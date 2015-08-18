@@ -1,0 +1,798 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4525 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	plugins/ADM_videoEncoder/ADM_vidEnc_xvid
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4525%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_xvid&In-Reply-To=%3C200901071001.n07A1r6x022903%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001757.html">
+   <LINK REL="Next"  HREF="001759.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4525 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	plugins/ADM_videoEncoder/ADM_vidEnc_xvid</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4525%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_xvid&In-Reply-To=%3C200901071001.n07A1r6x022903%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4525 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	plugins/ADM_videoEncoder/ADM_vidEnc_xvid">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Wed Jan  7 11:01:53 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001757.html">[Avidemux-svn-commit] r4524 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid:	. qt4
+</A></li>
+        <LI>Next message: <A HREF="001759.html">[Avidemux-svn-commit] r4526 - in	branches/avidemux_2.4_branch/platforms/windows:	build_scripts/avidemux_2.4 installer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1758">[ date ]</a>
+              <a href="thread.html#1758">[ thread ]</a>
+              <a href="subject.html#1758">[ subject ]</a>
+              <a href="author.html#1758">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-01-07 11:01:43 +0100 (Wed, 07 Jan 2009)
+New Revision: 4525
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/interface.c
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/options.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/options.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/presetOptions.cpp
+Log:
+[xvid] mostly working encoder
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp	2009-01-04 22:42:57 UTC (rev 4524)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp	2009-01-07 10:01:43 UTC (rev 4525)
+@@ -127,7 +127,7 @@
+ 
+ const char* externalEncoder::getCodecName(void)
+ {
+-	return _plugin-&gt;getEncoderName(_plugin-&gt;encoderId);
++	return _plugin-&gt;getFourCC(_plugin-&gt;encoderId);
+ }
+ 
+ const char* externalEncoder::getDisplayName(void)
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp	2009-01-04 22:42:57 UTC (rev 4524)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp	2009-01-07 10:01:43 UTC (rev 4525)
+@@ -1,5 +1,5 @@
+ /***************************************************************************
+-                               xvidEncoder.cpp
++                               XvidEncoder.cpp
+ 
+     begin                : Wed Jun 11 2008
+     copyright            : (C) 2008 by gruntster
+@@ -20,55 +20,102 @@
+ #include &quot;ADM_inttype.h&quot;
+ #include &quot;ADM_files.h&quot;
+ #include &quot;encoder.h&quot;
++#include &quot;options.h&quot;
+ 
+-static xvidEncoder encoder;
++int avidemuxHook(void *handle, int opt, void *param1, void *param2);
++static XvidEncoder encoder;
+ static void* encoders = { &amp;encoder };
+ 
+ extern &quot;C&quot;
+ {
+ 	void *encoders_getPointer(int uiType) { encoder.setUiType(uiType); return &encoders; } 
+-	int xvidEncoder_isConfigurable(void) { return encoder.isConfigurable(); }
+-	int xvidEncoder_configure(vidEncConfigParameters *configParameters, vidEncVideoProperties *properties) { return encoder.configure(configParameters, properties); }
+-	int xvidEncoder_getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize) { return encoder.getOptions(encodeOptions, pluginOptions, bufferSize); };
+-	int xvidEncoder_setOptions(vidEncOptions *encodeOptions, char *pluginOptions) { return encoder.setOptions(encodeOptions, pluginOptions); };
+-	int xvidEncoder_getPassCount(void) { return encoder.getPassCount(); }
+-	int xvidEncoder_getCurrentPass(void) { return encoder.getCurrentPass(); }
+-	int xvidEncoder_open(vidEncVideoProperties *properties) { return encoder.open(properties); }
+-	int xvidEncoder_beginPass(vidEncPassParameters *passParameters) { return encoder.beginPass(passParameters); }
+-	int xvidEncoder_encodeFrame(vidEncEncodeParameters *encodeParams) { return encoder.encodeFrame(encodeParams); }
+-	int xvidEncoder_finishPass(void) { return encoder.finishPass(); }
+-	void xvidEncoder_close(void) { encoder.close(); }
++	int XvidEncoder_isConfigurable(void) { return encoder.isConfigurable(); }
++	int XvidEncoder_configure(vidEncConfigParameters *configParameters, vidEncVideoProperties *properties) { return encoder.configure(configParameters, properties); }
++	int XvidEncoder_getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize) { return encoder.getOptions(encodeOptions, pluginOptions, bufferSize); };
++	int XvidEncoder_setOptions(vidEncOptions *encodeOptions, char *pluginOptions) { return encoder.setOptions(encodeOptions, pluginOptions); };
++	int XvidEncoder_getPassCount(void) { return encoder.getPassCount(); }
++	int XvidEncoder_getCurrentPass(void) { return encoder.getCurrentPass(); }
++	int XvidEncoder_open(vidEncVideoProperties *properties) { return encoder.open(properties); }
++	int XvidEncoder_beginPass(vidEncPassParameters *passParameters) { return encoder.beginPass(passParameters); }
++	int XvidEncoder_encodeFrame(vidEncEncodeParameters *encodeParams) { return encoder.encodeFrame(encodeParams); }
++	int XvidEncoder_finishPass(void) { return encoder.finishPass(); }
++	void XvidEncoder_close(void) { encoder.close(); }
+ }
+ 
+-xvidEncoder::xvidEncoder(void)
++#ifdef __WIN32
++extern void convertPathToAnsi(const char *path, char **ansiPath);
++#endif
++
++XvidEncoder::XvidEncoder(void)
+ {
+ 	_loader = NULL;
+ 	_opened = false;
+ 
+ 	_passCount = 1;
+ 	_currentPass = 0;
++	_openPass = false;
+ 
++	_logFileName = NULL;
++	_buffer = NULL;
++
+ 	_encodeOptions.structSize = sizeof(vidEncOptions);
+ 	_encodeOptions.encodeMode = DEFAULT_ENCODE_MODE;
+ 	_encodeOptions.encodeModeParameter = DEFAULT_ENCODE_MODE_PARAMETER;
++
++	xvid_gbl_init_t xvid_gbl_init;
++	xvid_gbl_info_t xvid_gbl_info;
++
++	memset(&amp;xvid_gbl_init, 0, sizeof(xvid_gbl_init_t));
++	memset(&amp;xvid_gbl_info, 0, sizeof(xvid_gbl_info_t));
++
++	printf (&quot;[Xvid] Initialising Xvid\n&quot;);
++
++	xvid_gbl_init.version = XVID_VERSION;
++	xvid_gbl_info.version = XVID_VERSION;
++
++	xvid_global(NULL, XVID_GBL_INIT, &amp;xvid_gbl_init, NULL);	
++	xvid_global(NULL, XVID_GBL_INFO, &amp;xvid_gbl_info, NULL);
++
++	_processors = xvid_gbl_info.num_threads;
++
++	if (xvid_gbl_info.build)
++		printf (&quot;[Xvid] Build: %s\n&quot;, xvid_gbl_info.build);
++
++	printf (&quot;[Xvid] SIMD supported: (%x)\n&quot;, xvid_gbl_info.cpu_flags);
++
++#define PRINT_CPU_FLAG(x) if (xvid_gbl_info.cpu_flags &amp; XVID_CPU_##x) printf(&quot;\t\t&quot;#x&quot;\n&quot;);
++
++	PRINT_CPU_FLAG(MMX);
++	PRINT_CPU_FLAG(MMXEXT);
++	PRINT_CPU_FLAG(SSE);
++	PRINT_CPU_FLAG(SSE2);
++	PRINT_CPU_FLAG(SSE3);
++	PRINT_CPU_FLAG(SSE41);
++	PRINT_CPU_FLAG(3DNOW);
++	PRINT_CPU_FLAG(3DNOWEXT);
++	PRINT_CPU_FLAG(ALTIVEC);
+ }
+ 
+-xvidEncoder::~xvidEncoder(void)
++XvidEncoder::~XvidEncoder(void)
+ {
++	if (_logFileName)
++		delete [] _logFileName;
+ 
++	if (_buffer)
++		delete [] _buffer;
+ }
+ 
+-void xvidEncoder::setUiType(int uiType)
++void XvidEncoder::setUiType(int uiType)
+ {
+ 	_uiType = uiType;
+ }
+ 
+-int xvidEncoder::isConfigurable(void)
++int XvidEncoder::isConfigurable(void)
+ {
+ 	return (_uiType == ADM_UI_GTK || _uiType == ADM_UI_QT4);
+ }
+ 
+-int xvidEncoder::configure(vidEncConfigParameters *configParameters, vidEncVideoProperties *properties)
++int XvidEncoder::configure(vidEncConfigParameters *configParameters, vidEncVideoProperties *properties)
+ {
+ 	if (_loader == NULL)
+ 	{
+@@ -101,7 +148,7 @@
+ 		return 0;
+ }
+ 
+-int xvidEncoder::getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize)
++int XvidEncoder::getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize)
+ {
+ 	char* xml = _options.toXml();
+ 	int xmlLength = strlen(xml);
+@@ -119,7 +166,7 @@
+ 	return xmlLength;
+ }
+ 
+-int xvidEncoder::setOptions(vidEncOptions *encodeOptions, char *pluginOptions)
++int XvidEncoder::setOptions(vidEncOptions *encodeOptions, char *pluginOptions)
+ {
+ 	if (_opened)
+ 		return ADM_VIDENC_ERR_ALREADY_OPEN;
+@@ -138,37 +185,318 @@
+ 		return ADM_VIDENC_ERR_FAILED;
+ }
+ 
+-int xvidEncoder::getCurrentPass(void)
++int XvidEncoder::getCurrentPass(void)
+ {
+ 	return _currentPass;
+ }
+ 
+-int xvidEncoder::getPassCount(void)
++int XvidEncoder::getPassCount(void)
+ {
+ 	return _passCount;
+ }
+ 
+-int xvidEncoder::open(vidEncVideoProperties *properties)
++int XvidEncoder::open(vidEncVideoProperties *properties)
+ {
++	if (_opened)
++		return ADM_VIDENC_ERR_ALREADY_OPEN;
+ 
++	_opened = true;
++	_currentPass = 0;
++	_bufferSize = properties-&gt;width * properties-&gt;height * 3;
++	_buffer = new uint8_t[_bufferSize];
++
++	memcpy(&amp;_properties, properties, sizeof(vidEncVideoProperties));
++	_properties.logFileName = NULL;
++
++	if (_logFileName)
++		delete [] _logFileName;
++
++#ifdef __WIN32
++	convertPathToAnsi(properties-&gt;logFileName, &amp;_logFileName);
++#else
++	_logFileName = new char[strlen(properties-&gt;logFileName) + 1];
++	strcpy(_logFileName, properties-&gt;logFileName);
++#endif
++
++	if (_options.getParAsInput())
++		_options.setPar(_properties.parWidth, _properties.parHeight);
++
++	updateEncodeParameters(&amp;_properties);
++
++	_xvid_enc_create.width = _properties.width;
++	_xvid_enc_create.height = _properties.height;
++	_xvid_enc_create.fincr = 1000;
++	_xvid_enc_create.fbase = _properties.fps1000;
++
++	if (_options.getThreads() == 0)
++		_xvid_enc_create.num_threads = _processors;
++
++	return ADM_VIDENC_ERR_SUCCESS;
+ }
+ 
+-int xvidEncoder::beginPass(vidEncPassParameters *passParameters)
++int XvidEncoder::beginPass(vidEncPassParameters *passParameters)
+ {
++	if (!_opened)
++		return ADM_VIDENC_ERR_CLOSED;
+ 
++	if (_openPass)
++		return ADM_VIDENC_ERR_PASS_ALREADY_OPEN;
++
++	if (_currentPass == _passCount)
++		return ADM_VIDENC_ERR_PASS_COUNT_REACHED;
++
++	_openPass = true;
++	_currentPass++;
++	_currentFrame = 0;
++
++	printf(&quot;[Xvid] begin pass %d/%d\n&quot;, _currentPass, _passCount);
++
++	if (_passCount &gt; 1)
++	{
++		if (_currentPass == 1)
++		{
++			_xvid_plugin_2pass1.filename = _logFileName;
++			_xvid_enc_plugin[0].func = xvid_plugin_2pass1;
++			_xvid_enc_plugin[0].param = &amp;_xvid_plugin_2pass1;
++
++			printf(&quot;[Xvid] writing to %s\n&quot;, _logFileName);
++		}
++		else
++		{
++			_xvid_plugin_2pass2.filename = _logFileName;
++			_xvid_enc_plugin[0].func = xvid_plugin_2pass2;
++			_xvid_enc_plugin[0].param = &amp;_xvid_plugin_2pass2;
++
++			printf(&quot;[Xvid] reading from %s\n&quot;, _logFileName);
++		}
++	}
++	else
++	{
++		_xvid_enc_plugin[0].func = xvid_plugin_single;
++		_xvid_enc_plugin[0].param = &amp;_xvid_plugin_single;
++	}
++
++	_xvid_enc_plugin[1].func = avidemuxHook;
++	_xvid_enc_plugin[1].param = NULL;
++
++	_xvid_enc_create.plugins = _xvid_enc_plugin;
++	_xvid_enc_create.num_plugins = 2;
++
++	int err = xvid_encore(NULL, XVID_ENC_CREATE, &amp;_xvid_enc_create, NULL);
++
++	if (err &lt; 0)
++	{
++		printf (&quot;[Xvid] Init error: %d\n&quot;, err);
++
++		return ADM_VIDENC_ERR_FAILED;
++	}
++
++	if (_currentPass == 1)
++	{
++		printEncCreate(&amp;_xvid_enc_create);
++		printEncFrame(&amp;_xvid_enc_frame);
++	}
++
++	return ADM_VIDENC_ERR_SUCCESS;
+ }
+ 
+-int xvidEncoder::encodeFrame(vidEncEncodeParameters *encodeParams)
++int XvidEncoder::encodeFrame(vidEncEncodeParameters *encodeParams)
+ {
++	xvid_enc_stats_t xvid_enc_stats;
+ 
++	if (!_opened)
++		return ADM_VIDENC_ERR_CLOSED;
++
++	memset(&amp;xvid_enc_stats, 0, sizeof(xvid_enc_stats_t));
++
++	xvid_enc_stats.version = XVID_VERSION;
++	_xvid_enc_frame.bitstream = _buffer;
++	_xvid_enc_frame.length = 0;
++	_xvid_enc_frame.input.csp = XVID_CSP_YV12;
++	_xvid_enc_frame.input.stride[0] = _xvid_enc_create.width;
++	_xvid_enc_frame.input.stride[1] = _xvid_enc_create.width &gt;&gt; 1;
++	_xvid_enc_frame.input.stride[2] = _xvid_enc_create.width &gt;&gt; 1;
++	_xvid_enc_frame.input.plane[0] = encodeParams-&gt;frameData;
++	_xvid_enc_frame.input.plane[1] = encodeParams-&gt;frameData + (_xvid_enc_create.width * _xvid_enc_create.height);
++	_xvid_enc_frame.input.plane[2] = encodeParams-&gt;frameData + ((_xvid_enc_create.width * _xvid_enc_create.height * 5) &gt;&gt; 2);
++
++	int size = xvid_encore(_xvid_enc_create.handle, XVID_ENC_ENCODE, &amp;_xvid_enc_frame, &amp;xvid_enc_stats);
++
++    if (size &lt; 0)
++    {
++        printf(&quot;[Xvid] Error performing encode %d\n&quot;, size);
++        return ADM_VIDENC_ERR_FAILED;
++    }
++
++	encodeParams-&gt;encodedDataSize = size;
++
++	if (_xvid_enc_frame.out_flags &amp; XVID_KEYFRAME)
++		encodeParams-&gt;frameType = ADM_VIDENC_FRAMETYPE_IDR;
++	else if (xvid_enc_stats.type == XVID_TYPE_BVOP)
++		encodeParams-&gt;frameType = ADM_VIDENC_FRAMETYPE_B;
++	else
++		encodeParams-&gt;frameType = ADM_VIDENC_FRAMETYPE_P;
++
++	encodeParams-&gt;quantiser = xvid_enc_stats.quant;
++	encodeParams-&gt;ptsFrame= _frameNumber;
++	encodeParams-&gt;encodedData = _buffer;
++
++	return ADM_VIDENC_ERR_SUCCESS;
+ }
+ 
+-int xvidEncoder::finishPass(void)
++int XvidEncoder::finishPass(void)
+ {
++	if (!_opened)
++		return ADM_VIDENC_ERR_CLOSED;
+ 
++	if (_openPass)
++		_openPass = false;
+ }
+ 
+-void xvidEncoder::close(void)
++void XvidEncoder::close(void)
+ {
++	if (_openPass)
++		finishPass();
+ 
++	_opened = false;
++
++	if (_xvid_enc_create.handle)
++	{
++		xvid_encore (_xvid_enc_create.handle, XVID_ENC_DESTROY, NULL, NULL);
++		_xvid_enc_create.handle = NULL;
++	}
++
++	if (_buffer)
++	{
++		delete [] _buffer;
++		_buffer = NULL;
++	}
+ }
++
++void XvidEncoder::updateEncodeParameters(vidEncVideoProperties *properties)
++{
++	xvid_enc_create_t *tmp_xvid_enc_create;
++	xvid_enc_frame_t *tmp_xvid_enc_frame;
++	xvid_plugin_single_t *tmp_xvid_plugin_single;
++	xvid_plugin_2pass2_t *tmp_xvid_plugin_2pass2;
++
++	_options.getParameters(&amp;tmp_xvid_enc_create, &amp;tmp_xvid_enc_frame, &amp;tmp_xvid_plugin_single, &amp;tmp_xvid_plugin_2pass2);
++
++	memcpy(&amp;_xvid_enc_create, tmp_xvid_enc_create, sizeof(xvid_enc_create_t));
++	memcpy(&amp;_xvid_enc_frame, tmp_xvid_enc_frame, sizeof(xvid_enc_frame_t));
++	memcpy(&amp;_xvid_plugin_single, tmp_xvid_plugin_single, sizeof(xvid_plugin_single_t));
++	memset(&amp;_xvid_plugin_2pass1, 0, sizeof(xvid_plugin_2pass1_t));
++	memcpy(&amp;_xvid_plugin_2pass2, tmp_xvid_plugin_2pass2, sizeof(xvid_plugin_2pass2_t));
++
++	_xvid_plugin_2pass1.version = XVID_VERSION;
++
++	delete tmp_xvid_enc_create;
++	delete tmp_xvid_enc_frame;
++	delete tmp_xvid_plugin_single;
++	delete tmp_xvid_plugin_2pass2;
++
++	switch (_encodeOptions.encodeMode)
++	{
++		case ADM_VIDENC_MODE_CBR:
++			_passCount = 1;
++			_xvid_plugin_single.bitrate = _encodeOptions.encodeModeParameter * 1000;
++
++			break;
++		case ADM_VIDENC_MODE_CQP:
++			_passCount = 1;
++			//_xvid_plugin_single.bitrate = 1500;
++
++			break;
++		case ADM_VIDENC_MODE_2PASS_SIZE:
++			_passCount = 2;
++			_xvid_plugin_2pass2.bitrate = calculateBitrate(properties-&gt;fps1000, properties-&gt;frameCount, _encodeOptions.encodeModeParameter);
++
++			break;
++		case ADM_VIDENC_MODE_2PASS_ABR:
++			_passCount = 2;
++			_xvid_plugin_2pass2.bitrate = _encodeOptions.encodeModeParameter * 1000;
++
++			break;
++	}
++}
++
++unsigned int XvidEncoder::calculateBitrate(unsigned int fps1000, unsigned int frameCount, unsigned int sizeInMb)
++{
++	double db, ti;
++
++	db = sizeInMb;
++	db = db * 1024. * 1024. * 8.;
++	// now db is in bits
++
++	// compute duration
++	ti = frameCount;
++	ti *= 1000;
++	ti /= fps1000;	// nb sec
++	db = db / ti;
++
++	return (unsigned int)floor(db);
++}
++
++void XvidEncoder::setFrameNumber(int frameNumber)
++{
++	_frameNumber = frameNumber;
++}
++
++void XvidEncoder::printEncCreate(xvid_enc_create_t *xvid_enc_create)
++{
++	printf(&quot;[Xvid] # xvid_enc_create #\n&quot;);
++	printf(&quot;[Xvid] version = %d\n&quot;, xvid_enc_create-&gt;version);
++	printf(&quot;[Xvid] profile = %d\n&quot;, xvid_enc_create-&gt;profile);
++	printf(&quot;[Xvid] width = %d, height = %d\n&quot;, xvid_enc_create-&gt;width, xvid_enc_create-&gt;height);
++	printf(&quot;[Xvid] num_zones = %d\n&quot;, xvid_enc_create-&gt;num_zones);
++	printf(&quot;[Xvid] num_plugins = %d\n&quot;, xvid_enc_create-&gt;num_plugins);
++	printf(&quot;[Xvid] num_threads = %d\n&quot;, xvid_enc_create-&gt;num_threads);
++	printf(&quot;[Xvid] max_bframes = %d\n&quot;, xvid_enc_create-&gt;max_bframes);
++	printf(&quot;[Xvid] global = %d\n&quot;, xvid_enc_create-&gt;global);
++	printf(&quot;[Xvid] fincr = %d\n&quot;, xvid_enc_create-&gt;fincr);
++	printf(&quot;[Xvid] fbase = %d\n&quot;, xvid_enc_create-&gt;fbase);
++	printf(&quot;[Xvid] max_key_interval = %d\n&quot;, xvid_enc_create-&gt;max_key_interval);
++	printf(&quot;[Xvid] frame_drop_ratio = %d\n&quot;, xvid_enc_create-&gt;frame_drop_ratio);
++	printf(&quot;[Xvid] bquant_ratio = %d\n&quot;, xvid_enc_create-&gt;bquant_ratio);
++	printf(&quot;[Xvid] bquant_offset = %d\n&quot;, xvid_enc_create-&gt;bquant_offset);
++
++	printf(&quot;[Xvid] min_quant = &quot;);
++	printArray(xvid_enc_create-&gt;min_quant, 3);
++
++	printf(&quot;\n[Xvid] max_quant = &quot;);
++	printArray(xvid_enc_create-&gt;max_quant, 3);
++
++	printf(&quot;\n&quot;);
++}
++
++void XvidEncoder::printEncFrame(xvid_enc_frame_t *xvid_enc_frame)
++{
++	printf(&quot;[Xvid] # xvid_enc_frame #\n&quot;);
++	printf(&quot;[Xvid] version = %d\n&quot;, xvid_enc_frame-&gt;version);
++	printf(&quot;[Xvid] vol_flags = %d\n&quot;, xvid_enc_frame-&gt;vol_flags);
++	printf(&quot;[Xvid] par = %d\n&quot;, xvid_enc_frame-&gt;par);
++	printf(&quot;[Xvid] par_width = %d\n&quot;, xvid_enc_frame-&gt;par_width);
++	printf(&quot;[Xvid] par_height = %d\n&quot;, xvid_enc_frame-&gt;par_height);
++	printf(&quot;[Xvid] fincr = %d\n&quot;, xvid_enc_frame-&gt;fincr);
++	printf(&quot;[Xvid] vop_flags = %d\n&quot;, xvid_enc_frame-&gt;vop_flags);
++	printf(&quot;[Xvid] motion = %d\n&quot;, xvid_enc_frame-&gt;motion);
++	printf(&quot;[Xvid] type = %d\n&quot;, xvid_enc_frame-&gt;type);
++	printf(&quot;[Xvid] quant = %d\n&quot;, xvid_enc_frame-&gt;quant);
++	printf(&quot;[Xvid] bframe_threshold = %d\n&quot;, xvid_enc_frame-&gt;bframe_threshold);
++}
++
++void XvidEncoder::printArray(const int data[], int size)
++{
++	for (int index = 0; index &lt; size; index++)
++		printf(&quot;%d &quot;, data[index]);
++}
++
++int avidemuxHook(void *handle, int opt, void *param1, void *param2)
++{
++	xvid_plg_data_t *xvid_plg_data = (xvid_plg_data_t*)param1;
++
++	if (opt == XVID_PLG_FRAME)
++		encoder.setFrameNumber(xvid_plg_data-&gt;frame_num);
++
++	return 0;
++}
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.h	2009-01-04 22:42:57 UTC (rev 4524)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.h	2009-01-07 10:01:43 UTC (rev 4525)
+@@ -25,7 +25,7 @@
+ 	#include &quot;ADM_vidEnc_plugin.h&quot;
+ 	}
+ 
+-	class xvidEncoder
++	class XvidEncoder
+ 	{
+ 	private:
+ 		int _uiType;
+@@ -33,13 +33,35 @@
+ 		configGuiLoader *_loader;
+ 		XvidOptions _options;
+ 		vidEncOptions _encodeOptions;
++		vidEncVideoProperties _properties;
++		char *_logFileName;
++		int _frameNumber;
++		int _processors;
+ 
++		uint8_t *_buffer;
++		int _bufferSize;
++
++		xvid_enc_create_t _xvid_enc_create;
++		xvid_enc_frame_t _xvid_enc_frame;
++		xvid_plugin_single_t _xvid_plugin_single;
++		xvid_plugin_2pass1_t _xvid_plugin_2pass1;
++		xvid_plugin_2pass2_t _xvid_plugin_2pass2;
++		xvid_enc_plugin_t _xvid_enc_plugin[2];
++
++		unsigned int _currentFrame;
+ 		int _currentPass, _passCount;
+-		bool _opened;
++		bool _opened, _openPass;
+ 
++		void updateEncodeParameters(vidEncVideoProperties *properties);
++		unsigned int calculateBitrate(unsigned int fps1000, unsigned int frameCount, unsigned int sizeInMb);
++
++		void printEncCreate(xvid_enc_create_t *xvid_enc_create);
++		void printEncFrame(xvid_enc_frame_t *xvid_enc_frame);
++		void printArray(const int data[], int size);
++
+ 	public:
+-		xvidEncoder(void);
+-		~xvidEncoder(void);
++		XvidEncoder(void);
++		~XvidEncoder(void);
+ 		void setUiType(int uiType);
+ 		int isConfigurable(void);
+ 		int configure(vidEncConfigParameters *configParameters, vidEncVideoProperties *properties);
+@@ -52,17 +74,18 @@
+ 		int encodeFrame(vidEncEncodeParameters *encodeParams);
+ 		int finishPass(void);
+ 		void close(void);
++		void setFrameNumber(int frameNumber);
+ 	};
+ #else
+ 	void *encoders_getPointer(int uiType);
+-	int xvidEncoder_isConfigurable(void);
+-	int xvidEncoder_configure(vidEncConfigParameters *configParameters, vidEncVideoProperties *properties);
+-	int xvidEncoder_getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize);
+-	int xvidEncoder_setOptions(vidEncOptions *encodeOptions, char *pluginOptions);
+-	int xvidEncoder_getPassCount(void);
+-	int xvidEncoder_getCurrentPass(void);
+-	int xvidEncoder_open(vidEncVideoProperties *properties);
+-	void xvidEncoder_close(void);
+-	int xvidEncoder_encodeFrame(vidEncEncodeParameters *encodeParams);
++	int XvidEncoder_isConfigurable(void);
++	int XvidEncoder_configure(vidEncConfigParameters *configParameters, vidEncVideoProperties *properties);
++	int XvidEncoder_getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize);
++	int XvidEncoder_setOptions(vidEncOptions *encodeOptions, char *pluginOptions);
++	int XvidEncoder_getPassCount(void);
++	int XvidEncoder_getCurrentPass(void);
++	int XvidEncoder_open(vidEncVideoProperties *properties);
++	void XvidEncoder_close(void);
++	int XvidEncoder_encodeFrame(vidEncEncodeParameters *encodeParams);
+ #endif	// __cplusplus
+ #endif	// encoder_h
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/interface.c
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/interface.c	2009-01-04 22:42:57 UTC (rev 4524)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/interface.c	2009-01-07 10:01:43 UTC (rev 4525)
+@@ -49,7 +49,7 @@
+ 
+ const char* vidEncGetFourCC(int encoderId)
+ {
+-	return &quot;xvid&quot;;
++	return &quot;XVID&quot;;
+ }
+ 
+ int vidEncGetEncoderApiVersion(int encoderId)
+@@ -71,57 +71,57 @@
+ 
+ int vidEncIsConfigurable(int encoderId)
+ {
+-	return xvidEncoder_isConfigurable();
++	return XvidEncoder_isConfigurable();
+ }
+ 
+ int vidEncConfigure(int encoderId, vidEncConfigParameters *configParameters, vidEncVideoProperties *properties)
+ {
+-	return xvidEncoder_configure(configParameters, properties);
++	return XvidEncoder_configure(configParameters, properties);
+ }
+ 
+ int vidEncGetOptions(int encoderId, vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize)
+ {
+-	return xvidEncoder_getOptions(encodeOptions, pluginOptions, bufferSize);
++	return XvidEncoder_getOptions(encodeOptions, pluginOptions, bufferSize);
+ }
+ 
+ int vidEncSetOptions(int encoderId, vidEncOptions *encodeOptions, char *pluginOptions)
+ {
+-	return xvidEncoder_setOptions(encodeOptions, pluginOptions);
++	return XvidEncoder_setOptions(encodeOptions, pluginOptions);
+ }
+ 
+ int vidEncGetPassCount(int encoderId)
+ {
+-	return xvidEncoder_getPassCount();
++	return XvidEncoder_getPassCount();
+ }
+ 
+ int vidEncGetCurrentPass(int encoderId)
+ {
+-	return xvidEncoder_getCurrentPass();
++	return XvidEncoder_getCurrentPass();
+ }
+ 
+ int vidEncOpen(int encoderId, vidEncVideoProperties *properties)
+ {
+-	return xvidEncoder_open(properties);
++	return XvidEncoder_open(properties);
+ }
+ 
+ int vidEncBeginPass(int encoderId, vidEncPassParameters *passParameters)
+ {
+-	return xvidEncoder_beginPass(passParameters);
++	return XvidEncoder_beginPass(passParameters);
+ }
+ 
+ int vidEncEncodeFrame(int encoderId, vidEncEncodeParameters *encodeParams)
+ {
+-	return xvidEncoder_encodeFrame(encodeParams);
++	return XvidEncoder_encodeFrame(encodeParams);
+ }
+ 
+ int vidEncFinishPass(int encoderId)
+ {
+-	return xvidEncoder_finishPass();
++	return XvidEncoder_finishPass();
+ }
+ 
+ int vidEncClose(int encoderId)
+ {
+-	xvidEncoder_close();
++	XvidEncoder_close();
+ 
+ 	return ADM_VIDENC_ERR_SUCCESS;
+ }
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/options.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/options.cpp	2009-01-04 22:42:57 UTC (rev 4524)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/options.cpp	2009-01-07 10:01:43 UTC (rev 4525)
+@@ -61,6 +61,11 @@
+ 	memset(&amp;xvid_plugin_single, 0, sizeof(xvid_plugin_single_t));
+ 	memset(&amp;xvid_plugin_2pass2, 0, sizeof(xvid_plugin_2pass2_t));
+ 
++	xvid_enc_create.version = XVID_VERSION;
++	xvid_enc_frame.version = XVID_VERSION;
++	xvid_plugin_single.version = XVID_VERSION;
++	xvid_plugin_2pass2.version = XVID_VERSION;
++
+ 	xvid_enc_frame.vop_flags = XVID_VOP_HALFPEL | XVID_VOP_HQACPRED;
+ 
+ 	setPar(1, 1);
+@@ -79,6 +84,20 @@
+ 	setPresetConfiguration(&quot;&lt;default&gt;&quot;, CONFIG_DEFAULT);
+ }
+ 
++void XvidOptions::getParameters(xvid_enc_create_t **xvid_enc_create, xvid_enc_frame_t **xvid_enc_frame,
++	xvid_plugin_single_t **xvid_plugin_single, xvid_plugin_2pass2_t **xvid_plugin_2pass2)
++{
++	*xvid_enc_create = new xvid_enc_create_t;
++	*xvid_enc_frame = new xvid_enc_frame_t;
++	*xvid_plugin_single = new xvid_plugin_single_t;
++	*xvid_plugin_2pass2 = new xvid_plugin_2pass2_t;
++
++	memcpy(*xvid_enc_create, &amp;this-&gt;xvid_enc_create, sizeof(xvid_enc_create_t));
++	memcpy(*xvid_enc_frame, &amp;this-&gt;xvid_enc_frame, sizeof(xvid_enc_frame_t));
++	memcpy(*xvid_plugin_single, &amp;this-&gt;xvid_plugin_single, sizeof(xvid_plugin_single_t));
++	memcpy(*xvid_plugin_2pass2, &amp;this-&gt;xvid_plugin_2pass2, sizeof(xvid_plugin_2pass2_t));
++}
++
+ void XvidOptions::getPresetConfiguration(char** configurationName, ConfigType *configurationType)
+ {
+ 	if (_configurationName)
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/options.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/options.h	2009-01-04 22:42:57 UTC (rev 4524)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/options.h	2009-01-07 10:01:43 UTC (rev 4525)
+@@ -97,6 +97,9 @@
+ 
+ 	void reset(void);
+ 
++	void getParameters(xvid_enc_create_t **xvid_enc_create, xvid_enc_frame_t **xvid_enc_frame,
++		xvid_plugin_single_t **xvid_plugin_single, xvid_plugin_2pass2_t **xvid_plugin_2pass2);
++
+ 	void getPresetConfiguration(char** configurationName, ConfigType *configurationType);
+ 	void setPresetConfiguration(const char* configurationName, ConfigType configurationType);
+ 	void clearPresetConfiguration(void);
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/presetOptions.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/presetOptions.cpp	2009-01-04 22:42:57 UTC (rev 4524)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/presetOptions.cpp	2009-01-07 10:01:43 UTC (rev 4525)
+@@ -18,7 +18,8 @@
+  *                                                                         *
+  ***************************************************************************/
+ #include &lt;libxml/parser.h&gt;
+-#include &quot;ADM_default.h&quot;
++#include &lt;string.h&gt;
++#include &quot;ADM_inttype.h&quot;
+ #include &quot;presetOptions.h&quot;
+ 
+ XvidPresetOptions::XvidPresetOptions(void) : XvidOptions()
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001757.html">[Avidemux-svn-commit] r4524 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid:	. qt4
+</A></li>
+	<LI>Next message: <A HREF="001759.html">[Avidemux-svn-commit] r4526 - in	branches/avidemux_2.4_branch/platforms/windows:	build_scripts/avidemux_2.4 installer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1758">[ date ]</a>
+              <a href="thread.html#1758">[ thread ]</a>
+              <a href="subject.html#1758">[ subject ]</a>
+              <a href="author.html#1758">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

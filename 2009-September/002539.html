@@ -1,0 +1,118 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5326 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5326%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska&In-Reply-To=%3C200909070544.n875ihJP000773%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002538.html">
+   <LINK REL="Next"  HREF="002540.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5326 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5326%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska&In-Reply-To=%3C200909070544.n875ihJP000773%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5326 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Sep  7 07:44:43 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002538.html">[Avidemux-svn-commit] r5325 -	branches/avidemux_2.6_branch_mean/addons/mkvscan
+</A></li>
+        <LI>Next message: <A HREF="002540.html">[Avidemux-svn-commit] r5327 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2539">[ date ]</a>
+              <a href="thread.html#2539">[ thread ]</a>
+              <a href="subject.html#2539">[ subject ]</a>
+              <a href="author.html#2539">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-09-07 07:44:38 +0200 (Mon, 07 Sep 2009)
+New Revision: 5326
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkvEntries.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkvIndexer.cpp
+Log:
+[Mkv] Print out Track timescale + fix overflow on Dts/Pts computation
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkvEntries.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkvEntries.cpp	2009-09-07 05:44:31 UTC (rev 5325)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkvEntries.cpp	2009-09-07 05:44:38 UTC (rev 5326)
+@@ -196,7 +196,10 @@
+         //case MKV_AUDIO_OUT_FREQUENCY:entry-&gt;fq=(uint32_t)floor(father.readFloat(len));break;
+         case  MKV_VIDEO_WIDTH: entry-&gt;w=father.readUnsignedInt(len);break;
+         case  MKV_VIDEO_HEIGHT: entry-&gt;h=father.readUnsignedInt(len);break;
+-        case  MKV_TRACK_TIMECODESCALE:father.skip(len);break; //FIXME
++        case  MKV_TRACK_TIMECODESCALE:
++                                {
++                                    printf(&quot;[Mkv] TimeCodeScale=%&quot;LLU&quot;\n&quot;,father.readUnsignedInt(len));
++                                };break; //FIXME
+ 
+         case  MKV_FRAME_DEFAULT_DURATION: entry-&gt;defaultDuration=father.readUnsignedInt(len)/1000; break; // In us
+         case  MKV_CODEC_EXTRADATA:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkvIndexer.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkvIndexer.cpp	2009-09-07 05:44:31 UTC (rev 5325)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkvIndexer.cpp	2009-09-07 05:44:38 UTC (rev 5326)
+@@ -42,7 +42,13 @@
+  
+     //************
+    work-&gt;update(0);
++#if 0
+    for(int clusters=0;clusters&lt;_nbClusters;clusters++)
++    {
++        printf(&quot;[Cluster] %d/%d StartTimecode=%&quot;LLU&quot; ms\n&quot;,clusters,_nbClusters,_clusters[clusters].Dts);
++    }
++#endif
++   for(int clusters=0;clusters&lt;_nbClusters;clusters++)
+    {
+    parser-&gt;seek(_clusters[clusters].pos);
+    ADM_ebml_file cluster(parser,_clusters[clusters].size);
+@@ -154,8 +160,8 @@
+   ix.pos=where;
+   ix.size=size;
+   ix.flags=AVI_KEY_FRAME;
+-  ix.Dts=timecodeMS*1000;
+-  ix.Pts=timecodeMS*1000;
++  ix.Dts=timecodeMS*1000LL;
++  ix.Pts=timecodeMS*1000LL;
+   
+   // since frame type is unreliable for mkv, we scan each frame
+   // For the 2 most common cases : mp4 &amp; h264.
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002538.html">[Avidemux-svn-commit] r5325 -	branches/avidemux_2.6_branch_mean/addons/mkvscan
+</A></li>
+	<LI>Next message: <A HREF="002540.html">[Avidemux-svn-commit] r5327 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2539">[ date ]</a>
+              <a href="thread.html#2539">[ thread ]</a>
+              <a href="subject.html#2539">[ subject ]</a>
+              <a href="author.html#2539">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

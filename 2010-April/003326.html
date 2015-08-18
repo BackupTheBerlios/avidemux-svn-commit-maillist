@@ -1,0 +1,123 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6122 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6122%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec&In-Reply-To=%3C201004111912.o3BJC3ie009324%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003325.html">
+   <LINK REL="Next"  HREF="003327.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6122 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6122%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec&In-Reply-To=%3C201004111912.o3BJC3ie009324%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6122 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sun Apr 11 21:12:03 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003325.html">[Avidemux-svn-commit] r6121 - in	branches/avidemux_2.5_branch_gruntster/cmake: . patches
+</A></li>
+        <LI>Next message: <A HREF="003327.html">[Avidemux-svn-commit] r6123 - in	branches/avidemux_2.5_branch_gruntster: cmake	plugins/ADM_audioDevices/Jack
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3326">[ date ]</a>
+              <a href="thread.html#3326">[ thread ]</a>
+              <a href="subject.html#3326">[ subject ]</a>
+              <a href="author.html#3326">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2010-04-11 21:11:58 +0200 (Sun, 11 Apr 2010)
+New Revision: 6122
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp
+Log:
+[avcodec] correctly flush encoder
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp	2010-04-11 10:58:16 UTC (rev 6121)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp	2010-04-11 19:11:58 UTC (rev 6122)
+@@ -358,31 +358,28 @@
+ 	_frame.key_frame = 0;
+ 	_frame.pict_type = 0;
+ 
+-	if (encodeParams-&gt;frameData[0])
++	if (_supportedCsps[0] == ADM_CSP_YV12)
+ 	{
+-		if (_supportedCsps[0] == ADM_CSP_YV12)
+-		{
+-			// Swap planes so YV12 looks like YUV420P
+-			uint8_t *tmpPlane = encodeParams-&gt;frameData[1];
++		// Swap planes so YV12 looks like YUV420P
++		uint8_t *tmpPlane = encodeParams-&gt;frameData[1];
+ 
+-			encodeParams-&gt;frameData[1] = encodeParams-&gt;frameData[2];
+-			encodeParams-&gt;frameData[2] = tmpPlane;
+-		}
++		encodeParams-&gt;frameData[1] = encodeParams-&gt;frameData[2];
++		encodeParams-&gt;frameData[2] = tmpPlane;
++	}
+ 
+-		_frame.data[0] = encodeParams-&gt;frameData[0];
+-		_frame.data[1] = encodeParams-&gt;frameData[1];
+-		_frame.data[2] = encodeParams-&gt;frameData[2];
+-		_frame.linesize[0] = encodeParams-&gt;frameLineSize[0];
+-		_frame.linesize[1] = encodeParams-&gt;frameLineSize[1];
+-		_frame.linesize[2] = encodeParams-&gt;frameLineSize[2];
++	_frame.data[0] = encodeParams-&gt;frameData[0];
++	_frame.data[1] = encodeParams-&gt;frameData[1];
++	_frame.data[2] = encodeParams-&gt;frameData[2];
++	_frame.linesize[0] = encodeParams-&gt;frameLineSize[0];
++	_frame.linesize[1] = encodeParams-&gt;frameLineSize[1];
++	_frame.linesize[2] = encodeParams-&gt;frameLineSize[2];
+ 
+-		int size = avcodec_encode_video(_context, _buffer, _bufferSize, &amp;_frame);
++	int size = avcodec_encode_video(_context, _buffer, _bufferSize, _frame.data[0] == NULL ? NULL : &amp;_frame);
+ 
+-		if (size &lt; 0)
+-			return ADM_VIDENC_ERR_FAILED;
++	if (size &lt; 0)
++		return ADM_VIDENC_ERR_FAILED;
+ 
+-		updateEncodeParameters(encodeParams, _buffer, size);
+-	}
++	updateEncodeParameters(encodeParams, _buffer, size);
+ 
+ 	return ADM_VIDENC_ERR_SUCCESS;
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003325.html">[Avidemux-svn-commit] r6121 - in	branches/avidemux_2.5_branch_gruntster/cmake: . patches
+</A></li>
+	<LI>Next message: <A HREF="003327.html">[Avidemux-svn-commit] r6123 - in	branches/avidemux_2.5_branch_gruntster: cmake	plugins/ADM_audioDevices/Jack
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3326">[ date ]</a>
+              <a href="thread.html#3326">[ thread ]</a>
+              <a href="subject.html#3326">[ subject ]</a>
+              <a href="author.html#3326">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

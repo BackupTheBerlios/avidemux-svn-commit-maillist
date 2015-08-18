@@ -1,0 +1,283 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3529 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3529%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_codecs&In-Reply-To=%3C200708181521.l7IFLS0P016613%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000802.html">
+   <LINK REL="Next"  HREF="000804.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3529 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3529%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_codecs&In-Reply-To=%3C200708181521.l7IFLS0P016613%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3529 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Aug 18 17:21:28 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000802.html">[Avidemux-svn-commit] r3528 - in	branches/avidemux_2.4_branch/avidemux: ADM_script	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_NONE/ADM_dialogFactory	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory	ADM_userInterfaces/ADM_commonUI
+</A></li>
+        <LI>Next message: <A HREF="000804.html">[Avidemux-svn-commit] r3530 - in	branches/avidemux_2.4_branch/avidemux:	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_commonUI ADM_video ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#803">[ date ]</a>
+              <a href="thread.html#803">[ thread ]</a>
+              <a href="subject.html#803">[ subject ]</a>
+              <a href="author.html#803">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-08-18 17:21:27 +0200 (Sat, 18 Aug 2007)
+New Revision: 3529
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_x264.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_x264.h
+Log:
+[MP4+X264] Put user data/SEI with 1st frame in mp4 mode
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_x264.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_x264.cpp	2007-08-18 06:58:56 UTC (rev 3528)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_x264.cpp	2007-08-18 15:21:27 UTC (rev 3529)
+@@ -214,6 +214,11 @@
+       delete[]extraData;
+       extraData = NULL;
+     }
++  if(_seiUserData)
++  {
++	  delete [] _seiUserData;
++	  _seiUserData=NULL;
++  }
+ }
+ X264Encoder::~X264Encoder ()
+ {
+@@ -256,18 +261,15 @@
+     {
+       sizemax = 0xfffffff;;
+       if (!param.b_repeat_headers)
+-	size += 4;
+-      thisnal =
+-	x264_nal_encode (dout + size, &amp;sizemax, param.b_repeat_headers,
+-			 &amp;nal[i]);
++    	  size += 4;
++      thisnal =	x264_nal_encode (dout + size, &amp;sizemax, param.b_repeat_headers, &amp;nal[i]);
+       if (!param.b_repeat_headers)
+-	{			// Need to put size (assuming nal_size=4)
+-	  dout[size + 0 - 4] = (thisnal &gt;&gt; 24) &amp; 0xff;
+-	  dout[size + 1 - 4] = (thisnal &gt;&gt; 16) &amp; 0xff;
+-	  dout[size + 2 - 4] = (thisnal &gt;&gt; 8) &amp; 0xff;
+-	  dout[size + 3 - 4] = (thisnal &gt;&gt; 0) &amp; 0xff;
+-
+-	}
++      {			// Need to put size (assuming nal_size=4)
++    	  dout[size + 0 - 4] = (thisnal &gt;&gt; 24) &amp; 0xff;
++    	  dout[size + 1 - 4] = (thisnal &gt;&gt; 16) &amp; 0xff;
++    	  dout[size + 2 - 4] = (thisnal &gt;&gt; 8) &amp; 0xff;
++    	  dout[size + 3 - 4] = (thisnal &gt;&gt; 0) &amp; 0xff;
++      }
+       size += thisnal;
+     }
+ 
+@@ -286,6 +288,23 @@
+     {
+     case X264_TYPE_IDR:
+       out-&gt;flags = AVI_KEY_FRAME;
++      /* First frame ?*/
++      if(!param.b_repeat_headers &amp;&amp; _seiUserData &amp;&amp; !pic_out.i_pts)
++      {
++    	  // Put our SEI front...
++    	  // first a temp location...
++    	  uint8_t tmpBuffer[size];
++    	  memcpy(tmpBuffer,out-&gt;data,size);
++    	  // Put back out SEI and add Size
++    	  dout[0]=(_seiUserDataLen&gt;&gt;24)&amp;0xff;
++    	  dout[1]=(_seiUserDataLen&gt;&gt;16)&amp;0xff;
++    	  dout[2]=(_seiUserDataLen&gt;&gt;8)&amp;0xff;
++    	  dout[3]=(_seiUserDataLen&gt;&gt;0)&amp;0xff;
++    	  memcpy(dout+4,_seiUserData,_seiUserDataLen);
++    	  memcpy(dout+4+_seiUserDataLen,tmpBuffer,size);
++    	  size+=4+_seiUserDataLen;
++    	  out-&gt;len = size; // update total size
++      }
+       break;
+     case X264_TYPE_I:
+       out-&gt;flags = AVI_P_FRAME;
+@@ -301,7 +320,6 @@
+     default:
+       printf (&quot;[x264] Unknown image type: %d\n&quot;, pic_out.i_type);
+       //ADM_assert(0);
+-
+     }
+     
+     //
+@@ -506,7 +524,7 @@
+ 
+         Try to create the avcC atom and set it as extraData
+ _______________________________________________________________*/
+-
++#define H264_NAL_TYPE_SEI       0x6
+ #define H264_NAL_TYPE_SEQ_PARAM 0x7
+ #define H264_NAL_TYPE_PIC_PARAM 0x8
+ 
+@@ -518,23 +536,21 @@
+     nal_count;
+   uint32_t
+     offset = 0;;
+-  uint8_t
+-    buffer[MAX_HEADER_X264];
+-  uint8_t
+-    picParam[MAX_HEADER_X264];
+-  uint8_t
+-    seqParam[MAX_HEADER_X264];
++  uint8_t    buffer[MAX_HEADER_X264];
++  uint8_t    picParam[MAX_HEADER_X264];
++  uint8_t    seqParam[MAX_HEADER_X264];
++  uint8_t    sei[MAX_HEADER_X264];
++  int	     picParamLen = 0, seqParamLen = 0,seiParamLen=0, len;
+   int
+-    picParamLen = 0, seqParamLen = 0, len;
+-  int
+     sz;
+ 
+   // 1024 bytes should be enough
+   extraData = new uint8_t[MAX_HEADER_X264];
+   extraSize = 0;
+ 
+-
+-  if (x264_encoder_headers (HANDLE, &amp;nal, &amp;nal_count))
++  x264_t *x264=(x264_t *)_handle;
++  //x264-&gt;i_frame=0; // force write_sei_params
++  if (x264_encoder_headers (x264, &amp;nal, &amp;nal_count))
+     {
+       printf (&quot;[x264] Cannot create header\n&quot;);
+       return 0;
+@@ -544,21 +560,23 @@
+   // Now encode them
+   for (int i = 0; i &lt; nal_count; i++)
+     {
+-      if (nal[i].i_type == H264_NAL_TYPE_SEQ_PARAM)
++	  switch(nal[i].i_type)
++	  {
++	  case H264_NAL_TYPE_SEQ_PARAM:
++		  	sz = x264_nal_encode (seqParam, &amp;seqParamLen, 0, &amp;nal[i]);
++		  	break;
++	  case H264_NAL_TYPE_PIC_PARAM:
++		  	sz = x264_nal_encode (picParam, &amp;picParamLen, 0, &amp;nal[i]);
++		  	break;
++	  case H264_NAL_TYPE_SEI:
++		  	sz = x264_nal_encode (sei, &amp;seiParamLen, 0, &amp;nal[i]);
++		  	break;
++	  default:
++		  printf (&quot;[x264] ?? type %d in nal %d\n&quot;, nal[i].i_type, i);
++		  sz = x264_nal_encode (buffer, &amp;len, 0, &amp;nal[i]);
++	 }
++    if (sz &lt;= 0)
+ 	{
+-	  sz = x264_nal_encode (seqParam, &amp;seqParamLen, 0, &amp;nal[i]);
+-	}
+-      else if (nal[i].i_type == H264_NAL_TYPE_PIC_PARAM)
+-	{
+-	  sz = x264_nal_encode (picParam, &amp;picParamLen, 0, &amp;nal[i]);
+-	}
+-      else
+-	{
+-	  printf (&quot;[x264] ?? type %d in nal %d\n&quot;, nal[i].i_type, i);
+-	  sz = x264_nal_encode (buffer, &amp;len, 0, &amp;nal[i]);
+-	}
+-      if (sz &lt;= 0)
+-	{
+ 	  printf (&quot;[x264] Cannot encode nal header %d\n&quot;, i);
+ 	  return 0;
+ 	}
+@@ -588,24 +606,26 @@
+ 
+   extraData[offset] = seqParamLen &gt;&gt; 8;
+   extraData[offset + 1] = seqParamLen &amp; 0xff;
+-
+   offset += 2;
+-
+   memcpy (extraData + offset, seqParam, seqParamLen);
+   offset += seqParamLen;
+ 
++  
+   extraData[offset] = 1;	// numOfPictureParameterSets
+   offset++;
+-
+   extraData[offset] = (picParamLen) &gt;&gt; 8;
+   extraData[offset + 1] = (picParamLen) &amp; 0xff;
+-
+   offset += 2;
+-
+-
+   memcpy (extraData + offset, picParam, picParamLen);
+   offset += picParamLen;
+ 
++  // Where x264 stores all its header, save it for later use
++  if(seiParamLen) 
++  {
++	  	_seiUserDataLen=seiParamLen;
++	  	_seiUserData=new uint8_t[_seiUserDataLen];
++	  	memcpy(_seiUserData,sei,_seiUserDataLen);
++  }
+ 
+   extraSize = offset;
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_x264.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_x264.h	2007-08-18 06:58:56 UTC (rev 3528)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_x264.h	2007-08-18 15:21:27 UTC (rev 3529)
+@@ -17,6 +17,8 @@
+ protected:uint32_t _inited;
+   void *_handle;
+   void *_pic;
++  uint8_t 	*_seiUserData;
++  uint32_t  _seiUserDataLen; // X264 user data
+   uint8_t preamble (uint32_t fps1000, ADM_x264Param * param);
+   ADM_x264Param _param;
+   uint8_t *extraData;
+@@ -34,6 +36,9 @@
+     extraSize = 0;
+     ptsFrame = 0;
+     curFrame = 0;
++    _seiUserDataLen=0;
++    _seiUserData=NULL;
++    
+   };
+   ~X264Encoder ();
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000802.html">[Avidemux-svn-commit] r3528 - in	branches/avidemux_2.4_branch/avidemux: ADM_script	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_NONE/ADM_dialogFactory	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory	ADM_userInterfaces/ADM_commonUI
+</A></li>
+	<LI>Next message: <A HREF="000804.html">[Avidemux-svn-commit] r3530 - in	branches/avidemux_2.4_branch/avidemux:	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_commonUI ADM_video ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#803">[ date ]</a>
+              <a href="thread.html#803">[ thread ]</a>
+              <a href="subject.html#803">[ subject ]</a>
+              <a href="author.html#803">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

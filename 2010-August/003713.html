@@ -1,0 +1,166 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6526 - in branches/avidemux_2.6_branch_mean:	. scripts
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6526%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09.%20scripts&In-Reply-To=%3C20100815070214.0C79D480F44%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003712.html">
+   <LINK REL="Next"  HREF="003714.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6526 - in branches/avidemux_2.6_branch_mean:	. scripts</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6526%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09.%20scripts&In-Reply-To=%3C20100815070214.0C79D480F44%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6526 - in branches/avidemux_2.6_branch_mean:	. scripts">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Aug 15 09:02:13 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003712.html">[Avidemux-svn-commit] r6525 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2:	binding include py src
+</A></li>
+        <LI>Next message: <A HREF="003714.html">[Avidemux-svn-commit] r6527 -	branches/avidemux_2.6_branch_mean/autononreg/py/avidemux
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3713">[ date ]</a>
+              <a href="thread.html#3713">[ thread ]</a>
+              <a href="subject.html#3713">[ subject ]</a>
+              <a href="author.html#3713">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-08-15 09:02:13 +0200 (Sun, 15 Aug 2010)
+New Revision: 6526
+
+Added:
+   branches/avidemux_2.6_branch_mean/scripts/
+   branches/avidemux_2.6_branch_mean/scripts/automkv.py
+Log:
+[py] add simple DVB-T -&gt; mkv auto script
+
+Added: branches/avidemux_2.6_branch_mean/scripts/automkv.py
+===================================================================
+--- branches/avidemux_2.6_branch_mean/scripts/automkv.py	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/scripts/automkv.py	2010-08-15 07:02:13 UTC (rev 6526)
+@@ -0,0 +1,89 @@
++# simple tinypy script that creates a MKV/AC3 file from input
++#  a PAL DVB capture
++
++adm=Avidemux()
++gui=Gui()
++#** Audio **
++adm.audioReset()
++adm.audioCodec(&quot;LavAC3&quot;,192)
++#** Muxer **
++adm.setContainer(&quot;MKV&quot;)
++# Do we need to resize ?
++width=adm.getWidth()
++height=adm.getHeight()
++fps=adm.getFps1000()
++aspectW=adm.getPARWidth()
++aspectH=adm.getPARHeight()
++print('Aspect: ',aspectW,', ',aspectH,'\n')
++#
++aspect=(aspectW,aspectH)
++ar=0
++if aspect == (1,1):
++        ar=0
++elif aspect == (16,15):
++        ar=1
++elif aspect == (64,45):
++        ar=2
++else:
++        print('Cannot guess aspect ratio')
++####################################################
++# Create a display menu to select Aspect ratio
++# And resize type 576p, 720p, ...
++####################################################
++listOfWidth=[720,1280]
++mnuSourceRatio = DFMenu(&quot;Source Aspect Ratio:&quot;);
++mnuSourceRatio.addItem(&quot;1:1&quot;)
++mnuSourceRatio.addItem(&quot;4:3&quot;)
++mnuSourceRatio.addItem(&quot;16:9&quot;)
++mnuSourceRatio.index=ar
++
++mnuResize = DFMenu(&quot;Video to create :&quot;);
++mnuResize.addItem(&quot;720 pixels&quot;)
++mnuResize.addItem(&quot;1280 pixels&quot;)
++
++toggleDeint = DFToggle(&quot;Deinterlace:&quot;);
++
++dlgWizard = DialogFactory(&quot;Automkv Source Aspect Ratio &quot;); 
++dlgWizard.addControl(mnuSourceRatio);  
++dlgWizard.addControl(mnuResize);  
++dlgWizard.addControl(toggleDeint);  
++
++res=dlgWizard.show()                                                                                                                        
++if res==1: 
++        ar=mnuSourceRatio.index
++        rsz=listOfWidth[mnuResize.index]
++        deinterlace=toggleDeint.value
++else:   
++        return
++#################################################################
++#  We have resize width, get resize Height from aspect ratio
++#################################################################
++if(ar==0) : # 1:1
++        newHeight=rsz
++elif(ar==1): # 4:3
++        newHeight=(rsz*3)/4
++elif(ar==2): # 16:9
++        newHeight=(rsz*9)/16
++# roundup newHeight to closer multiple of 16
++newHeight=newHeight&gt;&gt;4
++newHeight=newHeight&lt;&lt;4
++print(&quot;The end ar:&quot;,ar,&quot;Width :&quot;,rsz,&quot; height:&quot;,newHeight)
++# if deinterlace is set do it with vdpau
++if(deinterlace):
++        str1=&quot;targetWidth=&quot;+str(rsz)
++        str2=&quot;targetHeight=&quot;+str(newHeight)
++        adm.addVideoFilter(&quot;vdpauDeint&quot;,&quot;resizeToggle=True&quot;,&quot;deintMode=2&quot;,str1,str2)
++#else plain resize
++else:
++        str1=&quot;width=&quot;+str(rsz)
++        str2=&quot;height=&quot;+str(newHeight)
++        adm.addVideoFilter(&quot;swscale&quot;,str1,str2,&quot;algo=2&quot;,&quot;sourceAR=1&quot;,&quot;targetAR=1&quot;)
++       
++# Set video codec 
++adm.videoCodec(&quot;x264&quot;,&quot;params=AQ=18&quot;,&quot;MaxRefFrames=2&quot;,&quot;MinIdr=10&quot;,&quot;MaxIdr=150&quot;,&quot;threads=99&quot;,&quot;_8x8=True&quot;,&quot;_8x8P=True&quot;,&quot;_8x8B=True&quot;,&quot;_4x4=True&quot; ,&quot;_8x8I=True&quot;,&quot;_4x4I=True&quot;,&quot;MaxBFrame=2&quot;,&quot;profile=30&quot;,&quot;CABAC=True&quot;,&quot;Trellis=True&quot;)                       
++
++# popup user
++popupString=&quot;All set for &quot;+str(rsz)+&quot; wide video, x264/AC3/MKV.&quot;
++if(deinterlace):
++        popupString=popupString+&quot;\nDeinterlace is on (vdpau).&quot;
++gui.displayInfo(&quot;Ok&quot;,popupString)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003712.html">[Avidemux-svn-commit] r6525 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2:	binding include py src
+</A></li>
+	<LI>Next message: <A HREF="003714.html">[Avidemux-svn-commit] r6527 -	branches/avidemux_2.6_branch_mean/autononreg/py/avidemux
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3713">[ date ]</a>
+              <a href="thread.html#3713">[ thread ]</a>
+              <a href="subject.html#3713">[ subject ]</a>
+              <a href="author.html#3713">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

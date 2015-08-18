@@ -1,0 +1,236 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5331 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5331%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs&In-Reply-To=%3C200909161736.n8GHaIZd018799%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002542.html">
+   <LINK REL="Next"  HREF="002544.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5331 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5331%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs&In-Reply-To=%3C200909161736.n8GHaIZd018799%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5331 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Sep 16 19:36:18 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002542.html">[Avidemux-svn-commit] r5330 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_libraries/ADM_mplex
+</A></li>
+        <LI>Next message: <A HREF="002544.html">[Avidemux-svn-commit] r5332 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_codecs	ADM_infoExtractor ADM_inputs/ADM_matroska	ADM_inputs/ADM_openDML ADM_video
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2543">[ date ]</a>
+              <a href="thread.html#2543">[ thread ]</a>
+              <a href="subject.html#2543">[ subject ]</a>
+              <a href="author.html#2543">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-09-16 19:36:16 +0200 (Wed, 16 Sep 2009)
+New Revision: 5331
+
+Added:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_codecFrameType.h
+Log:
+[mkv] Derive frame type while indexing (merge from 2.6)
+
+Added: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_codecFrameType.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_codecFrameType.h	2009-09-15 19:10:33 UTC (rev 5330)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_codecFrameType.h	2009-09-16 17:36:16 UTC (rev 5331)
+@@ -0,0 +1,160 @@
++/***************************************************************************
++                          ADM_codec.h  -  description
++                             -------------------
++    begin                : Fri Apr 12 2002
++    copyright            : (C) 2002 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#ifndef __CODECS__
++#define __CODECS__
++#include &quot;ADM_image.h&quot;
++
++#define AVI_KEY_FRAME	0x10
++#define AVI_B_FRAME	0x4000	// hopefully it is not used..
++#define AVI_P_FRAME   	0x0
++
++#define ADM_QPEL_ON	1
++#define ADM_GMC_ON	2
++#define ADM_VOP_ON	4
++
++#define ADM_ENC_REQ_NULL_FLUSH	1
++
++/*
++        Bitrate in configuration will always be in **kBITS**
++
++*/
++
++#include &quot;ADM_bitstream.h&quot;
++#include &quot;ADM_compressedImage.h&quot;
++class decoders
++{
++protected:
++  uint32_t _w;
++  uint32_t _h;
++  uint8_t _lastQ;
++public:
++    decoders (uint32_t w, uint32_t h)
++  {
++    _w = w;
++    _h = h;
++    _lastQ = 0;
++  }
++  virtual ~ decoders ()
++  {
++  };
++  virtual uint8_t getPARWidth (void)
++  {
++    return 1;
++  };
++  virtual uint8_t getPARHeight (void)
++  {
++    return 1;
++  };
++  virtual void setParam (void)
++  {
++  };
++  virtual uint8_t uncompress (ADMCompressedImage * in, ADMImage * out)=0;
++
++  // does this codec *possibly* can have b-frame ?
++  virtual uint8_t dontcopy (void)
++  {
++    return 0;
++  }				// if 1 means the decoder will return reference
++  // no need to copy the datas to ADMimage
++  virtual uint8_t bFramePossible (void)
++  {
++    return 0;
++  }
++  virtual uint8_t decodeHeaderOnly (void)
++  {
++    return 0;
++  };
++  virtual uint8_t decodeFull (void)
++  {
++    return 0;
++  }
++  virtual uint8_t isDivxPacked (void)
++  {
++    return 0;
++  };
++  virtual uint32_t getSpecificMpeg4Info (void)
++  {
++    return 0;
++  };
++  virtual uint8_t isIndexable (void)
++  {
++    return 1;
++  };
++};
++/* Dummy decoder in case we don't have the desired one */
++class decoderEmpty : public decoders
++{
++protected:
++public:
++    decoderEmpty (uint32_t w, uint32_t h) : decoders(w,h) {};
++    uint8_t uncompress (ADMCompressedImage * in, ADMImage * out) {return 1;}
++
++};
++
++decoders *getDecoder (uint32_t fcc, uint32_t w, uint32_t h, uint32_t extraLen,
++		      uint8_t * extraData,uint32_t bpp=0);
++decoders *getDecoderVopPacked (uint32_t fcc, uint32_t w, uint32_t h,
++			       uint32_t extraLen, uint8_t * extraData);
++decoders *getDecoderH264noLogic (uint32_t fcc, uint32_t w, uint32_t h, uint32_t extraLen,
++		     uint8_t * extraData);
++
++class coders
++{
++protected:
++  uint32_t _w;
++  uint32_t _h;
++public:
++    coders (uint32_t w, uint32_t h)
++  {
++    _w = w;
++    _h = h;
++  }
++  virtual ~ coders ()
++  {
++  };
++  virtual uint8_t compress (ADMImage * in, ADMBitstream * out);
++};
++decoders *getCoder (uint32_t fcc, uint32_t w, uint32_t h);
++uint8_t isMpeg4Compatible (uint32_t fourcc);
++uint8_t isH264Compatible (uint32_t fourcc);
++uint8_t isMSMpeg4Compatible (uint32_t fourcc);
++uint8_t isDVCompatible (uint32_t fourcc);
++
++/*----------------------------------------------------------*/
++class encoder
++{
++protected:uint32_t _w, _h;
++public:encoder (uint32_t width, uint32_t height)
++  {
++    _w = width;
++    _h = height;
++  };
++  virtual uint8_t stopEncoder (void) = 0;
++  virtual uint8_t init (uint32_t val, uint32_t fps1000) = 0;
++  virtual uint8_t encode (ADMImage * in, ADMBitstream *out) = 0;
++  virtual uint8_t getExtraData (uint32_t * l, uint8_t ** d)
++  {
++    *l = 0;
++    *d = NULL;
++    return 0;
++  }
++};
++
++
++
++
++#endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002542.html">[Avidemux-svn-commit] r5330 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_libraries/ADM_mplex
+</A></li>
+	<LI>Next message: <A HREF="002544.html">[Avidemux-svn-commit] r5332 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_codecs	ADM_infoExtractor ADM_inputs/ADM_matroska	ADM_inputs/ADM_openDML ADM_video
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2543">[ date ]</a>
+              <a href="thread.html#2543">[ thread ]</a>
+              <a href="subject.html#2543">[ subject ]</a>
+              <a href="author.html#2543">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

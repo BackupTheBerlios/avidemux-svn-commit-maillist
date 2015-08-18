@@ -1,0 +1,248 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6804 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6804%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C20101204105456.4C0F648071A%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003982.html">
+   <LINK REL="Next"  HREF="003984.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6804 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6804%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C20101204105456.4C0F648071A%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6804 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Dec  4 11:54:56 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003982.html">[Avidemux-svn-commit] r6803 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg:	libavcodec patches/avcodec
+</A></li>
+        <LI>Next message: <A HREF="003984.html">[Avidemux-svn-commit] r6805 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3983">[ date ]</a>
+              <a href="thread.html#3983">[ thread ]</a>
+              <a href="subject.html#3983">[ subject ]</a>
+              <a href="author.html#3983">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-12-04 11:54:56 +0100 (Sat, 04 Dec 2010)
+New Revision: 6804
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractorH264.cpp
+Log:
+[util/h264] use avcodec to decode SPS
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractorH264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractorH264.cpp	2010-12-04 10:54:54 UTC (rev 6803)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractorH264.cpp	2010-12-04 10:54:56 UTC (rev 6804)
+@@ -14,6 +14,13 @@
+ 
+ 
+ #include &quot;ADM_includeFfmpeg.h&quot;
++extern &quot;C&quot;
++{
++#include &quot;libavcodec/parser.h&quot;
++#include &quot;libavcodec/avcodec.h&quot;
++#include &quot;libavcodec/ff_spsinfo.h&quot;
++extern int ff_h264_info(AVCodecParserContext *parser,ffSpsInfo *ndo);
++}
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_Video.h&quot;
+ 
+@@ -138,15 +145,16 @@
+ */
+     }
+     uint32_t f=0;
++    spsinfo-&gt;CpbDpbToSkip=0;
+     if(bits.get(1)) // nal_hrd_param
+     {
+         f++;
+-        spsinfo-&gt;CpbDpbToSkip=hrd(bits);
++        spsinfo-&gt;CpbDpbToSkip+=hrd(bits);
+     }
+     if(bits.get(1)) // vcl_hrd_param
+     {
+         f++;
+-        spsinfo-&gt;CpbDpbToSkip=hrd(bits);
++        spsinfo-&gt;CpbDpbToSkip+=hrd(bits);
+     }
+     if(f) bits.get(1); // low delay flag
+     
+@@ -202,7 +210,7 @@
+     \brief Extract info from H264 SPS
+     See 7.3.2.1 of 14496-10
+ */
+-uint8_t extractSPSInfo (uint8_t * data, uint32_t len, ADM_SPSInfo *spsinfo)
++uint8_t extractSPSInfo_internal (uint8_t * data, uint32_t len, ADM_SPSInfo *spsinfo)
+ {
+    
+   uint32_t profile, constraint, level, pic_order_cnt_type, w, h, mbh,
+@@ -333,8 +341,7 @@
+   if (bits.get(1))
+     {
+       extractVUIInfo (bits, spsinfo);
+-      printf (&quot;[H264] Fps %&quot; LU &quot;, a.r. %&quot; LU &quot;,%&quot; LU &quot;\n&quot;, spsinfo-&gt;fps1000, spsinfo-&gt;darNum,
+-	      spsinfo-&gt;darDen);
++//      printf (&quot;[H264] Fps %&quot; LU &quot;, a.r. %&quot; LU &quot;,%&quot; LU &quot;\n&quot;, spsinfo-&gt;fps1000, spsinfo-&gt;darNum,  spsinfo-&gt;darDen);
+     }
+   else
+     {
+@@ -526,4 +533,120 @@
+   printf (&quot;No stream\n&quot;);
+   return 0;
+ }
++/**
++        \fn extractSPSInfo2
++        \brief Same as extractSPSInfo, but using libavcodec
++*/
++uint8_t extractSPSInfo_lavcodec (uint8_t * data, uint32_t len, ADM_SPSInfo *spsinfo)
++{
++    static const uint8_t sig[5]={0,0,0,1,0};
++    uint32_t myLen=len+5+5+FF_INPUT_BUFFER_PADDING_SIZE;
++    uint8_t myData[myLen];
++    bool r=false;
++
++    memset(myData,myLen,1);
++    mixDump(data,len);
++    // put dummy SPS tag + dummy filler at the end
++    // so that lavcodec can split it
++    memcpy(myData,sig,5);
++    memcpy(myData+5,data,len);
++    memcpy(myData+5+len,sig,5);
++    myData[4]=NAL_SPS;
++    myData[5+len+4]=NAL_FILLER;
++    
++    
++    // 1-Create parser
++    AVCodecParserContext *parser=av_parser_init(CODEC_ID_H264);
++    AVCodecContext *ctx=NULL; 
++    AVCodec *codec=NULL;
++    uint8_t *d=NULL;
++  
++    if(!parser)
++    {
++        ADM_error(&quot;cannot create h264 parser\n&quot;);
++        goto theEnd;
++    }
++    ADM_info(&quot;Parser created\n&quot;);
++    codec=avcodec_find_decoder(CODEC_ID_H264);
++    if(!codec)
++    {
++        ADM_error(&quot;cannot create h264 codec\n&quot;);
++        goto theEnd;
++    }
++    ADM_info(&quot;Codec created\n&quot;);
++    ctx=avcodec_alloc_context();
++   if (avcodec_open(ctx, codec) &lt; 0)  
++   {
++        ADM_error(&quot;cannot create h264 context\n&quot;);
++        goto theEnd;
++    }
++    ADM_info(&quot;Context created\n&quot;);
++    //2- Parse, let's add SPS prefix + Filler postfix to make life easier for libavcodec parser
++    ctx-&gt;extradata=myData;
++    ctx-&gt;extradata_size=myLen;
++     {
++         uint8_t *outptr=NULL;
++         int outsize=0;
++         int consumed = av_parser_parse2(parser, ctx, 
++                                      &amp;outptr, &amp;outsize,
++                                      d, 0,
++                                      0, 0,0);
++    }
++    ADM_info(&quot;Width  : %d\n&quot;,ctx-&gt;width);
++    ADM_info(&quot;Height : %d\n&quot;,ctx-&gt;height);
++    {
++        ffSpsInfo nfo;
++        if(!ff_h264_info(parser,&amp;nfo))
++        {
++            ADM_error(&quot;Cannot get sps info from lavcodec\n&quot;);
++            r=false;
++            goto theEnd;
++        }
++        ADM_info(&quot;Width2 : %d\n&quot;,nfo.width);
++        ADM_info(&quot;Height2: %d\n&quot;,nfo.height);
++        #define CPY(x) spsinfo-&gt;x=nfo.x
++        CPY(width);
++        CPY(height);
++        CPY(fps1000);
++        CPY(hasStructInfo);
++        CPY(CpbDpbToSkip);
++        CPY(darNum);
++        CPY(darDen);
++        r=true;
++     }
++    // cleanup
++theEnd:
++    if(ctx)
++        avcodec_close(ctx);
++    if(parser)
++        av_parser_close(parser);
++    return r;
++}
++
++uint8_t extractSPSInfo (uint8_t * data, uint32_t len, ADM_SPSInfo *spsinfo)
++{
++#define DPY(x) ADM_info(#x&quot;:%d\n&quot;,(int)spsinfo-&gt;x);
++#if 1        
++        
++        bool l=extractSPSInfo_lavcodec(data,len,spsinfo);
++        DPY(width);
++        DPY(height);
++        DPY(fps1000);
++        DPY(hasStructInfo);
++        DPY(CpbDpbToSkip);
++        DPY(darNum);
++        DPY(darDen);
++        return l;
++#else           
++        bool i=extractSPSInfo_internal(data,len,spsinfo);
++        DPY(width);
++        DPY(height);
++        DPY(fps1000);
++        DPY(hasStructInfo);
++        DPY(CpbDpbToSkip);
++        DPY(darNum);
++        DPY(darDen);
++        return i;
++#endif
++}
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003982.html">[Avidemux-svn-commit] r6803 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg:	libavcodec patches/avcodec
+</A></li>
+	<LI>Next message: <A HREF="003984.html">[Avidemux-svn-commit] r6805 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3983">[ date ]</a>
+              <a href="thread.html#3983">[ thread ]</a>
+              <a href="subject.html#3983">[ subject ]</a>
+              <a href="author.html#3983">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

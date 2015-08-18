@@ -1,0 +1,115 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5904 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5904%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer%3A%0A%09include%20src&In-Reply-To=%3C201002070858.o178wxKQ027143%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003108.html">
+   <LINK REL="Next"  HREF="003110.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5904 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer:	include src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5904%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer%3A%0A%09include%20src&In-Reply-To=%3C201002070858.o178wxKQ027143%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5904 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Feb  7 09:58:59 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003108.html">[Avidemux-svn-commit] r5903 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src	avidemux_core/ADM_coreAudio/include
+</A></li>
+        <LI>Next message: <A HREF="003110.html">[Avidemux-svn-commit] r5905 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3109">[ date ]</a>
+              <a href="thread.html#3109">[ thread ]</a>
+              <a href="subject.html#3109">[ subject ]</a>
+              <a href="author.html#3109">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-02-07 09:58:57 +0100 (Sun, 07 Feb 2010)
+New Revision: 5904
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/include/ADM_coreMuxerFfmpeg.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src/ADM_coreMuxerFfmpeg.cpp
+Log:
+[muxer] Handle video encoding delay for lavformat derivated muxers
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/include/ADM_coreMuxerFfmpeg.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/include/ADM_coreMuxerFfmpeg.h	2010-02-06 14:00:47 UTC (rev 5903)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/include/ADM_coreMuxerFfmpeg.h	2010-02-07 08:58:57 UTC (rev 5904)
+@@ -54,6 +54,8 @@
+         {
+             return muxerRescaleVideoTime(time);
+         }
++        uint64_t audioDelay; // since video decoder can cause a delay, we have to delay also all audio tracks
++                             // by this value. It will be 0 for copy or 0 bframe codec.
+ protected:
+         bool saveLoop(const char *title);
+ protected:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src/ADM_coreMuxerFfmpeg.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src/ADM_coreMuxerFfmpeg.cpp	2010-02-06 14:00:47 UTC (rev 5903)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src/ADM_coreMuxerFfmpeg.cpp	2010-02-07 08:58:57 UTC (rev 5904)
+@@ -36,6 +36,7 @@
+     oc=NULL;
+     audio_st=NULL;
+     video_st=NULL;
++    audioDelay=0;
+ }
+ /**
+     \fn closeMuxer
+@@ -103,6 +104,7 @@
+ */
+ bool muxerFFmpeg::initVideo(ADM_videoStream *stream)
+ {
++    audioDelay=stream-&gt;getVideoDelay();
+     video_st = av_new_stream(oc, 0);
+ 	if (!video_st)
+ 	{
+@@ -445,6 +447,8 @@
+                         }
+                        // printf(&quot;Track %d , new audio packet DTS=%&quot;LLD&quot; size=%&quot;LU&quot;\n&quot;,audioTrack-&gt;dts,audioTrack-&gt;size);
+                         audioTrack-&gt;present=true;
++                        // Delay audio by the delay induce by encoder
++                        if(audioTrack-&gt;dts!=ADM_NO_PTS) audioTrack-&gt;dts+=audioDelay;
+                     }
+                     if(audioTrack-&gt;dts!=ADM_NO_PTS)
+                     {
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003108.html">[Avidemux-svn-commit] r5903 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src	avidemux_core/ADM_coreAudio/include
+</A></li>
+	<LI>Next message: <A HREF="003110.html">[Avidemux-svn-commit] r5905 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3109">[ date ]</a>
+              <a href="thread.html#3109">[ thread ]</a>
+              <a href="subject.html#3109">[ subject ]</a>
+              <a href="author.html#3109">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

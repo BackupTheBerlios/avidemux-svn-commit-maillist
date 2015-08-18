@@ -1,0 +1,279 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3653 - in branches/avidemux_2.4_branch: .	avidemux avidemux/ADM_userInterfaces/ADM_QT4 cmake
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3653%20-%20in%20branches/avidemux_2.4_branch%3A%20.%0A%09avidemux%20avidemux/ADM_userInterfaces/ADM_QT4%20cmake&In-Reply-To=%3C200710141603.l9EG3Olb026975%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000922.html">
+   <LINK REL="Next"  HREF="000923.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3653 - in branches/avidemux_2.4_branch: .	avidemux avidemux/ADM_userInterfaces/ADM_QT4 cmake</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3653%20-%20in%20branches/avidemux_2.4_branch%3A%20.%0A%09avidemux%20avidemux/ADM_userInterfaces/ADM_QT4%20cmake&In-Reply-To=%3C200710141603.l9EG3Olb026975%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3653 - in branches/avidemux_2.4_branch: .	avidemux avidemux/ADM_userInterfaces/ADM_QT4 cmake">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sun Oct 14 18:03:24 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000922.html">[Avidemux-svn-commit] r3652 - in branches/avidemux_2.4_branch: .	debian
+</A></li>
+        <LI>Next message: <A HREF="000923.html">[Avidemux-svn-commit] r3654 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_gui2 ADM_toolkit_gtk
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#924">[ date ]</a>
+              <a href="thread.html#924">[ thread ]</a>
+              <a href="subject.html#924">[ subject ]</a>
+              <a href="author.html#924">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2007-10-14 18:03:11 +0200 (Sun, 14 Oct 2007)
+New Revision: 3653
+
+Modified:
+   branches/avidemux_2.4_branch/ConfigureChecks.cmake
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ui_support.cpp
+   branches/avidemux_2.4_branch/avidemux/CMakeLists.txt
+   branches/avidemux_2.4_branch/cmake/FindSDL.cmake
+   branches/avidemux_2.4_branch/cmake/admSDL.cmake
+Log:
+[CMake] use CMake to detect SDL instead of pkg-config - better for Windows and Mac 
+
+Modified: branches/avidemux_2.4_branch/ConfigureChecks.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/ConfigureChecks.cmake	2007-10-14 14:44:34 UTC (rev 3652)
++++ branches/avidemux_2.4_branch/ConfigureChecks.cmake	2007-10-14 16:03:11 UTC (rev 3653)
+@@ -208,7 +208,7 @@
+ IF (NO_SDL)
+ 	MESSAGE(STATUS &quot;&lt;disabled per request&gt;&quot;)
+ ELSE (NO_SDL)
+-	ADM_FIND_SDL()
++	include(FindSDL)
+ 
+ 	IF (SDL_FOUND)
+ 		SET(USE_SDL 1)
+@@ -217,6 +217,9 @@
+ 	ELSE (SDL_FOUND)
+ 		MESSAGE(STATUS &quot;Not Found&quot;)
+ 	ENDIF (SDL_FOUND)
++	
++	MESSAGE(STATUS &quot;Flags: ${SDL_INCLUDE_DIR}&quot;)
++	MESSAGE(STATUS &quot;Libraries: ${SDL_LIBRARY}&quot;)	
+ ENDIF (NO_SDL)
+ 
+ ########################################
+@@ -238,8 +241,8 @@
+ 
+ 	ADM_CHECK_HL(Xvideo X11/extensions/Xvlib.h Xv XvShmPutImage USE_XV)
+ 	
+-	MESSAGE(STATUS &quot;(X11 Flags: ${CMAKE_REQUIRED_FLAGS} ${X11_INCLUDE_DIR})&quot;)
+-	MESSAGE(STATUS &quot;(X11 Libraries: ${X11_LIBRARIES})&quot;)
++	MESSAGE(STATUS &quot;Flags: ${CMAKE_REQUIRED_FLAGS} ${X11_INCLUDE_DIR}&quot;)
++	MESSAGE(STATUS &quot;Libraries: ${X11_LIBRARIES}&quot;)
+ 
+ 	SET(CMAKE_REQUIRED_FLAGS)
+ 	SET(CMAKE_REQUIRED_LIBRARIES)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ui_support.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ui_support.cpp	2007-10-14 14:44:34 UTC (rev 3652)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ui_support.cpp	2007-10-14 16:03:11 UTC (rev 3653)
+@@ -55,8 +55,8 @@
+ 
+ 	loadTranslation(&amp;qtTranslator, appdir + &quot;qt_&quot; + QLocale::system().name());
+ 	loadTranslation(&amp;avidemuxTranslator, appdir + &quot;avidemux_&quot; + QLocale::system().name());
+-	
+-	printf(&quot;[Locale] Test: &amp;File -&gt; %s\n\n&quot;, QApplication::translate(&quot;MainWindow&quot;, &quot;&amp;Edit&quot;).toUtf8().data());
++
++	printf(&quot;[Locale] Test: &amp;Edit -&gt; %s\n\n&quot;, QApplication::translate(&quot;MainWindow&quot;, &quot;&amp;Edit&quot;).toUtf8().data());
+ }
+ 
+ void destroyTranslator(void)
+
+Modified: branches/avidemux_2.4_branch/avidemux/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/CMakeLists.txt	2007-10-14 14:44:34 UTC (rev 3652)
++++ branches/avidemux_2.4_branch/avidemux/CMakeLists.txt	2007-10-14 16:03:11 UTC (rev 3653)
+@@ -288,17 +288,17 @@
+ 
+ # SDL
+ if(USE_SDL)
+-	add_libs_all_targets(${SDL_LDFLAGS})
++	add_libs_all_targets(&quot;${SDL_LIBRARY}&quot;)
+ endif(USE_SDL)
+ 
+ # ARTS
+ if(USE_ARTS)
+-	add_libs_all_targets(${ARTS_LDFLAGS})
++	add_libs_all_targets(&quot;${ARTS_LDFLAGS}&quot;)
+ endif(USE_ARTS)
+ 
+ #alsa
+ if(ALSA_FOUND)
+-	add_libs_all_targets(${ASOUND_LIBRARY})
++	add_libs_all_targets(&quot;${ASOUND_LIBRARY}&quot;)
+ endif(ALSA_FOUND)
+ 
+ # ESD
+@@ -398,10 +398,6 @@
+ 	if(CMAKE_BUILD_TYPE STREQUAL &quot;Release&quot;)
+ 		add_ldflags_all_targets(&quot;-Wl,-s&quot;)
+ 	endif(CMAKE_BUILD_TYPE STREQUAL &quot;Release&quot;)
+-
+-	if(USE_SDL)
+-		add_definitions(${SDL_CFLAGS})
+-	endif(USE_SDL)
+ ENDIF (ADM_OS_WINDOWS)
+ 
+ ########################
+
+Modified: branches/avidemux_2.4_branch/cmake/FindSDL.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/cmake/FindSDL.cmake	2007-10-14 14:44:34 UTC (rev 3652)
++++ branches/avidemux_2.4_branch/cmake/FindSDL.cmake	2007-10-14 16:03:11 UTC (rev 3653)
+@@ -31,6 +31,7 @@
+ # reasons because not all systems place things in SDL/ (see FreeBSD).
+ FIND_PATH(SDL_INCLUDE_DIR SDL.h
+   $ENV{SDLDIR}/include
++  $ENV{SDLDIR}/include/SDL
+   ~/Library/Frameworks/SDL.framework/Headers
+   /Library/Frameworks/SDL.framework/Headers
+   /usr/local/include/SDL
+@@ -125,7 +126,7 @@
+   SET(MINGW32_LIBRARY mingw32 CACHE STRING &quot;mwindows for MinGW&quot;)
+ ENDIF(MINGW)
+ 
+-SET(SDL_FOUND &quot;NO&quot;)
++SET(SDL_FOUND FALSE)
+ IF(SDL_LIBRARY_TEMP)
+   # For SDLmain
+   IF(SDLMAIN_LIBRARY)
+@@ -156,7 +157,7 @@
+   # Set the final string here so the GUI reflects the final state.
+   SET(SDL_LIBRARY ${SDL_LIBRARY_TEMP} CACHE STRING &quot;Where the SDL Library can be found&quot;)
+ 
+-  SET(SDL_FOUND &quot;YES&quot;)
++  SET(SDL_FOUND TRUE)
+ ENDIF(SDL_LIBRARY_TEMP)
+ 
+ MARK_AS_ADVANCED(SDL_LIBRARY_TEMP)
+
+Modified: branches/avidemux_2.4_branch/cmake/admSDL.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/cmake/admSDL.cmake	2007-10-14 14:44:34 UTC (rev 3652)
++++ branches/avidemux_2.4_branch/cmake/admSDL.cmake	2007-10-14 16:03:11 UTC (rev 3653)
+@@ -4,43 +4,42 @@
+ #  SDL_FOUND, if false, do not try to link to SDL
+ #  SDL_INCLUDE_DIR, where to find SDL.h
+ #
+-MACRO(ADM_FIND_SDL)
++#MACRO(ADM_FIND_SDL)
++#
++#FIND_PROGRAM(SDL_EXECUTABLE
++#  NAMES sdl-config
++#  PATHS
++#  $ENV{SDLDIR}/bin
++#)
++#if(SDL_EXECUTABLE)
++#  MESSAGE(STATUS &quot;sdl-config found ${SDL_EXECUTABLE}&quot;)
++## Check we can run it
++#    FIND_PROGRAM(SH_EXECUTABLE NAMES sh)
++#
++#    IF(SH_EXECUTABLE)
++#      MESSAGE(STATUS &quot;sh found ${SH_EXECUTABLE}&quot;)
++#    
++#      EXEC_PROGRAM(${SH_EXECUTABLE} ARGS &quot;${SDL_EXECUTABLE} --libs&quot;   OUTPUT_VARIABLE SDL_LDFLAGS )
++#      EXEC_PROGRAM(${SH_EXECUTABLE} ARGS &quot;${SDL_EXECUTABLE} --cflags&quot; OUTPUT_VARIABLE SDL_CFLAGS )
++#      SET(SDL_FOUND TRUE)
++#    ELSEIF(WIN32)
++#      SET(SDL_FOUND TRUE)
++#      SET(SDL_LDFLAGS &quot;-L/mingw/lib -lmingw32 -lSDLmain -lSDL -mwindows&quot;)
++#      SET(SDL_CFLAGS &quot;-I/mingw/include/SDL -D_GNU_SOURCE=1 -Dmain=SDL_main&quot;)
++#    ENDIF(SH_EXECUTABLE)
++#    
++#    IF(SDL_FOUND)
++#      MESSAGE(STATUS &quot;cflags : ${SDL_CFLAGS}&quot;)
++#      MESSAGE(STATUS &quot;libs   : ${SDL_LDFLAGS}&quot;)
++#    ENDIF(SDL_FOUND)
++#else(SDL_EXECUTABLE)
++#  MESSAGE(STATUS &quot;sdl-config not found &quot;)
++#endif(SDL_EXECUTABLE)
++#
++#ENDMACRO(ADM_FIND_SDL)
+ 
+-FIND_PROGRAM(SDL_EXECUTABLE
+-  NAMES sdl-config
+-  PATHS
+-  $ENV{SDLDIR}/bin
+-)
+-if(SDL_EXECUTABLE)
+-  MESSAGE(STATUS &quot;sdl-config found ${SDL_EXECUTABLE}&quot;)
+-# Check we can run it
+-    FIND_PROGRAM(SH_EXECUTABLE NAMES sh)
+-
+-    IF(SH_EXECUTABLE)
+-      MESSAGE(STATUS &quot;sh found ${SH_EXECUTABLE}&quot;)
+-    
+-      EXEC_PROGRAM(${SH_EXECUTABLE} ARGS &quot;${SDL_EXECUTABLE} --libs&quot;   OUTPUT_VARIABLE SDL_LDFLAGS )
+-      EXEC_PROGRAM(${SH_EXECUTABLE} ARGS &quot;${SDL_EXECUTABLE} --cflags&quot; OUTPUT_VARIABLE SDL_CFLAGS )
+-      SET(SDL_FOUND TRUE)
+-    ELSEIF(WIN32)
+-      SET(SDL_FOUND TRUE)
+-      SET(SDL_LDFLAGS &quot;-L/mingw/lib -lmingw32 -lSDLmain -lSDL -mwindows&quot;)
+-      SET(SDL_CFLAGS &quot;-I/mingw/include/SDL -D_GNU_SOURCE=1 -Dmain=SDL_main&quot;)
+-    ENDIF(SH_EXECUTABLE)
+-    
+-    IF(SDL_FOUND)
+-      MESSAGE(STATUS &quot;cflags : ${SDL_CFLAGS}&quot;)
+-      MESSAGE(STATUS &quot;libs   : ${SDL_LDFLAGS}&quot;)
+-    ENDIF(SDL_FOUND)
+-else(SDL_EXECUTABLE)
+-  MESSAGE(STATUS &quot;sdl-config not found &quot;)
+-endif(SDL_EXECUTABLE)
+-
+-ENDMACRO(ADM_FIND_SDL)
+-
+ MACRO(SDLify _source)
+-if(SDL_FOUND)
+-        SET_SOURCE_FILES_PROPERTIES(${_source}
+-                                     PROPERTIES COMPILE_FLAGS ${SDL_CFLAGS}) 
+-endif(SDL_FOUND)
+-ENDMACRO(SDLify _source)
++	if(SDL_FOUND)
++        SET_SOURCE_FILES_PROPERTIES(${_source} PROPERTIES COMPILE_FLAGS &quot;${SDL_INCLUDE_DIR}&quot;)
++	endif(SDL_FOUND)
++ENDMACRO(SDLify)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000922.html">[Avidemux-svn-commit] r3652 - in branches/avidemux_2.4_branch: .	debian
+</A></li>
+	<LI>Next message: <A HREF="000923.html">[Avidemux-svn-commit] r3654 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_gui2 ADM_toolkit_gtk
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#924">[ date ]</a>
+              <a href="thread.html#924">[ thread ]</a>
+              <a href="subject.html#924">[ subject ]</a>
+              <a href="author.html#924">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

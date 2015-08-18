@@ -1,0 +1,259 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6719 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	. colorYUV
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6719%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6%3A%0A%09.%20colorYUV&In-Reply-To=%3C20101028055452.7C668480FA4%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003900.html">
+   <LINK REL="Next"  HREF="003902.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6719 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	. colorYUV</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6719%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6%3A%0A%09.%20colorYUV&In-Reply-To=%3C20101028055452.7C668480FA4%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6719 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	. colorYUV">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Oct 28 07:54:52 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003900.html">[Avidemux-svn-commit] r6718 -	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_UIs/src
+</A></li>
+        <LI>Next message: <A HREF="003902.html">[Avidemux-svn-commit] r6720 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters/Yadif
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3901">[ date ]</a>
+              <a href="thread.html#3901">[ thread ]</a>
+              <a href="subject.html#3901">[ subject ]</a>
+              <a href="author.html#3901">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-10-28 07:54:52 +0200 (Thu, 28 Oct 2010)
+New Revision: 6719
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/ADM_vidColorYuv.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/colorYuv.conf
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/colorYuv.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/colorYuv_desc.cpp
+Log:
+[VideoFilter] ColorYuv]
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/CMakeLists.txt	2010-10-28 05:54:51 UTC (rev 6718)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/CMakeLists.txt	2010-10-28 05:54:52 UTC (rev 6719)
+@@ -1,6 +1,7 @@
+ ADD_SUBDIRECTORY(addBorder)
+ ADD_SUBDIRECTORY(ass)
+ ADD_SUBDIRECTORY(blackenBorder)
++ADD_SUBDIRECTORY(colorYUV)
+ ADD_SUBDIRECTORY(crop)
+ ADD_SUBDIRECTORY(dummy)
+ ADD_SUBDIRECTORY(fastConvolution)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/ADM_vidColorYuv.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/ADM_vidColorYuv.cpp	2010-10-28 05:54:51 UTC (rev 6718)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/ADM_vidColorYuv.cpp	2010-10-28 05:54:52 UTC (rev 6719)
+@@ -68,8 +68,61 @@
+ */
+ bool         vidColorYuv::configure(void)
+ {
++    bool r=false;
++
++// --- Tab 1 ----
++#define PX(x) (&amp;(param.x))
++     diaElemToggle     tAutoWhite(PX(autowhite),QT_TR_NOOP(&quot;AutoWhite&quot;));
++     diaElemToggle     tAutoGain(PX(autogain),QT_TR_NOOP(&quot;AutoGain&quot;));
++     diaElemToggle     tOpt(PX(opt),QT_TR_NOOP(&quot;Clip to Tv Range (16-235)&quot;));
++     diaMenuEntry      levelMenus[]={{0,QT_TR_NOOP(&quot;None&quot;),NULL},
++                                     {1,QT_TR_NOOP(&quot;PC-&gt;TV&quot;),NULL},
++                                     {2,QT_TR_NOOP(&quot;TV-&gt;PC&quot;),NULL}};
++// levels 	case 1:	// PC-&gt;TV Scale			case 2:	// TV-&gt;PC Scale  case 0:	//none
++        diaElemMenu mLevel(PX(levels),QT_TR_NOOP(&quot;Levels:&quot;), sizeof(levelMenus)/sizeof(diaMenuEntry),levelMenus,&quot;&quot;);    
++    diaElem *dia1[]={&amp;tAutoWhite,&amp;tAutoGain,&amp;tOpt,&amp;mLevel};
++//  diaElemFloat(ELEM_TYPE_FLOAT *intValue,const char *toggleTitle, ELEM_TYPE_FLOAT min, 
++//               ELEM_TYPE_FLOAT max,const char *tip=NULL, int decimals = 2);
++
++// --- Tab 2 ----
++
++    diaElemFloat        yGain(PX(y_gain),QT_TR_NOOP(&quot;Y gain&quot;),0,100,NULL,3);
++    diaElemFloat        yBright(PX(y_bright),QT_TR_NOOP(&quot;Y Brightness&quot;),0,100,NULL,3);
++    diaElemFloat        yGamma(PX(y_gamma),QT_TR_NOOP(&quot;Y Gamma&quot;),0,100,NULL,3);
++    diaElemFloat        yContrast(PX(y_contrast),QT_TR_NOOP(&quot;Y Contrast&quot;),0,100,NULL,3);
++ 
++    diaElem *dia2[]={&amp;yGain,&amp;yBright,&amp;yGamma,&amp;yContrast};
++// --- Tab 3 ----
++
++    diaElemFloat        uGain(PX(u_gain),QT_TR_NOOP(&quot;U gain&quot;),0,100,NULL,3);
++    diaElemFloat        uBright(PX(u_bright),QT_TR_NOOP(&quot;U Brightness&quot;),0,100,NULL,3);
++    diaElemFloat        uGamma(PX(u_gamma),QT_TR_NOOP(&quot;U Gamma&quot;),0,100,NULL,3);
++    diaElemFloat        uContrast(PX(u_contrast),QT_TR_NOOP(&quot;U Contrast&quot;),0,100,NULL,3);
++ 
++    diaElem *dia3[]={&amp;uGain,&amp;uBright,&amp;uGamma,&amp;uContrast};
++
++// --- Tab 4 ----
++
++    diaElemFloat        vGain(PX(u_gain),QT_TR_NOOP(&quot;V gain&quot;),0,100,NULL,3);
++    diaElemFloat        vBright(PX(u_bright),QT_TR_NOOP(&quot;V Brightness&quot;),0,100,NULL,3);
++    diaElemFloat        vGamma(PX(u_gamma),QT_TR_NOOP(&quot;V Gamma&quot;),0,100,NULL,3);
++    diaElemFloat        vContrast(PX(u_contrast),QT_TR_NOOP(&quot;V Contrast&quot;),0,100,NULL,3);
++ 
++    diaElem *dia4[]={&amp;vGain,&amp;vBright,&amp;vGamma,&amp;vContrast};
++//
++    diaElemTabs tab1(QT_TR_NOOP(&quot;Flags&quot;),4,dia1);
++    diaElemTabs tab2(QT_TR_NOOP(&quot;Y&quot;),4,dia2);
++    diaElemTabs tab3(QT_TR_NOOP(&quot;U&quot;),4,dia3);
++    diaElemTabs tab4(QT_TR_NOOP(&quot;V&quot;),4,dia4);
++    
++    diaElemTabs *tabs[]={&amp;tab1,&amp;tab2,&amp;tab3,&amp;tab4};
++    if( diaFactoryRunTabs(QT_TR_NOOP(&quot;colorYuv&quot;),4,tabs))
++    {
++        r=true;
++    }
++
+     MakeGammaLUT();
+-    return true;
++    return r;
+ }
+ /**
+     \fn getConfiguration
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/colorYuv.conf
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/colorYuv.conf	2010-10-28 05:54:51 UTC (rev 6718)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/colorYuv.conf	2010-10-28 05:54:52 UTC (rev 6719)
+@@ -1,18 +1,18 @@
+-float:y_contrast
++float:y_gain
+ float:y_bright
+ float:y_gamma
+-float:y_gain
+-float:u_contrast
++float:y_contrast
++float:u_gain
+ float:u_bright
+ float:u_gamma
+-float:u_gain;
+-float:v_contrast
++float:u_contrast
++float:v_gain
+ float:v_bright
+ float:v_gamma
+-float:v_gain
+-int32_t:matrix
+-int32_t:levels
+-int32_t:opt
++float:v_contrast
++uint32_t:matrix
++uint32_t:levels
++uint32_t:opt
+ uint32_t:colorbars
+ uint32_t:analyze
+ uint32_t:autowhite
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/colorYuv.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/colorYuv.h	2010-10-28 05:54:51 UTC (rev 6718)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/colorYuv.h	2010-10-28 05:54:52 UTC (rev 6719)
+@@ -2,21 +2,21 @@
+ #ifndef ADM_colorYuv_CONF_H
+ #define ADM_colorYuv_CONF_H
+ typedef struct {
+-   float y_contrast;
++   float y_gain;
+    float y_bright;
+    float y_gamma;
+-   float y_gain;
+-   float u_contrast;
++   float y_contrast;
++   float u_gain;
+    float u_bright;
+    float u_gamma;
+-   float u_gain;
+-   float v_contrast;
++   float u_contrast;
++   float v_gain;
+    float v_bright;
+    float v_gamma;
+-   float v_gain;
+-   int32_t matrix;
+-   int32_t levels;
+-   int32_t opt;
++   float v_contrast;
++   uint32_t matrix;
++   uint32_t levels;
++   uint32_t opt;
+    uint32_t colorbars;
+    uint32_t analyze;
+    uint32_t autowhite;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/colorYuv_desc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/colorYuv_desc.cpp	2010-10-28 05:54:51 UTC (rev 6718)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/colorYUV/colorYuv_desc.cpp	2010-10-28 05:54:52 UTC (rev 6719)
+@@ -1,20 +1,20 @@
+ // Automatically generated, do not edit!
+ const ADM_paramList colorYuv_param[]={
+- {&quot;y_contrast&quot;,offsetof( colorYuv,y_contrast),&quot;float&quot;,ADM_param_float},
++ {&quot;y_gain&quot;,offsetof( colorYuv,y_gain),&quot;float&quot;,ADM_param_float},
+  {&quot;y_bright&quot;,offsetof( colorYuv,y_bright),&quot;float&quot;,ADM_param_float},
+  {&quot;y_gamma&quot;,offsetof( colorYuv,y_gamma),&quot;float&quot;,ADM_param_float},
+- {&quot;y_gain&quot;,offsetof( colorYuv,y_gain),&quot;float&quot;,ADM_param_float},
+- {&quot;u_contrast&quot;,offsetof( colorYuv,u_contrast),&quot;float&quot;,ADM_param_float},
++ {&quot;y_contrast&quot;,offsetof( colorYuv,y_contrast),&quot;float&quot;,ADM_param_float},
++ {&quot;u_gain&quot;,offsetof( colorYuv,u_gain),&quot;float&quot;,ADM_param_float},
+  {&quot;u_bright&quot;,offsetof( colorYuv,u_bright),&quot;float&quot;,ADM_param_float},
+  {&quot;u_gamma&quot;,offsetof( colorYuv,u_gamma),&quot;float&quot;,ADM_param_float},
+- {&quot;u_gain&quot;,offsetof( colorYuv,u_gain),&quot;float&quot;,ADM_param_float},
+- {&quot;v_contrast&quot;,offsetof( colorYuv,v_contrast),&quot;float&quot;,ADM_param_float},
++ {&quot;u_contrast&quot;,offsetof( colorYuv,u_contrast),&quot;float&quot;,ADM_param_float},
++ {&quot;v_gain&quot;,offsetof( colorYuv,v_gain),&quot;float&quot;,ADM_param_float},
+  {&quot;v_bright&quot;,offsetof( colorYuv,v_bright),&quot;float&quot;,ADM_param_float},
+  {&quot;v_gamma&quot;,offsetof( colorYuv,v_gamma),&quot;float&quot;,ADM_param_float},
+- {&quot;v_gain&quot;,offsetof( colorYuv,v_gain),&quot;float&quot;,ADM_param_float},
+- {&quot;matrix&quot;,offsetof( colorYuv,matrix),&quot;int32_t&quot;,ADM_param_int32_t},
+- {&quot;levels&quot;,offsetof( colorYuv,levels),&quot;int32_t&quot;,ADM_param_int32_t},
+- {&quot;opt&quot;,offsetof( colorYuv,opt),&quot;int32_t&quot;,ADM_param_int32_t},
++ {&quot;v_contrast&quot;,offsetof( colorYuv,v_contrast),&quot;float&quot;,ADM_param_float},
++ {&quot;matrix&quot;,offsetof( colorYuv,matrix),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;levels&quot;,offsetof( colorYuv,levels),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;opt&quot;,offsetof( colorYuv,opt),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;colorbars&quot;,offsetof( colorYuv,colorbars),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;analyze&quot;,offsetof( colorYuv,analyze),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;autowhite&quot;,offsetof( colorYuv,autowhite),&quot;uint32_t&quot;,ADM_param_uint32_t},
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003900.html">[Avidemux-svn-commit] r6718 -	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_UIs/src
+</A></li>
+	<LI>Next message: <A HREF="003902.html">[Avidemux-svn-commit] r6720 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters/Yadif
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3901">[ date ]</a>
+              <a href="thread.html#3901">[ thread ]</a>
+              <a href="subject.html#3901">[ subject ]</a>
+              <a href="author.html#3901">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

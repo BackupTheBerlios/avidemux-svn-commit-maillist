@@ -1,0 +1,201 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6841 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs: include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6841%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs%3A%20include%20src&In-Reply-To=%3C20101212103942.0EE42480F94%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004016.html">
+   <LINK REL="Next"  HREF="004018.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6841 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs: include src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6841%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs%3A%20include%20src&In-Reply-To=%3C20101212103942.0EE42480F94%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6841 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs: include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Dec 12 11:39:42 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004016.html">[Avidemux-svn-commit] r6840 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+        <LI>Next message: <A HREF="004018.html">[Avidemux-svn-commit] r6842 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mpegdemuxer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4017">[ date ]</a>
+              <a href="thread.html#4017">[ thread ]</a>
+              <a href="subject.html#4017">[ subject ]</a>
+              <a href="author.html#4017">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-12-12 11:39:41 +0100 (Sun, 12 Dec 2010)
+New Revision: 6841
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/include/T_progress.h
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_jobControl.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_jobProgress.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_runOneJob.cpp
+Log:
+[jobs] Display progress
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/include/T_progress.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/include/T_progress.h	2010-12-12 10:39:40 UTC (rev 6840)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/include/T_progress.h	2010-12-12 10:39:41 UTC (rev 6841)
+@@ -19,13 +19,14 @@
+             uint32_t percent;
+         
+             void     updateUi(void);
+-            void     updatePercent(void);
++
+ public:
+                 jobProgress(uint32_t nbJobs);
+ 	virtual     ~jobProgress();
+             void  setCurrentJob(uint32_t job);
+             void  setCurrentOutputName(const string &amp;name);
+-            void  setPercent(uint32_t percent);
++            void  setPercent(uint32_t percent);
++            void  updatePercent(void);
+ protected:
+     Ui_DialogProgress ui;
+ public slots:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_jobControl.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_jobControl.cpp	2010-12-12 10:39:40 UTC (rev 6840)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_jobControl.cpp	2010-12-12 10:39:41 UTC (rev 6841)
+@@ -228,7 +228,7 @@
+             case   JobAction_runNow:
+                         {
+                             dialog=new jobProgress(1);
+-                            dialog-&gt;setCurrentJob(1);
++                            dialog-&gt;setCurrentJob(0);
+                             dialog-&gt;setCurrentOutputName(j-&gt;outputFileName);
+                             runOneJob(*j);
+                             delete dialog;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_jobProgress.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_jobProgress.cpp	2010-12-12 10:39:40 UTC (rev 6840)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_jobProgress.cpp	2010-12-12 10:39:41 UTC (rev 6841)
+@@ -28,14 +28,15 @@
+     ui.progressBar-&gt;setMaximum(100);
+     ui.progressBar-&gt;setValue(0);
+     ADM_info(&quot;Starting progress dialog\n&quot;);
+-    show();
++    open();
++    QApplication::processEvents();
+ }
+ /**
+     \fn dtor
+ */
+ jobProgress::~jobProgress()
+ {
+-
++    ADM_info(&quot;Deleting progress..\n&quot;);
+ }
+ /**
+ 
+@@ -67,6 +68,10 @@
+ */
+ void     jobProgress::updateUi(void)
+ {
++    char buffer[128];
++    sprintf(buffer,&quot;%d/%d&quot;,currentJob+1,numberOfJobs);
++    ui.labelJobCount-&gt;setText(buffer);
++    ui.labelOutputFile_2-&gt;setText(currentOutputFile.c_str());
+     updatePercent();
+ }
+ /**
+@@ -75,5 +80,6 @@
+ void     jobProgress::updatePercent(void)
+ {
+     ui.progressBar-&gt;setValue(percent);
++    QApplication::processEvents();
+ }
+ // EOF
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_runOneJob.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_runOneJob.cpp	2010-12-12 10:39:40 UTC (rev 6840)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_runOneJob.cpp	2010-12-12 10:39:41 UTC (rev 6841)
+@@ -12,6 +12,7 @@
+  *                                                                         *
+  ***************************************************************************/
+ #include &quot;T_jobs.h&quot;
++#include &quot;T_progress.h&quot;
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_coreJobs.h&quot;
+ #include &quot;pthread.h&quot;
+@@ -57,7 +58,11 @@
+     argv[1]=string(str);
+     argv[2]=string(&quot;--runpy \&quot;&quot;)+data-&gt;script+string(&quot;\&quot; &quot;);
+     argv[3]=string(&quot;--save \&quot;&quot;)+data-&gt;outputFile+string(&quot;\&quot; &quot;);
++#ifndef __WIN32
+     argv[4]=string(&quot;--quit &gt; /tmp/prout.log&quot;);
++#else
++    argv[4]=string(&quot;--quit &quot;);
++#endif
+     return spawnProcess(data-&gt;exeName,5,argv);
+ }
+ /**
+@@ -81,6 +86,7 @@
+             }
+             // Everything is fine, give process 1 second to use the stack allocated data....
+             ADM_usleep(1000*1000LL);
++            QApplication::processEvents();
+             ADM_info(&quot;Spawning successfull\n&quot;);
+             return true;
+ }
+@@ -162,6 +168,7 @@
+                             if(msg.getPayloadAsUint32_t(&amp;v))
+                             {
+                                     printf(&quot;Progress %d %%\n&quot;,(int)v);
++                                    dialog-&gt;setPercent(v);
+                             }else
+                             {
+                                     ADM_error(&quot;Can read End payload   \n&quot;);
+@@ -171,6 +178,8 @@
+                                 break;
+             }
+         }
++        ADM_assert(dialog);
++        QApplication::processEvents();
+         ADM_usleep(1000*1000); // Refresh once per sec
+     }
+     ADM_info(&quot;** End of slave process **\n&quot;);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004016.html">[Avidemux-svn-commit] r6840 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+	<LI>Next message: <A HREF="004018.html">[Avidemux-svn-commit] r6842 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mpegdemuxer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4017">[ date ]</a>
+              <a href="thread.html#4017">[ thread ]</a>
+              <a href="subject.html#4017">[ subject ]</a>
+              <a href="author.html#4017">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

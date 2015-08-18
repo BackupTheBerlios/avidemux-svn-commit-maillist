@@ -1,0 +1,401 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2678 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4:	ADM_filters ADM_gui
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2678%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4%3A%0A%09ADM_filters%20ADM_gui&In-Reply-To=%3C200701031947.l03Jld4e007482%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000006.html">
+   <LINK REL="Next"  HREF="000008.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2678 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4:	ADM_filters ADM_gui</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2678%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4%3A%0A%09ADM_filters%20ADM_gui&In-Reply-To=%3C200701031947.l03Jld4e007482%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2678 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4:	ADM_filters ADM_gui">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Jan  3 20:47:39 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000006.html">[Avidemux-svn-commit] r2677 -	branches/avidemux_2.3_branch/avidemux/ADM_audiofilter
+</A></li>
+        <LI>Next message: <A HREF="000008.html">[Avidemux-svn-commit] r2679 - in branches/avidemux_2.4_branch:	admin avidemux avidemux/ADM_filter	avidemux/ADM_libraries/ADM_utilities avidemux/ADM_osSupport	avidemux/ADM_toolkit avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#7">[ date ]</a>
+              <a href="thread.html#7">[ thread ]</a>
+              <a href="subject.html#7">[ subject ]</a>
+              <a href="author.html#7">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-01-03 20:47:39 +0100 (Wed, 03 Jan 2007)
+New Revision: 2678
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/mainfilter.ui
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/gui2.ui
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/translation_table.h
+Log:
+some small improvements on QT4 UI
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp	2007-01-01 18:38:37 UTC (rev 2677)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp	2007-01-03 19:47:39 UTC (rev 2678)
+@@ -39,7 +39,8 @@
+ extern uint32_t nb_video_filter;
+ extern FILTER videofilters[MAX_FILTER];
+ extern uint32_t nb_active_filter;
+-//extern ADM_Composer *video_body;
++extern const char  *filterGetNameFromTag(VF_FILTERS tag);
++extern ADM_Composer *video_body;
+ 
+ /*******************************************************/
+ class filtermainWindow : public QDialog
+@@ -50,13 +51,16 @@
+      filtermainWindow();
+  //    virtual ~filtermainWindow();
+      void             buildAvailableFilterList(void);
++     void             buildActiveFilterList(void);
+      Ui_mainFilterDialog ui;
+      
+      QStringList      allList[NB_TREE];
+      QStringListModel allModel[NB_TREE];
+-     QListView        *listView[NB_TREE];
+      
++     QStringList      activeList;
++     QStringListModel activeModel;
+      
++     
+  public slots:
+  private slots:
+  private:
+@@ -68,17 +72,18 @@
+ void filtermainWindow::buildAvailableFilterList(void)
+ {
+   int current_tree=-1;
+-  char str[1024];
+   
++  
+   max=0;
+   for (uint32_t i = 0; i &lt; nb_video_filter; i++)
+     {
+       if (allfilters[i].viewable==1)
+         {
+-          snprintf(str,1023,&quot;&lt;big&gt;&lt;b&gt;%s&lt;/b&gt;&lt;/big&gt;\n%s&quot;, 
+-                allfilters[i].name, allfilters[i].description);
+-  
+-          allList[current_tree]=allList[current_tree] &lt;&lt; str;
++          QString str; //=&quot;&lt;b&gt;&quot;;
++          str+=allfilters[i].name;
++          str+=&quot;:&quot;;//&quot;&lt;/b&gt;&lt;br&gt;&quot;;
++          str+=allfilters[i].description;
++          allList[current_tree]+=str;
+           max++;
+         }else 
+         {
+@@ -94,23 +99,35 @@
+     {
+       allModel[i].setStringList(allList[i]);
+     }
+-   
+ }
+-  
+   /**
++        \fn     buildActiveFilterList(void)
++        \brief  Build and display all active filters (may be empty)
++*/
++void filtermainWindow::buildActiveFilterList(void)
++{
++  VF_FILTERS fil;
++  activeList.clear();
++  for (uint32_t i = 1; i &lt; nb_active_filter; i++)
++    {
++                QString str;
++                fil=videofilters[i].tag;
++
++                 str =filterGetNameFromTag(fil);
++                 str+= videofilters[i].filter-&gt;printConf ();
++                 activeList+=str;
++    }
++    activeModel.setStringList(activeList);
++
++}
++  /**
+   */
+ filtermainWindow::filtermainWindow()     : QDialog()
+  {
+       buildAvailableFilterList();
++      buildActiveFilterList();
+       ui.setupUi(this);
+       
+-    listView[0]=ui.listViewTransform;
+-    listView[1]=ui.listViewInterlacing;
+-    listView[2]=ui.listViewColors;
+-    listView[3]=ui.listViewNoise;
+-    listView[4]=ui.listViewSharpness;
+-    listView[5]=ui.listViewSubtitles;
+-    listView[6]=ui.listViewMisc;
+     
+     ui.listViewTransform-&gt;setModel(&amp;(allModel[0]));
+     ui.listViewInterlacing-&gt;setModel(&amp;(allModel[1]));
+@@ -120,6 +137,7 @@
+     ui.listViewSubtitles-&gt;setModel(&amp;(allModel[5]));;
+     ui.listViewMisc-&gt;setModel(&amp;(allModel[6]));;
+       
++    ui.listViewActive-&gt;setModel(&amp;activeModel);
+ 
+ 
+  }
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/mainfilter.ui
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/mainfilter.ui	2007-01-01 18:38:37 UTC (rev 2677)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/mainfilter.ui	2007-01-03 19:47:39 UTC (rev 2678)
+@@ -33,9 +33,6 @@
+      &lt;/property&gt;
+     &lt;/widget&gt;
+    &lt;/item&gt;
+-   &lt;item row=&quot;1&quot; column=&quot;1&quot; &gt;
+-    &lt;widget class=&quot;QListWidget&quot; name=&quot;listWidgetCurrent&quot; /&gt;
+-   &lt;/item&gt;
+    &lt;item row=&quot;2&quot; column=&quot;0&quot; &gt;
+     &lt;layout class=&quot;QHBoxLayout&quot; &gt;
+      &lt;property name=&quot;margin&quot; &gt;
+@@ -282,6 +279,9 @@
+      &lt;/widget&gt;
+     &lt;/widget&gt;
+    &lt;/item&gt;
++   &lt;item row=&quot;1&quot; column=&quot;1&quot; &gt;
++    &lt;widget class=&quot;QListView&quot; name=&quot;listViewActive&quot; /&gt;
++   &lt;/item&gt;
+   &lt;/layout&gt;
+  &lt;/widget&gt;
+  &lt;resources/&gt;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.cpp	2007-01-01 18:38:37 UTC (rev 2677)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.cpp	2007-01-03 19:47:39 UTC (rev 2678)
+@@ -100,12 +100,32 @@
+      {
+         const char *source=qPrintable(sender()-&gt;objectName());
+ 
+-        printf(&quot;From : %s\n&quot;,source);
+-        if(!strcmp(source,&quot;comboBoxVideo&quot;))  HandleAction (ACT_VideoCodecChanged) ;
+-        else if(!strcmp(source,&quot;comboBoxAudio&quot;))  HandleAction (ACT_AudioCodecChanged) ;
++        if(!strcmp(source,&quot;comboBoxVideo&quot;))  
++        {
++          bool b=FALSE;;
++          if(ui.comboBoxVideo-&gt;currentIndex())
++          {
++             b=TRUE;
++          }
++          ui.pushButtonVideoConf-&gt;setEnabled(b);
++          ui.pushButtonVideoFilter-&gt;setEnabled(b);
++          HandleAction (ACT_VideoCodecChanged) ;
++        }
++        else 
++          if(!strcmp(source,&quot;comboBoxAudio&quot;))  
++        {
++          bool b=FALSE;
++          if(ui.comboBoxAudio-&gt;currentIndex())
++          {
++             b=TRUE;
++          }
++          ui.pushButtonAudioConf-&gt;setEnabled(b);
++          ui.pushButtonAudioFilter-&gt;setEnabled(b);
++          HandleAction (ACT_AudioCodecChanged) ;
++        }
+         
+ 
+-        printf(&quot;From : %s\n&quot;,source);
++        printf(&quot;From +: %s\n&quot;,source);
+      }
+       void sliderMoved(int u) 
+         {
+@@ -165,6 +185,13 @@
+             ADD(actionNext_blak_frame);
+             ADD(actionFirst_Frame);
+             ADD(actionLast_Frame);
++            
++            // default state
++            bool b=0;
++          ui.pushButtonVideoConf-&gt;setEnabled(b);
++          ui.pushButtonVideoFilter-&gt;setEnabled(b);
++          ui.pushButtonAudioConf-&gt;setEnabled(b);
++          ui.pushButtonAudioFilter-&gt;setEnabled(b);
+  }
+  /*
+       We receive a button press event
+@@ -174,7 +201,7 @@
+     // Receveid a key press Event, look into table..
+    const char *source=qPrintable(sender()-&gt;objectName());
+ 
+-    printf(&quot;From : %s\n&quot;,source);
++    printf(&quot;Button From : %s\n&quot;,source);
+     Action action=searchTranslationTable(source);
+     if(action!=ACT_DUMMY)
+     {
+@@ -226,7 +253,10 @@
+     setupMenus();
+     return a.exec();
+ }
+-
++/**
++    \fn searchTranslationTable(const char *name))
++    \brief return the action corresponding to a give button. The translation table is in translation_table.h
++*/
+ Action searchTranslationTable(const char *name)
+ {
+   for(int i=0;i&lt; SIZEOF_MY_TRANSLATION;i++)
+@@ -235,7 +265,6 @@
+     {
+       return  myTranslationTable[i].action;
+     }
+-    
+   }
+   printf(&quot;WARNING : Signal not found in translation table : %s\n&quot;,name);
+   return ACT_DUMMY;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/gui2.ui
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/gui2.ui	2007-01-01 18:38:37 UTC (rev 2677)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/gui2.ui	2007-01-03 19:47:39 UTC (rev 2678)
+@@ -210,7 +210,7 @@
+            &lt;number&gt;6&lt;/number&gt;
+           &lt;/property&gt;
+           &lt;item&gt;
+-           &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButton&quot; &gt;
++           &lt;widget class=&quot;QPushButton&quot; name=&quot;setMarkerA&quot; &gt;
+             &lt;property name=&quot;sizePolicy&quot; &gt;
+              &lt;sizepolicy&gt;
+               &lt;hsizetype&gt;1&lt;/hsizetype&gt;
+@@ -246,7 +246,7 @@
+            &lt;/widget&gt;
+           &lt;/item&gt;
+           &lt;item&gt;
+-           &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButton_2&quot; &gt;
++           &lt;widget class=&quot;QPushButton&quot; name=&quot;setMarkerB&quot; &gt;
+             &lt;property name=&quot;sizePolicy&quot; &gt;
+              &lt;sizepolicy&gt;
+               &lt;hsizetype&gt;4&lt;/hsizetype&gt;
+@@ -405,9 +405,9 @@
+            &lt;/widget&gt;
+           &lt;/item&gt;
+           &lt;item&gt;
+-           &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButton_5&quot; &gt;
++           &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButtonVideoConf&quot; &gt;
+             &lt;property name=&quot;enabled&quot; &gt;
+-             &lt;bool&gt;false&lt;/bool&gt;
++             &lt;bool&gt;true&lt;/bool&gt;
+             &lt;/property&gt;
+             &lt;property name=&quot;sizePolicy&quot; &gt;
+              &lt;sizepolicy&gt;
+@@ -420,12 +420,15 @@
+             &lt;property name=&quot;text&quot; &gt;
+              &lt;string&gt;Configure&lt;/string&gt;
+             &lt;/property&gt;
++            &lt;property name=&quot;checkable&quot; &gt;
++             &lt;bool&gt;false&lt;/bool&gt;
++            &lt;/property&gt;
+            &lt;/widget&gt;
+           &lt;/item&gt;
+           &lt;item&gt;
+-           &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButton_6&quot; &gt;
++           &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButtonVideoFilter&quot; &gt;
+             &lt;property name=&quot;enabled&quot; &gt;
+-             &lt;bool&gt;false&lt;/bool&gt;
++             &lt;bool&gt;true&lt;/bool&gt;
+             &lt;/property&gt;
+             &lt;property name=&quot;sizePolicy&quot; &gt;
+              &lt;sizepolicy&gt;
+@@ -534,9 +537,9 @@
+            &lt;/widget&gt;
+           &lt;/item&gt;
+           &lt;item&gt;
+-           &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButton_7&quot; &gt;
++           &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButtonAudioConf&quot; &gt;
+             &lt;property name=&quot;enabled&quot; &gt;
+-             &lt;bool&gt;false&lt;/bool&gt;
++             &lt;bool&gt;true&lt;/bool&gt;
+             &lt;/property&gt;
+             &lt;property name=&quot;sizePolicy&quot; &gt;
+              &lt;sizepolicy&gt;
+@@ -552,9 +555,9 @@
+            &lt;/widget&gt;
+           &lt;/item&gt;
+           &lt;item&gt;
+-           &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButton_8&quot; &gt;
++           &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButtonAudioFilter&quot; &gt;
+             &lt;property name=&quot;enabled&quot; &gt;
+-             &lt;bool&gt;false&lt;/bool&gt;
++             &lt;bool&gt;true&lt;/bool&gt;
+             &lt;/property&gt;
+             &lt;property name=&quot;sizePolicy&quot; &gt;
+              &lt;sizepolicy&gt;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/translation_table.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/translation_table.h	2007-01-01 18:38:37 UTC (rev 2677)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/translation_table.h	2007-01-03 19:47:39 UTC (rev 2678)
+@@ -66,18 +66,10 @@
+ 
+ 
+ #define LIST_OF_BUTTONS     \
++PROCESS(setMarkerA , ACT_MarkA  ) \
++PROCESS(setMarkerB ,ACT_MarkB )  \
++PROCESS(pushButtonVideoConf ,ACT_VideoConfigure )  \
++PROCESS(pushButtonVideoFilter , ACT_VideoParameter  ) \
++PROCESS(pushButtonAudioConf ,ACT_AudioConfigure ) \
++PROCESS(pushButtonAudioFilter ,ACT_AudioFilters )  
+ 
+-#if 0
+-PROCESS(toolButtonPlay , ACT_PlayAvi  ) \
+-PROCESS(toolButtonBPrev ,ACT_PrevBlackFrame ) \
+-PROCESS(toolButtonA ,    ACT_MarkA) \
+-PROCESS(toolButtonKNext ,ACT_NextKFrame ) \
+-PROCESS(toolButtonEnd ,  ACT_End ) \
+-PROCESS(toolButtonPrev,  ACT_PreviousFrame ) \
+-PROCESS(toolButtonNext , ACT_NextFrame ) \
+-PROCESS(toolButtonBegin ,ACT_Begin ) \
+-PROCESS(toolButtoBNext,  ACT_NextBlackFrame ) \
+-PROCESS(toolButtonB ,    ACT_MarkB) \
+-PROCESS(toolButtonKPrev ,ACT_PreviousKFrame ) \
+-PROCESS(toolButtonStop , ACT_StopAvi) 
+-#endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000006.html">[Avidemux-svn-commit] r2677 -	branches/avidemux_2.3_branch/avidemux/ADM_audiofilter
+</A></li>
+	<LI>Next message: <A HREF="000008.html">[Avidemux-svn-commit] r2679 - in branches/avidemux_2.4_branch:	admin avidemux avidemux/ADM_filter	avidemux/ADM_libraries/ADM_utilities avidemux/ADM_osSupport	avidemux/ADM_toolkit avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#7">[ date ]</a>
+              <a href="thread.html#7">[ thread ]</a>
+              <a href="subject.html#7">[ subject ]</a>
+              <a href="author.html#7">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

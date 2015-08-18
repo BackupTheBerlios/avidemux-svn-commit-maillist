@@ -1,0 +1,320 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5651 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5651%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2%3A%0A%09include%20src&In-Reply-To=%3C200912111906.nBBJ6c61030348%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002858.html">
+   <LINK REL="Next"  HREF="002860.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5651 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2:	include src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5651%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2%3A%0A%09include%20src&In-Reply-To=%3C200912111906.nBBJ6c61030348%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5651 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Dec 11 20:06:38 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002858.html">[Avidemux-svn-commit] r5650 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script2/include ADM_script2/src
+</A></li>
+        <LI>Next message: <A HREF="002860.html">[Avidemux-svn-commit] r5652 - in	branches/avidemux_2.6_branch_mean/avidemux/common:	ADM_script2/include ADM_script2/src ADM_videoFilter2/include	ADM_videoFilter2/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2859">[ date ]</a>
+              <a href="thread.html#2859">[ thread ]</a>
+              <a href="subject.html#2859">[ subject ]</a>
+              <a href="author.html#2859">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-12-11 20:06:36 +0100 (Fri, 11 Dec 2009)
+New Revision: 5651
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/include/ADM_js.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsAvidemux_js.c
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsAvidemux_js.idl
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsDebug.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsIf.cpp
+Log:
+[js] Improve registering + help combined
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/include/ADM_js.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/include/ADM_js.h	2009-12-11 15:24:41 UTC (rev 5650)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/include/ADM_js.h	2009-12-11 19:06:36 UTC (rev 5651)
+@@ -18,22 +18,31 @@
+ #include &quot;ADM_default.h&quot;
+ #include &lt;string.h&gt;
+ #include &lt;pthread.h&gt;
++#include &lt;vector&gt;
++using std::vector;
+ #include &quot;DIA_coreToolkit.h&quot;
+ #include &quot;jsapi.h&quot;
+-
+ #include &quot;ADM_jsUtils.h&quot;
+ #include &quot;ADM_jsShell.h&quot;
+ #include &quot;ADM_jsDebug.h&quot;
+ 
+ typedef JSBool JS_PROTOTYPE(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+-
++/**
++    \struct ADM_JS_HOOK
++*/
++typedef struct
++{
++    const char      *name;
++    const char      *text;
++    JSFunctionSpec  *jsFunctions;
++}ADM_JS_HOOK;
++extern vector &lt;ADM_JS_HOOK &gt;jsHooks;
+ #if !defined(ADM_JS_THREADSAFE)
+-#define enterLock() {}
+-#define leaveLock() {}
++    #define enterLock() {}
++    #define leaveLock() {}
+ #else
+-#define enterLock() jsrefcount nRefCount = JS_SuspendRequest(cx)
+-#define leaveLock() {JS_ResumeRequest(cx,nRefCount); }
+-
++    #define enterLock() jsrefcount nRefCount = JS_SuspendRequest(cx)
++    #define leaveLock() {JS_ResumeRequest(cx,nRefCount); }
+ #endif
+ 
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsAvidemux_js.c
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsAvidemux_js.c	2009-12-11 15:24:41 UTC (rev 5650)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsAvidemux_js.c	2009-12-11 19:06:36 UTC (rev 5651)
+@@ -1917,3 +1917,9 @@
+           return jjadm_init(cx,obj);
+ }
+ 
++JSFunctionSpec  *jsGetAdmFunctions(void)
++{
++        return jjadm_static_fs;
++}
++
++
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsAvidemux_js.idl
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsAvidemux_js.idl	2009-12-11 15:24:41 UTC (rev 5650)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsAvidemux_js.idl	2009-12-11 19:06:36 UTC (rev 5651)
+@@ -39,4 +39,10 @@
+           }
+           return jjadm_init(cx,obj);
+ }
++
++JSFunctionSpec  *jsGetAdmFunctions(void)
++{
++        return jjadm_static_fs;
++}
++
+ %&gt;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsDebug.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsDebug.cpp	2009-12-11 15:24:41 UTC (rev 5650)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsDebug.cpp	2009-12-11 19:06:36 UTC (rev 5651)
+@@ -16,35 +16,13 @@
+ #include &quot;ADM_js.h&quot;
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+ #include &quot;ADM_jsDebug.h&quot;
++#include &lt;vector&gt;
+ /**/
+ /**/
+-
+-
+ extern ADM_Composer *video_body;
+ void ADM_dumpJSHooks(void);
+-#if 0
++extern vector &lt;JSFunctionSpec *&gt;listOfHooks;
+ /**
+-    \fn JS_AvidemuxRegisterDebugFunction
+-*/
+-bool JS_AvidemuxRegisterDebugFunction(JSContext *cx,JSObject *global)
+-{
+-	if(JS_DefineFunctions(cx, global, adm_debug_functions) == true)
+-		return true;
+-
+-	ADM_warning(&quot;Unable to define functions\n&quot;);
+-	return false;
+-}
+-
+-/**
+-    \fn ADM_JsDebugGetFunctions
+-
+-*/
+-JSFunctionSpec *ADM_JsDebugGetFunctions(void)
+-{
+-    return adm_debug_functions;
+-}
+-#endif
+-/**
+     \fn displayError
+     \brief error popup
+ */
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsIf.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsIf.cpp	2009-12-11 15:24:41 UTC (rev 5650)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src/ADM_jsIf.cpp	2009-12-11 19:06:36 UTC (rev 5651)
+@@ -14,11 +14,17 @@
+ 
+ #include &quot;ADM_js.h&quot;
+ #include &lt;stdarg.h&gt;
++#include &lt;vector&gt;
++
+ void    A_Resync(void);
++
++/* our variables */
+ static jsLoggerFunc *jsLogger=NULL;
+ static void *jsLoggerCookie=NULL;
+ extern char * actual_workbench_file;
++vector &lt;ADM_JS_HOOK &gt;jsHooks;
+ 
++
+ #define JSVAR(a,b,c) a b=c
+ 
+ #if defined( __MINGW32__) 
+@@ -32,17 +38,8 @@
+ static JSObject   *g_pObject=NULL;
+ static JSContext  *g_pCx=NULL;
+ static JSRuntime  *g_pRt=NULL;
+-/*
++
+ static JSClass global_class = {
+-   
+-&quot;Avidemux&quot;, JSCLASS_HAS_PRIVATE,
+-        JS_PropertyStub, JS_PropertyStub,
+-        JS_PropertyStub, JS_PropertyStub,
+-        JS_EnumerateStub, JS_ResolveStub,
+-        JS_ConvertStub, JS_FinalizeStub
+-};
+-*/
+-   static JSClass global_class = {
+             &quot;global&quot;, JSCLASS_GLOBAL_FLAGS,
+             JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
+             JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+@@ -149,9 +146,9 @@
+ */
+ extern &quot;C&quot; JSFunctionSpec  *jsGetIfFunctions(void);
+ extern &quot;C&quot; JSFunctionSpec  *jsGetTestFunctions(void);
+-extern &quot;C&quot; JSFunctionSpec  *jsGetAvidemuxFunctions(void);
++extern &quot;C&quot; JSFunctionSpec  *jsGetAdmFunctions(void);
+ extern &quot;C&quot; JSObject *jsAvidemuxInit(JSContext *cx,JSObject *obj);
+-static bool registerOne(const char *name,JSFunctionSpec *s,JSContext *cx,JSObject *obj)
++static bool registerOne(const char *name,const char *text,JSFunctionSpec *s,JSContext *cx,JSObject *obj)
+ {
+     if (JS_DefineFunctions(cx, obj, s) != JS_TRUE) 
+     {
+@@ -159,6 +156,11 @@
+             return false;
+     }
+     ADM_info(&quot;Registered %s functions\n&quot;,name);
++    ADM_JS_HOOK h;
++    h.name=name;    
++    h.text=text;
++    h.jsFunctions=s;
++    jsHooks.push_back(h);
+     return true;
+ }
+ static void  dump(JSFunctionSpec *f)
+@@ -169,25 +171,52 @@
+         f++;
+     }
+ }
++/**
++    \fn jsHelp
++    \brief help command
++
++*/
+ extern &quot;C&quot; 
+ {
+ void jsHelp(const char *s)
+ {
++int n=jsHooks.size();
+     if(!s) goto none;
+-    if(!strcasecmp(s,&quot;debug&quot;)) return dump(jsGetIfFunctions());
+-    if(!strcasecmp(s,&quot;test&quot;)) return dump(jsGetTestFunctions());
++    {
++    for(int i=0;i&lt;n;i++)
++        if(!strcasecmp(s,jsHooks[i].name))
++        {
++            const char *t=jsHooks[i].text;
++            if(t)
++                jsLog(JS_LOG_NORMAL,&quot;%s&quot;,t);
++            return dump(jsHooks[i].jsFunctions);
++        }
++    }
+ //    if(!strcasecmp(s,&quot;load&quot;)) return dump(jsGetAvidemuxFunctions());
+ none:
+-        jsLog(JS_LOG_NORMAL,&quot;please use help(\&quot;debug\&quot;) or help(\&quot;test\&quot;&quot;);
++        jsLog(JS_LOG_NORMAL,&quot;please use help(\&quot;xxx\&quot;) with xx among&quot;);
++
++        for(int i=0;i&lt;n;i++)
++            jsLog(JS_LOG_NORMAL,&quot;    %s&quot;,jsHooks[i].name);
++
+ }
+-}
++} // extern &quot;C&quot;
++/**
++    \fn jsRegisterAvidemux
++    \brief Register avidemux hookd
++*/
+ static bool jsRegisterAvidemux(JSContext *cx,JSObject *obj)
+ {
+-        registerOne(&quot;If&quot;,   jsGetIfFunctions(),    cx,obj);
+-        registerOne(&quot;Test&quot;, jsGetTestFunctions(),  cx,obj);
+-      //  registerOne(&quot;Load&quot;, jsGetAvidemuxFunctions(),  cx,obj);
+-        jsAvidemuxInit(cx,obj);
+-        return true;
++ADM_JS_HOOK h;
++        registerOne(&quot;Debug&quot;,&quot;&quot;,   jsGetIfFunctions(),    cx,obj);
++        registerOne(&quot;Test&quot;,&quot;&quot;, jsGetTestFunctions(),  cx,obj);
++        // Register also our class (for  help() )
++            h.name=&quot;adm&quot;;
++            h.text=&quot;Please prefix this with adm.&quot;;
++            h.jsFunctions=jsGetAdmFunctions();
++            jsHooks.push_back(h);
++            jsAvidemuxInit(cx,obj);
++            return true;
+ }
+ /**
+     \fn SpidermonkeyInit
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002858.html">[Avidemux-svn-commit] r5650 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script2/include ADM_script2/src
+</A></li>
+	<LI>Next message: <A HREF="002860.html">[Avidemux-svn-commit] r5652 - in	branches/avidemux_2.6_branch_mean/avidemux/common:	ADM_script2/include ADM_script2/src ADM_videoFilter2/include	ADM_videoFilter2/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2859">[ date ]</a>
+              <a href="thread.html#2859">[ thread ]</a>
+              <a href="subject.html#2859">[ subject ]</a>
+              <a href="author.html#2859">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

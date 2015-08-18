@@ -1,0 +1,3408 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5374 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_editor ADM_script
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5374%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%0A%09ADM_editor%20ADM_script&In-Reply-To=%3C200910100940.n9A9eDJO004490%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002584.html">
+   <LINK REL="Next"  HREF="002585.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5374 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_editor ADM_script</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5374%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%0A%09ADM_editor%20ADM_script&In-Reply-To=%3C200910100940.n9A9eDJO004490%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5374 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_editor ADM_script">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Oct 10 11:40:13 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002584.html">[Avidemux-svn-commit] r5373 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices:	. Jack
+</A></li>
+        <LI>Next message: <A HREF="002585.html">[Avidemux-svn-commit] r5375 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2586">[ date ]</a>
+              <a href="thread.html#2586">[ thread ]</a>
+              <a href="subject.html#2586">[ subject ]</a>
+              <a href="author.html#2586">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-10-10 11:40:12 +0200 (Sat, 10 Oct 2009)
+New Revision: 5374
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_editInternal.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edStub.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADMedAVIAUD.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemux.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/gui_blackframes.cpp
+Log:
+[Editor] Begin to put back the segments/editor logic (incomplet + buggy)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -35,20 +35,7 @@
+ static uint32_t edFrameStart,edFrameEnd;
+ const char *getCurrentContainerAsString(void);
+ 
+-uint8_t ADM_Composer::getMarkers(uint32_t *start, uint32_t *end)
+-{
+-	if(_haveMarkers)
+-		{
+-			*start=edFrameStart;
+-			*end=edFrameEnd;		
+-		}
+-	else
+-		{
+-			*start=0;
+-			*end=_total_frames-1;
+-		}
+-	return 1;		
+-}
++
+ //______________________________________________
+ // Save the config, including name, segment etc...
+ //______________________________________________
+@@ -67,7 +54,7 @@
+ printf(&quot;\n **Saving script project **\n&quot;);
+   char *    tmp;
+ 
+-  if (!_nb_segment)
++  if (!_segments.getNbSegments())
+     return 1;
+ 
+   FILE *    fd;
+@@ -87,11 +74,11 @@
+ 
+   qfprintf (fd, &quot;var app = new Avidemux();\n&quot;);
+   qfprintf (fd,&quot;\n//** Video **\n&quot;);
+-  qfprintf (fd,&quot;// %02ld videos source \n&quot;, _nb_video);
++  qfprintf (fd,&quot;// %02ld videos source \n&quot;, _segments.getNbRefVideos());
+   char *nm;
+   uint32_t vop=!!(video_body-&gt;getSpecificMpeg4Info()&amp;ADM_VOP_ON);
+-
+-  for (uint32_t i = 0; i &lt; _nb_video; i++)
++#if 0
++  for (uint32_t i = 0; i &lt; _videos.size(); i++)
+     {
+         nm=ADM_cleanupPath(_videos[i]._aviheader-&gt;getMyName() );
+         if(vop)
+@@ -108,12 +95,12 @@
+         }
+         ADM_dealloc(nm);
+     }
+-  
+-  qfprintf (fd,&quot;//%02ld segments\n&quot;, _nb_segment);
++#endif  
++  qfprintf (fd,&quot;//%02ld segments\n&quot;, _segments.getNbSegments());
+   qfprintf (fd,&quot;app.clearSegments();\n&quot;);
+   
+  
+-
++#if 0
+ for (uint32_t i = 0; i &lt; _nb_segment; i++)
+     {
+         uint32_t src,start,nb;
+@@ -122,6 +109,7 @@
+                 nb=_segments[i]._nb_frames;
+                 qfprintf (fd, &quot;app.addSegment(%lu,%lu,%lu);\n&quot;,src,start,nb);
+     }
++#endif
+ // Markers
+ //
+         qfprintf(fd,&quot;app.markerA=%d;\n&quot;,frameStart);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -29,6 +29,9 @@
+ #endif
+ 
+ #include &quot;ADM_pp.h&quot;
++#define ADM_warning printf
++#define ADM_info    printf
++#define ADM_error   printf
+ 
+ // FIXME BADLY !!!
+ // This should be in a context somewhere
+@@ -41,15 +44,14 @@
+ */
+ bool        ADM_Composer::GoToIntra(uint32_t frame)
+ {
+-uint32_t relframe, seg, flags, len;
++uint32_t relframe, ref, flags, len;
+ 
+-  // convert frame to block, relative frame
+-  if (!convFrame2Seg (frame, &amp;seg, &amp;relframe))
++    if(_segments.getRefFromFrame(frame,&amp;ref,&amp;relframe)==false)
+     {
+-      printf (&quot;[ADMComposer::goToIntra] Conversion failed for frame %&quot;LU&quot; !\n&quot;,frame);
+-      return false;
++        ADM_warning(&quot;[GoToIntra] Cannot convert frame %&quot;LU&quot;\n&quot;,frame);
++        return false;
+     }
+-    return DecodePictureUpToIntra(relframe,seg);
++    return DecodePictureUpToIntra(relframe,ref);
+ }
+ /**
+     \fn GoToTime
+@@ -97,14 +99,18 @@
+ */
+ bool        ADM_Composer::getCompressedPicure(uint32_t framenum,ADMCompressedImage *img)
+ {
+-uint8_t ref = 0;
+-
+-    _VIDEOS *vid=&amp;_videos[ref];
++uint32_t ref = 0,relative=0;
++    if(false==_segments.getRefFromFrame(framenum,&amp;ref,&amp;relative))
++    {
++        ADM_warning(&quot;[getCompressedPicure] Cannot get ref+frame to frame %&quot;LD&quot;\n&quot;,framenum);
++        return false;
++    }
++    _VIDEOS *vid=_segments.getRefVideo(ref);
+     vidHeader *demuxer=vid-&gt;_aviheader;
+ 
+     img-&gt;cleanup(framenum);
+ 
+-    if (!demuxer-&gt;getFrame (framenum,img)) return false;
++    if (!demuxer-&gt;getFrame (relative,img)) return false;
+     return true;
+ }
+ //***************************** Internal API**************************
+@@ -132,9 +138,9 @@
+     img.cleanup(frame);
+ 
+     printf(&quot;[EditorRender] DecodeUpToInta %u ref:%u\n&quot;,frame,ref);
+-	_VIDEOS *vid=&amp;_videos[ref];
++	_VIDEOS *vid=_segments.getRefVideo(ref);
+     vidHeader *demuxer=vid-&gt;_aviheader;
+-	cache=_videos[ref]._videoCache;
++	cache=_segments.getRefVideo(ref)-&gt;_videoCache;
+ 	ADM_assert(cache);
+     // Make sure frame is an intra
+     demuxer-&gt;getFlags(frame,&amp;flags);
+@@ -145,7 +151,7 @@
+     uint32_t nbFrames=vid-&gt;_nb_video_frames;
+     aprintf(&quot;[EditorRender] DecodeUpToIntra flushing cache &amp; codec\n&quot;);
+     cache-&gt;flush();
+-    _videos[ref].decoder-&gt;flush();
++    vid-&gt;decoder-&gt;flush();
+     // The PTS associated with our frame is the one we are looking for
+     uint64_t wantedPts=vid-&gt;_aviheader-&gt;estimatePts(frame);
+     uint32_t tries=15+7; // Max Ref frames for H264 + MaxRecovery , let's say 7 is ok for recovery
+@@ -240,9 +246,9 @@
+ */
+ bool ADM_Composer::getSamePicture(ADMImage *out,uint32_t ref)
+ {
+-    _VIDEOS *vid=&amp;_videos[ref];
++    _VIDEOS *vid=_segments.getRefVideo(ref);
+     vidHeader *demuxer=vid-&gt;_aviheader;
+-	EditorCache   *cache =_videos[ref]._videoCache;
++	EditorCache   *cache =vid-&gt;_videoCache;
+ 	ADM_assert(cache);
+ 
+   ADMImage *in=cache-&gt;getByPts(vid-&gt;lastDecodedPts);
+@@ -265,9 +271,9 @@
+ */
+ bool ADM_Composer::getNextPicture(ADMImage *out,uint32_t ref)
+ {
+-  EditorCache   *cache=_videos[ref]._videoCache;
++  EditorCache   *cache=_segments.getRefVideo(ref)-&gt;_videoCache;
+   ADMImage	*result;
+-  _VIDEOS *vid=&amp;_videos[ref];
++  _VIDEOS *vid=_segments.getRefVideo(ref);
+ 
+    uint32_t loop=20; // Try 20 frames ahead
+ 
+@@ -324,9 +330,9 @@
+   ADMImage	*result;
+   uint32_t  flags;
+   ADMCompressedImage img;
+-   _VIDEOS *vid=&amp;_videos[ref];
++   _VIDEOS *vid=_segments.getRefVideo(ref);
+     vidHeader *demuxer=vid-&gt;_aviheader;
+-	cache=_videos[ref]._videoCache;
++	cache=vid-&gt;_videoCache;
+     // PlaceHolder...
+     img.data=compBuffer;
+     img.cleanup(vid-&gt;lastSentFrame+1);
+@@ -392,7 +398,8 @@
+ {
+  ADMImage *tmpImage=NULL;
+  uint32_t ww,hh,left,right;
+- uint32_t refOnly=_videos[ref].decoder-&gt;dontcopy(); // can we skip one memcpy ?
++ _VIDEOS *v=_segments.getRefVideo(ref);
++ uint32_t refOnly=v-&gt;decoder-&gt;dontcopy(); // can we skip one memcpy ?
+ // This is only an empty Shell
+     if(refOnly)
+     {
+@@ -424,7 +431,7 @@
+     //
+     tmpImage-&gt;_colorspace=ADM_COLOR_YV12;
+ 	// Decode it
+-        if (!_videos[ref].decoder-&gt;uncompress (in, tmpImage))
++        if (!v-&gt;decoder-&gt;uncompress (in, tmpImage))
+ 	    {
+             printf(&quot;[decompressImage] uncompress failed\n&quot;);
+             return false;
+@@ -472,7 +479,7 @@
+ 	// Pp deactivated ?
+ 	if(!_pp.postProcType || !_pp.postProcStrength || tmpImage-&gt;_colorspace!=ADM_COLOR_YV12)
+     {
+-        dupe(tmpImage,out,&amp;(_videos[ref]));
++        dupe(tmpImage,out,v);
+         aprintf(&quot;EdCache: Postproc disabled\n&quot;);
+ 		return 1;
+ 	}
+@@ -596,295 +603,8 @@
+     return true;
+ }
+ 
+-/**_____________________________________________________________________
+-		Main function
+-		Caller ask for a frame from the editor
+-		We first split it to segment and frame from that segment
+-			then look if it is in the cache
+-		If not and if there is Bframe we look if it is the forward
+-			reference frame we currently have
+ 
+-_______________________________________________________________________*/
+-uint8_t  ADM_Composer::getUncompressedFrame (uint32_t frame, ADMImage * out,
+-				      uint32_t * flagz)
+-{
+-  // first get segment
+-  uint32_t relframe, seg, flags, len;
+-  uint8_t ret = 0;
+-  EditorCache   *cache;
+-  ADMImage	*result;
+ 
+-//    static uint32_t lastlen=0;
+-    printf(&quot;[getUncompressedFrame] *************** OBSOLETE FUNCTION CALLED **********************\n&quot;);
+-    printf(&quot;[getUncompressedFrame] *************** OBSOLETE FUNCTION CALLED **********************\n&quot;);
+-    printf(&quot;[getUncompressedFrame] *************** OBSOLETE FUNCTION CALLED **********************\n&quot;);
+-    printf(&quot;[getUncompressedFrame] *************** OBSOLETE FUNCTION CALLED **********************\n&quot;);
+-    printf(&quot;[getUncompressedFrame] *************** OBSOLETE FUNCTION CALLED **********************\n&quot;);
+-    printf(&quot;[getUncompressedFrame] *************** OBSOLETE FUNCTION CALLED **********************\n&quot;);
+-	if(flagz)
+-			*flagz=0;
+-
+-  // convert frame to block, relative frame
+-  if (!convFrame2Seg (frame, &amp;seg, &amp;relframe))
+-    {
+-      printf (&quot;\n Conversion failed !\n&quot;);
+-      return 0;
+-    }
+-  uint32_t ref = _segments[seg]._reference;
+-  uint32_t llen = _videos[ref]._aviheader-&gt;getWidth ()
+-  				  * _videos[ref]._aviheader-&gt;getHeight ();
+-	llen = llen + (llen &gt;&gt; 1);
+-	_VIDEOS *vid=&amp;_videos[ref];
+-	cache=_videos[ref]._videoCache;
+-	ADM_assert(cache);
+-
+-	aprintf(&quot;Ed: Request for frame %&quot;LU&quot; seg %&quot;LU&quot;, old frame:%&quot;LU&quot; old seg:%&quot;LU&quot;\n&quot;,relframe,seg,_lastframe,_lastseg);
+-
+-	// First look in the cache
+-
+-	if((result=cache-&gt;getImage(relframe)))
+-	{
+-		aprintf(&quot;&gt;&gt;frame %&quot;LU&quot; is cached...\n&quot;,relframe);
+-		out-&gt;duplicate(result);
+-		if(flagz)
+-			*flagz=result-&gt;flags;
+-		return 1;
+-	}
+-	else
+-	{
+-		aprintf(&quot;frame %&quot;LU&quot; is not cached...\n&quot;,relframe);
+-	}
+-//
+-
+-//	Prepare the destination...
+-	result=cache-&gt;getFreeImage();
+-#ifdef VERBOSE
+-	cache-&gt;dump();
+-#endif
+-
+-  // now we got segment and frame
+-  //*************************
+-  // Is is a key frame ?
+-  //*************************
+-  _videos[ref]._aviheader-&gt;getFlags (relframe, &amp;flags);
+-
+-    if (flags &amp; AVI_KEY_FRAME)
+-    {
+-    	aprintf(&quot;keyframe\n&quot;);     	
+-        if(!decodeCache(relframe,ref, result))
+-		{
+-			printf(&quot;[edRender]Editor: Cannot deccode keyframe %&quot;LU&quot;\n&quot;,relframe);
+-			return 0;
+-		}
+-        _lastseg = seg;
+-        _lastframe = relframe;
+-        if(flagz)
+-            *flagz=result-&gt;flags;
+-        out-&gt;duplicate(result);
+-        return (1);
+-    }
+-
+-    //*************************
+-    // following frame ?
+-    // If it a  next b-frame we already have the forward reference set
+-    // if it is a first B-frame --&gt; do it
+-    //
+-    //*************************
+-      if ((seg == _lastseg) &amp;&amp; ((_lastframe + 1) == relframe))
+-	{
+-	aprintf(&quot;following frame\n&quot;);
+-	// B Frame ?
+-#if 0
+-	if(_videos[ref]._aviheader-&gt;isReordered())
+-	{
+-		// The frame we seek is not in cache, so
+-		if(!_videos[ref]._aviheader-&gt;getFlags (relframe, &amp;flags))
+-		{
+-			printf(&quot;Editor : Getflags failed\n&quot;);
+-			return 0;
+-		}
+-		// if it is a b frame we decode all of them up to
+-		// the next ip included and put all this in cache
+-		if(flags &amp; AVI_B_FRAME)
+-		{
+-			// decode all of them up to the next I/P frame
+-			uint32_t nextIp=relframe;
+-
+-			while((flags&amp;AVI_B_FRAME))
+-			{
+-				nextIp++;
+-				_videos[ref]._aviheader-&gt;getFlags (nextIp, &amp;flags);
+-
+-			}
+-			// Decode it
+-			if(!decodeCache(nextIp,ref, result))
+-			{
+-				printf(&quot;Editor: Cannot read ip frame %&quot;LU&quot;\n&quot;,nextIp);
+-				return 0;
+-			}
+-
+-
+-			// And now go forward...
+-			uint32_t seeked=relframe;
+-			while(seeked&lt;nextIp)
+-			{
+-				result=cache-&gt;getFreeImage();
+-				if(!decodeCache(seeked,ref, result))
+-				{
+-					printf(&quot;Editor: Cannot read ip frame %&quot;LU&quot;\n&quot;,nextIp);
+-					return 0;
+-				}
+-				if(seeked==relframe)
+-				{
+-					 out-&gt;duplicate(result);
+-					 if(flagz) *flagz=result-&gt;flags;
+-				}
+-				seeked++;
+-			}
+-			_lastframe=nextIp;
+-			_lastseg = seg;
+-			return 1;
+-		}
+-
+-	}
+-#endif
+-	// No b frame...
+-
+-      	 if(!decodeCache(relframe,ref, result))
+-			{
+-				printf(&quot;Editor: Cannot read ip frame %&quot;LU&quot;\n&quot;,relframe);
+-				return 0;
+-			}
+-	if(flagz)
+-		*flagz=result-&gt;flags;
+-	out-&gt;duplicate(result);
+-	_lastframe=relframe;
+-	_lastseg = seg;
+-	return 1;
+-    }
+-  //*************************
+-  // completly async frame
+-  // rewind ?
+-  //*************************
+-
+-  aprintf(&quot;async  frame, wanted : %&quot;LU&quot; last %&quot;LU&quot; (%&quot;LU&quot; - %&quot;LU&quot; seg)\n&quot;,relframe,_lastframe,seg,_lastseg);
+-  uint32_t rewind;
+-  uint32_t seekFlag=0;
+-
+-  _videos[ref]._aviheader-&gt;getFlags (relframe, &amp;seekFlag);
+-
+-  flags = 0;
+-  uint32_t need_rewind=1;
+-  rewind = relframe;
+-  ADM_assert(rewind); // the first frame should be a keyframe !
+-  while (!(flags &amp; AVI_KEY_FRAME))
+-  {
+-  	rewind--;
+-  	_videos[ref]._aviheader-&gt;getFlags (rewind, &amp;flags);
+-   }
+-   // Optimize for resample FPS*************************
+-   // If we are in the same segment, look if it is better to decode
+-    // From where we are or to seek the previous intra
+-   if ((seg == _lastseg))
+-   {
+-     if(rewind&lt;_lastframe &amp;&amp; relframe&gt;_lastframe) // we have a better position to go from
+-     {
+-       for (uint32_t i = _lastframe+1; i &lt;relframe; i++)
+-       {
+-
+-         _videos[ref]._aviheader-&gt;getFlags (i, &amp;flags);
+-      // Skip B frames, there can be a lot of them
+-         if((flags&amp;AVI_B_FRAME)) continue;
+-
+-         if(!decodeCache(i,ref, result))
+-         {
+-           printf(&quot;Editor: Cannot read ip frame %&quot;LU&quot;\n&quot;,relframe);
+-           return 0;
+-         }
+-         result=cache-&gt;getFreeImage();
+-       }
+-       need_rewind=0;
+-     }
+-   }
+-   // Optimize for resample FPS*************************
+-   //
+-  // now forward
+-  // IP seen is the last P (or I) before the frame we seek
+-   if(need_rewind)
+-   {
+-        for (uint32_t i = rewind; i &lt;relframe; i++)
+-        {
+-
+-                _videos[ref]._aviheader-&gt;getFlags (i, &amp;flags);
+-                // Skip B frames, there can be a lot of them
+-                if((flags&amp;AVI_B_FRAME)) continue;
+-
+-                if(!decodeCache(i,ref, result))
+-	        {
+-		      printf(&quot;Editor: Cannot read ip frame %&quot;LU&quot;\n&quot;,relframe);
+-		      return 0;
+-	        }
+-	        result=cache-&gt;getFreeImage();
+-        }
+-   }
+-      // Time to decode our frame
+-      // if it is not a B, just decode it
+-      // it it is a B, the usual stuff
+-      if(!seekFlag)
+-      {
+-      		if(!decodeCache(relframe,ref, result))
+-			{
+-				printf(&quot;Editor: Cannot read ip frame %&quot;LU&quot;\n&quot;,relframe);
+-				return 0;
+-			}
+-		if(flagz)
+-			*flagz=result-&gt;flags;
+-		out-&gt;duplicate(result);
+-		_lastframe=relframe;
+-		_lastseg=seg;
+-		return 1;
+-
+-      }
+-      // it is a b frame
+-      // decode all of them up to the next I/P frame
+-	uint32_t nextIp=relframe;
+-	flags=AVI_B_FRAME;
+-	while((flags&amp;AVI_B_FRAME))
+-	{
+-		nextIp++;
+-		_videos[ref]._aviheader-&gt;getFlags (nextIp, &amp;flags);
+-	}
+-	// Decode it
+-	if(!decodeCache(nextIp,ref, result))
+-	{
+-		printf(&quot;Editor: Cannot read ip frame %&quot;LU&quot;\n&quot;,nextIp);
+-		return 0;
+-	}
+-
+-
+-	// And now go forward...
+-	uint32_t seeked=relframe;
+-	while(seeked&lt;nextIp)
+-	{
+-		result=cache-&gt;getFreeImage();
+-		if(!decodeCache(seeked,ref, result))
+-		{
+-			printf(&quot;Editor: Cannot read ip frame %&quot;LU&quot;\n&quot;,nextIp);
+-			return 0;
+-		}
+-		if(seeked==relframe)
+-		{
+-			 out-&gt;duplicate(result);
+-			 if(flagz) *flagz=result-&gt;flags;
+-		}
+-		seeked++;
+-	}
+-	_lastframe=nextIp;
+-	_lastseg=seg;
+-  	return 1;
+-}
+-
+-
+ /**
+     \fn decodeCache
+     \brief Decode an image an update cache
+@@ -896,29 +616,40 @@
+ 
+ uint32_t sumit;
+ float	 sum;
+-EditorCache *cache=_videos[seg]._videoCache;
++
++uint32_t ref,refOffset;
++
++        if(false==_segments.getRefFromFrame(frame,&amp;ref,&amp;refOffset))
++        {
++            ADM_warning(&quot;[decodeCache] Cannot get ref for frame %&quot;LD&quot;\n&quot;,frame);
++            return false;
++        }
++
++
++_VIDEOS *v=_segments.getRefVideo(ref); // FIXME!!!!
++EditorCache *cache=v-&gt;_videoCache;
+ ADMImage *tmpImage=NULL;
+ uint8_t refOnly=0;
+ uint32_t left,ww;
+ ADMCompressedImage img;
+ 
+-        aprintf(&quot;decodeCache : Frame %u\n&quot;,frame);
++        aprintf(&quot;decodeCache : original :%&quot;LD&quot; Frame in ref %&quot;LD&quot;\n&quot;,frame,refOffset);
+         img.data=compBuffer;
+         img.cleanup(frame);
+-    // Step 1, retrieve the compressed datas, including PTS &amp; DTS infos
+-	 if (!_videos[seg]._aviheader-&gt;getFrame (frame,&amp;img))
+-	{
+-	  printf (&quot;\nEditor: last decoding failed.%&quot;LD&quot;)\n&quot;,   frame );
+-	  return 0;
+-	}
++        // Step 1, retrieve the compressed datas, including PTS &amp; DTS infos
++         if (!v-&gt;_aviheader-&gt;getFrame (refOffset,&amp;img))
++        {
++          ADM_warning (&quot;Editor: last decoding failed.%&quot;LD&quot;)\n&quot;,   refOffset );
++          return 0;
++        }
+         ADM_assert(_imageBuffer);
+ 
+         // if len is 0 then take the previous image
+         //
+ 
+-        refOnly=_videos[seg].decoder-&gt;dontcopy(); // can we skip one memcpy ?
++        refOnly=v-&gt;decoder-&gt;dontcopy(); // can we skip one memcpy ?
+ 
+-        if(!img.dataLength &amp; refOnly &amp; !frame)      // Size is null = no image and we only got a pointer
++        if(!img.dataLength &amp; refOnly &amp; !refOffset)      // Size is null = no image and we only got a pointer
+                                 // copy the previous one
+         {
+                 // First image
+@@ -927,7 +658,7 @@
+                         memset(YPLANE(image),0,page);
+                         memset(UPLANE(image),128,page&gt;&gt;2);
+                         memset(VPLANE(image),128,page&gt;&gt;2);
+-                        if(!frame)
++                        if(!refOffset)
+                                 image-&gt;flags=AVI_KEY_FRAME;
+                         else
+                                 image-&gt;flags=AVI_P_FRAME;
+@@ -965,18 +696,18 @@
+        }
+ 	tmpImage-&gt;_colorspace=ADM_COLOR_YV12;
+ 	// Do pp, and use imageBuffer as intermediate buffer
+-	if (!_videos[seg].decoder-&gt;uncompress (&amp;img, tmpImage))
++	if (!v-&gt;decoder-&gt;uncompress (&amp;img, tmpImage))
+ 	    {
+-	      printf (&quot;\nEditor: Last Decoding2 failed for frame %&quot;LU&quot;\n&quot;,frame);
++	      printf (&quot;\nEditor: Last Decoding2 failed for frame %&quot;LU&quot;\n&quot;,refOffset);
+ 	       // Try to dupe previous frame
+-                if(frame)
++                if(refOffset)
+                 {
+                         ADMImage *prev;
+-                        prev=cache-&gt;getImage(frame-1);
++                        prev=cache-&gt;getImage(refOffset-1);
+                         if(prev)
+                         {
+                                 image-&gt;duplicate(prev);
+-                                cache-&gt;updateFrameNum(image,frame);
++                                cache-&gt;updateFrameNum(image,refOffset);
+                                 return 1;
+                         }
+                 }
+@@ -984,7 +715,7 @@
+            }
+ 
+         //
+-        if(tmpImage-&gt;_noPicture &amp;&amp; refOnly &amp;&amp; frame)
++        if(tmpImage-&gt;_noPicture &amp;&amp; refOnly &amp;&amp; refOffset)
+         {
+                 cache-&gt;updateFrameNum(image,0xffffffffU);
+                 return 0;
+@@ -994,7 +725,7 @@
+ 	{
+ 		image-&gt;_Qp=2;
+ 		image-&gt;duplicate(tmpImage);
+-		cache-&gt;updateFrameNum(image,frame);
++		cache-&gt;updateFrameNum(image,refOffset);
+           //      if(refOnly) delete tmpImage;
+ 		aprintf(&quot;EdCache: No quant avail\n&quot;);
+ 		return 1;
+@@ -1025,9 +756,9 @@
+ 
+ 	// Pp deactivated ?
+ 	if(!_pp.postProcType || !_pp.postProcStrength || tmpImage-&gt;_colorspace!=ADM_COLOR_YV12)
+-         {
+-                dupe(tmpImage,image,&amp;(_videos[seg]));
+-		cache-&gt;updateFrameNum(image,frame);
++     {
++        dupe(tmpImage,image,v);
++		cache-&gt;updateFrameNum(image,refOffset);
+                // if(refOnly) delete tmpImage;
+ 		aprintf(&quot;EdCache: Postproc disabled\n&quot;);
+ 		return 1;
+@@ -1154,7 +885,7 @@
+ _next:
+         // update some infos
+         //   if(refOnly) delete tmpImage;
+-		cache-&gt;updateFrameNum(image,frame);
++		cache-&gt;updateFrameNum(image,refOffset);
+ 		aprintf(&quot;EdCache: Postproc done\n&quot;);
+ 		return 1;
+ }
+@@ -1188,7 +919,7 @@
+ */
+ uint8_t ADM_Composer::setPostProc( uint32_t type, uint32_t strength, uint32_t swapuv)
+ {
+-	if(!_nb_video) return 0;
++	if(!_segments.getNbRefVideos()) return 0;
+ 	_pp.postProcType=type;
+ 	_pp.postProcStrength=strength;
+         _pp.swapuv=swapuv;
+@@ -1201,7 +932,7 @@
+ 
+ uint8_t ADM_Composer::getPostProc( uint32_t *type, uint32_t *strength, uint32_t *swapuv)
+ {
+-	if(!_nb_video) return 0;
++	if(!_segments.getNbRefVideos()) return 0;
+ 	*type=_pp.postProcType;
+ 	*strength=_pp.postProcStrength;
+ 	*swapuv=_pp.swapuv;
+@@ -1213,7 +944,7 @@
+     \fn getPKFrame
+     \brief returns the keyFrame strictly before *frame
+ */
+-uint8_t	ADM_Composer::getPKFrame(uint32_t *frame)
++bool	ADM_Composer::getPKFrame(uint32_t *frame)
+ {
+ 	uint32_t fr, seg, relframe;	//,len; //flags,ret,nf;
+ 
+@@ -1221,22 +952,27 @@
+ 
+   if (*frame == 0)
+     {
+-      return 0;
++      return false;
+     }
+   if (!searchPreviousKeyFrame (fr, &amp;seg, &amp;relframe))
+     {
+       printf (&quot; NKF not found\n&quot;);
+-      return 0;
++      return false;
+     }
+-  ADM_assert (convSeg2Frame (frame, seg, relframe));
+-  return 1;
++    if(false==_segments.getFrameFromRef(frame,seg,relframe))
++    {
++        ADM_warning(&quot;[getPKFrame] getFrameFromRef failed for sefg : %&quot;LD&quot; reframe %&quot;LD&quot;\n&quot;,seg,relframe);
++        return false;
++    }
++  return true;
++
+ }
+ /**
+     \fn getNKFrame
+     \brief returns the keyFrame strictly after *frame
+ */
+ 
+-uint8_t	ADM_Composer::getNKFrame(uint32_t *frame)
++bool	ADM_Composer::getNKFrame(uint32_t *frame)
+ {
+ 	uint32_t fr, seg, relframe;	//,len; //flags,ret,nf;
+ 
+@@ -1246,8 +982,12 @@
+       printf (&quot; NKF not found\n&quot;);
+       return 0;
+     }
+-  ADM_assert (convSeg2Frame (frame, seg, relframe));
+-  return 1;
++    if(false==_segments.getFrameFromRef(frame,seg,relframe))
++    {
++        ADM_warning(&quot;[getNKFrame] getFrameFromRef failed for sefg : %&quot;LD&quot; reframe %&quot;LD&quot;\n&quot;,seg,relframe);
++        return false;
++    }
++  return true;
+ }
+ 
+ #if 0
+@@ -1306,11 +1046,20 @@
+ }
+ /**
+     \fn searchFrameBefore
+-    \brief rEturn the frame number with pts just before pts
++    \brief Return the frame number with pts just before pts
+ */
+ uint32_t ADM_Composer::searchFrameBefore(uint64_t pts)
+ {
+-    _VIDEOS   *vid=&amp;_videos[0];
++uint64_t refTime;
++uint32_t ref;
++    if(false==_segments.getRefFromTime(pts,&amp;ref,&amp;refTime))
++    {
++        ADM_warning(&quot;[searchFrameBefore] Failed for pts %&quot;LLU&quot;\n&quot;,pts);
++        ref=0;
++        refTime=pts;
++    }
++#warning fix over-seg issue
++    _VIDEOS   *vid=_segments.getRefVideo(ref);
+     vidHeader *demuxer=vid-&gt;_aviheader;
+     uint64_t  lastPts=demuxer-&gt;getTime(0);
+     uint32_t  nb=demuxer-&gt;getVideoStreamHeader()-&gt;dwLength;
+@@ -1336,8 +1085,8 @@
+ {
+     int ref=0;
+     EditorCache   *cache;
+-	_VIDEOS *vid=&amp;_videos[ref];
+-	cache=_videos[ref]._videoCache;
++	_VIDEOS *vid=_segments.getRefVideo(0);
++	cache=vid-&gt;_videoCache;
+ 	ADM_assert(cache);
+         ADMImage *r=cache-&gt;findLastBefore(pts);
+         if(!r) return false;
+@@ -1351,7 +1100,14 @@
+ */
+ bool        ADM_Composer::getPtsDts(uint32_t frame,uint64_t *pts,uint64_t *dts)
+ {
+-     _VIDEOS   *vid=&amp;_videos[0];
++uint32_t ref,refOffset;
++    if(_segments.getRefFromFrame(frame,&amp;ref,&amp;refOffset)==false)
++    {
++        ADM_warning(&quot;[Composer::getPtsDts] Cannot get ref video for frame %&quot;LD&quot;\n&quot;,frame);
++        return false;
++    }
++ 
++     _VIDEOS   *vid=_segments.getRefVideo(ref);
+     vidHeader *demuxer=vid-&gt;_aviheader;
+     return demuxer-&gt;getPtsDts(frame,pts,dts); // FIXME : Rescale frame number
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -18,14 +18,16 @@
+ #include &quot;fourcc.h&quot;
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+ 
+-
++/**
++    \fn searchNextKeyFrame
+  //             Input : frame &lt;b&gt;as seen by GUI  &lt;/b&gt;
+  //     Output, segment &amp; relframe previous keyframe
+  //
+-uint8_t
+-  ADM_Composer::searchNextKeyFrame (uint32_t in, uint32_t * oseg,
++*/
++uint8_t   ADM_Composer::searchNextKeyFrame (uint32_t in, uint32_t * oseg,
+ 				    uint32_t * orel)
+ {
++#if 0
+   uint32_t relframe;
+   uint32_t seg, flags;
+   uint8_t switched = 0;
+@@ -44,7 +46,7 @@
+       return 0;
+     }
+ 
+-  while (seg &lt; _nb_segment)
++  while (seg &lt; _segments.size())
+     {
+       ref = _segments[seg]._reference;
+       // Search next kf in seg
+@@ -77,6 +79,8 @@
+       relframe = _segments[seg]._start_frame;
+       switched = 1;
+     }
++#endif
++#warning : Obsolete!
+   return 0;
+ 
+ }
+@@ -86,6 +90,7 @@
+   ADM_Composer::searchPreviousKeyFrame (uint32_t in, uint32_t * oseg,
+ 					uint32_t * orel)
+ {
++#if 0
+   uint32_t relframe;
+   uint32_t seg, flags;
+   uint32_t ref;
+@@ -149,6 +154,8 @@
+     }
+   while (1);
+   printf (&quot;\n failed pkf..\n&quot;);
++#endif
++#warning obsolete
+   return 0;
+ 
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edStub.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edStub.cpp	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edStub.cpp	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -17,201 +17,68 @@
+ #include &quot;ADM_default.h&quot;
+ #include &lt;math.h&gt;
+ 
++#define ADM_warning printf
++#define ADM_info    printf
++#define ADM_error   printf
+ 
+ #include &quot;fourcc.h&quot;
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+ 
+-#define STUBB _videos[0]._aviheader
+-
++#define STUBB _segments.getRefVideo(0)-&gt;_aviheader
++#define ADM_TRANSLATE(func,frame) \
++uint32_t ref,refOffset;\
++    if(false== _segments.getRefFromFrame( frame,&amp;ref,&amp;refOffset))  \
++    { \
++        ADM_warning(#func &quot; cannot translate fame %&quot;LD&quot;\n&quot;,frame); \
++        return false; \
++    }
+ /*
+ 	Propagate this hack to the underlying decoder
+ */
+ uint32_t ADM_Composer::getSpecificMpeg4Info( void )
+ {
+-	if(_nb_segment)
+-		if(_videos[0].decoder)
+-	 		return _videos[0].decoder-&gt;getSpecificMpeg4Info();
++	if(_segments.getNbSegments())
++    {
++        _VIDEOS *vid=_segments.getRefVideo(0);
++		if(vid-&gt;decoder)
++	 		return vid-&gt;decoder-&gt;getSpecificMpeg4Info();
++    }
+ 	return 0;
+ 
+ }
+-/**
+-  Convert a frame as seen by the gui to a segment and offset
+-  in the segment
+-*/
+-uint8_t
+-  ADM_Composer::convFrame2Seg (uint32_t framenum,
+-			       uint32_t * seg, uint32_t * relframe)
+-{
+-  uint32_t curseg = 0, taq = 0;
+ 
+-  while (curseg &lt; _nb_segment)
+-    {
+ 
+-      if ((framenum &gt;= taq)
+-	  &amp;&amp; (framenum &lt; (taq + _segments[curseg]._nb_frames)))
+-	{
+-	  // gotcha
+-	  *seg = curseg;
+-	  *relframe = _segments[curseg]._start_frame + framenum - taq;
+-	  return 1;
+-
+-	}
+-      taq += _segments[curseg]._nb_frames;
+-      curseg++;
+-
+-    };
+-  printf(&quot;\n Frame 2 seg failed! (%&quot;LU&quot;)\n&quot;,framenum);
+-  dumpSeg();
+-  return 0;
+-
+-
+-}
+-
+ /**
+-  Convert a frame inside a segment as a frame as seen by GUI
+-  */
+-uint8_t
+-  ADM_Composer::convSeg2Frame (uint32_t * framenum,
+-			       uint32_t seg, uint32_t relframe)
+-{
+-  uint32_t curseg = 0;
+-  ADM_assert (seg &lt; _nb_segment);
+-  *framenum = 0;
+-  while (curseg &lt; seg)
+-    {
+-
+-      *framenum += _segments[curseg]._nb_frames;
+-
+-      curseg++;
+-    };
+-#if 0
+-  printf (&quot;\n Seg: %lu Sum : %lu, relframe :%lu, start:%lu&quot;, seg,
+-	  *framenum, relframe, _segments[seg]._start_frame);
+-#endif
+-  *framenum += relframe - _segments[seg]._start_frame;
+-#if 0
+-  printf (&quot;--&gt; %lu\n&quot;, *framenum);
+-#endif
+-  return 1;
+-
+-
+-}
+-
+-decoders 		*ADM_Composer::rawGetDecoder(uint32_t frame)
+-{
+- uint32_t relframe;
+-  uint32_t seg;
+-  uint32_t ref;
+-
+-  // convert frame to block, relative frame
+-  if (!convFrame2Seg (frame, &amp;seg, &amp;relframe))
+-    return 0;
+-   ref = _segments[seg]._reference;
+-    return _videos[ref].decoder;
+-}
+-/**
+     \fn getFrame
+     \brief returns the raw frame from the demuxer with len pts &amp; dts
+ */
+ uint8_t   ADM_Composer::getFrame (uint32_t framenum, ADMCompressedImage *img, uint8_t *isSeq)
+ {
+-  uint32_t relframe;
+-  uint32_t seg;
+-  static uint32_t lastseg = 0, lastframe = 0;
+-  uint32_t ref;
++  static uint32_t lastRef = 0, lastframe = 0;
++  ADM_TRANSLATE(getFrame,framenum)
+ 
+-  // convert frame to block, relative frame
+-  if (!convFrame2Seg (framenum, &amp;seg, &amp;relframe))
+-    return 0;
+-#if 0
+-  printf (&quot;\n %&quot;LU&quot; --&gt; %&quot;LU&quot;,%&quot;LU&quot;\n&quot;, framenum, seg, relframe);
+-#endif
+-  if (seg)
++  if (ref)
+     {
+-      if ((lastseg == seg) &amp;&amp; ((lastframe + 1) == relframe))
++      if ((lastRef == ref) &amp;&amp; ((lastframe + 1) == refOffset))
+ 	{
+ 	  *isSeq = 1;
+ 	}
+       else
+ 	*isSeq = 0;
+     }
+-  lastseg = seg;
+-  lastframe = relframe;
+-  ref = _segments[seg]._reference;
+-  return _videos[ref]._aviheader-&gt;getFrame (relframe,img);
++  lastRef = ref;
++  lastframe = refOffset;
++  return _segments.getRefVideo(ref)-&gt;_aviheader-&gt;getFrame (refOffset,img);
+ }
+-//
+-// Check that the 2 frames are sequential with just B frames in between
+-// B &gt; A!
+-// Return 1 if they are in sequence
+-// 0 if not
+-uint8_t ADM_Composer::sequentialFramesB(uint32_t frameA,uint32_t frameB)
+-{
+-	uint32_t relframeA,segA;
+-	uint32_t relframeB,segB,ref;
+-	uint32_t flags;
+ 
+-	ADM_assert(frameB&gt;frameA);
+ 
+-	if (!convFrame2Seg (frameA, &amp;segA, &amp;relframeA))
+-  	{
+-  		printf(&quot;Editor: seq : convFrame2seg failed!\n&quot;);
+-    		return 0;
+-  	}
+-  	if (!convFrame2Seg (frameB, &amp;segB, &amp;relframeB))
+-  	{
+-  		printf(&quot;Editor: seq : convFrame2seg failed!\n&quot;);
+-    		return 0;
+-  	}
+-  	if(segA!=segB)
+-	{
+-	// printf(&quot;%&quot;LU&quot; %&quot;LU&quot; -&gt; seg differs: %&quot;LU&quot;,%&quot;LU&quot;\n&quot;,frameA,frameB,segA,segB);
+-	 return 0;
+-	}
+-
+-	 ref = _segments[segA]._reference;
+-
+-	for(uint32_t i=relframeA+1;i&lt;relframeB;i++)
+-	{
+-		_videos[ref]._aviheader-&gt;getFlags(i,&amp;flags);
+-		if(!(flags&amp;AVI_B_FRAME))
+-		{
+-	//		printf(&quot;Start: %&quot;LU&quot; ko:%&quot;LU&quot; end:%&quot;LU&quot;\n&quot;,relframeA+1,i,relframeB);
+-			return 0;		// There is not only B frame between A &amp; B
+-		}
+-	}
+-
+-	return 1;
+-
+-}
+-//_________________________________________________________________
+-uint8_t   ADM_Composer::isSequential (uint32_t framenum)
+-{
+-  uint32_t relframe;
+-  uint32_t seg;
+-  static uint32_t lastseg = 0, lastframe = 0;
+-  uint32_t ref;
+-
+-  // convert frame to block, relative frame
+-  if (!convFrame2Seg (framenum, &amp;seg, &amp;relframe))
+-  {
+-  	printf(&quot;Editor: seq : convFrame2seg failed!\n&quot;);
+-    return 0;
+-  }
+-
+-	if ((lastseg == seg) &amp;&amp; ((lastframe + 1) == relframe))
+-	  return 1;
+-	else
+-	return 0;
+-}
+-
+-
+ /**
+     \fn getTime
+     \brief return or estimate the pts of frame fn
+ */
+ uint64_t ADM_Composer::getTime (uint32_t fn)
+ {
++    
+     uint64_t t= STUBB-&gt;getTime(fn);
+     uint32_t org=fn;
+     if(t!=ADM_COMPRESSED_NO_PTS) return t;
+@@ -224,75 +91,54 @@
+         if(STUBB-&gt;getTime(fn)!=ADM_COMPRESSED_NO_PTS)
+         {
+             t=STUBB-&gt;getTime(fn);
+-            t+= _videos[0].timeIncrementInUs*(org-fn);
++            t+= _segments.getRefVideo(0)-&gt;timeIncrementInUs*(org-fn);
+             return t;
+         }
+     }
+     printf(&quot;[ADM_Composer::getTime] Cannot estimate time for frame %u\n&quot;,org);
+     return 0;
+ }
+-
++/**
++    \fn getFlags
++*/
+ uint32_t ADM_Composer::getFlags (uint32_t frame, uint32_t * flags)
+ {
+-  uint32_t
+-    relframe;
+-  uint32_t
+-    seg;
+-  if (!convFrame2Seg (frame, &amp;seg, &amp;relframe))
+-  {
+-        printf(&quot;Error for frame %u\n&quot;,frame);
+-    return 0;
+-  }
+-  uint32_t
+-    ref =
+-    _segments[seg].
+-    _reference;
+-  return _videos[ref]._aviheader-&gt;getFlags (relframe, flags);
++    ADM_TRANSLATE(getFlags,frame);
++    return _segments.getRefVideo(ref)-&gt;_aviheader-&gt;getFlags (refOffset, flags);
+ }
++/**
++    \fn getFlagsAndSeg
++*/
+ uint32_t ADM_Composer::getFlagsAndSeg (uint32_t frame, uint32_t * flags,uint32_t *segs)
+ {
+-  uint32_t
+-    relframe;
+-  uint32_t
+-    seg;
++#if 0
++  uint32_t    relframe;
++  uint32_t    seg;
+   if (!convFrame2Seg (frame, &amp;seg, &amp;relframe))
+     return 0;
+   uint32_t    ref =   _segments[seg]._reference;
+ 
+     *segs=seg;
+-    return _videos[ref]._aviheader-&gt;getFlags (relframe, flags);
++#endif
++    return _segments.getRefVideo(0)-&gt;_aviheader-&gt;getFlags (frame, flags);
+ }
+ /**
+     \fn getFrameSize
+ */
+ uint8_t ADM_Composer::getFrameSize (uint32_t frame, uint32_t * size)
+ {
+-  uint32_t    relframe;
+-  uint32_t    seg,    ref;
+-  if (!convFrame2Seg (frame, &amp;seg, &amp;relframe))
+-    return 0;
++ 
++  ADM_TRANSLATE(getframeSize,frame);
++  return _segments.getRefVideo(ref)-&gt;_aviheader-&gt;getFrameSize (refOffset, size);
+ 
+-  ref = _segments[seg]._reference;
+-  return _videos[ref]._aviheader-&gt;getFrameSize (relframe, size);
+ 
+-
+ }
+ 
+ 
+ uint8_t ADM_Composer::setFlag (uint32_t frame, uint32_t flags)
+ {
+-  uint32_t
+-    relframe;
+-  uint32_t
+-    seg;
+-  if (!convFrame2Seg (frame, &amp;seg, &amp;relframe))
+-    return 0;
+-
+-  uint32_t
+-    ref =
+-    _segments[seg].
+-    _reference;
+-  return _videos[ref]._aviheader-&gt;setFlag (relframe, flags);
++    ADM_TRANSLATE(setFlag,frame);
++    return _segments.getRefVideo(ref)-&gt;_aviheader-&gt;setFlag (refOffset, flags);
+ }
+ 
+ //
+@@ -300,40 +146,34 @@
+ uint8_t ADM_Composer::updateVideoInfo (aviInfo * info)
+ {
+ 
+-  info-&gt;nb_frames = _total_frames;
++  info-&gt;nb_frames = _segments.getNbFrames();
+   if (info-&gt;fps1000)
+     {
+-      uint32_t
+-	r,
+-	s,
+-	d;
++      uint32_t 	r,	s,	d;
+       // we got 1000 * image /s
+       // we want rate, scale and duration
+       //
+       s = 1000;
+       r = info-&gt;fps1000;
+-      double
+-	u;
++      double	u;
+       u = (double) info-&gt;fps1000;
+       if (u &lt; 10.)
+-	u = 10.;
++            u = 10.;
+       u = 1000000. / u;
+       d = (uint32_t) floor (u);;	// 25 fps hard coded
+-
+-      //getVideoStreamHeader
+-
+-      AVIStreamHeader *ily =	_videos[0]._aviheader-&gt;	getVideoStreamHeader ();
++      AVIStreamHeader *ily =	_segments.getRefVideo(0)-&gt;_aviheader-&gt;	getVideoStreamHeader ();
+       ily-&gt;dwRate = r;
+       ily-&gt;dwScale = s;
+       rebuildDuration();
+     }
+   return 1;
+ }
+-
++/**
++    \fn getVideoInfo
++*/
+ uint8_t ADM_Composer::getVideoInfo (aviInfo * info)
+ {
+-  uint8_t
+-    ret;
++  uint8_t    ret;
+   ret = STUBB-&gt;getVideoInfo (info);
+   if (ret)
+     {
+@@ -345,13 +185,11 @@
+ //______________________________
+ //    Info etc... to be removed later
+ //______________________________
+-AVIStreamHeader *
+-ADM_Composer::getVideoStreamHeader (void)
++AVIStreamHeader *ADM_Composer::getVideoStreamHeader (void)
+ {
+   return STUBB-&gt;getVideoStreamHeader ();
+ };
+-MainAVIHeader *
+-ADM_Composer::getMainHeader (void)
++MainAVIHeader *ADM_Composer::getMainHeader (void)
+ {
+   return STUBB-&gt;getMainHeader ();
+ }
+@@ -360,13 +198,16 @@
+ {
+   return STUBB-&gt;getBIH ();
+ };
+-//
++/**
++    \fn sanityCheckRef
+ //	Do a sanity check for copy mode
+ //	Check that B frames did not loose there backward/forward ref frame
+ // 	It is brute force as we only need to check begin/end of each segment
+ //	But it should be fast anyway
++*/
+ uint8_t		ADM_Composer::sanityCheckRef(uint32_t start, uint32_t end,uint32_t *fatal)
+ {
++#if 0
+ uint32_t flags,seg;
+ uint32_t lastnonb=0,segnonB=0xffff;
+ uint32_t forward=0,forwardseg=0xffff;
+@@ -440,34 +281,10 @@
+ 		printf(&quot;Frame %d has lost its fw/bw reference frame (%&quot;LU&quot;/%&quot;LU&quot;)\n&quot;,i,start,end);
+ 	}
+ 	return ok;
++#endif
++    return true;
+ }
+-// return the segment holding the next reference frame
+-//
+-uint32_t ADM_Composer::searchForwardSeg(uint32_t startframe)
+-{
+-	uint32_t fw=startframe;
+-	uint32_t flags,seg;
+-	uint8_t r;
+ 
+-			while(1)
+-			{
+-				fw++;
+-				r=getFlagsAndSeg (fw, &amp;flags,&amp;seg);
+-				if(!(flags &amp; AVI_B_FRAME))
+-				{
+-					return seg;
+-
+-				}
+-
+-				if(!r)
+-				{
+-					seg=0xffff;
+-					return seg;
+-				}
+-
+-			}
+-	return 1;
+-}
+ /**
+     \fn getVideoDuration
+     \brief returns duration of the video track
+@@ -475,9 +292,7 @@
+ */
+ uint64_t ADM_Composer::getVideoDuration(void)
+ {
+-  if(_nb_segment)
+-    return _videos[0]._aviheader-&gt;getVideoDuration();
+-  return 0;
++    return _segments.getTotalDuration();
+ }
+ 
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -27,22 +27,6 @@
+ #include &quot;fourcc.h&quot;
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+ 
+-#if 0
+-
+-#include &quot;ADM_inputs/ADM_inpics/ADM_pics.h&quot;
+-#include &quot;ADM_inputs/ADM_nuv/ADM_nuv.h&quot;
+-#include &quot;ADM_inputs/ADM_h263/ADM_h263.h&quot;
+-//#include &quot;ADM_3gp/ADM_3gp.h&quot;
+-#include &quot;ADM_inputs/ADM_mp4/ADM_mp4.h&quot;
+-#include &quot;ADM_inputs/ADM_openDML/ADM_openDML.h&quot;
+-#include &quot;ADM_inputs/ADM_avsproxy/ADM_avsproxy.h&quot;
+-#include &quot;ADM_inputs/ADM_matroska/ADM_mkv.h&quot;
+-//#include &quot;ADM_inputs/ADM_flv/ADM_flv.h&quot;
+-#include &quot;ADM_inputs/ADM_amv/ADM_amv.h&quot;
+-#include &quot;ADM_inputs/ADM_asf/ADM_asf.h&quot;
+-#include &quot;ADM_inputs/ADM_ogm/ADM_ogm.h&quot;
+-#endif
+-
+ #include &quot;DIA_coreToolkit.h&quot;
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+ #include &quot;ADM_videoFilter.h&quot;
+@@ -52,24 +36,21 @@
+ #define MODULE_NAME MODULE_EDITOR
+ #include &quot;ADM_debug.h&quot;
+ 
+-#//include &quot;ADM_inputs/ADM_mpegdemuxer/dmx_indexer.h&quot;
+ #include &quot;ADM_outputfmt.h&quot;
+ #include &quot;ADM_edPtsDts.h&quot;
+ 
+ vidHeader *ADM_demuxerSpawn(uint32_t magic,const char *name);
+ 
+-int DIA_mpegIndexer (char **mpegFile, char **indexFile, int *aid,
+-		     int already = 0);
+-void DIA_indexerPrefill(char *name);
+-extern uint8_t indexMpeg (char *mpeg, char *file, uint8_t aid);
+-
+-extern uint8_t loadVideoCodecConf( const char *name);
+ extern uint8_t parseScript(char *name);
+ uint8_t UI_SetCurrentFormat( ADM_OUT_FORMAT fmt );
+ const char *VBR_MSG = QT_TR_NOOP(&quot;Avidemux detected VBR MP3 audio in this file. For keeping audio/video in sync, time map is needed. Build it now?\n\nYou can do it later with \&quot;Audio -&gt; Build VBR Time Map\&quot;.&quot;);
+ //
+ //
+ 
++#define ADM_warning printf
++#define ADM_info    printf
++#define ADM_error   printf
++
+ #define TEST_MPEG2DEC
+ 
+ ADM_Composer::ADM_Composer (void) : ADM_audioStream(NULL,NULL)
+@@ -79,15 +60,12 @@
+    packetBufferSize=0;
+    packetBufferDts=ADM_NO_PTS;
+ 
+-  _nb_segment = 0;
+-  _nb_video = 0;
+   _total_frames = 0;
+   _audioseg = 0;
+   _audiooffset = 0;
+   _audioSample=0;
+   _lastseg = 99;
+   _lastframe = 99;
+-  _nb_clipboard=0;
+   _haveMarkers=0; // only edl have markers
+   // Initialize a default postprocessing (dummy)
+   initPostProc(&amp;_pp,16,16);
+@@ -102,11 +80,6 @@
+   _imageBuffer=NULL;
+   _internalFlags=0;
+   // Start with a clean base
+-  memset (_videos, 0, sizeof (_videos));
+-  max_seg = MAX_SEG;
+-  _segments = new _SEGMENT[max_seg];
+-  memset (_segments, 0, sizeof (_segments));
+-  _scratch=NULL;
+ 
+ }
+ /**
+@@ -114,147 +87,65 @@
+ 
+ */
+ #define YOURAUDIO(x) _videos[x].audioTracks[_videos[x].currentAudioStream]
++/**
++    \fn resetSeg
++    \brief Redo a 1:1 mapping between ref video and segment
++*/
+ uint8_t ADM_Composer::resetSeg( void )
+ {
+-	_total_frames=0;
+-	for(uint32_t i=0;i&lt;_nb_video;i++)
+-	{
+-		_segments[i]._reference = i;
+-        if(_videos[i].audioTracks)
+-            _segments[i]._audio_size = YOURAUDIO(i)-&gt;size;
+-        else
+-            _segments[i]._audio_size=0;
+-  		_segments[i]._audio_start = 0;
+-  		_segments[i]._start_frame = 0;
+-		_segments[i]._audio_duration = 0;
+-		_segments[i]._nb_frames   =   _videos[i]._nb_video_frames ;
+-		_total_frames+=_segments[i]._nb_frames  ;
+-		updateAudioTrack (i);
+-	}
++	_segments.resetSegment();
+ 
+-  	_nb_segment=_nb_video;
+   	computeTotalFrames();
+-	dumpSeg();
++//	dumpSeg();
+ 	return 1;
+ }
+ /**
+-	Return extra Header info present in avi chunk that are needed to initialize
++    \fn getExtraHeaderData
++    \brief	Return extra Header info present in avi chunk that are needed to initialize
+ 	the video codec
+ 	It is assumed that there is only one file or can share the same init data
+ 	(huffyuv for example)
+ */
+-uint8_t ADM_Composer::getExtraHeaderData (uint32_t * len, uint8_t ** data)
++bool ADM_Composer::getExtraHeaderData (uint32_t * len, uint8_t ** data)
+ {
+-  return _videos[0]._aviheader-&gt;getExtraHeaderData (len, data);
+-
++    if(_segments.getNbRefVideos())
++        return _segments.getRefVideo(0)-&gt;_aviheader-&gt;getExtraHeaderData (len, data);
++    *len=0;
++    *data=NULL;
++    return false;
+ }
+ 
+ 
+ /**
+-	Purge all segments
++    \fn ADM_Composer
+ */
+-uint8_t ADM_Composer::deleteAllSegments (void)
+-{
+-
+-
+-  memset (_segments, 0, sizeof (_segments));
+-  _nb_segment = 0;
+-  _total_frames=computeTotalFrames();
+-  return 1;
+-
+-}
+-
+-/**
+-	\fn Purge all videos
+-    \brief delete datas associated with all video
+-*/
+-void
+-ADM_Composer::deleteAllVideos (void)
+-{
+-
+-  for (uint32_t vid = 0; vid &lt; _nb_video; vid++)
+-    {
+-
+-      // if there is a video decoder...
+-      if (_videos[vid].decoder)
+-            delete _videos[vid].decoder;
+-      if(_videos[vid].color)
+-            delete _videos[vid].color;
+-      // prevent from crashing
+-      _videos[vid]._aviheader-&gt;close ();
+-      delete _videos[vid]._aviheader;
+-      if(_videos[vid]._videoCache)
+-      	delete  _videos[vid]._videoCache;
+-      _videos[vid]._videoCache=NULL;
+-     // Delete audio codec too
+-     // audioStream will be deleted by the demuxer
+-      if(_videos[vid].audioTracks)
+-      {
+-            for(int i=0;i&lt;_videos[vid].nbAudioStream;i++)
+-            {
+-                delete _videos[vid].audioTracks[i];
+-            }
+-            delete [] _videos[vid].audioTracks;
+-            _videos[vid].audioTracks=NULL;
+-      }
+-    }
+-
+-  memset (_videos, 0, sizeof (_videos));
+-
+-
+-  if(_imageBuffer)
+-  	delete _imageBuffer;
+-  _imageBuffer=NULL;
+-
+-}
+-
+ ADM_Composer::~ADM_Composer ()
+ {
+-	deleteAllSegments();
+-	deleteAllVideos();
++	_segments.deleteAll();
+ 	deletePostProc(&amp;_pp);
+-
+-	if(_segments)
+-	{
+-		delete[] _segments;
+-		_segments=NULL;
+-	}
+-	if(_scratch)
+-	{
+-		delete _scratch;
+-		_scratch=NULL;
+-	}
+ }
+ 
+-/*
+-   			Return Magic : 4*4 bytes first
+ 
+-*/
+-
+ /**
+     \fn addFile
+     \brief	Load or append a file.	The file type is determined automatically and the ad-hoc video decoder is spawned
+ 
+     @param name: filename
+-    @param mode: 0 open, 1 append
+-
+-
+     @return 1 on success, 0 on failure
+ 
+ 
+ */
+-uint8_t ADM_Composer::addFile (const char *name, uint8_t mode)
++bool ADM_Composer::addFile (const char *name)
+ {
++
+   uint8_t    ret =    0;
+   aviInfo    info;
+ 
++  _VIDEOS video;
++    memset(&amp;video,0,sizeof(video));
+ 
+-
+-UNUSED_ARG(mode);
+ 	_haveMarkers=0; // by default no markers are present
+-  ADM_assert (_nb_segment &lt; max_seg);
+-  ADM_assert (_nb_video &lt; MAX_VIDEO);
+-
++  
+     FILE *f=fopen(name,&quot;r&quot;);
+     uint8_t buffer[4];
+     if(!f) return 0;
+@@ -264,34 +155,37 @@
+ 
+ 
+   // First find the demuxer....
+-   	_videos[_nb_video]._aviheader=ADM_demuxerSpawn(magic,name);
+-    if(!_videos[_nb_video]._aviheader)
++   	video._aviheader=ADM_demuxerSpawn(magic,name);
++    if(!video._aviheader)
+     {
+      char str[512+1];
+      snprintf(str,512,QT_TR_NOOP(&quot;Cannot find a demuxer for %s&quot;), name);
+       str[512] = '\0';
+       GUI_Error_HIG(str,NULL);
+-      return 0;
++      return false;
+     }
+-    ret = _videos[_nb_video]._aviheader-&gt;open(name);
++    ret = video._aviheader-&gt;open(name);
+    // check opening was successful
+    if (ret == 0) {
+      char str[512+1];
+      snprintf(str,512,QT_TR_NOOP(&quot;Attempt to open %s failed!&quot;), name);
+       str[512] = '\0';
+       GUI_Error_HIG(str,NULL);
+-      delete _videos[_nb_video]._aviheader;
+-      return 0;
++      video._aviheader;
++      video._aviheader=NULL;
++      return false;
+    }
+ 
+    /* check for resolution */
+-   if( _nb_video ){
++   if( _segments.getNbRefVideos())
++    {
+       /* append operation */
+       aviInfo info0, infox;
+-      _videos[   0     ]._aviheader-&gt;getVideoInfo (&amp;info0);
+-      _videos[_nb_video]._aviheader-&gt;getVideoInfo (&amp;infox);
+-      if( info0.width != infox.width || info0.height != infox.height ){
+-        char str[512+1];
++      _segments.getRefVideo(0)-&gt;_aviheader-&gt;getVideoInfo (&amp;info0);
++      video._aviheader-&gt;getVideoInfo (&amp;infox);
++      if( info0.width != infox.width || info0.height != infox.height )
++        {
++         char str[512+1];
+          str[0] = '\0';
+          if( info0.width != infox.width )
+             strcpy(str,&quot;width&quot;);
+@@ -302,80 +196,78 @@
+                  (strlen(str)?&quot; are &quot;:&quot; is &quot;) );
+          str[512] = '\0';
+          GUI_Error_HIG(str,QT_TR_NOOP(&quot;You cannot mix different video dimensions yet. Using the partial video filter later, will not work around this problem. The workaround is:\n1.) \&quot;resize\&quot; / \&quot;add border\&quot; / \&quot;crop\&quot; each stream to the same resolution\n2.) concatinate them together&quot;));
+-         delete _videos[_nb_video]._aviheader;
+-         return 0;
++         delete video._aviheader;
++         return false;
+       }
+    }
+ 
+   // else update info
+-  _videos[_nb_video]._aviheader-&gt;getVideoInfo (&amp;info);
+-  _videos[_nb_video]._aviheader-&gt;setMyName (name);
++  video._aviheader-&gt;getVideoInfo (&amp;info);
++  video._aviheader-&gt;setMyName (name);
+ 
+   // Printf some info about extradata
+-  {
++  
+     uint32_t l=0;
+     uint8_t *d=NULL;
+-    _videos[_nb_video]._aviheader-&gt;getExtraHeaderData(&amp;l,&amp;d);
++    video._aviheader-&gt;getExtraHeaderData(&amp;l,&amp;d);
+     if(l &amp;&amp; d)
+     {
+         printf(&quot;[Editor]The video codec has some extradata (%d bytes)\n&quot;,l);
+         mixDump(d,l);
+         printf(&quot;\n&quot;);
+     }
+-  }
++  
+   // 1st if it is our first video we update postproc
+- if(!_nb_video)
+- {
++    if(!_segments.getNbRefVideos())
++    {
+         uint32_t type,value;
+ 
+         if(!prefs-&gt;get(DEFAULT_POSTPROC_TYPE,&amp;type)) type=3;
+         if(!prefs-&gt;get(DEFAULT_POSTPROC_VALUE,&amp;value)) value=3;
+ 
+-	deletePostProc(&amp;_pp );
+- 	initPostProc(&amp;_pp,info.width,info.height);
+-	_pp.postProcType=type;
+-	_pp.postProcStrength=value;
+-	_pp.forcedQuant=0;
+-	updatePostProc(&amp;_pp);
++        deletePostProc(&amp;_pp );
++        initPostProc(&amp;_pp,info.width,info.height);
++        _pp.postProcType=type;
++        _pp.postProcStrength=value;
++        _pp.forcedQuant=0;
++        updatePostProc(&amp;_pp);
+ 
+-	if(_imageBuffer) delete _imageBuffer;
+-	_imageBuffer=new ADMImage(info.width,info.height);
+- 	_imageBuffer-&gt;_qSize= ((info.width+15)&gt;&gt;4)*((info.height+15)&gt;&gt;4);
+-	_imageBuffer-&gt;quant=new uint8_t[_imageBuffer-&gt;_qSize];
+-    memset(_imageBuffer-&gt;quant,0,_imageBuffer-&gt;_qSize);
+-	_imageBuffer-&gt;_qStride=(info.width+15)&gt;&gt;4;
+- }
++        if(_imageBuffer) delete _imageBuffer;
++        _imageBuffer=new ADMImage(info.width,info.height);
++        _imageBuffer-&gt;_qSize= ((info.width+15)&gt;&gt;4)*((info.height+15)&gt;&gt;4);
++        _imageBuffer-&gt;quant=new uint8_t[_imageBuffer-&gt;_qSize];
++        memset(_imageBuffer-&gt;quant,0,_imageBuffer-&gt;_qSize);
++        _imageBuffer-&gt;_qStride=(info.width+15)&gt;&gt;4;
++    }
+ 
+ 
+ //    fourCC::print( info.fcc );
+-  _total_frames += info.nb_frames;
+-  _videos[_nb_video]._nb_video_frames = info.nb_frames;
++    _total_frames += info.nb_frames;
+ 
+ 
++
+   // Update audio infos
+   // an spawn the appropriate decoder
+   //_________________________
+-   uint32_t nbAStream=_videos[_nb_video]._aviheader-&gt;getNbAudioStreams();
++   uint32_t nbAStream=video._aviheader-&gt;getNbAudioStreams();
+ 
+   if (!nbAStream)
+     {
+       printf (&quot;[Editor] *** NO AUDIO ***\n&quot;);
+-      _videos[_nb_video].audioTracks = NULL;
+-      _videos[_nb_video].nbAudioStream=0;
+-      _videos[_nb_video].currentAudioStream=0;
++      video.audioTracks = NULL;
++      video.nbAudioStream=0;
++      video.currentAudioStream=0;
+     }
+   else
+     {
+         // Read and construct the audio tracks for that videos
+-
+-
+       audioInfo *info;
+       uint32_t extraLen;
+       uint8_t  *extraData;
+       ADM_audioStream *stream;
+       WAVHeader *header;
+ 
+-      _VIDEOS *thisVid=&amp;(_videos[_nb_video]);
++      _VIDEOS *thisVid=&amp;(video);
+       // Create streams
+       thisVid-&gt;audioTracks=new ADM_audioStreamTrack*[nbAStream];
+       thisVid-&gt;nbAudioStream=nbAStream;
+@@ -383,12 +275,11 @@
+       {
+             ADM_audioStreamTrack *track=new ADM_audioStreamTrack;
+ 
+-
+             header=thisVid-&gt;_aviheader-&gt;getAudioInfo(i );
+             memcpy(&amp;(track-&gt;wavheader),header,sizeof(*header));
+ 
+             // We need at last fq so that advanceDts will work
+-            if(!i &amp;&amp; !_nb_video)
++            if(!i &amp;&amp; !_segments.getNbRefVideos())
+             {
+                 wavHeader.frequency=header-&gt;frequency;
+                 wavHeader.channels=header-&gt;channels;
+@@ -407,7 +298,6 @@
+             thisVid-&gt;audioTracks[i]=track;
+ 
+       }
+-//      printf(&quot;[Editor] Duration in seconds: %&quot;LLU&quot;, in samples: %&quot;LLU&quot;\n&quot;,_videos[_nb_video]._audio_duration/_wavinfo-&gt;frequency,_videos[_nb_video]._audio_duration);
+     }
+ 
+   printf (&quot;[Editor] Decoder FCC: &quot;);
+@@ -419,143 +309,23 @@
+       info.fps1000 = 25 * 1000;
+       updateVideoInfo (&amp;info);
+     }
+-  uint32_t    	l;
+-  uint8_t 	*d;
+-  _videos[_nb_video]._aviheader-&gt;getExtraHeaderData (&amp;l, &amp;d);
+-  _videos[_nb_video].decoder = getDecoder (info.fcc,  info.width, info.height, l, d,info.bpp);
+ 
+-  _videos[_nb_video]._videoCache   =   new EditorCache(32,info.width,info.height) ;
++    // From here we cannot fail, let the segment handler make the other part of the job
++    _segments.addReferenceVideo(&amp;video);
+ 
+-  float frameD=info.fps1000;
+-  frameD=frameD/1000;
+-  frameD=1/frameD;
+-  frameD*=1000000;
+-  _videos[_nb_video].timeIncrementInUs=(uint64_t)frameD;
+-  printf(&quot;[Editor] About %&quot;LLU&quot; microseconds per frame\n&quot;,_videos[_nb_video].timeIncrementInUs);
+-
+-  //
+-  //  And automatically create the segment
+-  //
+-  if(_videos[_nb_video].audioTracks)
+-    {
+-        ADM_audioStreamTrack *trk=_videos[_nb_video].audioTracks[0];
+-        _segments[_nb_segment]._audio_size = trk-&gt;size;
+-        _segments[_nb_segment]._audio_duration =trk-&gt;duration;
+-    }else
+-    {
+-        _segments[_nb_segment]._audio_size = 0;
+-        _segments[_nb_segment]._audio_duration =0;
+-    }
+-
+-  _segments[_nb_segment]._reference = _nb_video;
+-  _segments[_nb_segment]._audio_start = 0;
+-  _segments[_nb_segment]._start_frame = 0;
+-  _segments[_nb_segment]._nb_frames   =   _videos[_nb_video]._nb_video_frames ;
+-
+-
+-//****************************
+-
+-
+-  // next one please
+-#if 0
+-        if(_videos[_nb_video].audioTracks)
+-        {
+-            WAVHeader *    _wavinfo=&amp;(_videos[_nb_video].audioTracks[0]-&gt;wavheader);
+-            if(_wavinfo-&gt;encoding==WAV_MP3 &amp;&amp; _wavinfo-&gt;blockalign==1152)
+-            {
+-              uint32_t autovbr=0;
+-              prefs-&gt;get(FEATURE_AUTO_BUILDMAP,&amp;autovbr);
+-              if(autovbr || GUI_Confirmation_HIG(QT_TR_NOOP(&quot;Build Time Map&quot;),QT_TR_NOOP( &quot;Build VBR time map?&quot;), VBR_MSG))
+-                    {
+-                   // _videos[_nb_video]._isAudioVbr=_videos[_nb_video]._audiostream-&gt;buildAudioTimeLine ();
+-                    }
+-            }
+-        }
+-#endif
+-        // Update frametype if needed...
+-        _VIDEOS 	*vid;
+-        vid=&amp;(_videos[_nb_video]);
+-        decoders *decoder=vid-&gt;decoder;
+-        rederiveFrameType(_videos[_nb_video]._aviheader);
+-
+-
+-        //
+-        _nb_video++;
+-        _nb_segment++;
+-
+-        //Update time stamps if needed....
+-		vid-&gt;_reorderReady=0;
+-        vid-&gt;_unpackReady=0;
+-		// we only try if we got everything needed...
+-		if(!vid-&gt;decoder)
+-		{
+-			printf(&quot;[Editor] no decoder to check for B- frame\n&quot;);
+-		}else
+-        {
+-           
+-            if(vid-&gt;_aviheader-&gt;providePts()==false) // Else we rely on demuxer PTS
+-            {
+-                printf(&quot;[Editor] This container does not provide PTS \n&quot;);
+-                if(decoder-&gt;bFramePossible())
+-                {
+-                    printf(&quot;[Editor] B- frame possible with that codec \n&quot;);
+-                    if(isMpeg4Compatible(info.fcc) || isMpeg12Compatible(info.fcc))
+-                    {
+-                        printf(&quot;[Editor] It is mpeg4-SP/ASP, try to guess all PTS\n&quot;);                        
+-                        setMpeg4PtsFromDts(vid-&gt;_aviheader,vid-&gt;timeIncrementInUs);
+-                    }
+-                }
+-                else   
+-                {
+-                        printf(&quot;[Editor] No B frame with that codec, PTS=DTS\n&quot;);
+-                        setPtsEqualDts(vid-&gt;_aviheader,vid-&gt;timeIncrementInUs);
+-                }
+-            }
+-        }
+-		GoToIntra(0);
+-        durationInUs=vid-&gt;_aviheader-&gt;getVideoDuration();
+-		printf(&quot;[Editor] End of B-frame check\n&quot;);
+-
+   return 1;
+ }
+-/**
+-	Send a re-order order to all video if
+-		- They may need it
+-		- It is not already done.
+-*/
+-uint8_t ADM_Composer::reorder (void)
+-{
+-_VIDEOS *vid;
+-	for(uint32_t i=0;i&lt;_nb_video;i++)
+-	{
+-		vid=&amp;_videos[i];
+-#if 0
+-		if(!vid-&gt;_reorderReady) // not already reordered ?
+-		{
+-				if(vid-&gt;decoder-&gt;bFramePossible()) // can be re-ordered ?
+-				{
+-						if((vid-&gt;_reorderReady=vid-&gt;_aviheader-&gt;reorder()))
+-						{
+-							aviInfo    info;
+-							_videos[i]._aviheader-&gt;getVideoInfo (&amp;info);
+ 
+-							printf(&quot; Video %&quot;LU&quot; has been reordered\n&quot;,i);
+-						}
+-
+-				}
+-		}
+-#endif
+-	}
+-	return 1;
+-}
+-/*
++/**
++    \fn hasVBRAudio
+         If one of the videos has VBR audio we handle the whole editor audio has VBR
+         If it is CBR, it is not harmful
+         and it avoid loosing the VBR info in case we do VBR time map upon loading
+ */
+-uint8_t ADM_Composer::hasVBRVideos(void)
++bool ADM_Composer::hasVBRAudio(void)
+ {
+-        for(int i=0;i&lt;_nb_video;i++)
++    int n=_segments.getNbRefVideos();
++        for(int i=0;i&lt;n;i++)
+         {
+                 ADM_audioStreamTrack *trk=getTrack(i);
+                 if(trk)
+@@ -564,24 +334,29 @@
+         return 0;
+ }
+ 
+-/*
++/**
++    \fn getPARWidth
+ 
+ */
+ uint32_t ADM_Composer::getPARWidth()
+ {
+-  if (_nb_video)
++  if (_segments.getNbRefVideos())
+   {
+-    return _videos[0].decoder-&gt;getPARWidth();
++    return _segments.getRefVideo(0)-&gt;decoder-&gt;getPARWidth();
+   }
+   return 1;
+ 
+ }
++/**
++    \fn getPARHeight
+ 
++*/
++
+ uint32_t ADM_Composer::getPARHeight()
+ {
+-  if (_nb_video)
++  if (_segments.getNbRefVideos())
+   {
+-    return _videos[0].decoder-&gt;getPARHeight();
++    return _segments.getRefVideo(0)-&gt;decoder-&gt;getPARHeight();
+   }
+   return 1;
+ 
+@@ -591,29 +366,28 @@
+ */
+ uint64_t ADM_Composer::getFrameIncrement(void)
+ {
+-    if (!_nb_video) return 0;
+-    return _videos[0].timeIncrementInUs;
++    if (!_segments.getNbSegments()) return 0;
++    return _segments.getRefVideo(0)-&gt;timeIncrementInUs;
+ }
+ /**
+ 	Set decoder settings (post process/swap u&amp;v...)
+ 	for the segment referred by frame
+ 
+ */
+-uint8_t ADM_Composer::setDecodeParam (uint32_t frame)
++bool ADM_Composer::setDecodeParam (uint64_t time)
+ {
+-uint32_t seg,relframe,ref;
+-  if (_nb_video)
++uint64_t offset;
++uint32_t ref;
++  if (_segments.getNbRefVideos())
+   {
+-   if (!convFrame2Seg (frame, &amp;seg, &amp;relframe))
++    if(false==_segments.getRefFromTime(time,&amp;ref,&amp;offset))
+     {
+-      printf (&quot;\n Conversion failed !\n&quot;);
+-      return 0;
++        ADM_warning(&quot;Cannot get ref from time %&quot;LLD&quot; ms\n&quot;,time/1000);
++        return false;
+     }
+-    // Search source
+-     ref = _segments[seg]._reference;
+-    _videos[ref].decoder-&gt;setParam ();
++    _segments.getRefVideo(ref)-&gt;decoder-&gt;setParam ();
+   }
+-  return 1;
++  return true;
+ 
+ }
+ 
+@@ -624,20 +398,10 @@
+ */
+ uint8_t ADM_Composer::cleanup (void)
+ {
+-  deleteAllSegments ();
+-  deleteAllVideos ();
+-  _nb_segment = 0;
+-  _nb_video = 0;
+-  _total_frames = 0;
+-
+-	if(_scratch)
+-	{
+-		delete _scratch;
+-		_scratch=NULL;
+-	}
+-
++  _segments.deleteAll();
+   return 1;
+ }
++#if 0
+ /*
+         param:
+                 source : source #
+@@ -758,89 +522,97 @@
+   return 1;
+ 
+ }
++#endif
+ /**
+     \fn getAudioStreamsInfo
+     \brief Returns a copy of all audio trackes at frame frame
+     call delete [] infos when you dont need them anymore
+ */
+-uint8_t ADM_Composer::getAudioStreamsInfo(uint32_t frame,uint32_t *nbStreams, audioInfo **infos)
++bool ADM_Composer::getAudioStreamsInfo(uint64_t xtime,uint32_t *nbStreams, audioInfo **infos)
+ {
+-uint32_t seg,rel,reference;
+ 
+-        if (!convFrame2Seg (frame, &amp;seg, &amp;rel))
+-        {
+-                printf(&quot;Editor : frame2seg failed (%u)\n&quot;,frame);
+-                return 0;
+-        }
+-        reference=_segments[seg]._reference;
+-        if(!_videos[reference].nbAudioStream)
+-        {
+-            *nbStreams=0;
+-            *infos=NULL;
+-        }
+-       // return _videos[reference]._aviheader-&gt;getAudioStreamsInfo(nbStreams,infos);
++uint64_t offset;
++uint32_t ref;
++  
++    if(false==_segments.getRefFromTime(xtime,&amp;ref,&amp;offset))
++    {
++        ADM_warning(&quot;[Editor] getAudioStreamsInfo failed for time %&quot;LLD&quot; ms\n&quot;,xtime);
++        return false;
++    }
+ 
+-        *nbStreams=_videos[reference].nbAudioStream;
+-        *infos=new audioInfo[*nbStreams];
+-        for(int i=0;i&lt;*nbStreams;i++)
+-        {
+-            WAVHeader *wav=&amp;(_videos[reference].audioTracks[i]-&gt;wavheader);
+-            audioInfo *t=(*infos)+i;
+-            t-&gt;bitrate=(wav-&gt;byterate*8)/1000;
+-            t-&gt;channels=wav-&gt;channels;
+-            t-&gt;encoding=wav-&gt;encoding;
+-            t-&gt;frequency=wav-&gt;frequency;
+-            t-&gt;av_sync=0;
+-         }
+-        return 1;
+-    return 0;
++    _VIDEOS *v=_segments.getRefVideo(ref);
++    ADM_assert(v);
++
++    if(!v-&gt;nbAudioStream)
++    {
++        *nbStreams=0;
++        *infos=NULL;
++        return true;
++    }
++
++    *nbStreams=v-&gt;nbAudioStream;
++    *infos=new audioInfo[*nbStreams];
++    for(int i=0;i&lt;*nbStreams;i++)
++    {
++        WAVHeader *wav=&amp;(v-&gt;audioTracks[i]-&gt;wavheader);
++        audioInfo *t=(*infos)+i;
++        t-&gt;bitrate=(wav-&gt;byterate*8)/1000;
++        t-&gt;channels=wav-&gt;channels;
++        t-&gt;encoding=wav-&gt;encoding;
++        t-&gt;frequency=wav-&gt;frequency;
++        t-&gt;av_sync=0;
++     }
++    return true;
+ }
+-/*
+-        Change the audio track for the source video attached to the &quot;frame&quot; frame
++/**
++    \fn getCurrentAudioStreamNumber
++    \brief Get stream number used for frame at position xtime
+ 
+ */
+-uint32_t ADM_Composer::getCurrentAudioStreamNumber(uint32_t frame)
++uint32_t ADM_Composer::getCurrentAudioStreamNumber(uint64_t  xtime)
+ {
+-uint32_t   seg,rel,reference;
++uint32_t ref;
++uint64_t offset;
+ 
+-        if (!convFrame2Seg (frame, &amp;seg, &amp;rel))
++        if(false==_segments.getRefFromTime(xtime,&amp;ref,&amp;offset))  
+         {
+-                printf(&quot;Editor : frame2seg failed (%u)\n&quot;,frame);
+-                return 0;
++            ADM_warning(&quot;[Editor::getCurrentAudioStreamNumber] Cannot get ref video for time %&quot;LLD&quot; ms\n&quot;,xtime/1000);
++            return 0;
+         }
+-        reference=_segments[seg]._reference;
+ 
+-        return _videos[reference].currentAudioStream;
++        return _segments.getRefVideo(ref)-&gt;currentAudioStream;
+ }
+ /**
+         \fn changeAudioStream
+ 
+ */
+-uint8_t ADM_Composer::changeAudioStream(uint32_t frame,uint32_t newstream)
++bool ADM_Composer::changeAudioStream(uint64_t xtime,uint32_t newstream)
+ {
+-uint32_t   seg,rel,reference;
+ double     duration;
+ WAVHeader *wav;
+ aviInfo    info;
+ 
+-        if (!convFrame2Seg (frame, &amp;seg, &amp;rel))
++       uint32_t ref;
++        uint64_t offset;
++
++        if(false==_segments.getRefFromTime(xtime,&amp;ref,&amp;offset))  
+         {
+-                printf(&quot;Editor : frame2seg failed (%u)\n&quot;,frame);
+-                return 0;
++            ADM_warning(&quot;[Editor::changeAudioStream] Cannot get ref video for time %&quot;LLD&quot; ms\n&quot;,xtime/1000);
++            return 0;
+         }
+-        reference=_segments[seg]._reference;
+-        ADM_audioStreamTrack **trks=_videos[reference].audioTracks;
+-        uint32_t nb=_videos[reference].nbAudioStream;
++        _VIDEOS *v=_segments.getRefVideo(ref);
++        ADM_assert(v);
++        ADM_audioStreamTrack **trks=v-&gt;audioTracks;
++        uint32_t nb=v-&gt;nbAudioStream;
+         if(newstream&gt;=nb)
+         {
+-            return 0;
++            ADM_warning(&quot;[Editor::changeAudioStream] New stream exceeds # of stream (%d/%d)\n&quot;,(int)newstream,(int)nb);
++            return false;
+         }
+-        _videos[reference].currentAudioStream=newstream;
+-        for(uint32_t i=0;i&lt;_nb_segment;i++)
+-                updateAudioTrack(i);
+-        return 1;
++        v-&gt;currentAudioStream=newstream;
++        return true;
+ }
+-
++#if 0
+ /**
+ ______________________________________________________
+ //
+@@ -1020,12 +792,13 @@
+   return 1;
+ 
+ }
+-
++#endif
+ //____________________________________
+ //      Remove empty segments
+ //____________________________________
+ uint32_t ADM_Composer::computeTotalFrames (void)
+ {
++#if 0
+   uint32_t
+     seg,
+     tf =
+@@ -1037,8 +810,9 @@
+     }
+ 
+   return tf;
++#endif
+ }
+-
++#if 0
+ //____________________________________
+ //      Remove empty segments
+ //____________________________________
+@@ -1124,7 +898,7 @@
+   updateAudioTrack (seg);
+   return 1;
+ }
+-
++#endif
+ //
+ //      Update the real size of audio track by computing the
+ // delta between sync @end and <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">sync at begin</A>
+@@ -1133,6 +907,7 @@
+ 
+ uint8_t ADM_Composer::updateAudioTrack (uint32_t seg)
+ {
++#if 0
+   // audio sync
+   uint32_t
+     pos_start,
+@@ -1147,7 +922,7 @@
+   if (!getTrack(reference))
+     return 1;
+ 
+-
++#endif
+   return 1;
+ 
+ #warning FIXME, does not work if audio track is shorter
+@@ -1155,7 +930,7 @@
+ }
+ 
+ 
+-
++#if 0
+ //__________________________________________________
+ // check that the given frame is inside the segment
+ //__________________________________________________
+@@ -1190,16 +965,8 @@
+ 
+ 
+ }
++#endif
+ 
+-/**
+-	Propagate VBR building to underlying segment
+-
+-*/
+-void
+-ADM_Composer::propagateBuildMap (void)
+-{
+-
+-}
+ //_________________________________________
+ uint8_t		ADM_Composer::setEnv(_ENV_EDITOR_FLAGS newflag)
+ {
+@@ -1303,7 +1070,7 @@
+ uint64_t    ADM_Composer::estimatePts(uint32_t frame)
+ {
+     uint32_t flags;
+-    _VIDEOS *vid=&amp;_videos[0];
++    _VIDEOS *vid=_segments.getRefVideo(0);
+     vidHeader *demuxer=vid-&gt;_aviheader;
+     int count=0;
+     uint64_t  wantedPts;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -1,6 +1,6 @@
+ /***************************************************************************
+-                          ADM_edit.hxx  -  description
+-                             -------------------
++     \file  ADM_edit.hxx  
++     \brief Editor class
+     This file is the composer
+     It presents the processed underlying files as if it was a flat
+     file.
+@@ -12,11 +12,8 @@
+     	described by the segment
+     	** NOT the beginning of the segment start_frame **
+ 
++    (C) 2002-2009 Mean, <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.Fr</A>
+ 
+-
+-    begin                : Thu Feb 28 2002
+-    copyright            : (C) 2002 by mean
+-    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+  ***************************************************************************/
+ 
+ /***************************************************************************
+@@ -38,10 +35,10 @@
+ 
+  #include &quot;ADM_audioStream.h&quot;
+  #include &quot;ADM_audiocodec/ADM_audiocodec.h&quot;
+-#define MAX_SEG  	100 // Should be enougth
+-#define MAX_VIDEO   100
++ #include &quot;ADM_segment.h&quot;
++ #include &lt;vector&gt;
+ 
+-#define ADM_EDITOR_AUDIO_BUFFER_SIZE (128*1024)
++#define ADM_EDITOR_AUDIO_BUFFER_SIZE (128*1024*6*sizeof(float))
+ 
+ 
+ typedef enum
+@@ -53,95 +50,25 @@
+     ENV_EDITOR_SMART=  0x0005,
+ 	ENV_EDITOR_LAST=   0x8000
+ }_ENV_EDITOR_FLAGS;
+-/**
+-    \class ADM_audioStreamTack
+ 
+-*/
+-class ADM_audioStreamTrack
+-{
+-public:
+-    ADM_audioStream  *stream;
+-    audioInfo        *info;
+-    ADM_Audiocodec   *codec;
+-    WAVHeader		 wavheader;
+-    bool             vbr;
+-    uint64_t         duration;
+-    uint64_t         size;
+ 
+-public:
+-    ADM_audioStreamTrack() {memset(this,0,sizeof(*this));}
+-    ~ADM_audioStreamTrack()
+-    {
+-        stream=NULL;
+-        info=NULL;   // These 2 are destroyed by the demuxer itself
+-        if(codec) 
+-        {
+-            delete codec;
+-            codec=NULL;
+-        }
+ 
+-    }
+-};
+-//
+-//  The start frame correspond to the frame 0 of the segment (quite obvisous)
+-//  _nb_video_frames is the number of active frame in the segment
+-//
+-//
+-
+-typedef struct
+-{
+-  	vidHeader 							*_aviheader;
+-  	decoders							*decoder;
+-    COL_Generic2YV12                    *color;
+-
+-	
+-    uint32_t                            nbAudioStream;
+-    uint32_t                            currentAudioStream;
+-    ADM_audioStreamTrack                **audioTracks;
+-
+-	uint32_t							_nb_video_frames;	
+-	uint8_t								_reorderReady;
+-    uint8_t                             _unpackReady;
+-	EditorCache							*_videoCache;
+-    uint32_t                            lastSentFrame;   // Last frame read/sent to decoder
+-    uint64_t                            lastDecodedPts;  // Pts of last frame out of decoder
+-    uint64_t                            lastReadPts;     // Pts of the last frame we read
+-    uint64_t                            timeIncrementInUs; // in case the video has no PTS, time increment (us)
+-}_VIDEOS;
+-
+-
+-typedef struct
+-{
+-  	uint32_t							_reference;
+- 	uint32_t							_start_frame;
+-	uint32_t							_nb_frames;
+-	uint32_t  							_audio_size;
+-	uint64_t							_audio_duration; //! IN SAMPLE
+-	uint32_t							_seg_audio_duration;
+-	uint32_t							_seg_video_duration;
+- 	uint32_t  							_audio_start;
+-}_SEGMENT;
+ /**
+             \class ADM_Composer
++            \brief Wrapper class that handles all the logic to seek/deal with multiple video files
++                        with editing
+ */
+ class ADM_Composer : public ADM_audioStream
+ {
+   private:
+-                
+-//    uint8_t                             audioBuffer[ADM_EDITOR_AUDIO_BUFFER_SIZE];
+-//    uint32_t                            audioBufferStart;
+-//    uint32_t                            audioBufferEnd;
+-
+-                    uint8_t dupe(ADMImage *src,ADMImage *dst,_VIDEOS *vid); 
++                    ADM_EditorSegment _segments;
++                    uint8_t     dupe(ADMImage *src,ADMImage *dst,_VIDEOS *vid); 
+                                                             // Duplicate img, do colorspace
+                                                             // if needed
+   					uint32_t	_internalFlags;
+   					ADM_PP 		_pp;
+ 					ADMImage	*_imageBuffer;
+   					uint8_t		decodeCache(uint32_t frame,uint32_t seg, ADMImage *image);
+-  					uint32_t 	_nb_segment;
+-					uint32_t 	_nb_video;
+-					uint32_t    _nb_clipboard;
+   					uint32_t 	_total_frames;
+   					uint32_t 	_audio_size;
+   					// _audiooffset points to the offset / the total segment
+@@ -153,160 +80,146 @@
+                     
+        				uint32_t _lastseg,_lastframe,_lastlen;
+ 
+-					uint32_t	    max_seg;
+-  					_SEGMENT 		*_segments;
+-					_SEGMENT 		_clipboard[MAX_SEG];
+-					_VIDEOS 		_videos[MAX_VIDEO];
+-                    ADM_audioStreamTrack *getTrack(uint32_t i)
++                    ADM_audioStreamTrack *getTrack(uint32_t i);
++#if 0
+                                             {
+                                                 if(!_videos[i].audioTracks) return NULL;
+                                                 return _videos[i].audioTracks[_videos[i].currentAudioStream];
+-
+                                             }
++#endif
+                     ADMImage        *_scratch;
+-						uint8_t  	convFrame2Seg(uint32_t framenum,uint32_t *seg,
+-																			uint32_t *relframe);
+-						uint8_t  	convSeg2Frame(	uint32_t *framenum,
+-																			uint32_t seg,
+-																			uint32_t relframe);
+-						uint8_t 	crunch( void)																			;
+-						uint8_t 	duplicateSegment( uint32_t segno);
+-						uint32_t 	computeTotalFrames(void) ;
++                    uint8_t 	crunch( void)																			;
++                    uint8_t 	duplicateSegment( uint32_t segno);
++                    uint32_t 	computeTotalFrames(void) ;
+ 
+-						uint8_t 	removeTo( 	uint32_t to, uint32_t seg,uint8_t included);
+-						uint8_t 	removeFrom( uint32_t from, uint32_t seg,uint8_t included);
+-						uint8_t 	checkInSeg( uint32_t seg, uint32_t frame);
+-						uint8_t 	sanityCheck( void);
+-				        uint8_t  	updateAudioTrack(uint32_t seg);			   	
+-						void 		deleteAllVideos(void );
++                    uint8_t 	removeTo( 	uint32_t to, uint32_t seg,uint8_t included);
++                    uint8_t 	removeFrom( uint32_t from, uint32_t seg,uint8_t included);
++                    uint8_t 	checkInSeg( uint32_t seg, uint32_t frame);
++                    uint8_t 	sanityCheck( void);
++                    uint8_t  	updateAudioTrack(uint32_t seg);			   	
++                    void 		deleteAllVideos(void );
+ 
+-						uint8_t 	getMagic(const char *name,uint32_t *magic);
++                    uint8_t 	getMagic(const char *name,uint32_t *magic);
+ 
+-						uint32_t 	searchForwardSeg(uint32_t startframe);
+-                        uint8_t     tryIndexing(const char *name, const char *idxname=NULL);
+-                        bool        rederiveFrameType(vidHeader *demuxer);
++                    uint32_t 	searchForwardSeg(uint32_t startframe);
++                    uint8_t     tryIndexing(const char *name, const char *idxname=NULL);
++                    bool        rederiveFrameType(vidHeader *demuxer);
+ 
+   public:
+-                            uint8_t hasVBRVideos(void);
+-                            uint8_t addSegment(uint32_t source,uint32_t start, uint32_t nb);
+-                            uint8_t deleteAllSegments(void);
+-  						uint8_t 	getExtraHeaderData(uint32_t *len, uint8_t **data);
+-                            uint32_t getPARWidth(void);
+-                            uint32_t getPARHeight(void);
+-                            uint8_t  rebuildDuration(void);
++                    bool        hasVBRAudio(void);
++                    uint8_t     addSegment(uint32_t source,uint32_t start, uint32_t nb);
++                    uint8_t     deleteAllSegments(void);
++                    bool     	getExtraHeaderData(uint32_t *len, uint8_t **data);
++                    uint32_t    getPARWidth(void);
++                    uint32_t    getPARHeight(void);
++                    uint8_t     rebuildDuration(void);
+   								ADM_Composer();
+   				virtual 			~ADM_Composer();
+-  						void		clean( void );
+-  						void		dumpSeg(void);
+-                        uint8_t     saveAsScript (const char *name, const char *out);
+-						uint8_t 	saveWorbench(const char *name);
+-						uint8_t 	loadWorbench(const char *name);
+-						uint8_t     resetSeg( void );
+-						uint8_t	    reorder( void );
+-						uint8_t	    isReordered( uint32_t framenum ) {return true;}
+-						uint8_t	    isIndexable( void);
+-  				//_______________________
+-  				// specific to composer
+-  				//_______________________
+-  						uint8_t 	addFile (const char *name, uint8_t mode=0);
+-  						uint8_t 	cleanup( void);
+-			   			uint8_t 	isMultiSeg( void) { if(_nb_segment&gt;1) return 1; else return 0;}
+-  						uint8_t 	removeFrames(uint32_t start,uint32_t end);
+-  						uint8_t 	addFrameFrom(uint32_t to,uint32_t frombegin,uint32_t fromend);
+-						uint8_t 	copyToClipBoard (uint32_t start, uint32_t end);
+-						uint8_t 	pasteFromClipBoard (uint32_t whereto);
+-  				//_____________________________
++                    void		clean( void );
++                    void		dumpSeg(void);
++                    uint8_t     saveAsScript (const char *name, const char *out);
++                    uint8_t 	saveWorbench(const char *name);
++                    uint8_t 	loadWorbench(const char *name);
++                    uint8_t     resetSeg( void );
++                    uint8_t	    reorder( void );
++                    uint8_t	    isReordered( uint32_t framenum ) {return true;}
++                    uint8_t	    isIndexable( void);
++            //_______________________
++            // specific to composer
++            //_______________________
++                    bool     	addFile (const char *name);
++                    uint8_t 	cleanup( void);
++                    bool 	    isMultiSeg( void);
++                    uint8_t 	removeFrames(uint32_t start,uint32_t end);
++                    uint8_t 	addFrameFrom(uint32_t to,uint32_t frombegin,uint32_t fromend);
++                    uint8_t 	copyToClipBoard (uint32_t start, uint32_t end);
++                    uint8_t 	pasteFromClipBoard (uint32_t whereto);
++            //_____________________________
+   				// navigation &amp; frame functions
+   				//_____________________________
+ /************************************* Markers *****************************/
+ private:        
+-                        uint64_t markerAPts,markerBPts;
++                    uint64_t    markerAPts,markerBPts;
+ public:
+-                        uint64_t    getMarkerAPts();
+-                        uint64_t    getMarkerBPts();
+-                        bool        setMarkerAPts(uint64_t pts);
+-                        bool        setMarkerBPts(uint64_t pts);
++                    uint64_t    getMarkerAPts();
++                    uint64_t    getMarkerBPts();
++                    bool        setMarkerAPts(uint64_t pts);
++                    bool        setMarkerBPts(uint64_t pts);
+ public:
+ /************************************ Public API ***************************/
+ protected:
+-                        uint32_t    currentFrame;
++                    uint32_t    currentFrame;
+ public:
+-                        uint32_t    getCurrentFrame(void);
+-                        
+-                        bool        setCurrentFrame(uint32_t frame);
+-                        bool        GoToIntra(uint32_t frame);
+-                        bool        GoToTime(uint64_t time);
+-                        bool        NextPicture(ADMImage *image);
+-                        bool        samePicture(ADMImage *image);
+-                        bool        getCompressedPicure(uint32_t framenum,ADMCompressedImage *img);
+-                        uint64_t    estimatePts(uint32_t frame);
+-                        uint32_t    searchFrameBefore(uint64_t pts);
+-                        bool        getImageFromCacheForFrameBefore(uint64_t pts,ADMImage *out);
+-                        bool        getPictureJustBefore(uint64_t pts);
+-                        bool        getPtsDts(uint32_t frame,uint64_t *pts,uint64_t *dts);
++                    uint32_t    getCurrentFrame(void);
++                    
++                    bool        setCurrentFrame(uint32_t frame);
++                    bool        GoToIntra(uint32_t frame);
++                    bool        GoToTime(uint64_t time);
++                    bool        NextPicture(ADMImage *image);
++                    bool        samePicture(ADMImage *image);
++                    bool        getCompressedPicure(uint32_t framenum,ADMCompressedImage *img);
++                    uint64_t    estimatePts(uint32_t frame);
++                    uint32_t    searchFrameBefore(uint64_t pts);
++                    bool        getImageFromCacheForFrameBefore(uint64_t pts,ADMImage *out);
++                    bool        getPictureJustBefore(uint64_t pts);
++                    bool        getPtsDts(uint32_t frame,uint64_t *pts,uint64_t *dts);
+ /************************************ Internal ******************************/
+ public:
+-                                    /// Decode frame and on until frame is popped out of decoders
+-                        bool        DecodePictureUpToIntra(uint32_t frame,uint32_t ref);
+-                                    /// compressed image-&gt;yb12 image image and do postproc/colorconversion
+-                        bool        decompressImage(ADMImage *out,ADMCompressedImage *in,uint32_t ref);
+-                                    /// Decode next image
+-                        bool        DecodeNextPicture(uint32_t ref);
+-                                    /// Get the next decoded picture
+-                        bool     	getNextPicture(ADMImage *out,uint32_t ref);
+-                                    /// Get again last decoded picture
+-                        bool        getSamePicture(ADMImage *out,uint32_t ref);
++                                /// Decode frame and on until frame is popped out of decoders
++                    bool        DecodePictureUpToIntra(uint32_t frame,uint32_t ref);
++                                /// compressed image-&gt;yb12 image image and do postproc/colorconversion
++                    bool        decompressImage(ADMImage *out,ADMCompressedImage *in,uint32_t ref);
++                                /// Decode next image
++                    bool        DecodeNextPicture(uint32_t ref);
++                                /// Get the next decoded picture
++                    bool     	getNextPicture(ADMImage *out,uint32_t ref);
++                                /// Get again last decoded picture
++                    bool        getSamePicture(ADMImage *out,uint32_t ref);
+ /************************************ Internal ******************************/
+-  						uint8_t 	getFrame(uint32_t   framenum,ADMCompressedImage *img,uint8_t *isSequential);
+-						
+-   					
+-	          			uint64_t 	getTime(uint32_t fn);
+-						uint32_t 	getFlags(uint32_t frame,uint32_t *flags);
+-						uint8_t   	isSequential (uint32_t framenum);
+-								// B follow A with just Bframes in between
+-						uint8_t 	sequentialFramesB(uint32_t frameA,uint32_t frameB);
+-						uint32_t 	getFlagsAndSeg (uint32_t frame, 
+-									uint32_t * flags,uint32_t *segs);
+-						uint8_t  	setFlag(uint32_t frame,uint32_t flags);
+-						uint8_t	    updateVideoInfo(aviInfo *info);
++                    uint8_t 	getFrame(uint32_t   framenum,ADMCompressedImage *img,uint8_t *isSequential);
++                    
++                
++                    uint64_t 	getTime(uint32_t fn);
++                    uint32_t 	getFlags(uint32_t frame,uint32_t *flags);
++                    uint8_t   	isSequential (uint32_t framenum);
++                            // B follow A with just Bframes in between
++                    uint8_t 	sequentialFramesB(uint32_t frameA,uint32_t frameB);
++                    uint32_t 	getFlagsAndSeg (uint32_t frame, 
++                                uint32_t * flags,uint32_t *segs);
++                    uint8_t  	setFlag(uint32_t frame,uint32_t flags);
++                    uint8_t	    updateVideoInfo(aviInfo *info);
+ 
+-						uint8_t  	getFrameSize(uint32_t frame,uint32_t *size) ;
+-						uint8_t		sanityCheckRef(uint32_t start, uint32_t end,
+-									uint32_t *fatal);
+-                                                uint8_t         hasPtsDts(uint32_t ); // Return 1 if the container gives PTS &amp; DTS info
+-                                                uint32_t        ptsDtsDelta(uint32_t framenum) ;
+-					//*******************************************	
+-						uint32_t 	getSpecificMpeg4Info( void );
++                    uint8_t  	getFrameSize(uint32_t frame,uint32_t *size) ;
++                    uint8_t		sanityCheckRef(uint32_t start, uint32_t end,
++                                uint32_t *fatal);
++                                            uint8_t         hasPtsDts(uint32_t ); // Return 1 if the container gives PTS &amp; DTS info
++                                            uint32_t        ptsDtsDelta(uint32_t framenum) ;
++                //*******************************************	
++                    uint32_t 	getSpecificMpeg4Info( void );
+ /************************************ audioStream ******************************/
+ protected:
+ #define ADM_EDITOR_PACKET_BUFFER_SIZE (20*1024)
+-                        uint8_t  packetBuffer[ADM_EDITOR_PACKET_BUFFER_SIZE];
+-                        uint32_t packetBufferSize;
+-                        uint64_t packetBufferDts;
+-                        uint32_t packetBufferSamples;
+-                        bool     refillPacketBuffer(void);
++                    uint8_t  packetBuffer[ADM_EDITOR_PACKET_BUFFER_SIZE];
++                    uint32_t packetBufferSize;
++                    uint64_t packetBufferDts;
++                    uint32_t packetBufferSamples;
++                    bool     refillPacketBuffer(void);
+   
+ public:
+-        
+-virtual uint8_t         getPacket(uint8_t *buffer,uint32_t *size, uint32_t sizeMax,uint32_t *nbSample,uint64_t *dts);
+-        uint8_t         getPCMPacket(float  *dest, uint32_t sizeMax, uint32_t *samples,uint64_t *odts);
+-virtual bool            goToTime(uint64_t nbUs);
+-        bool            getExtraData(uint32_t *l, uint8_t **d);
+-        uint64_t        getDurationInUs(void) {return durationInUs;}
+-        uint8_t			getAudioStream(ADM_audioStream **audio);
+-virtual WAVHeader       *getInfo(void);
+-virtual CHANNEL_TYPE    *getChannelMapping(void );
++                    
++            virtual uint8_t         getPacket(uint8_t *buffer,uint32_t *size, uint32_t sizeMax,uint32_t *nbSample,uint64_t *dts);
++                    uint8_t         getPCMPacket(float  *dest, uint32_t sizeMax, uint32_t *samples,uint64_t *odts);
++            virtual bool            goToTime(uint64_t nbUs);
++                    bool            getExtraData(uint32_t *l, uint8_t **d);
++                    uint64_t        getDurationInUs(void) {return durationInUs;}
++                    uint8_t			getAudioStream(ADM_audioStream **audio);
++            virtual WAVHeader       *getInfo(void);
++            virtual CHANNEL_TYPE    *getChannelMapping(void );
+ /************************************ /audioStream ******************************/
+-					//______________________________
+-					//   /audioStream
+-					//______________________________
+-                    uint8_t         getAudioStreamsInfo(uint32_t frame,uint32_t *nbStreams, audioInfo **infos);
+-                    uint8_t         changeAudioStream(uint32_t frame,uint32_t newstream);
+-                    uint32_t        getCurrentAudioStreamNumber(uint32_t frame);
+-
+-                    // /other audio stuff
+-
+-			     		uint8_t 			setDecodeParam( uint32_t frame );
++                    bool            getAudioStreamsInfo(uint64_t xtime,uint32_t *nbStreams, audioInfo **infos);
++                    bool            changeAudioStream(uint64_t xtime,uint32_t newstream);
++                    uint32_t        getCurrentAudioStreamNumber(uint64_t xframe);
++                    bool    		setDecodeParam( uint64_t frameTime );
+ /**************************************** Video Info **************************/
+ 	 				AVIStreamHeader 	*getVideoStreamHeader(void ) ;
+ 	 				MainAVIHeader 		*getMainHeader(void );
+@@ -319,34 +232,28 @@
+ /**************************************** /Video Info **************************/					
+ 					
+ 					
+-                  //
+-                  //	Coder/decoder
+-                  //
+-		  			// Search previous/ next key frame
+-		  			uint8_t			getPKFrame(uint32_t *frame);
+-					uint8_t			getNKFrame(uint32_t *frame);
+-					//
+-                  			uint8_t			getUncompressedFrame(uint32_t frame,ADMImage *out,
+-									uint32_t *flagz=NULL)    ;
+-protected:					// Obsolete									
+-              				uint8_t			searchNextKeyFrame(uint32_t in,uint32_t *oseg, uint32_t * orel);
+-                 			uint8_t			searchPreviousKeyFrame(uint32_t in,uint32_t *oseg, uint32_t * orel);
++/***************************************** Seeking *****************************/            
++		  			bool			getPKFrame(uint32_t *frame);
++					bool			getNKFrame(uint32_t *frame);
++					
++                    bool			getUncompressedFrame(uint32_t frame,ADMImage *out,uint32_t *flagz=NULL);
+ public:
+-                  // kludg
+-                  			void 			propagateBuildMap( void );
+-
+-			
+-					uint8_t 		getMarkers(uint32_t *start, uint32_t *end);
+-								 // get markers from file
+-					uint8_t 		setPostProc( uint32_t type, uint32_t strength, 
+-										uint32_t swapuv);
+-					uint8_t 		getPostProc( uint32_t *type, uint32_t *strength, 
+-										uint32_t *swapuv);
+-										
+-				
++                    
++/******************************* Post Processing ************************************/
++					uint8_t 		setPostProc( uint32_t type, uint32_t strength,	uint32_t swapuv);
++					uint8_t 		getPostProc( uint32_t *type, uint32_t *strength,uint32_t *swapuv);
++/******************************* /Post Processing ************************************/										
++/******************************* Misc ************************************/				
+ 					uint8_t			setEnv(_ENV_EDITOR_FLAGS newflag);
+ 					uint8_t			getEnv(_ENV_EDITOR_FLAGS newflag);
+ 					decoders 		*rawGetDecoder(uint32_t frame);
++/******************************* /Misc ************************************/				
++/***** OBSOLETE API *****/
++/***** OBSOLETE API *****/
++/***** OBSOLETE API *****/
++protected:					// Obsolete									
++                    uint8_t			searchNextKeyFrame(uint32_t in,uint32_t *oseg, uint32_t * orel);
++                    uint8_t			searchPreviousKeyFrame(uint32_t in,uint32_t *oseg, uint32_t * orel);
+ 
+ };
+ #endif
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_editInternal.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_editInternal.h	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_editInternal.h	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -0,0 +1,4 @@
++/**
++    \file ADM_editInternal.h
++
++*/
+\ No newline at end of file
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -0,0 +1,289 @@
++/***************************************************************************
++     \file  ADM_segment.h
++     \brief Handle segment
++
++    (C) 2002-2009 Mean, <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.Fr</A>
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_segment.h&quot;
++ #include &quot;../ADM_codecs/ADM_codec.h&quot;
++ #include &quot;ADM_image.h&quot;
++ #include &quot;../ADM_editor/ADM_edCache.h&quot;
++ #include &quot;ADM_pp.h&quot;
++ #include &quot;ADM_colorspace.h&quot;
++
++
++#define ADM_warning printf
++#define ADM_info    printf
++#define ADM_error   printf
++
++ADM_EditorSegment::ADM_EditorSegment(void)
++{
++
++}
++ADM_EditorSegment::~ADM_EditorSegment()
++{
++    deleteAll();
++}
++/**
++    \fn addReferenceVideo
++    \brief Add a new source video, fill in the missing info + create automatically the matching seg
++*/
++bool        ADM_EditorSegment::addReferenceVideo(_VIDEOS *ref)
++{
++  uint32_t    	l;
++  uint8_t 	    *d;
++  aviInfo       info;
++  _SEGMENT      seg;
++
++  memset(&amp;seg,0,sizeof(seg));
++
++  ref-&gt;_aviheader-&gt;getVideoInfo (&amp;info);
++  ref-&gt;_aviheader-&gt;getExtraHeaderData (&amp;l, &amp;d);
++  ref-&gt;decoder = getDecoder (info.fcc,  info.width, info.height, l, d,info.bpp);
++  ref-&gt;_videoCache   =   new EditorCache(32,info.width,info.height) ;
++
++  float frameD=info.fps1000;
++  frameD=frameD/1000;
++  frameD=1/frameD;
++  frameD*=1000000;
++  ref-&gt;timeIncrementInUs=(uint64_t)frameD;
++  ADM_info(&quot;[Editor] About %&quot;LLU&quot; microseconds per frame\n&quot;,ref-&gt;timeIncrementInUs);
++  ref-&gt;_nb_video_frames = info.nb_frames;
++  //
++  //  And automatically create the segment
++  //
++  seg._reference=videos.size();
++  if(!videos.size())
++  {
++        seg._startTimeUs=0;
++  }else
++  {
++      #warning todo compute cumulative time
++   }
++   seg._durationUs=ref-&gt;_aviheader-&gt;getVideoDuration();
++
++    // Update frametype if needed...
++    _VIDEOS 	*vid=ref;
++    decoders *decoder=vid-&gt;decoder;
++//    rederiveFrameType(_videos[_nb_video]._aviheader);
++
++#if 0
++    // we only try if we got everything needed...
++    if(!vid-&gt;decoder)
++    {
++        printf(&quot;[Editor] no decoder to check for B- frame\n&quot;);
++    }else
++    {
++       
++        if(vid-&gt;_aviheader-&gt;providePts()==false) // Else we rely on demuxer PTS
++        {
++            printf(&quot;[Editor] This container does not provide PTS \n&quot;);
++            if(decoder-&gt;bFramePossible())
++            {
++                printf(&quot;[Editor] B- frame possible with that codec \n&quot;);
++                if(isMpeg4Compatible(info.fcc) || isMpeg12Compatible(info.fcc))
++                {
++                    printf(&quot;[Editor] It is mpeg4-SP/ASP, try to guess all PTS\n&quot;);                        
++                    setMpeg4PtsFromDts(vid-&gt;_aviheader,vid-&gt;timeIncrementInUs);
++                }
++            }
++            else   
++            {
++                    printf(&quot;[Editor] No B frame with that codec, PTS=DTS\n&quot;);
++                    setPtsEqualDts(vid-&gt;_aviheader,vid-&gt;timeIncrementInUs);
++            }
++        }
++     }
++#endif    
++    segments.push_back(seg);
++    videos.push_back(*ref);
++    updateStartTime();
++    return true;
++}
++
++/**
++    \fn deleteAll
++    \brief Delete all segments &amp; ref video
++*/
++bool        ADM_EditorSegment::deleteAll(void)
++{
++#warning todo
++    return true;
++}
++
++#if 0
++/**
++	\fn Purge all videos
++    \brief delete datas associated with all video
++*/
++void getFlags::deleteAllVideos (void)
++{
++
++  for (uint32_t vid = 0; vid &lt; _videos.size(); vid++)
++    {
++
++      // if there is a video decoder...
++      if (_videos[vid].decoder)
++            delete _videos[vid].decoder;
++      if(_videos[vid].color)
++            delete _videos[vid].color;
++      // prevent from crashing
++      _videos[vid]._aviheader-&gt;close ();
++      delete _videos[vid]._aviheader;
++      if(_videos[vid]._videoCache)
++      	delete  _videos[vid]._videoCache;
++      _videos[vid]._videoCache=NULL;
++     // Delete audio codec too
++     // audioStream will be deleted by the demuxer
++      if(_videos[vid].audioTracks)
++      {
++            for(int i=0;i&lt;_videos[vid].nbAudioStream;i++)
++            {
++                delete _videos[vid].audioTracks[i];
++            }
++            delete [] _videos[vid].audioTracks;
++            _videos[vid].audioTracks=NULL;
++      }
++    }
++
++   if(_videos.size())
++    {
++        _videos.erase(_videos.begin(),_videos.begin()+_videos.size()-1);
++    }
++
++
++  if(_imageBuffer)
++  	delete _imageBuffer;
++  _imageBuffer=NULL;
++
++}
++
++}
++#endif
++/**
++    \fn resetSegment
++    \brief Redo a 1:1 mapping between videos and segments
++*/
++bool        ADM_EditorSegment::resetSegment(void)
++{
++    //
++    
++    segments.clear();
++    int n=videos.size();
++    for(int i=0;i&lt;n;i++)
++    {
++        _SEGMENT seg;
++        _VIDEOS  *vid=&amp;(videos[i]);
++        memset(&amp;seg,0,sizeof(seg));
++        seg._durationUs=vid-&gt;_aviheader-&gt;getVideoDuration();
++        seg._reference=i;
++    }
++    updateStartTime();
++    return true;
++}
++/**
++    \fn getRefVideo
++    \brief getRefVideo
++*/
++_VIDEOS     *ADM_EditorSegment::getRefVideo(int i)
++{
++    ADM_assert(i&lt;videos.size());
++    return &amp;(videos[i]);
++}
++/**
++    \fn getNbRefVideo
++    \brief getNbRefVideo
++*/
++int         ADM_EditorSegment::getNbRefVideos(void)
++{
++    return videos.size();
++}
++/**
++    \fn getNbSegment
++    \brief  getNbSegment
++*/
++int         ADM_EditorSegment::getNbSegments(void)
++{   
++    return segments.size();
++}
++/**
++    \fn updateStartTime
++    \brief Recompute the start time of the video 
++*/
++bool         ADM_EditorSegment::updateStartTime(void)
++{   
++    int n=segments.size();
++    uint64_t t=0;
++    for(int i=0;i&lt;n;i++)
++    {
++        segments[i]._startTimeUs=t;
++        t+=segments[i]._durationUs;
++    }
++    return true;
++}
++/**
++    \fn getTotalDuration
++    \brief 
++*/
++uint64_t ADM_EditorSegment::getTotalDuration(void)
++{
++    uint64_t dur=0;
++    int n=segments.size();
++    for(int i=0;i&lt;n;i++)
++        dur+=segments[i]._durationUs;
++    return dur;
++
++}
++/**
++    \fn getNbFrames
++    \brief 
++*/
++uint32_t ADM_EditorSegment::getNbFrames(void)
++{
++    uint32_t dur;
++    uint32_t nb=0;
++    int n=videos.size();
++    for(int i=0;i&lt;n;i++)
++        dur+=videos[i]._nb_video_frames;
++    return nb;
++
++}
++/**
++    \fn getTotalDuration
++*/
++bool        ADM_EditorSegment::getRefFromTime(uint64_t time,uint32_t *refVideo, uint64_t *offset)
++{
++    *offset=time;
++    *refVideo=0;
++    return true;
++}
++/**
++    \fn getRefFromFrame
++*/
++bool        ADM_EditorSegment::getRefFromFrame(uint32_t frame,uint32_t *refVideo, uint32_t *frameOffset)
++{
++    *refVideo=0;
++    *frameOffset=frame;
++    return true;
++}
++/**
++    \fn getFrameFromRef
++*/
++bool        ADM_EditorSegment::getFrameFromRef(uint32_t *frame,uint32_t refVideo, uint32_t frameOffset)
++{
++    *frame=frameOffset;
++    return true;
++
++}
++//EOF
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -0,0 +1,131 @@
++/***************************************************************************
++     \file  ADM_segment.h
++     \brief Handle segment
++
++    (C) 2002-2009 Mean, <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.Fr</A>
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#ifndef ADM_SEGMENT_H
++#define ADM_SEGMENT_H
++#include &lt;vector&gt;
++class ADM_audioStream;
++class ADM_Audiocodec;
++class decoders;
++class COL_Generic2YV12;
++class EditorCache;
++#include &quot;ADM_Video.h&quot;
++/**
++    \class ADM_audioStreamTack
++    \brief Place Holder for demuxer audio tracks.
++*/
++class ADM_audioStreamTrack
++{
++public:
++    ADM_audioStream  *stream;
++    audioInfo        *info;
++    ADM_Audiocodec   *codec;
++    WAVHeader		 wavheader;
++    bool             vbr;
++    uint64_t         duration;
++    uint64_t         size;
++
++public:
++    ADM_audioStreamTrack() {memset(this,0,sizeof(*this));}
++    ~ADM_audioStreamTrack()
++    {
++        stream=NULL;
++        info=NULL;   // These 2 are destroyed by the demuxer itself
++        if(codec) 
++        {
++            delete codec;
++            codec=NULL;
++        }
++    }
++};
++/**
++    \struct _VIDEOS
++    \brief The _VIDEOS struct is a video we have loaded.
++*/
++typedef struct
++{
++  	vidHeader 							*_aviheader;  /// Demuxer
++  	decoders							*decoder;     /// Video codec
++    COL_Generic2YV12                    *color;       /// Color conversion if needed
++
++	/* Audio part */
++
++    uint32_t                            nbAudioStream;   
++    uint32_t                            currentAudioStream;
++    ADM_audioStreamTrack                **audioTracks;
++
++	uint32_t							_nb_video_frames;  /// Really needed ?	
++	EditorCache							*_videoCache;      /// Decoded video cache
++
++    /* Timeing info */
++
++    uint32_t                            lastSentFrame;     /// Last frame read/sent to decoder
++    uint64_t                            lastDecodedPts;    /// Pts of last frame out of decoder
++    uint64_t                            lastReadPts;       /// Pts of the last frame we read
++    uint64_t                            timeIncrementInUs; /// in case the video has no PTS, time increment (us)
++}_VIDEOS;
++
++/**
++    \struct _SEGMENT
++    \brief The video is a collection of segment.
++            Each segment refers to its source (the reference) and the part of the source the segment is made of.
++*/
++typedef struct
++{
++  	uint32_t							_reference;       /// Reference video
++ 	uint64_t							_refStartTimeUs;  /// Starting time in reference
++    uint64_t                            _startTimeUs;     /// Start time in current (=sum(_duration of previous seg))
++	uint64_t							_durationUs;      ///
++
++}_SEGMENT;
++/*
++    Use vectors to store our videos &amp; segments
++*/
++typedef std::vector &lt;_VIDEOS&gt;  ListOfVideos;
++typedef std::vector &lt;_SEGMENT&gt; ListOfSegments;
++
++/**
++    \class ADM_EditorSegment
++*/
++class ADM_EditorSegment
++{
++protected:
++        ListOfSegments segments;
++        ListOfVideos   videos;
++        bool           updateStartTime(void);
++
++public:
++                        ADM_EditorSegment(void);
++                        ~ADM_EditorSegment();
++            bool        addReferenceVideo(_VIDEOS *ref);
++            bool        deleteAll(void);
++            bool        resetSegment(void);
++
++            _VIDEOS     *getRefVideo(int i);
++            int         getNbRefVideos(void);
++
++            int         getNbSegments(void);
++            uint64_t    getTotalDuration(void);
++            uint32_t    getNbFrames(void);
++
++            bool        getRefFromTime(uint64_t time,uint32_t *refVideo, uint64_t *offset);
++            bool        getRefFromFrame(uint32_t frame,uint32_t *refVideo, uint32_t *frameOffset);
++            bool        getFrameFromRef(uint32_t *frame,uint32_t refVideo, uint32_t frameOffset);
++
++};
++
++#endif
++//EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADMedAVIAUD.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADMedAVIAUD.cpp	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADMedAVIAUD.cpp	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -261,6 +261,16 @@
+     return trk-&gt;stream-&gt;getExtraData(l,d); 
+ 
+ }
++/**
++    \fn getTrack
++*/
++ADM_audioStreamTrack *ADM_Composer::getTrack(uint32_t i)
++{
++    _VIDEOS *v=_segments.getRefVideo(0);
++    if(!v-&gt;audioTracks) return NULL;
+ 
++    return v-&gt;audioTracks[v-&gt;currentAudioStream];
++}
++
+ //EOF
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/CMakeLists.txt	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/CMakeLists.txt	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -10,6 +10,7 @@
+ ADM_edMarker.cpp
+ ADM_edStub.cpp
+ ADM_edPtsDts.cpp
++ADM_segment.cpp
+ )
+ 
+ ADD_LIBRARY(ADM_editor6 STATIC ${ADM_editor_SRCS})
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemux.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemux.cpp	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemux.cpp	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -418,7 +418,7 @@
+                 return JS_FALSE;
+         printf(&quot;clearing segments \n&quot;);
+         enterLock();
+-        *rval = BOOLEAN_TO_JSVAL(video_body-&gt;deleteAllSegments());
++//        *rval = BOOLEAN_TO_JSVAL(video_body-&gt;deleteAllSegments());
+ 	leaveLock();
+         updateAll();
+         return JS_TRUE;
+@@ -441,7 +441,7 @@
+         int c = JSVAL_TO_INT(argv[2]);
+         aprintf(&quot;adding segment :%d %d %d\n&quot;,a,b,c);
+         enterLock();
+-        *rval = BOOLEAN_TO_JSVAL( video_body-&gt;addSegment(a,b,c));
++//        *rval = BOOLEAN_TO_JSVAL( video_body-&gt;addSegment(a,b,c));
+ 	leaveLock();
+         updateAll();
+         return JS_TRUE;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.cpp	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.cpp	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -166,7 +166,7 @@
+                 return JS_FALSE;
+         printf(&quot;Clearing Video... \n&quot;);
+         enterLock();
+-        *rval = BOOLEAN_TO_JSVAL(video_body-&gt;deleteAllSegments());
++//        *rval = BOOLEAN_TO_JSVAL(video_body-&gt;deleteAllSegments());
+         leaveLock();
+         return JS_TRUE;
+ }// end Clear
+@@ -183,7 +183,7 @@
+                 return JS_FALSE;
+         printf(&quot;Adding Video... \n&quot;);
+         enterLock();
+-        *rval = BOOLEAN_TO_JSVAL(video_body-&gt;addSegment(JSVAL_TO_INT(argv[0]),JSVAL_TO_INT(argv[1]),JSVAL_TO_INT(argv[2])));
++//        *rval = BOOLEAN_TO_JSVAL(video_body-&gt;addSegment(JSVAL_TO_INT(argv[0]),JSVAL_TO_INT(argv[1]),JSVAL_TO_INT(argv[2])));
+         leaveLock();
+         return JS_TRUE;
+ }// end Add
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -385,7 +385,7 @@
+       		if( frameEnd &lt; frameStart ){
+                   GUI_Error_HIG(QT_TR_NOOP(&quot;Marker A &gt; B&quot;), QT_TR_NOOP(&quot;Cannot copy.&quot;));
+       		}else{
+-    		   video_body-&gt;copyToClipBoard (frameStart,frameEnd);
++//    		   video_body-&gt;copyToClipBoard (frameStart,frameEnd);
+       		}
+ 		break;
+     case ACT_Paste:
+@@ -590,12 +590,7 @@
+   ** we may get a relative path by cmdline
+   */
+   longname = ADM_PathCanonize(name);
+-  if (mode)
+-    res = video_body-&gt;addFile (longname, 1);
+-  else
+-  {
+-    res = video_body-&gt;addFile (longname);
+-  }
++  res = video_body-&gt;addFile (longname);
+ //  DIA_StopBusy ();
+ 
+   // forget last project file
+@@ -778,7 +773,7 @@
+ //  DIA_StopBusy ();
+ 
+ 
+-  video_body-&gt;dumpSeg ();
++//  video_body-&gt;dumpSeg ();
+   if (!video_body-&gt;updateVideoInfo (avifileinfo))
+     {
+       GUI_Error_HIG (QT_TR_NOOP(&quot;Something bad happened (II)&quot;), NULL);
+@@ -904,6 +899,7 @@
+ */
+ void A_videoCheck( void)
+ {
++#if 0
+ uint32_t nb=0;
+ //uint32_t buf[720*576*2];
+ uint32_t error=0;
+@@ -936,7 +932,7 @@
+ 
+ 	}
+ 	GUI_GoToFrame(0);
+-
++#endif
+ }
+ int A_delete(uint32_t start, uint32_t end)
+ {
+@@ -956,13 +952,14 @@
+ 	  return 0;
+ 	}
+ 
+-      video_body-&gt;dumpSeg ();
+-      if (!video_body-&gt;removeFrames (start, end))
++//      video_body-&gt;dumpSeg ();
++//      if (!video_body-&gt;removeFrames (start, end))
++    if(0)
+ 	{
+           GUI_Error_HIG (QT_TR_NOOP(&quot;Something bad happened&quot;), NULL);
+ 	  return 0;
+ 	}
+-      video_body-&gt;dumpSeg ();
++//      video_body-&gt;dumpSeg ();
+       //resync GUI and video
+       if (!video_body-&gt;updateVideoInfo (avifileinfo))
+ 	{
+@@ -1238,8 +1235,8 @@
+ */
+ uint8_t GUI_getFrameContent(ADMImage *image, uint32_t frame)
+ {
+-  uint32_t flags;
+-  if(!video_body-&gt;getUncompressedFrame(frame,image,&amp;flags)) return 0;
++//  uint32_t flags;
++//  if(!video_body-&gt;getUncompressedFrame(frame,image,&amp;flags)) return 0;
+   return 1;
+ }
+ /**
+@@ -1285,7 +1282,7 @@
+ 
+ 
+   GUI_close();
+-  res = video_body-&gt;addFile (&quot;avsproxy.avs&quot;,0);
++  res = video_body-&gt;addFile (&quot;avsproxy.avs&quot;);
+   // forget last project file
+   if( actual_workbench_file ){
+      ADM_dealloc(actual_workbench_file);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gui_blackframes.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gui_blackframes.cpp	2009-10-10 09:40:09 UTC (rev 5373)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gui_blackframes.cpp	2009-10-10 09:40:12 UTC (rev 5374)
+@@ -141,6 +141,7 @@
+ 
+ void GUI_NextPrevBlackFrame(int dir)
+ {
++#if 0
+    uint32_t f;
+    uint32_t flags;
+    uint16_t reresh_count=0;
+@@ -197,7 +198,7 @@
+    }
+ //    admPreview::update( curframe) ;
+     GUI_setCurrentFrameAndTime();
+-
++#endif
+    return ;
+ }
+ /**
+@@ -206,6 +207,7 @@
+ */
+ uint8_t A_ListAllBlackFrames(char *name)
+ {
++#if 0
+     uint32_t f;
+     uint32_t flags;
+     uint32_t startframe;
+@@ -267,6 +269,7 @@
+     fclose(fd);
+     delete work;
+     GUI_GoToFrame(startframe);
++#endif
+     return 1;
+ }
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002584.html">[Avidemux-svn-commit] r5373 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices:	. Jack
+</A></li>
+	<LI>Next message: <A HREF="002585.html">[Avidemux-svn-commit] r5375 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2586">[ date ]</a>
+              <a href="thread.html#2586">[ thread ]</a>
+              <a href="subject.html#2586">[ subject ]</a>
+              <a href="author.html#2586">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

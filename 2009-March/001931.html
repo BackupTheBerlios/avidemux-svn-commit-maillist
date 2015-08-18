@@ -1,0 +1,203 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4702 - in	branches/avidemux_2.6_branch_mean/avidemux: .	ADM_audioFilter/include ADM_audioFilter/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4702%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20.%0A%09ADM_audioFilter/include%20ADM_audioFilter/src&In-Reply-To=%3C200903211456.n2LEu2AR003475%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001930.html">
+   <LINK REL="Next"  HREF="001932.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4702 - in	branches/avidemux_2.6_branch_mean/avidemux: .	ADM_audioFilter/include ADM_audioFilter/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4702%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20.%0A%09ADM_audioFilter/include%20ADM_audioFilter/src&In-Reply-To=%3C200903211456.n2LEu2AR003475%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4702 - in	branches/avidemux_2.6_branch_mean/avidemux: .	ADM_audioFilter/include ADM_audioFilter/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Mar 21 15:56:02 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001930.html">[Avidemux-svn-commit] r4701 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_audioFilter/include avidemux/ADM_audioFilter/src	avidemux/ADM_audiofilter avidemux/ADM_coreAudioEncoder/include	plugins/ADM_audioEncoders plugins/ADM_audioEncoders/lame	plugins/ADM_audioEncoders/twolame
+</A></li>
+        <LI>Next message: <A HREF="001932.html">[Avidemux-svn-commit] r4703 - in	branches/avidemux_2.6_branch_mean/avidemux:	ADM_audioFilter/include ADM_audioFilter/src	ADM_coreAudioEncoder/src ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1931">[ date ]</a>
+              <a href="thread.html#1931">[ thread ]</a>
+              <a href="subject.html#1931">[ subject ]</a>
+              <a href="author.html#1931">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-03-21 15:56:02 +0100 (Sat, 21 Mar 2009)
+New Revision: 4702
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter/include/audiofilter_access.h
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter/src/audiofilter_access.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter/src/audiofilter_encoder.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/gui_savenew.cpp
+Log:
+[Audio] Began hooking encoding access and muxers (incomplete/crash)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter/include/audiofilter_access.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter/include/audiofilter_access.h	2009-03-21 14:56:00 UTC (rev 4701)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter/include/audiofilter_access.h	2009-03-21 14:56:02 UTC (rev 4702)
+@@ -16,7 +16,7 @@
+ #define AUDM_ACCESS_H
+ 
+ #include &quot;ADM_audioStream.h&quot;
+-class ADM_AudioEncoder;
++#include &quot;audioencoder.h&quot;
+ /**
+     \class ADMAudioFilter_Access
+     \brief Bridge audioFilter-&gt;Access
+@@ -27,11 +27,10 @@
+   protected:
+     uint64_t            startTimeUs; /*&lt; Starting time in us */
+     AUDMAudioFilter     *filter;
+-    WAVHeader           header;
+     uint64_t            samplesSeen;
+     ADM_AudioEncoder    *encoder;
+   public:
+-                WAVHeader         *getWavHeader(void) {return &header;}
++                WAVHeader         *getWavHeader(void) {return encoder-&gt;getInfo();}
+ 
+                                     ADMAudioFilter_Access(AUDMAudioFilter *incoming,ADM_AudioEncoder *encoder,uint64_t timeUs) ;
+                 virtual           ~ADMAudioFilter_Access();
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter/src/audiofilter_access.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter/src/audiofilter_access.cpp	2009-03-21 14:56:00 UTC (rev 4701)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter/src/audiofilter_access.cpp	2009-03-21 14:56:02 UTC (rev 4702)
+@@ -32,7 +32,6 @@
+     this-&gt;encoder=encoder;
+     ADM_assert(filter);
+     startTimeUs=timeUs;
+-    memcpy(&amp;header,incoming-&gt;getInfo(),sizeof(header));
+     samplesSeen=0;
+     printf(&quot;[FilterAccess] Created, starting at %&quot;LU&quot; ms\n&quot;,(uint32_t)(timeUs/1000));
+ }
+@@ -84,7 +83,7 @@
+         return false;
+     }
+ 
+-    float d=(float)samplesSeen/(float)(header.frequency);
++    float d=(float)samplesSeen/(float)(filter-&gt;getInfo()-&gt;frequency);
+     d*=1000*1000;
+     *dts=startTimeUs+(uint64_t)d;
+     samplesSeen+=samples;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter/src/audiofilter_encoder.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter/src/audiofilter_encoder.cpp	2009-03-21 14:56:00 UTC (rev 4701)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter/src/audiofilter_encoder.cpp	2009-03-21 14:56:02 UTC (rev 4702)
+@@ -66,7 +66,7 @@
+ /**
+     \fn createEncodingAccess
+ */
+-ADM_audioAccess *createEncodingAccess(uint64_t startTime,int32_t shift)
++ADM_audioStream *createEncodingStream(uint64_t startTime,int32_t shift)
+ {
+     printf(&quot;[AccessFilter] Creating access filter\n&quot;);
+     // 1-Create access filter
+@@ -85,11 +85,17 @@
+         return NULL;
+     }
+     // 3- Create access
+-    ADM_audioAccess *access=new ADMAudioFilter_Access(filter,encoder,0);
++    ADMAudioFilter_Access *access=new ADMAudioFilter_Access(filter,encoder,0);
+     if(!access)
+     {
+         printf(&quot;[Access] Cannot create access\n&quot;);
+     }
+-    return access;
++    // 4- Create Stream // MEMLEAK!!!!
++    ADM_audioStream *stream=ADM_audioCreateStream(access-&gt;getWavHeader(), access);
++    if(!access)
++    {
++        printf(&quot;[Access] Cannot create access\n&quot;);
++    }
++    return (ADM_audioStream *)access;
+ }
+ // EOF
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/gui_savenew.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gui_savenew.cpp	2009-03-21 14:56:00 UTC (rev 4701)
++++ branches/avidemux_2.6_branch_mean/avidemux/gui_savenew.cpp	2009-03-21 14:56:02 UTC (rev 4702)
+@@ -47,6 +47,8 @@
+  extern uint8_t mpeg_passthrough(const char *name,ADM_OUT_FORMAT format);
+ ADM_muxer *ADM_MuxerSpawnFromIndex(int index);
+ 
++extern ADM_audioStream *createEncodingStream(uint64_t startTime,int32_t shift);
++
+ /**
+     \fn A_Save
+ */
+@@ -74,7 +76,21 @@
+     // Video Stream ?
+     ADM_videoStream *video=new ADM_videoStreamCopy();
+     //
+-    ADM_audioStream *astreams[1]={audio};
++    ADM_audioStream *astreams[1];
++    if (!audioProcessMode())
++    {
++        astreams[0]=audio;
++    }else   
++    {
++        if(audio)
++        {
++            // Access..
++            ADM_audioStream *access=createEncodingStream(0,0); // FIXME LEAK
++            astreams[0]=access;
++
++            
++        }
++    }
+     if(!muxer-&gt;open(name,video,nbAStream,astreams))
+     {
+         GUI_Error_HIG(&quot;Muxer&quot;,&quot;Cannot open &quot;);
+@@ -87,6 +103,8 @@
+     //
+ 
+     if(muxer) delete muxer;
++    if (!audioProcessMode() &amp;&amp; astreams[0])
++        delete astreams[0];
+     return ret;
+ }
+ #if 0
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001930.html">[Avidemux-svn-commit] r4701 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_audioFilter/include avidemux/ADM_audioFilter/src	avidemux/ADM_audiofilter avidemux/ADM_coreAudioEncoder/include	plugins/ADM_audioEncoders plugins/ADM_audioEncoders/lame	plugins/ADM_audioEncoders/twolame
+</A></li>
+	<LI>Next message: <A HREF="001932.html">[Avidemux-svn-commit] r4703 - in	branches/avidemux_2.6_branch_mean/avidemux:	ADM_audioFilter/include ADM_audioFilter/src	ADM_coreAudioEncoder/src ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1931">[ date ]</a>
+              <a href="thread.html#1931">[ thread ]</a>
+              <a href="subject.html#1931">[ subject ]</a>
+              <a href="author.html#1931">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

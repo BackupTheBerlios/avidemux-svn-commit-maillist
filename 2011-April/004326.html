@@ -1,0 +1,1217 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7170 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7170%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C20110430191930.B829748137F%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004325.html">
+   <LINK REL="Next"  HREF="004327.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7170 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7170%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C20110430191930.B829748137F%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7170 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Apr 30 21:19:30 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004325.html">[Avidemux-svn-commit] r7169 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/qt4
+</A></li>
+        <LI>Next message: <A HREF="004327.html">[Avidemux-svn-commit] r7171 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4326">[ date ]</a>
+              <a href="thread.html#4326">[ thread ]</a>
+              <a href="subject.html#4326">[ subject ]</a>
+              <a href="author.html#4326">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-04-30 21:19:30 +0200 (Sat, 30 Apr 2011)
+New Revision: 7170
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs.cpp
+Log:
+[pref] Switch from xml to json
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/CMakeLists.txt	2011-04-30 12:49:07 UTC (rev 7169)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/CMakeLists.txt	2011-04-30 19:19:30 UTC (rev 7170)
+@@ -15,7 +15,9 @@
+ ADM_string.cpp
+ ADM_getbits.cpp
+ ADM_writeRiff.cpp
+-prefs.cpp)
++prefs.cpp
++prefs2_json.cpp
++)
+ 
+ ADM_ADD_SHARED_LIBRARY(ADM_coreUtils6 ${ADM_coreUtils_SRCS})
+ TARGET_LINK_LIBRARIES(ADM_coreUtils6 ADM_core6 ADM_coreUI6 ADM_libavutil ADM_libavcodec ${LIBXML2_LIBRARIES})
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs.cpp	2011-04-30 12:49:07 UTC (rev 7169)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs.cpp	2011-04-30 19:19:30 UTC (rev 7170)
+@@ -27,240 +27,139 @@
+ 
+ 
+ #include &quot;ADM_cpp.h&quot;
+-#include &lt;libxml/tree.h&gt;
+-#include &lt;libxml/parser.h&gt;
+-
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_quota.h&quot;
++#include &quot;ADM_paramList.h&quot; 
++#include &quot;prefs.h&quot;
+ 
+-#include &lt;unistd.h&gt;	/* access(), R_OK */
+-#include &lt;errno.h&gt;	/* errno, ENOENT */
+-#include &lt;dirent.h&gt;
++#include &quot;prefs2.h&quot;
++#include &quot;prefs2_desc.cpp&quot;
+ 
+-#undef free
++#define CONFIG &quot;config2&quot;
++#define FILE_SIZE_MAX (20*1024)
+ extern char *ADM_getBaseDir(void);
+-#define CONFIG &quot;config&quot;
+-extern int  qxmlSaveFormatFile(const char *filename, xmlDocPtr cur, int format);
+ static char *checkDirAccess(char *home);
+ extern char *ADM_escape(const ADM_filename *incoming);
+ class preferences *prefs;
+-// &lt;prefs_gen&gt;
+-typedef enum {
+-	ADM_UINT,
+-	ADM_INT,
+-	ADM_ULONG,
+-	ADM_LONG,
+-	ADM_FLOAT,
+-	ADM_STRING,
+-	ADM_FILENAME
+-} types;
++static my_prefs_struct myPrefs;
+ 
+-typedef struct {
+-	const char *name;
+-	types type;
+-	const char *default_val;
+-	char *current_val;
+-	const char *minimum;
+-	const char *maximum;
+-} opt_def;
++bool  my_prefs_struct_jserialize(const char *file, const my_prefs_struct *key);
++bool  my_prefs_struct_jdeserialize(const char *file, const ADM_paramList *tmpl,my_prefs_struct *key);
+ 
+-static opt_def opt_defs [] = {
+-	{&quot;codecs.svcd.enctype&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;99999&quot;},
+-	{&quot;codecs.svcd.bitrate&quot;,		ADM_UINT,	&quot;1500000&quot;,NULL,	&quot;16000&quot;,&quot;2748000&quot;},
+-	{&quot;codecs.svcd.quantizer&quot;,		ADM_UINT,	&quot;4&quot;,	NULL,	&quot;2&quot;,	&quot;31&quot;	},
+-	{&quot;codecs.svcd.finalsize&quot;,	ADM_UINT,	&quot;700&quot;,	NULL,	&quot;0&quot;,	&quot;99999&quot;},
+-	{&quot;codecs.svcd.interlaced&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;codecs.svcd.bff&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;codecs.svcd.widescreen&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;codecs.svcd.matrix&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;99999&quot;},
+-	{&quot;codecs.svcd.gopsize&quot;,		ADM_UINT,	&quot;12&quot;,	NULL,	&quot;0&quot;,	&quot;99999&quot;},
+-	{&quot;codecs.svcd.maxbitrate&quot;,		ADM_UINT,	&quot;2500&quot;,	NULL,	&quot;0&quot;,	&quot;2748&quot;	},
+-	{&quot;codecs.dvd.enctype&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;99999&quot;},
+-	{&quot;codecs.dvd.bitrate&quot;,		ADM_UINT,	&quot;1500000&quot;,NULL,	&quot;16000&quot;,&quot;9900000&quot;},
+-	{&quot;codecs.dvd.quantizer&quot;,		ADM_UINT,	&quot;4&quot;,	NULL,	&quot;2&quot;,	&quot;31&quot;	},
+-	{&quot;codecs.dvd.finalsize&quot;,	ADM_UINT,	&quot;700&quot;,	NULL,	&quot;0&quot;,	&quot;99999&quot;},
+-	{&quot;codecs.dvd.interlaced&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;codecs.dvd.bff&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;codecs.dvd.widescreen&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;codecs.dvd.matrix&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;99999&quot;},
+-	{&quot;codecs.dvd.gopsize&quot;,		ADM_UINT,	&quot;12&quot;,	NULL,	&quot;0&quot;,	&quot;99999&quot;},
+-	{&quot;codecs.dvd.maxbitrate&quot;,		ADM_UINT,	&quot;9000&quot;,	NULL,	&quot;0&quot;,	&quot;9900&quot;	},
+-	{&quot;codecs.xvid.enctype&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;99999&quot;},
+-	{&quot;codecs.xvid.quantizer&quot;,		ADM_UINT,	&quot;4&quot;,	NULL,	&quot;2&quot;,	&quot;32&quot;	},
+-	{&quot;codecs.xvid.bitrate&quot;,		ADM_UINT,	&quot;1500000&quot;,NULL,	&quot;17&quot;,	&quot;5900000&quot;},
+-	{&quot;codecs.xvid.finalsize&quot;,	ADM_UINT,	&quot;700&quot;,	NULL,	&quot;0&quot;,	&quot;3999&quot;	},
+-	{&quot;codecs.preferredcodec&quot;,		ADM_STRING,&quot;FFmpeg4&quot;,NULL, NULL, NULL },
+-	{&quot;filters.subtitle.fontname&quot;,		ADM_FILENAME,&quot;/usr/share/fonts/truetype/DejaVuSans.ttf&quot;,NULL, NULL, NULL },
+-	{&quot;filters.subtitle.charset&quot;,		ADM_STRING,&quot;ISO-8859-1&quot;,NULL, NULL, NULL },
+-	{&quot;filters.subtitle.fontsize&quot;,		ADM_UINT,	&quot;24&quot;,	NULL,	&quot;1&quot;,	&quot;576&quot;	},
+-	{&quot;filters.subtitle.ypercent&quot;,	ADM_INT,	&quot;255&quot;,	NULL,	&quot;0&quot;,	&quot;255&quot;	},
+-	{&quot;filters.subtitle.upercent&quot;,		ADM_INT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;255&quot;	},
+-	{&quot;filters.subtitle.vpercent&quot;,		ADM_INT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;255&quot;	},
+-	{&quot;filters.subtitle.selfadjustable&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;filters.subtitle.usebackgroundcolor&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;filters.avsfilter.avs_script&quot;,		ADM_FILENAME,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;filters.avsfilter.avs_loader&quot;,		ADM_FILENAME,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;filters.avsfilter.pipe_timeout&quot;,		ADM_UINT,	&quot;10&quot;,	NULL,	&quot;1&quot;,	&quot;30&quot;	},
+-	{&quot;filters.avsfilter.debug_msg&quot;,		ADM_UINT,	&quot;1&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;settings.mpegsplit&quot;,	ADM_UINT,	&quot;790&quot;,	NULL,	&quot;400&quot;,	&quot;5000&quot;	},
+-	{&quot;device.audiodevice&quot;,		ADM_STRING,&quot;ALSA&quot;,	NULL, NULL, NULL },
+-	{&quot;device.audio.alsa_device&quot;,		ADM_STRING,&quot;dmix&quot;,	NULL, NULL, NULL },
+-	{&quot;device.videodevice&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;10&quot;	},
+-	{&quot;default.postproc_type&quot;,		ADM_UINT,	&quot;3&quot;,	NULL,	&quot;0&quot;,	&quot;7&quot;	},
+-	{&quot;default.postproc_value&quot;,		ADM_UINT,	&quot;3&quot;,	NULL,	&quot;0&quot;,	&quot;5&quot;	},
+-	{&quot;lastfiles.file1&quot;,		ADM_FILENAME,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;lastfiles.file2&quot;,		ADM_FILENAME,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;lastfiles.file3&quot;,		ADM_FILENAME,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;lastfiles.file4&quot;,		ADM_FILENAME,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;lastdir_read&quot;,		ADM_FILENAME,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;lastdir_write&quot;,		ADM_FILENAME,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;lame_cli&quot;,		ADM_STRING,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;pipe_cmd&quot;,		ADM_STRING,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;pipe_param&quot;,		ADM_STRING,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;lame_path&quot;,		ADM_STRING,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;toolame_path&quot;,		ADM_STRING,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;lvemux_path&quot;,		ADM_STRING,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;requant_path&quot;,		ADM_STRING,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;message_level&quot;,		ADM_UINT,	&quot;2&quot;,	NULL,	&quot;0&quot;,	&quot;2&quot;	},
+-	{&quot;feature.swap_if_A_greater_than_B&quot;,		ADM_UINT,	&quot;1&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.svcdres.preferedsourceratio&quot;,		ADM_STRING,&quot;1:1&quot;,	NULL, NULL, NULL },
+-	{&quot;feature.saveprefsonexit&quot;,		ADM_UINT,	&quot;1&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.ignoresavedmarkers&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.disable_nuv_resync&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.tryautoidx&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.use_odml&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.use_systray&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.reuse_2pass_log&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.audiobar_uses_master&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.threading.lavc&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;32&quot;	},
+-	{&quot;feature.cpu_caps&quot;,		ADM_UINT,	&quot;4294967295&quot;,NULL,	&quot;0&quot;,	&quot;4294967295&quot;},
+-	{&quot;feature.mpeg_no_limit&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.auto_buildmap&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.auto_rebuildindex&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.auto_unpack&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;downmixing.prologic&quot;,		ADM_UINT,	&quot;2&quot;,	NULL,	&quot;0&quot;,	&quot;2&quot;	},
+-	{&quot;filters.autoload.path&quot;,		ADM_STRING,&quot;/tmp/&quot;,NULL, NULL, NULL },
+-	{&quot;filters.autoload.active&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.alternate_mp3_tag&quot;,		ADM_UINT,	&quot;1&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.vdpau&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.global_glyph.active&quot;,		ADM_UINT,	&quot;1&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+-	{&quot;feature.global_glyph.name&quot;,		ADM_STRING,&quot;&quot;,	NULL, NULL, NULL },
+-	{&quot;priority.encoding&quot;,		ADM_UINT,	&quot;3&quot;,	NULL,	&quot;0&quot;,	&quot;4&quot;	},
+-	{&quot;priority.indexing&quot;,		ADM_UINT,	&quot;3&quot;,	NULL,	&quot;0&quot;,	&quot;4&quot;	},
+-	{&quot;priority.playback&quot;,		ADM_UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;4&quot;	}
+-};
++typedef struct
++{
++   const char *name;
++   const char *name2;
++   ADM_paramType  type;
++   const char *defaultValue;
++   const char *min;
++   const char *max;
++   char *Value;
++}optionDesc;
+ 
+-int num_opts = 83;
+-// &lt;/prefs_gen&gt;
++#include &quot;prefs2_pref.h&quot;
+ 
++/**
++    \fn initPrefs
++*/
++int initPrefs(  void )
++{
++  prefs = new preferences();
++  return 1;
++}
++/**
++    \fn destroyPrefs
++*/
++int destroyPrefs(void)
++{
++	delete prefs;
++	prefs = NULL;
++	return 1;
++}
+ 
+-/*
+-** we cannot put this into the header file, cause libxml headers
+-** are not reachable in all directories/Makefiles
+-** way 1: make xml headers reachable
+-** way 2: write my own (extended) class definition here
+-** way 3: use an external static variable only here
+-**
+-** i've choosed way 3 ;-)
++static int searchOptionByName2(const char *name)
++{
++    int nb=sizeof( myOptions)/sizeof(optionDesc);
++    for(int i=0;i&lt;nb;i++)
++        if(!strcmp(myOptions[i].name2,name)) return i;
++    return -1;
++}
++/**
++    \fn ctor
+ */
+-static xmlDocPtr xdoc;
+-#if 0
+-int xmlSaveNoEmptyTags  = 1;      /* save empty tags as &lt;empty&gt;&lt;/empty&gt; */
+-int xmlIndentTreeOutput = 1;      /* try to indent the tree dumps */
+-#endif
++preferences::preferences()
++{
++	internal_lastfiles[0] = internal_lastfiles[1] = NULL;
++	internal_lastfiles[2] = internal_lastfiles[3] = NULL;
++	internal_lastfiles[4] = NULL;
++    // set default...
++    int nb=sizeof( my_prefs_struct_param)/sizeof(ADM_paramList);
++    for(int i=0;i&lt;nb-1;i++) //
++    {
++            char *dummyPointer=(char *)&myPrefs;
+ 
++            const ADM_paramList *param=my_prefs_struct_param+i;
++            int offset=param-&gt;offset;
++            const char *name=param-&gt;paramName;
+ 
++            int rank=searchOptionByName2(name);
++            ADM_assert(rank!=-1);
++            const optionDesc *opt=myOptions+rank;
++            ADM_assert(myOptions[rank].type==param-&gt;type);
++            
++            switch(param-&gt;type)
++            {
++                case ADM_param_uint32_t:
++                                    *(uint32_t *)(dummyPointer+offset)=atoi(opt-&gt;defaultValue);
++                                    break;
++                case ADM_param_int32_t:
++                                    *(int32_t *)(dummyPointer+offset)=atoi(opt-&gt;defaultValue);
++                                    break;
++                case ADM_param_float:
++                                    *(float *)(dummyPointer+offset)=atof(opt-&gt;defaultValue);
++                                    break;
++                case ADM_param_bool:
++                                    *(bool *)(dummyPointer+offset)=atoi(opt-&gt;defaultValue);
++                                    break;
++                case ADM_param_string:
++                                    {
++                                        char **z=(char **)(dummyPointer+offset);
++                                        *z=ADM_strdup(opt-&gt;defaultValue);
++                                    }
++                                    break;
++                default:
++                        ADM_error(&quot;Type not authorized for prefs %s\n&quot;,name);
++                        ADM_assert(0);
+ 
+-void erase_blank_nodes(xmlNodePtr cur){
+-  /* erase all blank-nodes recursive; they deny IndentTreeOutput !!! */
+-  xmlNodePtr run = cur;
+-  xmlNodePtr erase;
+-   while( run ){
+-      if( xmlIsBlankNode(run) ){
+-         erase = run;
+-         run = run-&gt;next;
+-         xmlUnlinkNode(erase);
+-         xmlFreeNode(erase);
+-         continue;
+-      }
+-      if( run-&gt;children )
+-         erase_blank_nodes(run-&gt;children); /* Blank nodes has no childs ;-) */
+-      run = run-&gt;next;
+-   }
++            }
++            // 
++    
++    }
+ }
+ 
+-xmlNodePtr goto_node(xmlNodePtr cur, const char *str){
+-  xmlNodePtr ret;
+-   ADM_assert(cur);
+-   ret = cur-&gt;children;
+-   while( ret ){
+-      if( !strcmp((char *)ret-&gt;name,str) )
+-         return ret;
+-      ret = ret-&gt;next;
+-   }
+-   return ret;
+-}
+-
+-xmlNodePtr goto_node_with_create(xmlNodePtr cur, const char *str){
+-  xmlNodePtr nn = goto_node(cur, str);
+-	if( ! nn ){
+-		if( !(nn=xmlNewChild(cur,NULL,(xmlChar *)str,NULL)) ){
+-			fprintf(stderr,&quot;xmlNewChild() failed\n&quot;);
+-			return NULL;
+-		}
++preferences::~preferences(){
++  unsigned int idx;
++	for( idx=0; idx &lt; 4; idx++ ){
++		if( internal_lastfiles[idx] )
++			ADM_dealloc(internal_lastfiles[idx]);
+ 	}
+-	return nn;
+-}
+-
+-void set_content(const char *option, xmlNodePtr x){
+-   int idx = -1;
+-   char *str,*str2;
+-	for( int i=0; i &lt; num_opts; i++ ){
+-		if( !strcmp(opt_defs[i].name,option) ){
+-			idx = i;
+-			break;
+-		}
+-	}
+-	if( idx == -1 ){
+-		fprintf(stderr,&quot;option \&quot;%s\&quot; not defined.\n&quot;,option);
+-		return;
+-	}
+-	if( !(str = (char*)xmlNodeGetContent(x)) ){
+-		fprintf(stderr,&quot;no content in xmlNode for option \&quot;%s\&quot;.\n&quot;,option);
+-		return;
+-	}
+ 	
+-	str2=(char *)ADM_alloc(strlen(str)+1);
+-	strcpy(str2,str);
+-	free(str);
+ 	
+-	if( opt_defs[idx].current_val )
+-		ADM_dealloc(opt_defs[idx].current_val);
+-	opt_defs[idx].current_val = str2;
+-	#ifdef DEBUG_PREFS
+-	fprintf(stderr,&quot;Prefs: %s =&gt; %s\n&quot;,opt_defs[idx].name,opt_defs[idx].current_val);
+-	#endif
+ }
+ 
+ 
+-#include &quot;prefs.h&quot;
+ 
+-#define FILE_SIZE_MAX (20*1024)
+ /**
+     \fn load
+-    \brief load prefs from file..
++    \brief load prefs from file.. Should be called only once
+ */
+-int preferences::load(){
+-   xmlNodePtr p;
++int preferences::load()
++{
++
+    char *home;
+    char *dir_adm;
+    std::string path;
+-   
+-   char buf[1024];
+-   char fileInMemory[FILE_SIZE_MAX];
+-   DIR   *dir;
+ 
+-    
+ 
+     dir_adm=ADM_getBaseDir();
+     if(!dir_adm) return RC_FAILED;
+@@ -272,726 +171,137 @@
+     // exist ?
+     if(!ADM_fileExist(path.c_str()))
+     {
+-		fprintf(stderr,&quot;can't read(%s): %d (%s)\n&quot;,
+-				path.c_str(), errno, strerror(errno) );
++		ADM_error(&quot;can't read %s\n&quot;,			path.c_str());
+ 		return RC_FAILED;
+     }
+-    FILE *o=ADM_fopen(path.c_str(),&quot;r&quot;);
+-    if(!o)
++    if(true==my_prefs_struct_jdeserialize(path.c_str(),my_prefs_struct_param,&amp;myPrefs))
+     {
+-        ADM_error(&quot;Cannot open pref file\n&quot;);
+-        return RC_FAILED;
++        ADM_info(&quot;Preferences found and loaded\n&quot;);
++        return RC_OK;
+     }
+-    int sz=fread(fileInMemory,1,FILE_SIZE_MAX,o);
+-    // Read into memory...
+-    fclose(o);
+-    //ADM_info(&quot;prefs is %d bytes long\n&quot;,sz);
+-    // Parse...
+-    xdoc=xmlParseMemory(fileInMemory,sz);
+-    if(!xdoc)
+-    {
+-		fprintf(stderr,&quot;can't parse &quot;CONFIG&quot;.\n&quot;);
+-		return RC_FAILED;
+-	}
+-	erase_blank_nodes(xdoc-&gt;children);
+-	p = xdoc-&gt;children; // -&gt;avidemux
+-	buf[0] = '\0';
+-	if( p )
+-		p = p-&gt;children; // -&gt;avidemux-&gt;???
+-	while( p ){
+-		if( strlen(buf) ){
+-			strncpy(&amp;buf[strlen(buf)],&quot;.&quot;,1024-strlen(buf));
+-			buf[1023] = '\0';
+-		}
+-		strncpy(&amp;buf[strlen(buf)],(char*)p-&gt;name,1024-strlen(buf));
+-		buf[1023] = '\0';
+-		if( p-&gt;content ){
+-			set_content(buf, p);
+-		}else if( p-&gt;children ){
+-		   xmlNodePtr c = p-&gt;children;
+-			if( c-&gt;type == XML_TEXT_NODE &amp;&amp; ! c-&gt;children &amp;&amp; ! c-&gt;next &amp;&amp; ! c-&gt;prev ){
+-				set_content(buf, c);
+-				// the routine below will go to c-&gt;parent-&gt;next (p-&gt;next) if we do:
+-				p = c;
+-				strncpy(&amp;buf[strlen(buf)],&quot;.DUMMY&quot;,1024-strlen(buf));
+-				buf[1023] = '\0';
+-			}
+-		}
+-		if( p-&gt;children ){                               // go down first
+-			p = p-&gt;children;
+-		}else if( p-&gt;next ){                             // than go next
+-		   char *t = rindex(buf,'.');
+-			if( t )
+-				*t = '\0';
+-			else
+-				buf[0] = '\0';
+-			p = p-&gt;next;
+-		}else{                                           // and last go up AND next
+-			do{
+-				if( p-&gt;parent == xdoc-&gt;children ){
+-					p = NULL;
+-				}else{
+-				   char *t = rindex(buf,'.');
+-					if( t )
+-						*t = '\0';
+-					else
+-						buf[0] = '\0';
+-					p = p-&gt;parent;
+-				}
+-			}while( p &amp;&amp; ! p-&gt;next );
+-			if( p ){
+-			   char *t = rindex(buf,'.');
+-				if( t )
+-					*t = '\0';
+-				else
+-					buf[0] = '\0';
+-				p = p-&gt;next;
+-			}
+-		}
+-	}
+-	// load xml to preferences
+-	//    check ranges foreach val
+-	//       set to min if  &lt;min or to max if &gt;max - generate warning
+-	//    warn about unused options
+-	ADM_info(&quot;Preferences found and loaded\n&quot;);
+-	return RC_OK;
++    ADM_warning(&quot;An error happened while loading config\n&quot;);
++    return RC_FAILED;
+ }
+ 
+ /**
+     \fn save
+ */
+-int preferences::save(){
+-   xmlNodePtr n;
+-   char buf[1024];
+-   char *p;
+-   char *q;
+-	if( xdoc )
+-		xmlFreeDoc(xdoc);
+-	if( ! (xdoc = xmlNewDoc((const xmlChar *)&quot;1.0&quot;)) )
+-		return RC_FAILED;
+-	if( ! (xdoc-&gt;children = xmlNewNode(NULL,(xmlChar *)&quot;avidemux&quot;)) ){
+-		xmlFreeDoc(xdoc); xdoc = NULL;
+-		return RC_FAILED;
+-	}
+-	for( int i=0; i &lt; num_opts; i++ ){
+-	   xmlNodePtr nn;
+-	   const char *val = opt_defs[i].current_val;
+-		if( ! opt_defs[i].current_val )
+-			val = opt_defs[i].default_val;
+-		//	continue; // no value set - yet
+-		// if( ! strcmp(opt_defs[i].default_val,opt_defs[i].current_val) )
+-		//	continue; // current_val == default_val
+-		strncpy(buf,opt_defs[i].name,1024);
+-		buf[1023] = '\0';
+-		p = buf;
+-		n = xdoc-&gt;children;
+-		while( (q=index(p,'.')) ){
+-			*q = '\0'; q++;
+-			nn = goto_node_with_create(n, p);
+-			if( !nn )
+-				return RC_FAILED;
+-			p = q;
+-			n = nn;
+-		}
+-		nn = goto_node_with_create(n, p);
+-		if( !nn )
+-			return RC_FAILED;
+-		xmlNodeSetContent( nn, (xmlChar*)val );
+-	}
+-	return save_xml_to_file();
+-}
+-/**
+-    \fn save_xml_to_file
+-
+-*/
+-int preferences::save_xml_to_file()
++int preferences::save()
+ {
++   char *home;
+    char *dir_adm;
+-   std::string path,path_new;
++   std::string path;
+ 
++
+     dir_adm=ADM_getBaseDir();
+     if(!dir_adm) return RC_FAILED;
+ 
+-    path=std::string(dir_adm);
++    path=string(dir_adm);
+     path=path+std::string(&quot;/&quot;);
+     path=path+std::string(CONFIG);
++    string tmp=path;
++    tmp=tmp+string(&quot;.tmp&quot;);
++    ADM_error(&quot;Saving prefs to %s\n&quot;,tmp.c_str());
+ 
+-
+-#if 0 // Why ? defined(__MINGW32__)
+-	xmlSetDocCompressMode(xdoc,9);
+-	if( xmlSaveFormatFile(path.c_str(),xdoc,1) == -1 ){
+-           fprintf(stderr,&quot;\ncan't save xml tree to file. Filesystem full?\n\n&quot;);
+-           delete [] rcfile;
+-	   return RC_FAILED;
+-	}
+-        delete [] rcfile;
+-	return RC_OK;
+-
+-#else
+-	
+-    path_new=path+std::string(&quot;.new&quot;);
+-    ADM_eraseFile(path_new.c_str());
+-    xmlSetDocCompressMode(xdoc,9);
+-	if( qxmlSaveFormatFile(path_new.c_str(),xdoc,1) == -1 )
++   if(true==my_prefs_struct_jserialize(tmp.c_str(),&amp;myPrefs))
+     {
+-	   return RC_FAILED;
+-	}
+-    ADM_eraseFile(path.c_str());
+-    if(false==ADM_copyFile(path_new.c_str(),path.c_str()))
+-    {
+-        ADM_error(&quot;Cannot copy %s to %s\n&quot;,path_new.c_str(),path.c_str());
++        ADM_copyFile(tmp.c_str(),path.c_str());
++        ADM_eraseFile(tmp.c_str());
++        return RC_OK;
+     }
+-    ADM_eraseFile(path_new.c_str());
+-	return RC_OK;
+-#endif
++    ADM_error(&quot;Cannot save prefs\n&quot;);
++    return RC_FAILED;
+ }
+-/**
+-    \fn ctor
+-*/
+-preferences::preferences(){
+-	internal_lastfiles[0] = internal_lastfiles[1] = NULL;
+-	internal_lastfiles[2] = internal_lastfiles[3] = NULL;
+-	internal_lastfiles[4] = NULL;
+-	
+-	xdoc = NULL;
+-	
+-}
+ 
+-preferences::~preferences(){
+-  unsigned int idx;
+-	for( idx=0; idx &lt; 4; idx++ ){
+-		if( internal_lastfiles[idx] )
+-			ADM_dealloc(internal_lastfiles[idx]);
+-	}
+-	
+-	if( xdoc )
+-		xmlFreeDoc(xdoc);
+-	
++//--------
++int preferences::get(options option, uint8_t *val)
++{
++	return RC_FAILED;
+ }
+ 
+ 
+-/*
+-int preferences::get(options option, uint8_t *val){
+-   unsigned int x;
+-	if( get(option,&amp;x) == RC_OK ){
+-		if( x &lt;= 255 ){
+-			*val = (uint8_t)x;
+-			return RC_OK;
+-		}
+-	}
++int preferences::get(options option, uint16_t *val)
++{
+ 	return RC_FAILED;
+ }
+-*/
+-int preferences::get(options option, uint16_t *val){
+-   unsigned int x;
+-	if( get(option,&amp;x) == RC_OK ){
+-		if( x &lt;= 65535 ){
+-			*val = (uint16_t)x;
+-			return RC_OK;
+-		}
+-	}
+-	return RC_FAILED;
+-}
+ 
+-int preferences::get(options option, unsigned int *val){
+-   const char *p = opt_defs[option].current_val;
+-	if( !p )
+-		p = opt_defs[option].default_val;
+-	if( opt_defs[option].type != ADM_UINT ){
+-		fprintf(stderr,&quot;preferences::get(%s,uint) called for type %d\n&quot;,
+-			opt_defs[option].name,opt_defs[option].type);
+-		ADM_assert(0);
+-	}
+-	if( sscanf(p,&quot;%u&quot;,val) == 1 )
+-		return RC_OK;
++int preferences::get(options option, unsigned int *val)
++{
+ 	return RC_FAILED; // wrong input for conversion or EOF
+ }
+ 
+-int preferences::get(options option,          int *val){
+-   const char *p = opt_defs[option].current_val;
+-	if( !p )
+-		p = opt_defs[option].default_val;
+-	if( opt_defs[option].type != ADM_INT ){
+-		fprintf(stderr,&quot;preferences::get(%s,int) called for type %d\n&quot;,
+-			opt_defs[option].name,opt_defs[option].type);
+-		ADM_assert(0);
+-	}
+-	if( sscanf(p,&quot;%d&quot;,val) == 1 )
+-		return RC_OK;
++int preferences::get(options option,          int *val)
++{
++
+ 	return RC_FAILED; // wrong input for conversion or EOF
+ }
+ 
+-int preferences::get(options option, unsigned long *val){
+-   const char *p = opt_defs[option].current_val;
+-	if( !p )
+-		p = opt_defs[option].default_val;
+-	if( opt_defs[option].type != ADM_ULONG ){
+-		fprintf(stderr,&quot;preferences::get(%s,ulong) called for type %d\n&quot;,
+-			opt_defs[option].name,opt_defs[option].type);
+-		ADM_assert(0);
+-	}
+-	if( sscanf(p,&quot;%lu&quot;,val) == 1 )
+-		return RC_OK;
++int preferences::get(options option, unsigned long *val)
++{
++
+ 	return RC_FAILED; // wrong input for conversion or EOF
+ }
+ 
+-int preferences::get(options option, long *val){
+-   const char *p = opt_defs[option].current_val;
+-	if( !p )
+-		p = opt_defs[option].default_val;
+-	if( opt_defs[option].type != ADM_LONG ){
+-		fprintf(stderr,&quot;preferences::get(%s,long) called for type %d\n&quot;,
+-			opt_defs[option].name,opt_defs[option].type);
+-		ADM_assert(0);
+-	}
+-	if( sscanf(p,&quot;%ld&quot;,val) == 1 )
+-		return RC_OK;
++int preferences::get(options option, long *val)
++{
+ 	return RC_FAILED; // wrong input for conversion or EOF
+ }
+ 
+-int preferences::get(options option, float *val){
+-   const char *p = opt_defs[option].current_val;
+-	if( !p )
+-		p = opt_defs[option].default_val;
+-	if( opt_defs[option].type != ADM_FLOAT ){
+-		fprintf(stderr,&quot;preferences::get(%s,float) called for type %d\n&quot;,
+-			opt_defs[option].name,opt_defs[option].type);
+-		ADM_assert(0);
+-	}
+-	if( sscanf(p,&quot;%f&quot;,val) == 1 )
+-		return RC_OK;
++int preferences::get(options option, float *val)
++{
+ 	return RC_FAILED; // wrong input for conversion or EOF
+ }
+ 
+-int preferences::get(options option, char **val){
+-   const char *p = opt_defs[option].current_val;
+-	if( !p )
+-		p = opt_defs[option].default_val;
+-	// no type check : every value can be represented by a string
+-	// not an error -&gt; it's a magic feature
+-	if( (*val = ADM_strdup(p) ) )
+-		return RC_OK;
++int preferences::get(options option, char **val)
++{
+ 	return RC_FAILED; // strdup() out of memory
+ }
+-#warning incorrect!
+-int preferences::get(options option, ADM_filename **val){
+-   const char *p = opt_defs[option].current_val;
+-	if( !p )
+-		p = opt_defs[option].default_val;
+-	// no type check : every value can be represented by a string
+-	// not an error -&gt; it's a magic feature
+-	if( (*val = (ADM_filename *)ADM_strdup(p) ) )
+-		return RC_OK;
+-	return RC_FAILED; // strdup() out of memory
+-}
+-int preferences::set(options option, const unsigned int val){
+-   unsigned int l,r;
+-   char buf[1024];
+-   unsigned int v = val;
+-	// check type of option
+-	if( opt_defs[option].type != ADM_UINT ){
+-		fprintf(stderr,&quot;preferences::set(%s,uint) called for type %d\n&quot;,
+-			opt_defs[option].name,opt_defs[option].type);
+-		ADM_assert(0);
+-	}
+-	// check range
+-	if( sscanf(opt_defs[option].minimum,&quot;%u&quot;,&amp;l) != 1){
+-		fprintf(stderr,&quot;error reading opt_defs[option].minimum\n&quot;);
+-		return RC_FAILED;
+-	}
+-	if( sscanf(opt_defs[option].maximum,&quot;%u&quot;,&amp;r) != 1){
+-		fprintf(stderr,&quot;error reading opt_defs[option].maximum\n&quot;);
+-		return RC_FAILED;
+-	}
+-	if( v &lt; l ){
+-		fprintf(stderr,&quot;%s : value &lt; min : %u &lt; %u\n&quot;, opt_defs[option].name, v, l);
+-		v = l;
+-		fprintf(stderr,&quot;   using %u as value instead.\n&quot;, v);
+-	}
+-	if( v &gt; r ){
+-		fprintf(stderr,&quot;%s : value &gt; max : %u &gt; %u\n&quot;, opt_defs[option].name, v, r);
+-		v = r;
+-		fprintf(stderr,&quot;   using %u as value instead.\n&quot;, v);
+-	}
+-	// set value
+-	if( opt_defs[option].current_val )
+-		ADM_dealloc(opt_defs[option].current_val);
+-	snprintf(buf,1024,&quot;%u&quot;,v);
+-	buf[1023] = '\0';
+-	opt_defs[option].current_val = ADM_strdup(buf);
+-	if( ! opt_defs[option].current_val )
+-		return RC_FAILED;
++
++int preferences::set(options option, const unsigned int val)
++{
+ 	return RC_OK;
+ }
+ 
+-int preferences::set(options option, const int val){
+-   int l,r;
+-   char buf[1024];
+-   int v = val;
+-	// check type of option
+-	if( opt_defs[option].type != ADM_INT ){
+-		fprintf(stderr,&quot;preferences::set(%s,int) called for type %d\n&quot;,
+-			opt_defs[option].name,opt_defs[option].type);
+-	}
+-	// check range
+-	if( sscanf(opt_defs[option].minimum,&quot;%d&quot;,&amp;l) != 1){
+-		fprintf(stderr,&quot;error reading opt_defs[option].minimum\n&quot;);
+-		return RC_FAILED;
+-	}
+-	if( sscanf(opt_defs[option].maximum,&quot;%d&quot;,&amp;r) != 1){
+-		fprintf(stderr,&quot;error reading opt_defs[option].maximum\n&quot;);
+-		return RC_FAILED;
+-	}
+-	if( v &lt; l ){
+-		fprintf(stderr,&quot;%s : value &lt; min : %d &lt; %d\n&quot;, opt_defs[option].name, v, l);
+-		v = l;
+-		fprintf(stderr,&quot;   using %d as value instead.\n&quot;, v);
+-	}
+-	if( v &gt; r ){
+-		fprintf(stderr,&quot;%s : value &gt; max : %d &gt; %d\n&quot;, opt_defs[option].name, v, r);
+-		v = r;
+-		fprintf(stderr,&quot;   using %d as value instead.\n&quot;, v);
+-	}
+-	// set value
+-	if( opt_defs[option].current_val )
+-		ADM_dealloc(opt_defs[option].current_val);
+-	snprintf(buf,1024,&quot;%d&quot;,v);
+-	buf[1023] = '\0';
+-	opt_defs[option].current_val = ADM_strdup(buf);
+-	if( ! opt_defs[option].current_val )
+-		return RC_FAILED;
++int preferences::set(options option, const int val)
++{
+ 	return RC_OK;
+ }
+ 
+-int preferences::set(options option, const unsigned long val){
+-   unsigned long l,r;
+-   char buf[1024];
+-   unsigned long v = val;
+-	// check type of option
+-	if( opt_defs[option].type != ADM_ULONG ){
+-		fprintf(stderr,&quot;preferences::set(%s,ulong) called for type %d\n&quot;,
+-			opt_defs[option].name,opt_defs[option].type);
+-		ADM_assert(0);
+-	}
+-	// check range
+-	if( sscanf(opt_defs[option].minimum,&quot;%lu&quot;,&amp;l) != 1){
+-		fprintf(stderr,&quot;error reading opt_defs[option].minimum\n&quot;);
+-		return RC_FAILED;
+-	}
+-	if( sscanf(opt_defs[option].maximum,&quot;%lu&quot;,&amp;r) != 1){
+-		fprintf(stderr,&quot;error reading opt_defs[option].maximum\n&quot;);
+-		return RC_FAILED;
+-	}
+-	if( v &lt; l ){
+-		fprintf(stderr,&quot;%s : value &lt; min : %lu &lt; %lu\n&quot;, opt_defs[option].name, v, l);
+-		v = l;
+-		fprintf(stderr,&quot;   using %lu as value instead.\n&quot;, v);
+-	}
+-	if( v &gt; r ){
+-		fprintf(stderr,&quot;%s : value &gt; max : %lu &gt; %lu\n&quot;, opt_defs[option].name, v, r);
+-		v = r;
+-		fprintf(stderr,&quot;   using %lu as value instead.\n&quot;, v);
+-	}
+-	// set value
+-	if( opt_defs[option].current_val )
+-		ADM_dealloc(opt_defs[option].current_val);
+-	snprintf(buf,1024,&quot;%lu&quot;,v);
+-	buf[1023] = '\0';
+-	opt_defs[option].current_val = ADM_strdup(buf);
+-	if( ! opt_defs[option].current_val )
+-		return RC_FAILED;
++int preferences::set(options option, const unsigned long val)
++{
+ 	return RC_OK;
+ }
+ 
+-int preferences::set(options option, const long val){
+-   long l,r;
+-   char buf[1024];
+-   long v = val;
+-	// check type of option
+-	if( opt_defs[option].type != ADM_LONG ){
+-		fprintf(stderr,&quot;preferences::set(%s,long) called for type %d\n&quot;,
+-			opt_defs[option].name,opt_defs[option].type);
+-		ADM_assert(0);
+-	}
+-	// check range
+-	if( sscanf(opt_defs[option].minimum,&quot;%ld&quot;,&amp;l) != 1){
+-		fprintf(stderr,&quot;error reading opt_defs[option].minimum\n&quot;);
+-		return RC_FAILED;
+-	}
+-	if( sscanf(opt_defs[option].maximum,&quot;%ld&quot;,&amp;r) != 1){
+-		fprintf(stderr,&quot;error reading opt_defs[option].maximum\n&quot;);
+-		return RC_FAILED;
+-	}
+-	if( v &lt; l ){
+-		fprintf(stderr,&quot;%s : value &lt; min : %ld &lt; %ld\n&quot;, opt_defs[option].name, v, l);
+-		v = l;
+-		fprintf(stderr,&quot;   using %ld as value instead.\n&quot;, v);
+-	}
+-	if( v &gt; r ){
+-		fprintf(stderr,&quot;%s : value &gt; max : %ld &gt; %ld\n&quot;, opt_defs[option].name, v, r);
+-		v = r;
+-		fprintf(stderr,&quot;   using %ld as value instead.\n&quot;, v);
+-	}
+-	// set value
+-	if( opt_defs[option].current_val )
+-		ADM_dealloc(opt_defs[option].current_val);
+-	snprintf(buf,1024,&quot;%ld&quot;,v);
+-	buf[1023] = '\0';
+-	opt_defs[option].current_val = ADM_strdup(buf);
+-	if( ! opt_defs[option].current_val )
+-		return RC_FAILED;
++int preferences::set(options option, const long val)
++{
+ 	return RC_OK;
+ }
+ 
+-int preferences::set(options option, const float val){
+-   float l,r;
+-   char buf[1024];
+-   float v = val;
+-	// check type of option
+-	if( opt_defs[option].type != ADM_FLOAT ){
+-		fprintf(stderr,&quot;preferences::set(%s,float) called for type %d\n&quot;,
+-			opt_defs[option].name,opt_defs[option].type);
+-		ADM_assert(0);
+-	}
+-	// check range
+-	if( sscanf(opt_defs[option].minimum,&quot;%f&quot;,&amp;l) != 1){
+-		fprintf(stderr,&quot;error reading opt_defs[option].minimum\n&quot;);
+-		return RC_FAILED;
+-	}
+-	if( sscanf(opt_defs[option].maximum,&quot;%f&quot;,&amp;r) != 1){
+-		fprintf(stderr,&quot;error reading opt_defs[option].maximum\n&quot;);
+-		return RC_FAILED;
+-	}
+-	if( v &lt; l ){
+-		fprintf(stderr,&quot;%s : value &lt; min : %f &lt; %f\n&quot;, opt_defs[option].name, v, l);
+-		v = l;
+-		fprintf(stderr,&quot;   using %f as value instead.\n&quot;, v);
+-	}
+-	if( v &gt; r ){
+-		fprintf(stderr,&quot;%s : value &gt; max : %f &gt; %f\n&quot;, opt_defs[option].name, v, r);
+-		v = r;
+-		fprintf(stderr,&quot;   using %f as value instead.\n&quot;, v);
+-	}
+-	// set value
+-	if( opt_defs[option].current_val )
+-		ADM_dealloc(opt_defs[option].current_val);
+-	snprintf(buf,1024,&quot;%f&quot;,v);
+-	buf[1023] = '\0';
+-	opt_defs[option].current_val = ADM_strdup(buf);
+-	if( ! opt_defs[option].current_val )
+-		return RC_FAILED;
++int preferences::set(options option, const float val)
++{
+ 	return RC_OK;
+ }
+ 
+-int preferences::set(options option, const char * val){
+-	// check type of option
+-	if( opt_defs[option].type != ADM_STRING ){
+-		fprintf(stderr,&quot;preferences::set(%s,string) called for type %d\n&quot;,
+-			opt_defs[option].name,opt_defs[option].type);
+-		ADM_assert(0);
+-	}
+-	// check val
+-	if( ! val )
+-		return RC_FAILED;
+-	// set value
+-	if( opt_defs[option].current_val )
+-		ADM_dealloc(opt_defs[option].current_val);
+-	opt_defs[option].current_val = ADM_strdup(val);
+-	if( ! opt_defs[option].current_val )
+-		return RC_FAILED;
++int preferences::set(options option, const char * val)
++{
+ 	return RC_OK;
+ }
+-#warning incorrect!
+-int preferences::set(options option, const ADM_filename * val){
+-	// check type of option
+-	if( opt_defs[option].type != ADM_FILENAME ){
+-		fprintf(stderr,&quot;preferences::set(%s,string) called for type %d\n&quot;,
+-			opt_defs[option].name,opt_defs[option].type);
+-		ADM_assert(0);
+-	}
+-	// check val
+-	if( ! val )
+-		return RC_FAILED;
+-	// set value
+-	if( opt_defs[option].current_val )
+-		ADM_dealloc(opt_defs[option].current_val);
+-	opt_defs[option].current_val = ADM_strdup((char *)val);
+-	if( ! opt_defs[option].current_val )
+-		return RC_FAILED;
+-	return RC_OK;
+-}
+ 
+-const char * preferences::get_str_min(options option){
+-	return( opt_defs[option].minimum );
+-}
+-
+-const char * preferences::get_str_max(options option){
+-	return( opt_defs[option].maximum );
+-}
+-
+ #define PRT_LAFI(x,y,z) fprintf(stderr,&quot;Prefs: %s%u %s\n&quot;,x,y,(z?z:&quot;NULL&quot;))
+ 
+-int preferences::set_lastfile(const char* file){
+-   char *internal_file;
+-	if( ! file ){
+-		fprintf(stderr,&quot;Prefs: set_lastfile(NULL) called\n&quot;);
+-		return RC_FAILED;
+-	}
+-	internal_file = ADM_PathCanonize(file);
+-	if( !internal_file ){
+-		fprintf(stderr,&quot;Prefs: set_lastfile(): PathCanonize() returns NULL\n&quot;);
+-		return RC_FAILED;
+-        }
+-#ifdef DEBUG_PREFS
+-	fprintf(stderr,&quot;Prefs: set_lastfile(%s)\n&quot;,file);
+-	if( strcmp(file,internal_file) )
+-		fprintf(stderr,&quot;Prefs: set_lastfile(%s) (with appended current dir)\n&quot;,internal_file);
+-	PRT_LAFI(&quot;&lt;= LASTFILES_&quot;,1,opt_defs[LASTFILES_FILE1].current_val);
+-	PRT_LAFI(&quot;&lt;= LASTFILES_&quot;,2,opt_defs[LASTFILES_FILE2].current_val);
+-	PRT_LAFI(&quot;&lt;= LASTFILES_&quot;,3,opt_defs[LASTFILES_FILE3].current_val);
+-	PRT_LAFI(&quot;&lt;= LASTFILES_&quot;,4,opt_defs[LASTFILES_FILE4].current_val);
+-#endif
+-	// change opt_defs array
+-	//
+-	// ToDo:
+-	// * a call with a file already in lastfiles will resort lastfiles with
+-	//   the actual argument on top
+-	// * a call with a file new to lastfiles will drop LASTFILE_4, move all
+-	//   one step down and add the file as LASTFILE_1
+-	if( opt_defs[LASTFILES_FILE4].current_val &amp;&amp;
+-	    !strncmp(opt_defs[LASTFILES_FILE4].current_val,internal_file,strlen(opt_defs[LASTFILES_FILE4].current_val)) ){
+-	  char *x = opt_defs[LASTFILES_FILE4].current_val;
+-		opt_defs[LASTFILES_FILE4].current_val = opt_defs[LASTFILES_FILE3].current_val;
+-		opt_defs[LASTFILES_FILE3].current_val = opt_defs[LASTFILES_FILE2].current_val;
+-		opt_defs[LASTFILES_FILE2].current_val = opt_defs[LASTFILES_FILE1].current_val;
+-		opt_defs[LASTFILES_FILE1].current_val = x;
+-	}else if( opt_defs[LASTFILES_FILE3].current_val &amp;&amp;
+-            !strncmp(opt_defs[LASTFILES_FILE3].current_val,internal_file,strlen(opt_defs[LASTFILES_FILE3].current_val)) ){
+-          char *x = opt_defs[LASTFILES_FILE3].current_val;
+-		opt_defs[LASTFILES_FILE3].current_val = opt_defs[LASTFILES_FILE2].current_val;
+-                opt_defs[LASTFILES_FILE2].current_val = opt_defs[LASTFILES_FILE1].current_val;
+-                opt_defs[LASTFILES_FILE1].current_val = x;
+-        }else if( opt_defs[LASTFILES_FILE2].current_val &amp;&amp;
+-            !strncmp(opt_defs[LASTFILES_FILE2].current_val,internal_file,strlen(opt_defs[LASTFILES_FILE2].current_val)) ){
+-          char *x = opt_defs[LASTFILES_FILE2].current_val;
+-		opt_defs[LASTFILES_FILE2].current_val = opt_defs[LASTFILES_FILE1].current_val;
+-		opt_defs[LASTFILES_FILE1].current_val = x;
+-	}else if( opt_defs[LASTFILES_FILE1].current_val &amp;&amp;
+-            !strncmp(opt_defs[LASTFILES_FILE1].current_val,internal_file,strlen(opt_defs[LASTFILES_FILE1].current_val)) ){
+-		; // nothing to do - always on top
+-	}else{
+-		if( opt_defs[LASTFILES_FILE4].current_val )
+-			ADM_dealloc(opt_defs[LASTFILES_FILE4].current_val);
+-		opt_defs[LASTFILES_FILE4].current_val = opt_defs[LASTFILES_FILE3].current_val;
+-		opt_defs[LASTFILES_FILE3].current_val = opt_defs[LASTFILES_FILE2].current_val;
+-		opt_defs[LASTFILES_FILE2].current_val = opt_defs[LASTFILES_FILE1].current_val;
+-		opt_defs[LASTFILES_FILE1].current_val = ADM_strdup(internal_file);
+-	}
++int preferences::set_lastfile(const char* file)
++{
+ 
+-
+-	// change the xmlDocument
+-	if( ! xdoc ){
+-		// no .avidemuxrc file or not loaded yet
+-		load();          // try to load it
+-		if( ! xdoc ){    // really: no .avidemuxrc file
+-			save();  // generate one from internal defaults and actual changes
+-			if( xdoc )
+-				erase_blank_nodes(xdoc-&gt;children);
+-		}
+-	}
+-	if( ! xdoc ){
+-		fprintf(stderr,&quot;Prefs: no xml document generated ny load() nor save()\n&quot;);
+-	}else{
+-	  xmlNodePtr p;
+-	  xmlNodePtr q;
+-		// we assume a valid xml document, but maybe an older version
+-		ADM_assert( xdoc-&gt;children );
+-		p = xdoc-&gt;children;				// -&gt;avidemux (should be there)
+-		p = goto_node_with_create(p, &quot;lastfiles&quot;);	// -&gt;avidemux-&gt;lastfile
+-		q = goto_node_with_create(p, &quot;file1&quot;);		// -&gt;avidemux-&gt;lastfile-&gt;1
+-		xmlNodeSetContent( q,
+-			(xmlChar*)(opt_defs[LASTFILES_FILE1].current_val?opt_defs[LASTFILES_FILE1].current_val:&quot;&quot;));
+-		q = goto_node_with_create(p, &quot;file2&quot;);		// -&gt;avidemux-&gt;lastfile-&gt;2
+-		xmlNodeSetContent( q,
+-			(xmlChar*)(opt_defs[LASTFILES_FILE2].current_val?opt_defs[LASTFILES_FILE2].current_val:&quot;&quot;));
+-		q = goto_node_with_create(p, &quot;file3&quot;);		// -&gt;avidemux-&gt;lastfile-&gt;3
+-		xmlNodeSetContent( q,
+-			(xmlChar*)(opt_defs[LASTFILES_FILE3].current_val?opt_defs[LASTFILES_FILE3].current_val:&quot;&quot;));
+-		q = goto_node_with_create(p, &quot;file4&quot;);		// -&gt;avidemux-&gt;lastfile-&gt;4
+-		xmlNodeSetContent( q,
+-			(xmlChar*)(opt_defs[LASTFILES_FILE4].current_val?opt_defs[LASTFILES_FILE4].current_val:&quot;&quot;));
+-		save_xml_to_file();
+-	}
+-
+-
+-#ifdef DEBUG_PREFS
+-	PRT_LAFI(&quot;=&gt; LASTFILES_&quot;,1,opt_defs[LASTFILES_FILE1].current_val);
+-	PRT_LAFI(&quot;=&gt; LASTFILES_&quot;,2,opt_defs[LASTFILES_FILE2].current_val);
+-	PRT_LAFI(&quot;=&gt; LASTFILES_&quot;,3,opt_defs[LASTFILES_FILE3].current_val);
+-	PRT_LAFI(&quot;=&gt; LASTFILES_&quot;,4,opt_defs[LASTFILES_FILE4].current_val);
+-#endif
+-	delete[] internal_file;
+ 	return RC_OK;
+ }
+ 
+ #undef PRT_LAFI
+ #define PRT_LAFI(y,z) fprintf(stderr,&quot;Prefs: ret idx[%u] %s\n&quot;,y,(z?z:&quot;NULL&quot;))
+ 
+-const char **preferences::get_lastfiles(void){
+-  unsigned int idx;
+-#ifdef DEBUG_PREFS
+-	fprintf(stderr,&quot;Prefs: get_lastfile()\n&quot;);
+-#endif
+-	for( idx=0; idx &lt; 4; idx++ ){
+-		if( internal_lastfiles[idx] ){
+-			ADM_dealloc(internal_lastfiles[idx]);
+-			internal_lastfiles[idx] = NULL;
+-		}
+-	}
+-	if( opt_defs[LASTFILES_FILE1].current_val )
+-		internal_lastfiles[0] = ADM_strdup(opt_defs[LASTFILES_FILE1].current_val);
+-	if( opt_defs[LASTFILES_FILE2].current_val )
+-		internal_lastfiles[1] = ADM_strdup(opt_defs[LASTFILES_FILE2].current_val);
+-	if( opt_defs[LASTFILES_FILE3].current_val )
+-		internal_lastfiles[2] = ADM_strdup(opt_defs[LASTFILES_FILE3].current_val);
+-	if( opt_defs[LASTFILES_FILE4].current_val )
+-		internal_lastfiles[3] = ADM_strdup(opt_defs[LASTFILES_FILE4].current_val);
+-	internal_lastfiles[4] = NULL;
++const char **preferences::get_lastfiles(void)
++{
+ 
+-#ifdef DEBUG_PREFS
+-	PRT_LAFI(0,internal_lastfiles[0]);
+-	PRT_LAFI(1,internal_lastfiles[1]);
+-	PRT_LAFI(2,internal_lastfiles[2]);
+-	PRT_LAFI(3,internal_lastfiles[3]);
+-	PRT_LAFI(4,internal_lastfiles[4]);
+-#endif
+ 	return (const char**)internal_lastfiles;
+ }
+-/**
+-    \fn initPrefs
+-*/
+-int initPrefs(  void )
+-{
+-  prefs = new preferences();
+-  return 1;
+-}
+-/**
+-    \fn destroyPrefs
+-*/
+-int destroyPrefs(void)
+-{
+-	for (int i = 0; i &lt; num_opts; i++)
+-	{
+-		if (opt_defs[i].current_val)
+-		{
+-			ADM_dealloc(opt_defs[i].current_val);
+-			opt_defs[i].current_val=NULL;
+-		}
+-	}
+ 
+-	delete prefs;
+-	prefs = NULL;
+-	return 1;
+-}
+-
+ // EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004325.html">[Avidemux-svn-commit] r7169 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/qt4
+</A></li>
+	<LI>Next message: <A HREF="004327.html">[Avidemux-svn-commit] r7171 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4326">[ date ]</a>
+              <a href="thread.html#4326">[ thread ]</a>
+              <a href="subject.html#4326">[ subject ]</a>
+              <a href="author.html#4326">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

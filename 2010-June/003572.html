@@ -1,0 +1,269 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6382 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_plugins/ADM_demuxers/MpegPS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6382%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreDemuxerMpeg/include%0A%09avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C201006180525.o5I5P8aF029921%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003571.html">
+   <LINK REL="Next"  HREF="003573.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6382 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_plugins/ADM_demuxers/MpegPS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6382%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreDemuxerMpeg/include%0A%09avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C201006180525.o5I5P8aF029921%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6382 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_plugins/ADM_demuxers/MpegPS">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Jun 18 07:25:08 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003571.html">[Avidemux-svn-commit] r6381 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="003573.html">[Avidemux-svn-commit] r6383 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_lav
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3572">[ date ]</a>
+              <a href="thread.html#3572">[ thread ]</a>
+              <a href="subject.html#3572">[ subject ]</a>
+              <a href="author.html#3572">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-06-18 07:25:07 +0200 (Fri, 18 Jun 2010)
+New Revision: 6382
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/ADM_indexFile.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psReadIndex.cpp
+Log:
+[PS] add preliminary support for frame/field picture type
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/ADM_indexFile.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/ADM_indexFile.h	2010-06-18 05:25:05 UTC (rev 6381)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/ADM_indexFile.h	2010-06-18 05:25:07 UTC (rev 6382)
+@@ -22,6 +22,7 @@
+     \class indexFile
+     \brief Read a index file easily
+ */
++#define ADM_INDEX_FILE_VERSION 2
+ #define ADM_INDEX_BUFFER (20*1024)
+ /**
+     \class dmxToken
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.cpp	2010-06-18 05:25:05 UTC (rev 6381)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.cpp	2010-06-18 05:25:07 UTC (rev 6382)
+@@ -37,6 +37,7 @@
+     uint32_t append;
+     char *type;
+     uint64_t startDts;
++    uint32_t version=0;
+ 
+     sprintf(idxName,&quot;%s.idx2&quot;,name);
+     indexFile index;
+@@ -50,6 +51,13 @@
+         printf(&quot;[psDemux] Cannot read system section\n&quot;);
+         goto abt;
+     }
++
++    version=index.getAsUint32(&quot;Version&quot;);
++    if(version!=ADM_INDEX_FILE_VERSION)
++    {
++        GUI_Error_HIG(&quot;Error&quot;,&quot;This file's index has been created with an older version of avidemux.\nPlease delete the idx2 file and reopen.&quot;);
++        goto abt;
++    }
+     type=index.getAsString(&quot;Type&quot;);
+     if(!type || type[0]!='P')
+     {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.h	2010-06-18 05:25:05 UTC (rev 6381)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.h	2010-06-18 05:25:07 UTC (rev 6382)
+@@ -35,9 +35,11 @@
+     uint64_t  startAt;
+     uint32_t  index;
+     uint8_t   type; // 1=I 2=P 3=B
++    uint32_t  pictureType; // 3=Frame, 1=Top, 2=Bottom
+     uint64_t  pts;
+     uint64_t  dts;
+     uint32_t  len;
++    
+ }dmxFrame;
+ /**
+     \struct ADM_psAudioSeekPoint
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp	2010-06-18 05:25:05 UTC (rev 6381)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp	2010-06-18 05:25:07 UTC (rev 6382)
+@@ -25,8 +25,10 @@
+ #include &quot;ADM_quota.h&quot;
+ #include &quot;ADM_psAudioProbe.h&quot;
+ #include &quot;DIA_working.h&quot;
++#include &quot;ADM_indexFile.h&quot;
+ 
+-static const char Type[5]={'X','I','P','B','P'};
++static const char Type[5]={'X','I','P','B','P'};  // Frame type
++static const char Structure[4]={'X','T','B','F'}; // X Top Bottom Frame
+ 
+ static const uint32_t FPS[16]={
+                 0,                      // 0
+@@ -63,15 +65,24 @@
+     idx_startAtImage,
+     idx_startAtGopOrSeq
+ }indexerState;
++
++typedef enum
++{
++    pictureFrame=3,
++    pictureTopField=1, 
++    pictureBottomField=2
++}pictureStructure;
++
+ typedef struct
+ {
+-    uint64_t pts,dts,startAt;
+-    uint32_t offset;
+-    uint32_t frameType;
+-    uint32_t nbPics;
+-    indexerState state;
++    uint64_t        pts,dts,startAt;
++    uint32_t        offset;
++    uint32_t        frameType;
++    pictureStructure picStructure;
++    uint32_t        nbPics;
++    indexerState    state;
+     psPacketLinear *pkt;
+-    int32_t        nextOffset;
++    int32_t         nextOffset;
+ }indexerData;
+ 
+ typedef enum
+@@ -153,8 +164,10 @@
+ PSVideo video;
+ indexerData  data;    
+ dmxPacketInfo info;
++    
+     memset(&amp;video,0,sizeof(video));
+     memset(&amp;data,0,sizeof(data));
++    data.picStructure=pictureFrame;
+     char *indexName=(char *)alloca(strlen(file)+5);
+     sprintf(indexName,&quot;%s.idx2&quot;,file);
+     index=qfopen(indexName,&quot;wt&quot;);
+@@ -239,9 +252,15 @@
+                                             //printf(&quot;Picture type %02x struct:%x\n&quot;,two,picture_structure);
+                                             switch(picture_structure)
+                                             {
+-                                            case 3: video.frameCount++;break;
+-                                            case 1:
+-                                            case 2:  video.fieldCount++;break;
++                                            case 3: video.frameCount++;
++                                                    data.picStructure=pictureFrame;
++                                                    break;
++                                            case 1:  data.picStructure=pictureTopField;
++                                                     video.fieldCount++;
++                                                     break;
++                                            case 2:  data.picStructure=pictureBottomField;
++                                                     video.fieldCount++;
++                                                     break;
+                                             default: ADM_warning(&quot;frame type 0 met, this is illegal\n&quot;);
+                                             }
+                                         }
+@@ -399,7 +418,7 @@
+             data-&gt;nextOffset=-2;
+         }
+     
+-        qfprintf(index,&quot;%c&quot;,Type[data-&gt;frameType]);
++        qfprintf(index,&quot;%c%c&quot;,Type[data-&gt;frameType],Structure[data-&gt;picStructure&amp;3]);
+     }
+     if(update==markEnd || update==markNow)
+     {
+@@ -439,6 +458,7 @@
+ {
+     qfprintf(index,&quot;PSD1\n&quot;);
+     qfprintf(index,&quot;[System]\n&quot;);
++    qfprintf(index,&quot;Version=%d\n&quot;,ADM_INDEX_FILE_VERSION);
+     qfprintf(index,&quot;Type=P\n&quot;);
+     qfprintf(index,&quot;File=%s\n&quot;,filename);
+     qfprintf(index,&quot;Append=%d\n&quot;,append);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psReadIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psReadIndex.cpp	2010-06-18 05:25:05 UTC (rev 6381)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psReadIndex.cpp	2010-06-18 05:25:07 UTC (rev 6382)
+@@ -102,7 +102,7 @@
+                     return false;
+             }
+             
+-            char *start=strstr(buffer,&quot; I:&quot;);
++            char *start=strstr(buffer,&quot; I&quot;);
+             if(!start) return true;
+             start+=1;
+             int count=0;
+@@ -110,11 +110,14 @@
+             {
+                 char *cur=start;
+                 char type=1;
++                char picStruct='F';
+                 char *next;
+                 uint32_t len;
+                 type=*cur;
+                 if(type==0x0a || type==0x0d || !type) break;
+                 cur++;
++                picStruct=*cur;
++                cur++;
+                 if(*(cur)!=':')
+                 {
+                     printf(&quot;[psDemux]  instead of : (%c %x %x):\n&quot;,*cur,*(cur-1),*cur);
+@@ -148,6 +151,13 @@
+                     case 'B': frame-&gt;type=3;break;
+                     default: ADM_assert(0);
+                 }
++                switch(picStruct)
++                {
++                        default: ADM_warning(&quot;Unknown picture structure %c\n&quot;,picStruct);
++                        case 'F': frame-&gt;pictureType=3;break;
++                        case 'T': frame-&gt;pictureType=1;break;
++                        case 'B': frame-&gt;pictureType=2;break;
++                }
+                 frame-&gt;len=len;
+                 ListOfFrames.push_back(frame);
+                 count++;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003571.html">[Avidemux-svn-commit] r6381 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="003573.html">[Avidemux-svn-commit] r6383 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_lav
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3572">[ date ]</a>
+              <a href="thread.html#3572">[ thread ]</a>
+              <a href="subject.html#3572">[ subject ]</a>
+              <a href="author.html#3572">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

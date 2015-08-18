@@ -1,0 +1,445 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6653 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6653%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate%3A%0A%09include%20src&In-Reply-To=%3C20100925150232.C0A63480FCF%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003836.html">
+   <LINK REL="Next"  HREF="003838.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6653 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate:	include src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6653%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate%3A%0A%09include%20src&In-Reply-To=%3C20100925150232.C0A63480FCF%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6653 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Sep 25 17:02:32 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003836.html">[Avidemux-svn-commit] r6652 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio:	include src
+</A></li>
+        <LI>Next message: <A HREF="003838.html">[Avidemux-svn-commit] r6654 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3837">[ date ]</a>
+              <a href="thread.html#3837">[ thread ]</a>
+              <a href="subject.html#3837">[ subject ]</a>
+              <a href="author.html#3837">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-09-25 17:02:32 +0200 (Sat, 25 Sep 2010)
+New Revision: 6653
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopyFromAnnexB.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/include/ADM_videoCopy.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopy.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/CMakeLists.txt
+Log:
+[H264] AnnexB-&gt;iso, incomplete
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/include/ADM_videoCopy.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/include/ADM_videoCopy.h	2010-09-25 15:02:31 UTC (rev 6652)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/include/ADM_videoCopy.h	2010-09-25 15:02:32 UTC (rev 6653)
+@@ -19,6 +19,9 @@
+             ADMCompressedImage image;
+             bool eofMet;
+             uint64_t  rescaleTs(uint64_t in);
++            uint64_t  rewindTime;
++
++            bool      rewind(void);
+ public:
+              ADM_videoStreamCopy(uint64_t startTime,uint64_t endTime);
+     virtual ~ADM_videoStreamCopy();
+@@ -29,5 +32,27 @@
+ virtual     uint64_t getVideoDuration(void);
+ virtual     uint64_t getStartTime(void);
+ };
++/**
++        \fn ADM_videoStreamCopyFromAnnexB
++        \brief Same as copy but does annexB-&gt;mp4/iso on the fly
++*/
++class ADM_videoStreamCopyFromAnnexB : public ADM_videoStreamCopy
++{
++protected:
++#define ADM_COPY_FROM_ANNEX_B_SIZE (1920*1200*3)
++        uint8_t         buffer[ADM_COPY_FROM_ANNEX_B_SIZE];
++        ADMBitstream    *myBitstream;
++        uint8_t         *myExtra;
++        uint32_t        myExtraLen;
++        bool            findNalu(int nalu,uint8_t *start,uint8_t *end,uint8_t **outPtr,uint32_t *outLen);
++        int             convertFromAnnexB(uint8_t *inData,uint32_t inSize,
++                                                      uint8_t *outData,uint32_t outMaxSize);
+ 
++public:
++                        ADM_videoStreamCopyFromAnnexB(uint64_t startTime,uint64_t endTime);
++        virtual         ~ADM_videoStreamCopyFromAnnexB();
++        virtual bool    getPacket(ADMBitstream *out);
++        virtual bool    getExtraData(uint32_t *extraLen, uint8_t **extraData) ;
++};
++
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopy.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopy.cpp	2010-09-25 15:02:31 UTC (rev 6652)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopy.cpp	2010-09-25 15:02:32 UTC (rev 6653)
+@@ -18,8 +18,16 @@
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_videoCopy.h&quot;
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
++#include &quot;ADM_coreUtils.h&quot;
++extern ADM_Composer *video_body; // Fixme!
++extern bool ADM_findH264StartCode(uint8_t *start, uint8_t *end,uint8_t *outstartcode,uint32_t *offset);
+ 
+-extern ADM_Composer *video_body; // Fixme!
++#if 1
++#define aprintf ADM_info
++#else
++#define aprintf(...) {}
++#endif
++
+ /**
+     \fn ADM_videoStreamCopy
+ */
+@@ -62,12 +70,20 @@
+     this-&gt;startTimeDts=dtsStart;
+     this-&gt;startTimePts=ptsStart;
+     this-&gt;endTimePts=endTime;
+-
+-    video_body-&gt;GoToIntraTime_noDecoding(ptsStart);
++    rewindTime=ptsStart;
++    rewind();
++    
+     ADM_info(&quot; Fixating start time by %d\n&quot;,abs((int)(startTime-startTimeDts)));
+     ADM_info(&quot; Starting DTS=%&quot;LLU&quot;, PTS=%&quot;LLU&quot; ms\n&quot;,startTimeDts/1000,startTimePts/1000);
+ }
+ /**
++
++*/
++bool      ADM_videoStreamCopy::rewind(void)
++{
++    return video_body-&gt;GoToIntraTime_noDecoding(rewindTime);
++}
++/**
+     \fn ADM_videoStreamCopy
+ */
+ ADM_videoStreamCopy::~ADM_videoStreamCopy()
+@@ -163,3 +179,5 @@
+ {
+     return true;
+ }
++
++// EOF
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopyFromAnnexB.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopyFromAnnexB.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopyFromAnnexB.cpp	2010-09-25 15:02:32 UTC (rev 6653)
+@@ -0,0 +1,257 @@
++/**
++    \file ADM_videoCopyFromAnnexB
++    \brief Convert from annexB h264 to iso on the fly
++    (c) Mean 2010/GPLv2
++
++*/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;ADM_cpp.h&quot;
++using std::string;
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_videoCopy.h&quot;
++#include &quot;ADM_editor/ADM_edit.hxx&quot;
++#include &quot;ADM_coreUtils.h&quot;
++#include &quot;ADM_h264_tag.h&quot;
++extern bool ADM_findH264StartCode(uint8_t *start, uint8_t *end,uint8_t *outstartcode,uint32_t *offset);
++extern void mixDump(uint8_t *ptr, uint32_t len);
++#if 1
++#define aprintf ADM_info
++#else
++#define aprintf(...) {}
++#endif
++
++static uint32_t readBE32(uint8_t *p)
++{
++    uint32_t v=(p[0]&lt;&lt;8)+p[1];
++    uint32_t u=(p[2]&lt;&lt;8)+p[3];
++    return (v&lt;&lt;16)+u;
++}
++static void writeBE32(uint8_t *p, uint32_t size)
++{
++    p[0]=size&gt;&gt;24;
++    p[1]=(size&gt;&gt;16)&amp;0xff;
++    p[2]=(size&gt;&gt;8)&amp;0xff;
++    p[3]=(size&gt;&gt;0)&amp;0xff;
++}
++
++/**
++    \fn findNalu
++*/
++bool ADM_videoStreamCopyFromAnnexB::findNalu(int nalu,uint8_t *start,uint8_t *end,
++            uint8_t **outPtr,uint32_t *outLen)
++{
++    uint8_t *realstart=start;
++    while(start+5&lt;end) // NALU starts with 4 bytes size + (1 bytes nalu id, size-1 other payload)
++    {
++        uint32_t len=readBE32(start);
++        uint8_t  n=start[4];
++        if(len+start+4&gt;end)
++        {
++            ADM_warning(&quot;Nal size too big (%d)\n&quot;,len);
++            return false;
++        }
++        aprintf(&quot;Looking for %x found %x, size=%d at offset 0x%x\n&quot;,nalu,n,len,start-realstart);
++        if((n&amp;0x1f)==nalu)
++        {
++            *outPtr=start+5;
++            *outLen=len-1;
++            return true;
++        }
++        start+=4+len;
++    }
++    return false;
++}
++
++/**
++    \fn ctor
++*/
++ADM_videoStreamCopyFromAnnexB::ADM_videoStreamCopyFromAnnexB(uint64_t startTime,uint64_t endTime):
++      ADM_videoStreamCopy(startTime,endTime)  
++{
++    ADM_info(&quot;AnnexB to iso filter\n&quot;);
++    myBitstream=new ADMBitstream(ADM_COPY_FROM_ANNEX_B_SIZE);
++    myBitstream-&gt;data=buffer;
++
++    myExtra=NULL;
++    myExtraLen=0;
++    // Read First frame, it contains PPS &amp; SPS
++    // Built avc-like atom from it.
++    if(true==ADM_videoStreamCopy::getPacket(myBitstream))
++    {
++        uint8_t *tmp=new uint8_t[myBitstream-&gt;len*2];
++        
++        int size=convertFromAnnexB(myBitstream-&gt;data,myBitstream-&gt;len,tmp+10,myBitstream-&gt;len*2-10);
++        // search sps
++        uint8_t *spsStart,*ppsStart;
++        uint32_t spsLen=0, ppsLen=0;
++
++        if(false==findNalu(NAL_SPS,tmp+10,tmp+size-10,&amp;spsStart,&amp;spsLen))
++        {
++            ADM_error(&quot;Cannot find SPS&quot;);
++            
++        }
++        if(false==findNalu(NAL_PPS,tmp+10,tmp+size-10,&amp;ppsStart,&amp;ppsLen))
++        {
++            ADM_error(&quot;Cannot find PPS&quot;);
++            
++        }
++        if(spsLen &amp;&amp; ppsLen)
++        {
++            ADM_info(&quot;Copy from annexB: Found sps=%d, pps=%d.\n&quot;,(int)spsLen,(int)ppsLen);
++            // Build extraData
++            myExtraLen=5+1+2+spsLen+1+2+ppsLen;
++            myExtra=new uint8_t[myExtraLen];
++            uint8_t *ptr=myExtra;
++            *ptr++=1;
++            *ptr++=0x64;
++            *ptr++=0x00;
++            *ptr++=0x33;
++            *ptr++=0xff;
++
++            *ptr++=0xe1;
++            *ptr++=spsLen&gt;&gt;8;
++            *ptr++=spsLen&amp;0xff;
++
++            memcpy(ptr,spsStart,spsLen);
++            ptr+=spsLen;
++
++            *ptr++=0x1;
++            *ptr++=ppsLen&gt;&gt;8;
++            *ptr++=ppsLen&amp;0xff;
++
++            memcpy(ptr,ppsStart,ppsLen);
++            ptr+=ppsLen;
++
++            ADM_info(&quot;generated %d bytes of extradata.\n&quot;,(int)myExtraLen);
++            mixDump(myExtra, myExtraLen);
++        }
++        delete [] tmp;
++
++    }else ADM_warning(&quot;Cannot read first frame to get PPS and SPS&quot;);
++    rewind();
++
++}
++/**
++
++    \fn dtor
++
++*/
++
++ADM_videoStreamCopyFromAnnexB::~ADM_videoStreamCopyFromAnnexB()
++{
++    ADM_info(&quot;Destroying AnnexB to iso filtet\n&quot;);
++    delete myBitstream;
++    myBitstream=NULL;
++}
++/**
++    \fn unescape
++    \brief should be moved to coreUtils
++*/
++static uint32_t unescape(uint8_t *in, uint32_t len,uint8_t *out)
++{
++  uint32_t outlen=0;
++  uint8_t *tail=in+len;
++    if(len&lt;3) return 0;
++    while(in&lt;tail-3)
++    {
++      if(!in[0]  &amp;&amp; !in[1] &amp;&amp; in[2]==3)
++      {
++        out[0]=0;
++        out[1]=0;
++        out+=2;
++        outlen+=2;
++        in+=3;
++        continue;
++      }
++      *out++=*in++;
++      outlen++;
++    }
++    // copy last bytes
++    uint32_t left=tail-in;
++    memcpy(out,in,left);
++    outlen+=left;
++    return outlen;
++ ;
++
++}
++/**
++    \fn convertFromAnnexB   
++    \brief convert annexB startcode (00 00 00 0 xx) to NALU
++*/
++int ADM_videoStreamCopyFromAnnexB::convertFromAnnexB(uint8_t *inData,uint32_t inSize,
++                                                      uint8_t *outData,uint32_t outMaxSize)
++{
++    uint8_t *tail=inData+inSize;
++    uint8_t *head=inData;
++    uint8_t *tgt=outData;
++    uint8_t startCode;
++    uint32_t offset;
++    bool first=true;
++    uint8_t oldStartCode;
++    while(head&lt;tail)
++    {
++        if(false==ADM_findH264StartCode(head,tail,&amp;startCode,&amp;offset))
++            break;
++        if(true==first)
++        {
++            oldStartCode=startCode;
++            head+=offset; // First startcode
++            first=false;
++            continue;
++        }
++        uint32_t toEscape=offset-5; // ignore startcode
++        uint32_t nalHeaderSize=4;
++        uint32_t nalSize=unescape(head,toEscape,tgt+nalHeaderSize+1);
++        head+=offset;
++        writeBE32(tgt,1+nalSize);
++        aprintf(&quot;%x , %d -&gt; %d at offset 0x%x\n&quot;,oldStartCode,toEscape,nalSize,tgt-outData);
++        tgt[nalHeaderSize]=oldStartCode;
++        tgt+=nalSize+1+nalHeaderSize;
++        
++
++        oldStartCode=startCode;
++    }
++    uint32_t toEscape=tail-head;
++    uint32_t nalHeaderSize=4;
++    uint32_t nalSize=unescape(head,toEscape,tgt+nalHeaderSize+1);
++    writeBE32(tgt,1+nalSize);
++    aprintf(&quot;%x , %d -&gt; %d at offset 0x%x\n&quot;,oldStartCode,toEscape,nalSize,tgt-outData);
++    tgt[nalHeaderSize]=oldStartCode;
++    tgt+=1+nalSize+nalHeaderSize;
++    int outputSize=tgt-outData;
++    ADM_assert(outputSize&lt;outMaxSize);
++    return outputSize;
++}
++/**
++    \fn getPacket
++*/
++
++bool    ADM_videoStreamCopyFromAnnexB::getPacket(ADMBitstream *out)
++{
++    if(false==ADM_videoStreamCopy::getPacket(myBitstream)) return false;
++    aprintf(&quot;---------------\n&quot;);
++    int size=convertFromAnnexB(myBitstream-&gt;data,myBitstream-&gt;len,out-&gt;data,out-&gt;bufferSize);
++    out-&gt;len=size;
++    out-&gt;dts=myBitstream-&gt;dts;
++    out-&gt;pts=myBitstream-&gt;pts;
++    out-&gt;flags=myBitstream-&gt;flags;
++    return true;
++}
++/**
++
++*/
++bool    ADM_videoStreamCopyFromAnnexB::getExtraData(uint32_t *extraLen, uint8_t **extraData) 
++{
++    *extraData=myExtra;
++    *extraLen=myExtraLen;
++    return 0;
++}
++// EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/CMakeLists.txt	2010-09-25 15:02:31 UTC (rev 6652)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/CMakeLists.txt	2010-09-25 15:02:32 UTC (rev 6653)
+@@ -2,6 +2,7 @@
+ ADM_videoCopy.cpp
+ ADM_videoProcess.cpp
+ ADM_createStreams.cpp
++ADM_videoCopyFromAnnexB.cpp
+ )
+ include_directories(../include)
+ ADD_LIBRARY(ADM_muxerGate6 STATIC ${ADM_muxerGate_SRCS})
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003836.html">[Avidemux-svn-commit] r6652 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio:	include src
+</A></li>
+	<LI>Next message: <A HREF="003838.html">[Avidemux-svn-commit] r6654 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3837">[ date ]</a>
+              <a href="thread.html#3837">[ thread ]</a>
+              <a href="subject.html#3837">[ subject ]</a>
+              <a href="author.html#3837">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,435 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5882 - in	branches/avidemux_2.6_branch_mean/avidemux_core:	ADM_coreUtils/src ADM_coreVideoEncoder/include	ADM_coreVideoEncoder/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5882%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core%3A%0A%09ADM_coreUtils/src%20ADM_coreVideoEncoder/include%0A%09ADM_coreVideoEncoder/src&In-Reply-To=%3C201001301311.o0UDBpFB000585%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003087.html">
+   <LINK REL="Next"  HREF="003088.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5882 - in	branches/avidemux_2.6_branch_mean/avidemux_core:	ADM_coreUtils/src ADM_coreVideoEncoder/include	ADM_coreVideoEncoder/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5882%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core%3A%0A%09ADM_coreUtils/src%20ADM_coreVideoEncoder/include%0A%09ADM_coreVideoEncoder/src&In-Reply-To=%3C201001301311.o0UDBpFB000585%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5882 - in	branches/avidemux_2.6_branch_mean/avidemux_core:	ADM_coreUtils/src ADM_coreVideoEncoder/include	ADM_coreVideoEncoder/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jan 30 14:11:51 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003087.html">[Avidemux-svn-commit] r5881 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_core/ADM_coreVideoEncoder/include	avidemux_core/ADM_coreVideoEncoder/src	avidemux_plugins/ADM_videoEncoder/ffFlv1	avidemux_plugins/ADM_videoEncoder/ffMpeg4	avidemux_plugins/ADM_videoEncoder/ffMsMpeg4 cmake
+</A></li>
+        <LI>Next message: <A HREF="003088.html">[Avidemux-svn-commit] r5883 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder:	ffFlv1 ffMsMpeg4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3086">[ date ]</a>
+              <a href="thread.html#3086">[ thread ]</a>
+              <a href="subject.html#3086">[ subject ]</a>
+              <a href="author.html#3086">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-01-30 14:11:50 +0100 (Sat, 30 Jan 2010)
+New Revision: 5882
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/FFcodecContext_desc.cpp
+Removed:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/FFcodecContext_desc.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_paramList.cpp
+Log:
+[paramList] Also declare COMPRES_PARAM as a parameter in configuration
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_paramList.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_paramList.cpp	2010-01-30 13:11:48 UTC (rev 5881)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_paramList.cpp	2010-01-30 13:11:50 UTC (rev 5882)
+@@ -1,8 +1,12 @@
+ /** *************************************************************************
+     \file ADM_paramList
+     \brief Handle Param list 
+-                      
+-    copyright            : (C) 2009 by mean
++    \author  mean (C) 2009/2010   <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>                
++    Usually only basic types should be handled by this
++    We make 2 exceptions though :
++        * lavcodec settings as we use a lot of derivative class. It is to simplify derivative configuration
++        * same for COMPRESS_PARAMS, since is used by all video encoder, it is &quot;smart&quot; to make it a dedicated 
++                    configuration type.
+     
+  ***************************************************************************/
+ 
+@@ -15,24 +19,178 @@
+  ***************************************************************************/
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_paramList.h&quot;
++#include &lt;stddef.h&gt;
++#include &quot;ADM_encoderConf.h&quot;
+ #include &quot;ADM_coreVideoEncoderFFmpeg_param.h&quot;
++#include &quot;../src/FFcodecContext_desc.cpp&quot;
++#define MAX_LAV_STRING 1024
++/**
++    \fn loadCoupleFromString
++*/
++static bool loadCoupleFromString(const char *str,const ADM_paramList *tmpl,void *data)
++{
++  // Split str to couples...
++    uint32_t nb=0;
++    const char *s=str;
++    char tmp[256];
++    while(*s)
++    {
++        if(*s==':') nb++;
++        s++;
++    }
+ 
++    int p=0;
++    const ADM_paramList *l=tmpl;
++    while(l-&gt;paramName)
++    {
++        p++;
++        l++;
++    };
++    if(nb!=p)
++    {
++        ADM_error(&quot;Mistmatch in the number of parameters (%d/%d)\n&quot;,(int)nb,(int)p);
++        return false;
++    }
++    CONFcouple *couples=new CONFcouple(nb);
++    s=str;
++    const char *n;
++    for(int i=0;i&lt;nb;i++)
++    {
++        if(*s!=':')
++        {
++            ADM_error(&quot;Bad split :%s insteald of ':'\n&quot;,s);
++            delete [] couples;
++            return false;
++        }
++        n=s+1;
++        while(*n!=':') n++;
++        n--;
++        memcpy(tmp,s+1,n-s);
++        tmp[n-s]=0;       
++        s=n+1;
++       // printf(&quot;tmp:%s\n&quot;,tmp);
++        // Now we have aaa=bbb in tmp, split it
++        char *equal,*tail;
++        equal=tmp;
++        tail=tmp+strlen(tmp);
++        while(*equal!='=' &amp;&amp; equal&lt;tail)
++        {
++            equal++;
++        }
++        if(*equal!='=')
++        {
++            ADM_error(&quot;Malformed string :%s\n&quot;,tmp);
++            delete [] couples;
++            return false;
++        }
++        *equal=0;
++        couples-&gt;setInternalName(tmp,equal+1);
++       // printf(&quot;%s-&gt;%s\n&quot;,tmp,equal+1);
++    }
++    // Now build structure from couple
++    bool r=ADM_paramLoad(couples, tmpl,data);
++    delete  couples;
++    return r;
++}
++
++
++/**
++    \fn lavReadFromString
++*/
+ static bool lavReadFromString(FFcodecContext *ctx,const char *str)
+ {
+-    printf(&quot;String:%s\n&quot;,str);
+-    return true;
++   return  loadCoupleFromString(str,FFcodecContext_param,ctx);
+ }
++/**
++    \fn lavWriteToString
++*/
+ static bool lavWriteToString(FFcodecContext *ctx,char **str)
+ {
+-    *str=ADM_strdup(&quot;foobar&quot;);
++    CONFcouple *couples=NULL;
++    if(false==ADM_paramSave(&amp;couples, FFcodecContext_param,ctx))
++    {
++        ADM_error(&quot;ADM_paramSave failed (lavContext)\n&quot;);
++        return false;
++    }
++    // Iterate through ctx and save..
++    char *s=(char *)ADM_alloc(MAX_LAV_STRING);
++    char tmp[256];
++    *s=0;
++    *str=s;
++    uint32_t nb=couples-&gt;getSize();
++    for(int i=0;i&lt;nb;i++)
++    {
++        char *name,*value;
++        couples-&gt;getInternalName(i,&amp;name,&amp;value);
++        sprintf(tmp,&quot;:%s=%s&quot;,name,value);
++        ADM_assert(strlen(tmp)&lt;255);
++        strcat(s,tmp);
++        ADM_assert(strlen(s)&lt;MAX_LAV_STRING);
++    }
++    delete couples;
+     return true;
+ }
+-
+ /**
++    \fn compressReadFromString
++*/
++static bool compressReadFromString(COMPRES_PARAMS *params,const char *str)
++{
++    char tmp[256];
++    if(!strcasecmp(str,&quot;SAME&quot;))
++    {
++        params-&gt;mode=COMPRESS_SAME;
++        return true;
++    }
++    // all other are in the form a=b
++    strcpy(tmp,str);
++    char *s=tmp;
++    while(*s)
++    {
++        if(*s=='=') break;
++        s++;
++    }
++    if(!(*s))
++    {
++        ADM_error(&quot;Malformed compressVideo line (%s)\n&quot;,str);
++        return false;
++    }
++    *s=0;
++    uint32_t val=atoi(s+1);
++    if(!strcasecmp(tmp,&quot;CQ&quot;))    {params-&gt;mode=COMPRESS_CQ;params-&gt;qz=val;return true;}
++    if(!strcasecmp(tmp,&quot;CBR&quot;))   {params-&gt;mode=COMPRESS_CBR;params-&gt;bitrate=val;return true;}
++    if(!strcasecmp(tmp,&quot;2PASS&quot;)) {params-&gt;mode=COMPRESS_2PASS;params-&gt;finalsize=val;return true;}
++    if(!strcasecmp(tmp,&quot;2PASSBITRATE&quot;)) {params-&gt;mode=COMPRESS_2PASS_BITRATE;params-&gt;avg_bitrate=val;return true;}
++    if(!strcasecmp(tmp,&quot;AQ&quot;)) {params-&gt;mode=COMPRESS_AQ;params-&gt;qz=val;return true;}
++    ADM_error(&quot;Unknown mode :%s\n&quot;,tmp);
++    return false;
++    
++}
++/**
++    \fn compressWriteToString
++*/
++static bool compressWriteToString(COMPRES_PARAMS *params,  char **str)
++{
++    char tmp[256];
++    switch(params-&gt;mode)
++    {
++        case COMPRESS_CQ:    sprintf(tmp,&quot;CQ=%&quot;LU,params-&gt;qz);break;
++        case COMPRESS_CBR:   sprintf(tmp,&quot;CBR=%&quot;LU,params-&gt;bitrate);break;
++        case COMPRESS_2PASS: sprintf(tmp,&quot;2PASS=%&quot;LU,params-&gt;finalsize);break;
++        case COMPRESS_SAME:  sprintf(tmp,&quot;SAME&quot;);break;
++        case COMPRESS_2PASS_BITRATE: sprintf(tmp,&quot;2PASSBITRATE=%&quot;LU,params-&gt;avg_bitrate);break;
++        case COMPRESS_AQ:    sprintf(tmp,&quot;AQ=%&quot;LU,params-&gt;qz);break;
++        default:
++            ADM_error(&quot;Unknown compressin mode \n&quot;);
++            return false;
++    }
++    *str=ADM_strdup(tmp);
++    return true;
++}
++/**
+     \fn ADM_paramValidate
+     \brief Check the confcouples match the param list
+ */
+-bool ADM_paramValidate(CONFcouple *couples, const ADM_paramList *params)
++bool ADM_paramValidate(CONFcouple *couples, const    ADM_paramList *params)
+ {
+     int n=couples-&gt;getSize();
+     int found=0;
+@@ -83,6 +241,23 @@
+            SWAL(ADM_param_int32_t, int32_t, i32,Int32)
+            SWAL(ADM_param_float,   float ,  f,Float)
+            SWAL(ADM_param_bool,    bool ,   b,Bool)
++           case ADM_param_video_encode:
++                        {
++                        char *lavString;
++                        if(false==couples-&gt;readAsString(name,&amp;lavString))
++                        {
++                                ADM_error(&quot;Error reading video_encode conf&quot;);
++                                return false;
++                        }
++                        bool r=compressReadFromString((COMPRES_PARAMS *)(address+params[i].offset),lavString);
++                        ADM_dezalloc(lavString);
++                        if(false==r)
++                            {
++                                    ADM_error(&quot;Error reading codecParam string&quot;);
++                                    return false;
++                            }
++                        }
++                        break;
+            case ADM_param_lavcodec_context:
+                         {
+                         char *lavString;
+@@ -108,7 +283,7 @@
+ }
+ /**
+     \fn ADM_paramLoad
+-    \brief Load a structure from a list of confCouple
++    \brief Save a structure to a list of confCouple
+ */
+ bool ADM_paramSave(CONFcouple **couples, const ADM_paramList *params,void *s)
+ {
+@@ -138,6 +313,23 @@
+            SWAL(ADM_param_int32_t, int32_t, i32,Int32)
+            SWAL(ADM_param_float,   float ,  f,Float)
+            SWAL(ADM_param_bool,    bool ,   b,Bool)
++            case ADM_param_video_encode:
++              {
++                        char *lavString;
++                        if(false==compressWriteToString((COMPRES_PARAMS *)(address+params[i].offset),&amp;lavString))
++                        {
++                                ADM_error(&quot;Error writing paramvideo string&quot;);
++                                return false;
++                        }
++                        bool r=c-&gt;setInternalName(name,lavString);
++                        ADM_dezalloc(lavString);
++                        if(false==r)
++                        {
++                                ADM_error(&quot;Error writing paramvideo conf&quot;);
++                                return false;
++                        }
++              }
++                break;
+            case ADM_param_lavcodec_context:
+               {
+                         char *lavString;
+
+Deleted: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/FFcodecContext_desc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/FFcodecContext_desc.cpp	2010-01-30 13:11:48 UTC (rev 5881)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/FFcodecContext_desc.cpp	2010-01-30 13:11:50 UTC (rev 5882)
+@@ -1,44 +0,0 @@
+-// Automatically generated, do not edit!
+-const ADM_paramList FFcodecContext_param[]={
+- {&quot;version&quot;,offsetof( FFcodecContext,version),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;MultiThreaded&quot;,offsetof( FFcodecContext,MultiThreaded),&quot;bool&quot;,ADM_param_bool},
+- {&quot;me_method&quot;,offsetof( FFcodecContext,me_method),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;_GMC&quot;,offsetof( FFcodecContext,_GMC),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;_4MV&quot;,offsetof( FFcodecContext,_4MV),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;_QPEL&quot;,offsetof( FFcodecContext,_QPEL),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;_TRELLIS_QUANT&quot;,offsetof( FFcodecContext,_TRELLIS_QUANT),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;qmin&quot;,offsetof( FFcodecContext,qmin),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;qmax&quot;,offsetof( FFcodecContext,qmax),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;max_qdiff&quot;,offsetof( FFcodecContext,max_qdiff),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;max_b_frames&quot;,offsetof( FFcodecContext,max_b_frames),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;mpeg_quant&quot;,offsetof( FFcodecContext,mpeg_quant),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;is_luma_elim_threshold&quot;,offsetof( FFcodecContext,is_luma_elim_threshold),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;luma_elim_threshold&quot;,offsetof( FFcodecContext,luma_elim_threshold),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;is_chroma_elim_threshold&quot;,offsetof( FFcodecContext,is_chroma_elim_threshold),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;chroma_elim_threshold&quot;,offsetof( FFcodecContext,chroma_elim_threshold),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;lumi_masking&quot;,offsetof( FFcodecContext,lumi_masking),&quot;float&quot;,ADM_param_float},
+- {&quot;is_lumi_masking&quot;,offsetof( FFcodecContext,is_lumi_masking),&quot;int32_t&quot;,ADM_param_int32_t},
+- {&quot;dark_masking&quot;,offsetof( FFcodecContext,dark_masking),&quot;float&quot;,ADM_param_float},
+- {&quot;is_dark_masking&quot;,offsetof( FFcodecContext,is_dark_masking),&quot;int32_t&quot;,ADM_param_int32_t},
+- {&quot;qcompress&quot;,offsetof( FFcodecContext,qcompress),&quot;float&quot;,ADM_param_float},
+- {&quot;qblur&quot;,offsetof( FFcodecContext,qblur),&quot;float&quot;,ADM_param_float},
+- {&quot;minBitrate&quot;,offsetof( FFcodecContext,minBitrate),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;maxBitrate&quot;,offsetof( FFcodecContext,maxBitrate),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;user_matrix&quot;,offsetof( FFcodecContext,user_matrix),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;gop_size&quot;,offsetof( FFcodecContext,gop_size),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;interlaced&quot;,offsetof( FFcodecContext,interlaced),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;bff&quot;,offsetof( FFcodecContext,bff),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;widescreen&quot;,offsetof( FFcodecContext,widescreen),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;mb_eval&quot;,offsetof( FFcodecContext,mb_eval),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;vratetol&quot;,offsetof( FFcodecContext,vratetol),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;is_temporal_cplx_masking&quot;,offsetof( FFcodecContext,is_temporal_cplx_masking),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;temporal_cplx_masking&quot;,offsetof( FFcodecContext,temporal_cplx_masking),&quot;float&quot;,ADM_param_float},
+- {&quot;is_spatial_cplx_masking&quot;,offsetof( FFcodecContext,is_spatial_cplx_masking),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;spatial_cplx_masking&quot;,offsetof( FFcodecContext,spatial_cplx_masking),&quot;float&quot;,ADM_param_float},
+- {&quot;_NORMALIZE_AQP&quot;,offsetof( FFcodecContext,_NORMALIZE_AQP),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;use_xvid_ratecontrol&quot;,offsetof( FFcodecContext,use_xvid_ratecontrol),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;bufferSize&quot;,offsetof( FFcodecContext,bufferSize),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;override_ratecontrol&quot;,offsetof( FFcodecContext,override_ratecontrol),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;dummy&quot;,offsetof( FFcodecContext,dummy),&quot;uint32_t&quot;,ADM_param_uint32_t},
+-{NULL,0,NULL}
+-};
+
+Copied: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/FFcodecContext_desc.cpp (from rev 5881, branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/FFcodecContext_desc.cpp)
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/FFcodecContext_desc.cpp	2010-01-30 13:11:48 UTC (rev 5881)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/FFcodecContext_desc.cpp	2010-01-30 13:11:50 UTC (rev 5882)
+@@ -0,0 +1,44 @@
++// Automatically generated, do not edit!
++const ADM_paramList FFcodecContext_param[]={
++ {&quot;version&quot;,offsetof( FFcodecContext,version),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;MultiThreaded&quot;,offsetof( FFcodecContext,MultiThreaded),&quot;bool&quot;,ADM_param_bool},
++ {&quot;me_method&quot;,offsetof( FFcodecContext,me_method),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;_GMC&quot;,offsetof( FFcodecContext,_GMC),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;_4MV&quot;,offsetof( FFcodecContext,_4MV),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;_QPEL&quot;,offsetof( FFcodecContext,_QPEL),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;_TRELLIS_QUANT&quot;,offsetof( FFcodecContext,_TRELLIS_QUANT),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;qmin&quot;,offsetof( FFcodecContext,qmin),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;qmax&quot;,offsetof( FFcodecContext,qmax),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;max_qdiff&quot;,offsetof( FFcodecContext,max_qdiff),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;max_b_frames&quot;,offsetof( FFcodecContext,max_b_frames),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;mpeg_quant&quot;,offsetof( FFcodecContext,mpeg_quant),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;is_luma_elim_threshold&quot;,offsetof( FFcodecContext,is_luma_elim_threshold),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;luma_elim_threshold&quot;,offsetof( FFcodecContext,luma_elim_threshold),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;is_chroma_elim_threshold&quot;,offsetof( FFcodecContext,is_chroma_elim_threshold),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;chroma_elim_threshold&quot;,offsetof( FFcodecContext,chroma_elim_threshold),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;lumi_masking&quot;,offsetof( FFcodecContext,lumi_masking),&quot;float&quot;,ADM_param_float},
++ {&quot;is_lumi_masking&quot;,offsetof( FFcodecContext,is_lumi_masking),&quot;int32_t&quot;,ADM_param_int32_t},
++ {&quot;dark_masking&quot;,offsetof( FFcodecContext,dark_masking),&quot;float&quot;,ADM_param_float},
++ {&quot;is_dark_masking&quot;,offsetof( FFcodecContext,is_dark_masking),&quot;int32_t&quot;,ADM_param_int32_t},
++ {&quot;qcompress&quot;,offsetof( FFcodecContext,qcompress),&quot;float&quot;,ADM_param_float},
++ {&quot;qblur&quot;,offsetof( FFcodecContext,qblur),&quot;float&quot;,ADM_param_float},
++ {&quot;minBitrate&quot;,offsetof( FFcodecContext,minBitrate),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;maxBitrate&quot;,offsetof( FFcodecContext,maxBitrate),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;user_matrix&quot;,offsetof( FFcodecContext,user_matrix),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;gop_size&quot;,offsetof( FFcodecContext,gop_size),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;interlaced&quot;,offsetof( FFcodecContext,interlaced),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;bff&quot;,offsetof( FFcodecContext,bff),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;widescreen&quot;,offsetof( FFcodecContext,widescreen),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;mb_eval&quot;,offsetof( FFcodecContext,mb_eval),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;vratetol&quot;,offsetof( FFcodecContext,vratetol),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;is_temporal_cplx_masking&quot;,offsetof( FFcodecContext,is_temporal_cplx_masking),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;temporal_cplx_masking&quot;,offsetof( FFcodecContext,temporal_cplx_masking),&quot;float&quot;,ADM_param_float},
++ {&quot;is_spatial_cplx_masking&quot;,offsetof( FFcodecContext,is_spatial_cplx_masking),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;spatial_cplx_masking&quot;,offsetof( FFcodecContext,spatial_cplx_masking),&quot;float&quot;,ADM_param_float},
++ {&quot;_NORMALIZE_AQP&quot;,offsetof( FFcodecContext,_NORMALIZE_AQP),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;use_xvid_ratecontrol&quot;,offsetof( FFcodecContext,use_xvid_ratecontrol),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;bufferSize&quot;,offsetof( FFcodecContext,bufferSize),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;override_ratecontrol&quot;,offsetof( FFcodecContext,override_ratecontrol),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;dummy&quot;,offsetof( FFcodecContext,dummy),&quot;uint32_t&quot;,ADM_param_uint32_t},
++{NULL,0,NULL}
++};
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003087.html">[Avidemux-svn-commit] r5881 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_core/ADM_coreVideoEncoder/include	avidemux_core/ADM_coreVideoEncoder/src	avidemux_plugins/ADM_videoEncoder/ffFlv1	avidemux_plugins/ADM_videoEncoder/ffMpeg4	avidemux_plugins/ADM_videoEncoder/ffMsMpeg4 cmake
+</A></li>
+	<LI>Next message: <A HREF="003088.html">[Avidemux-svn-commit] r5883 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder:	ffFlv1 ffMsMpeg4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3086">[ date ]</a>
+              <a href="thread.html#3086">[ thread ]</a>
+              <a href="subject.html#3086">[ subject ]</a>
+              <a href="author.html#3086">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

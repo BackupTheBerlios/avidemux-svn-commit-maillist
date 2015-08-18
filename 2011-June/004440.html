@@ -1,0 +1,132 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7286 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7286%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C20110615182621.57BC2480D95%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004439.html">
+   <LINK REL="Next"  HREF="004441.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7286 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7286%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C20110615182621.57BC2480D95%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7286 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Jun 15 20:26:21 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004439.html">[Avidemux-svn-commit] r7285 -	branches/avidemux_2.6_branch_mean/cmake_compile_check
+</A></li>
+        <LI>Next message: <A HREF="004441.html">[Avidemux-svn-commit] r7287 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4440">[ date ]</a>
+              <a href="thread.html#4440">[ thread ]</a>
+              <a href="subject.html#4440">[ subject ]</a>
+              <a href="author.html#4440">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-06-15 20:26:20 +0200 (Wed, 15 Jun 2011)
+New Revision: 7286
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp
+Log:
+[editor] Dont allocate huge chunk on the heap + fine tune the not-cut-on-keyframe code. Still not reliable
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp	2011-06-15 06:23:28 UTC (rev 7285)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp	2011-06-15 18:26:20 UTC (rev 7286)
+@@ -39,7 +39,7 @@
+     int nbSeg=_segments.getNbSegments();
+ 
+     ADMCompressedImage img;
+-    uint8_t buffer[1920*1080*3];
++    uint8_t *buffer=new uint8_t[1920*1080*3];
+     img.data=buffer;
+     ADM_info(&quot;Checking cuts start on keyframe..\n&quot;);
+     for(int i=0;i&lt;nbSeg;i++)
+@@ -55,21 +55,40 @@
+         }
+         if(false==demuxer-&gt;getFrame (vid-&gt;lastSentFrame,&amp;img))
+         {
++            ADM_info(&quot;Cannot get 1st frame of segment %d\n&quot;,i);
+             fail=true;
+             break;
+         }
+-        if(img.flags &amp; AVI_KEY_FRAME)
++        if(!img.flags &amp; AVI_KEY_FRAME)
+         {
+-            ADM_info(&quot;Segment %d starts on a keyframe\n&quot;,i);
+-        }else   
+-        {
+             ADM_warning(&quot;Segment %d does not start on a keyframe (%s)\n&quot;,i,ADM_us2plain(img.demuxerPts));
+             fail=true;
+-             break;
++            break;
+         }
++        // After a seg switch we are at the keyframe before or equal to where we want to go
++        // if the dts do not match, it means we went back too much
++        // When re-encoding, it's not a problem, it is when copying.
++        ADM_info(&quot;seg:%d refDTS=%&quot;LLU&quot;\n&quot;,seg-&gt;_reference,seg-&gt;_refStartDts);
++        ADM_info(&quot;seg:%d imgDTS=%&quot;LLU&quot;\n&quot;,seg-&gt;_reference,img.demuxerDts);
++        if(!seg-&gt;_refStartDts &amp;&amp; !seg-&gt;_reference)
++        {
++            ADM_info(&quot;Ignoring first seg (unreliable DTS)\n&quot;);
++            
++        }else
++        if(img.demuxerDts!=ADM_NO_PTS &amp;&amp; seg-&gt;_refStartDts!=ADM_NO_PTS &amp;&amp; 
++            img.demuxerDts!=seg-&gt;_refStartDts)
++        {
++            ADM_warning(&quot;Segment %d does not start on a known DTS (%s)\n&quot;,i,ADM_us2plain(img.demuxerPts));
++            ADM_warning(&quot;expected (%s)\n&quot;,ADM_us2plain(seg-&gt;_refStartDts));
++            fail=true;
++            break;
++        }
++        ADM_info(&quot;Segment %d ok\n&quot;,i);
+     }   
+-
+-    return fail;
++    delete [] buffer;
++    buffer=NULL;
++    if(fail) return false;
++    return true;
+ }
+ 
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004439.html">[Avidemux-svn-commit] r7285 -	branches/avidemux_2.6_branch_mean/cmake_compile_check
+</A></li>
+	<LI>Next message: <A HREF="004441.html">[Avidemux-svn-commit] r7287 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4440">[ date ]</a>
+              <a href="thread.html#4440">[ thread ]</a>
+              <a href="subject.html#4440">[ subject ]</a>
+              <a href="author.html#4440">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

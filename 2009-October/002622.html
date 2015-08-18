@@ -1,0 +1,116 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5411 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5411%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame&In-Reply-To=%3C200910241558.n9OFwm2J029911%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002621.html">
+   <LINK REL="Next"  HREF="002623.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5411 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5411%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame&In-Reply-To=%3C200910241558.n9OFwm2J029911%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5411 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Oct 24 17:58:48 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002621.html">[Avidemux-svn-commit] r5410 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_audiofilter ADM_coreAudio/include
+</A></li>
+        <LI>Next message: <A HREF="002623.html">[Avidemux-svn-commit] r5412 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2622">[ date ]</a>
+              <a href="thread.html#2622">[ thread ]</a>
+              <a href="subject.html#2622">[ subject ]</a>
+              <a href="author.html#2622">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-10-24 17:58:45 +0200 (Sat, 24 Oct 2009)
+New Revision: 5411
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame/audioencoder_lame.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame/audioencoder_lame.h
+Log:
+[Lame] Properly export lame VBR settings, ref #45
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame/audioencoder_lame.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame/audioencoder_lame.cpp	2009-10-24 15:58:43 UTC (rev 5410)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame/audioencoder_lame.cpp	2009-10-24 15:58:45 UTC (rev 5411)
+@@ -172,11 +172,15 @@
+     {
+     default:
+     case ADM_LAME_PRESET_CBR:
++          lame_set_VBR(MYFLAGS, vbr_off);
+       break;
+     case ADM_LAME_PRESET_ABR:
+ 
+-      lame_set_preset (MYFLAGS, lameConf-&gt;bitrate);
++     // lame_set_preset (MYFLAGS, lameConf-&gt;bitrate);
+       _wavheader-&gt;blockalign = BLOCK_SIZE;
++       lame_set_VBR(MYFLAGS, vbr_abr);
++       lame_set_VBR_mean_bitrate_kbps(MYFLAGS, lameConf-&gt;bitrate);
++
+       break;
+     case ADM_LAME_PRESET_EXTREME:
+       _wavheader-&gt;blockalign = BLOCK_SIZE;
+@@ -197,7 +201,7 @@
+     @return 1 if the stream is vbr, 0 is cbr
+ 
+ */
+-uint8_t AUDMEncoder_Lame::isVBR (void)
++bool AUDMEncoder_Lame::isVBR (void)
+ {
+   if (myLameParam.preset == ADM_LAME_PRESET_CBR)
+     return 0;
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame/audioencoder_lame.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame/audioencoder_lame.h	2009-10-24 15:58:43 UTC (rev 5410)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame/audioencoder_lame.h	2009-10-24 15:58:45 UTC (rev 5411)
+@@ -27,7 +27,7 @@
+ //            uint8_t     init(ADM_audioEncoderDescriptor *config);
+     virtual             ~AUDMEncoder_Lame();
+                         AUDMEncoder_Lame(AUDMAudioFilter *instream);	
+-            uint8_t	isVBR(void );
++   virtual bool	    isVBR(void );
+             
+    virtual uint8_t	getPacket(uint8_t *dest, uint32_t *len, uint32_t *samples);
+    virtual uint8_t  initialize(void);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002621.html">[Avidemux-svn-commit] r5410 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_audiofilter ADM_coreAudio/include
+</A></li>
+	<LI>Next message: <A HREF="002623.html">[Avidemux-svn-commit] r5412 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2622">[ date ]</a>
+              <a href="thread.html#2622">[ thread ]</a>
+              <a href="subject.html#2622">[ subject ]</a>
+              <a href="author.html#2622">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

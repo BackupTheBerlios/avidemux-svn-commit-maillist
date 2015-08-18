@@ -1,0 +1,246 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5873 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5873%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C201001231930.o0NJUak6020623%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003077.html">
+   <LINK REL="Next"  HREF="003079.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5873 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5873%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C201001231930.o0NJUak6020623%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5873 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jan 23 20:30:36 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003077.html">[Avidemux-svn-commit] r5872 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="003079.html">[Avidemux-svn-commit] r5874 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3078">[ date ]</a>
+              <a href="thread.html#3078">[ thread ]</a>
+              <a href="subject.html#3078">[ subject ]</a>
+              <a href="author.html#3078">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-01-23 20:30:33 +0100 (Sat, 23 Jan 2010)
+New Revision: 5873
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+Log:
+[editor] Cleanup a bit the code for get previous frame
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2010-01-23 19:30:28 UTC (rev 5872)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2010-01-23 19:30:33 UTC (rev 5873)
+@@ -246,7 +246,54 @@
+         ADM_warning(&quot;Cannot get next picture. Last segment\n&quot;);
+         return false;
+ }
++/**
++    \fn decodeTillPicture
++    \brief that one is a bit different compare to goToTime as we
++                dont want to decode the targetPts if it is a keyframe
++                but have the frame before
++*/
++bool ADM_Composer::decodeTillPictureAtPts(uint64_t targetPts,ADMImage *image)
++{
++ // Go to the previous keyframe and decode forward...
++                _SEGMENT *seg=_segments.getSegment(_currentSegment);
++                int ref=seg-&gt;_reference;
+ 
++                uint64_t refTime;
++                if(false==_segments.LinearToRefTime(_currentSegment,targetPts-1,&amp;refTime))
++                {
++                    ADM_warning(&quot;Cannot find ref time\n&quot;);
++                    return false;
++                }
++                uint64_t previousKf;
++                if(false==searchPreviousKeyFrameInRef(ref,refTime,&amp;previousKf))
++                {
++                    ADM_warning(&quot;Cannot find previous keyframe in ref %d, time=%&quot;LLU&quot; \n&quot;,ref,refTime);
++                    return false;
++                }
++                // go to it...
++                if(false==seektoTime(ref,previousKf,false))
++                {
++                    ADM_warning(&quot;Cannot seek to time=%&quot;LLU&quot; \n&quot;,previousKf);
++                    return false;            
++                }
++                // Now forward till we reach out frame
++                while(1)
++                {
++                    if(false==nextPicture(image))
++                    {
++                            ADM_warning(&quot;Error in decoding forward&quot;);
++                            return false;
++                    }
++                    if(image-&gt;Pts==targetPts)
++                            break;
++                }
++                if(image-&gt;Pts!=targetPts)
++                {
++                    ADM_error(&quot;Could not retrieve our own frame at PTS=%&quot;LLU&quot; ms\n&quot;,targetPts/1000);
++                    return false;
++                }
++                return true;
++}
+ /**
+     \fn NextPicture
+     \brief decode &amp; returns the next picture
+@@ -277,7 +324,8 @@
+         ADM_info(&quot;while looking for frame %&quot;LLU&quot;\n&quot;,_currentPts);
+         vid-&gt;_videoCache-&gt;dump();
+         // The previous is not available
+-        // either it is in the same segment but we have decoded later, or it is in the previous segment
++        // either it is in the same segment but we have decoded later in that segment
++        // , or it is in the previous segment
+         // Let's check...
+         if(!_currentPts) return false;
+         uint64_t segTime;
+@@ -287,45 +335,19 @@
+                   ADM_error(&quot;Cannot convert time in samePicture\n&quot;);         
+                   return false;
+             }
+-        
++        // Two possiblities
++        // 1- we are still in the same segment, in that case, we have to go back
++        // and decode forward 
++        // 2- We are at a jum, i.e. what we want is the last image from the previous segment
+         seg=_segments.getSegment(segNo);
+-        int ref=seg-&gt;_reference;
+-
+-        uint64_t refTime;
+-        if(false==_segments.LinearToRefTime(segNo,_currentPts,&amp;refTime))
++        if(segNo==_currentSegment) // Still in the same segment..
+         {
+-            ADM_warning(&quot;Cannot find ref time\n&quot;);
+-            return false;
+-        }
+-        uint64_t previousKf;
+-        if(false==searchPreviousKeyFrameInRef(ref,refTime,&amp;previousKf))
+-        {
+-            ADM_warning(&quot;Cannot find previous keyframe in ref %d, time=%&quot;LLU&quot; \n&quot;,ref,refTime);
+-            return false;
+-        }
+-        // Convert it to linear...
+-        // We are in the right segment..
+-        if(false==seektoTime(ref,previousKf,false))
+-        {
+-            ADM_warning(&quot;Cannot seek to time=%&quot;LLU&quot; \n&quot;,previousKf);
+-            return false;            
+-        }
+-        // Update our _currentSegment
+-        _currentSegment=segNo;
+-        // Now forward till we reach out frame
+-        while(1)
+-        {
+-            if(false==nextPicture(image))
+-            {
+-                    ADM_warning(&quot;Error in decoding forward&quot;);
++                if(false==decodeTillPictureAtPts(targetPts,image))
++                {
++                    ADM_error(&quot;Cannot decode till our current pts\n&quot;);
+                     return false;
+-            }
+-            if(image-&gt;Pts==targetPts)
+-            {
+-                ADM_info(&quot;Decoding forward, we have our image, let's take its predecessor\n&quot;);
+-                refPts=targetPts-seg-&gt;_startTimeUs+seg-&gt;_refStartTimeUs; // time in the ref video
++                }
+                 cached=vid-&gt;_videoCache-&gt;getBefore(refPts);
+-               
+                 if(cached)
+                 {
+                     if(cached-&gt;Pts&gt;=seg-&gt;_refStartTimeUs)
+@@ -336,11 +358,16 @@
+                         SET_CURRENT_PTS(image-&gt;Pts);
+                         return true;
+                     }
++                    ADM_warning(&quot;The image found is before refStartTime ???\n&quot;);
+                 }
+-                ADM_error(&quot;Find our frame and its predecessor, but it is out of range\n&quot;);
++                ADM_error(&quot;Find our frame and its predecessor (%&quot;LLU&quot;), but it is out of range\n&quot;,refPts);
++                vid-&gt;_videoCache-&gt;dump();
+                 return false;
+-            }
+         }
++        ADM_assert(segNo+1==_currentSegment);
++        // it is basically the same as above except the exit condition is that the frame is out of reach
++        ADM_error(&quot;Searching across segment is not implemented\n&quot;);
++       
+         return false;
+ }
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2010-01-23 19:30:28 UTC (rev 5872)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2010-01-23 19:30:33 UTC (rev 5873)
+@@ -566,9 +566,7 @@
+ */
+ uint64_t    ADM_Composer::getCurrentFramePts(void)
+ {
+-    _SEGMENT *seg=_segments.getSegment(_currentSegment);
+-    _VIDEOS *vid=_segments.getRefVideo(seg-&gt;_reference);
+-    return vid-&gt;lastDecodedPts;
++   return _currentPts;
+ }
+ /**
+     \fn remove
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2010-01-23 19:30:28 UTC (rev 5872)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2010-01-23 19:30:33 UTC (rev 5873)
+@@ -75,6 +75,8 @@
+                     // Some useful functions...
+                     void        recalibrate(uint64_t *time,_SEGMENT *seg);
+                     bool        updateImageTiming(_SEGMENT *seg,ADMImage *image);
++                    // Need to get the image just before targetPts
++                    bool        decodeTillPictureAtPts(uint64_t targetPts,ADMImage *image);
+ 
+ protected:
+                                 /// Decode frame and on until frame is popped out of decoders
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003077.html">[Avidemux-svn-commit] r5872 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="003079.html">[Avidemux-svn-commit] r5874 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3078">[ date ]</a>
+              <a href="thread.html#3078">[ thread ]</a>
+              <a href="subject.html#3078">[ subject ]</a>
+              <a href="author.html#3078">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

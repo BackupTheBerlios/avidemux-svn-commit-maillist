@@ -1,0 +1,200 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7108 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7108%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder%3A%0A%09include%20src&In-Reply-To=%3C20110405054942.65DE2480CFD%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004267.html">
+   <LINK REL="Next"  HREF="004269.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7108 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder:	include src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7108%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder%3A%0A%09include%20src&In-Reply-To=%3C20110405054942.65DE2480CFD%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7108 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Apr  5 07:49:42 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004267.html">[Avidemux-svn-commit] r7107 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreJson/src	avidemux_plugins/ADM_videoEncoder/x264
+</A></li>
+        <LI>Next message: <A HREF="004269.html">[Avidemux-svn-commit] r7109 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4268">[ date ]</a>
+              <a href="thread.html#4268">[ thread ]</a>
+              <a href="subject.html#4268">[ subject ]</a>
+              <a href="author.html#4268">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-04-05 07:49:41 +0200 (Tue, 05 Apr 2011)
+New Revision: 7108
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoder.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoder.cpp
+Log:
+[plugin] Add support for per plugin default settings/custom settings (incomplete)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoder.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoder.h	2011-04-03 07:59:28 UTC (rev 7107)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoder.h	2011-04-05 05:49:41 UTC (rev 7108)
+@@ -22,6 +22,7 @@
+ #include &quot;ADM_bitstream.h&quot;
+ #include &quot;ADM_frameType.h&quot;
+ #include &lt;vector&gt;
++#include &lt;string&gt;
+ using std::vector;
+ #include &quot;stddef.h&quot;
+ /**
+@@ -73,5 +74,8 @@
+                uint64_t    lastDts; //
+ };
+ bool usSecondsToFrac(uint64_t useconds, int *n,int *d);
++bool ADM_pluginGetPath(const std::string pluginName,int pluginVersion,std::string &amp;rootPath);
++bool ADM_pluginInstallSystem(const std::string pluginName,int pluginVersion);
++bool ADM_listFile(const std::string path,const std::string extension,vector &lt;std::string &gt; &amp; list);
+ #endif
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoder.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoder.cpp	2011-04-03 07:59:28 UTC (rev 7107)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoder.cpp	2011-04-05 05:49:41 UTC (rev 7108)
+@@ -19,6 +19,7 @@
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_coreVideoEncoder.h&quot;
+ #include &quot;ADM_vidMisc.h&quot;
++#include &lt;sstream&gt;
+ extern &quot;C&quot; 
+ {
+ #include &quot;libavcodec/avcodec.h&quot;
+@@ -129,4 +130,93 @@
+     return false;
+ 
+ }
++/**
++
++*/
++static bool ADM_pluginSystemPath(const std::string pluginName,int pluginVersion,std::string &amp;rootPath)
++{
++    char *sy=ADM_getInstallRelativePath(&quot;ADM_plugins6&quot;,&quot;&quot;,&quot;&quot;);
++    std::string path=std::string(sy);
++    delete [] sy;
++
++    std::string slash=std::string(&quot;/&quot;);
++    std::string version;
++    std::stringstream out;
++    out &lt;&lt; pluginVersion;
++    version=out.str();
++
++    path=path+slash+std::string(&quot;pluginSettings&quot;);
++    ADM_mkdir(path.c_str());
++    path=path+slash+std::string(pluginName);
++    ADM_mkdir(path.c_str());
++    path=path+slash+version;
++    ADM_mkdir(path.c_str());
++    rootPath=path;
++    ADM_info(&quot;System Plugin preset path : %s\n&quot;,rootPath.c_str());
++    return true;
++}
++/**
++    \fn ADM_pluginGetPath
++    \brief returns the user plugin path, containing the presets for that plugin
++*/
++bool ADM_pluginGetPath(const std::string pluginName,int pluginVersion,std::string &amp;rootPath)
++{
++    std::string path=std::string(ADM_getBaseDir());
++    std::string slash=std::string(&quot;/&quot;);
++    std::string version;
++    std::stringstream out;
++    out &lt;&lt; pluginVersion;
++    version=out.str();
++    path=path+slash+std::string(&quot;pluginSettings&quot;);
++    ADM_mkdir(path.c_str());
++    path=path+slash+std::string(pluginName);
++    ADM_mkdir(path.c_str());
++    path=path+slash+version;
++    ADM_mkdir(path.c_str());
++    rootPath=path;
++    ADM_info(&quot;Plugin preset path : %s\n&quot;,rootPath.c_str());
++    return true;
++}
++/**
++    \fn ADM_pluginInstallSystem
++    \brief Copy if needed the system presets to the user presets list
++*/
++bool ADM_pluginInstallSystem(const std::string pluginName,int pluginVersion)
++{
++    std::string sysPath,userPath;
++    ADM_pluginSystemPath(pluginName,pluginVersion,sysPath);
++    ADM_pluginGetPath(pluginName,pluginVersion,userPath);
++    return true;
++}
++/**
++    \fn ADM_pluginGetPath
++    \brief returns the user plugin path, containing the presets for that plugin
++*/
++bool ADM_listFile(const std::string path,const std::string extension,vector &lt;std::string &gt; &amp; listOut)
++{
++#define NB 20
++    char *list[NB];
++    uint32_t nb=0;
++
++    listOut.clear();
++    if(false==buildDirectoryContent(&amp;nb,path.c_str(),list,NB,extension.c_str()))
++    {
++        ADM_info(&quot;No preset found\n&quot;);
++        return true;
++    }
++    for(int i=0;i&lt;nb;i++)
++    {
++        std::string s=std::string(list[i]);
++        size_t lastSlash=s.find_last_of('/');
++        s.replace(0,lastSlash+1,std::string(&quot;&quot;));
++        size_t lastDot=s.find_last_of('.');
++        s.replace(lastDot,s.size(),std::string(&quot;&quot;));
++        // Remove extension
++        listOut.push_back(s);
++    }
++    for(int i=0;i&lt;nb;i++)
++        ADM_dealloc(list[i]);
++    return true;
++}
++
+ // EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004267.html">[Avidemux-svn-commit] r7107 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreJson/src	avidemux_plugins/ADM_videoEncoder/x264
+</A></li>
+	<LI>Next message: <A HREF="004269.html">[Avidemux-svn-commit] r7109 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4268">[ date ]</a>
+              <a href="thread.html#4268">[ thread ]</a>
+              <a href="subject.html#4268">[ subject ]</a>
+              <a href="author.html#4268">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

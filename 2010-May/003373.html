@@ -1,0 +1,248 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6170 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6170%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreDemuxerMpeg/include%0A%09avidemux_core/ADM_coreDemuxerMpeg/src%0A%09avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C201005111740.o4BHejOY008750%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003372.html">
+   <LINK REL="Next"  HREF="003374.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6170 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6170%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreDemuxerMpeg/include%0A%09avidemux_core/ADM_coreDemuxerMpeg/src%0A%09avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C201005111740.o4BHejOY008750%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6170 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue May 11 19:40:45 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003372.html">[Avidemux-svn-commit] r6169 - branches/avidemux_2.5_branch_gruntster
+</A></li>
+        <LI>Next message: <A HREF="003374.html">[Avidemux-svn-commit] r6171 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3373">[ date ]</a>
+              <a href="thread.html#3373">[ thread ]</a>
+              <a href="subject.html#3373">[ subject ]</a>
+              <a href="author.html#3373">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-05-11 19:40:26 +0200 (Tue, 11 May 2010)
+New Revision: 6170
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/dmxPSPacket.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmxPSPacket.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp
+Log:
+[PSdemuxer] inline read8i, use same startcode search than TS
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/dmxPSPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/dmxPSPacket.h	2010-05-10 17:48:07 UTC (rev 6169)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/dmxPSPacket.h	2010-05-11 17:40:26 UTC (rev 6170)
+@@ -9,6 +9,7 @@
+ #include &quot;dmxPacket.h&quot;
+ #include &quot;ADM_Video.h&quot;
+ 
++#define PS_PACKET_INLINE
+ 
+ 
+ /**
+@@ -54,9 +55,6 @@
+                 psPacketLinear(uint8_t pid);
+                 ~psPacketLinear();
+         uint32_t getConsumed(void);
+-        uint8_t  readi8();
+-        uint16_t readi16();
+-        uint32_t readi32();
+         bool     sync(uint8_t *pid);
+         bool    read(uint32_t len, uint8_t *buffer);
+         bool    forward(uint32_t v);
+@@ -64,6 +62,61 @@
+         bool    getInfo(dmxPacketInfo *info);
+         bool    seek(uint64_t packetStart, uint32_t offset);
+         bool    changePid(uint32_t pid) ;
++#ifndef PS_PACKET_INLINE
++        uint8_t  readi8();
++        uint16_t readi16();
++        uint32_t readi32();
++#else
++        /**
++            \fn readi8
++        */
++        uint8_t readi8(void)
++        {
++            consumed++;
++            if(bufferIndex&lt;bufferLen)
++            {
++                return buffer[bufferIndex++];
++            }
++            if(false==refill()) 
++            {
++                eof=1;
++                return 0;
++            }
++            ADM_assert(bufferLen);
++            bufferIndex=1;
++            return buffer[0];
++            
++        }
++        /**
++            \fn readi16
++        */
++        uint16_t readi16(void)
++        {
++            if(bufferIndex+1&lt;bufferLen)
++            {
++                uint16_t v=(buffer[bufferIndex]&lt;&lt;8)+buffer[bufferIndex+1];;
++                bufferIndex+=2;
++                consumed+=2;
++                return v;
++            }
++            return (readi8()&lt;&lt;8)+readi8();
++        }
++        /**
++            \fn readi32
++        */
++        uint32_t readi32(void)
++        {
++            if(bufferIndex+3&lt;bufferLen)
++            {
++                uint8_t *p=buffer+bufferIndex;
++                uint32_t v=(p[0]&lt;&lt;24)+(p[1]&lt;&lt;16)+(p[2]&lt;&lt;8)+p[3];
++                bufferIndex+=4;
++                consumed+=4;
++                return v;
++            }
++            return (readi16()&lt;&lt;16)+readi16();
++        }
++#endif
+ };
+ /**
+     \class psPacketLinearTracker
+@@ -90,6 +143,7 @@
+          packetStats    *getStat(int intdex);
+          bool           resetStats(void);
+ virtual  bool           getPacketOfType(uint8_t pid,uint32_t maxSize, uint32_t *packetSize,uint64_t *pts,uint64_t *dts,uint8_t *buffer,uint64_t *startAt);
++         int            findStartCode(void);
+ };
+ 
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmxPSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmxPSPacket.cpp	2010-05-10 17:48:07 UTC (rev 6169)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmxPSPacket.cpp	2010-05-11 17:40:26 UTC (rev 6170)
+@@ -413,6 +413,7 @@
+         bufferIndex=0;
+         return true;
+ }
++#ifndef PS_PACKET_INLINE
+ /**
+     \fn readi8
+ */
+@@ -462,6 +463,7 @@
+     }
+     return (readi16()&lt;&lt;16)+readi16();
+ }
++#endif
+ /**
+     \fn forward
+ */
+@@ -651,4 +653,39 @@
+         p-&gt;startDts=ADM_NO_PTS;
+     }
+ }
++/**
++    \fn findStartCode
++    \brief Must check stillOk after calling this
++*/
++int psPacketLinearTracker::findStartCode(void)
++{
++#define likely(x) x
++#define unlikely(x) x
++        unsigned int last=0xfffff;
++        unsigned int cur=0xffff;
++        int startCode=0;
++        while(this-&gt;stillOk())
++        {
++            last=cur;
++            cur=this-&gt;readi16();
++            if(likely(last&amp;0xff)) continue;
++            if(unlikely(!last)) // 00 00 , need 01 xx
++            {
++                if((cur&gt;&gt;8)==1) 
++                {
++                        startCode=cur&amp;0xff;
++                        break;
++                }
++            }
++            if(unlikely(!(last&amp;0xff))) // xx 00 need 00 01
++            {
++                if(cur==1)
++                {
++                        startCode=this-&gt;readi8();
++                        break;
++                }
++            }
++        }
++        return startCode;
++}
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp	2010-05-10 17:48:07 UTC (rev 6169)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp	2010-05-11 17:40:26 UTC (rev 6170)
+@@ -188,14 +188,9 @@
+     fullSize=pkt-&gt;getSize();
+       while(1)
+       {
+-        uint32_t code=0xffff+0xffff0000;
+-        while((code&amp;0x00ffffff)!=1 &amp;&amp; pkt-&gt;stillOk())
+-        {
+-            code=(code&lt;&lt;8)+pkt-&gt;readi8();
+-        }
++        
++        uint8_t startCode=pkt-&gt;findStartCode();
+         if(!pkt-&gt;stillOk()) break;
+-        uint8_t startCode=pkt-&gt;readi8();
+-
+         pkt-&gt;getInfo(&amp;info);
+         info.offset-=4;
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003372.html">[Avidemux-svn-commit] r6169 - branches/avidemux_2.5_branch_gruntster
+</A></li>
+	<LI>Next message: <A HREF="003374.html">[Avidemux-svn-commit] r6171 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3373">[ date ]</a>
+              <a href="thread.html#3373">[ thread ]</a>
+              <a href="subject.html#3373">[ subject ]</a>
+              <a href="author.html#3373">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

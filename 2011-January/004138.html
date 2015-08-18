@@ -1,0 +1,144 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6964 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6964%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2&In-Reply-To=%3C20110127071851.CF8264812FF%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004137.html">
+   <LINK REL="Next"  HREF="004139.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6964 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6964%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2&In-Reply-To=%3C20110127071851.CF8264812FF%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6964 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jan 27 08:18:51 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004137.html">[Avidemux-svn-commit] r6963 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_render avidemux_core/ADM_core/src
+</A></li>
+        <LI>Next message: <A HREF="004139.html">[Avidemux-svn-commit] r6965 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4138">[ date ]</a>
+              <a href="thread.html#4138">[ thread ]</a>
+              <a href="subject.html#4138">[ subject ]</a>
+              <a href="author.html#4138">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-01-27 08:18:51 +0100 (Thu, 27 Jan 2011)
+New Revision: 6964
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Video.cpp
+Log:
+[mp4v2] Add tune chunk duration
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp	2011-01-27 07:18:50 UTC (rev 6963)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp	2011-01-27 07:18:51 UTC (rev 6964)
+@@ -38,8 +38,24 @@
+    1, // uint32_t optimize;
+    0  //uint32_t add_itunes_metadata;
+ };
+-
+ /**
++    \fn setMaxDurationPerChunk
++    \brief Max chunk duration is 1 sec par default; set it to ~ 4 frames
++*/
++bool muxerMp4v2::setMaxDurationPerChunk(MP4TrackId track, uint32_t samples)
++{
++    uint32_t trackScale=MP4GetTrackTimeScale(handle,track);
++    uint32_t   mx;
++    mx=4*samples;
++    ADM_info(&quot;Setting max chunk duration =%d; scale=%d for track %d\n&quot;,(int)mx,(int)trackScale,(int)track);
++    if(!MP4SetTrackDurationPerChunk(handle,track,mx))
++    {
++        ADM_error(&quot;Cannot set TrackDurationPerChunk\n&quot;);
++        return false;
++    }
++    return true;
++}
++/**
+     \fn timeScale
+     \brief convert our unit (us) to mp4v2 unit (90khz tick)
+ */
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h	2011-01-27 07:18:50 UTC (rev 6963)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h	2011-01-27 07:18:51 UTC (rev 6964)
+@@ -73,6 +73,7 @@
+         bool            initH264(void);
+         bool            initVideo(void);
+         bool            loadNextVideoFrame(ADMBitstream *bs);
++        bool            setMaxDurationPerChunk(MP4TrackId track, uint32_t samples);
+ protected: // audio
+         bool            initAudio(void);
+         bool            fillAudio(uint64_t targetDts);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Video.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Video.cpp	2011-01-27 07:18:50 UTC (rev 6963)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Video.cpp	2011-01-27 07:18:51 UTC (rev 6964)
+@@ -166,6 +166,8 @@
+                 ADM_error(&quot;Wrong extra data for h264\n&quot;);
+                 return false;
+             }
++            
++            // if we dont have extraData, it is annexB 100 % sire
+             needToConvertFromAnnexB=true;
+             if(extraLen)
+                 if(extra[0]==1) needToConvertFromAnnexB=false;
+@@ -225,6 +227,13 @@
+                 return false;
+             }
+         }
++        double inc=vStream-&gt;getAvgFps1000();
++        inc=inc/1000;
++        if(inc&gt;0.005) inc=1/inc;
++                else inc=0.005;
++        ADM_info(&quot;Frame increment =%d ms\n&quot;,(int)(inc*1000));
++        inc*=90000;
++        setMaxDurationPerChunk(videoTrackId, inc);
+         ADM_info(&quot;[MP4V2] Video correctly initalized\n&quot;);
+         return true;
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004137.html">[Avidemux-svn-commit] r6963 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_render avidemux_core/ADM_core/src
+</A></li>
+	<LI>Next message: <A HREF="004139.html">[Avidemux-svn-commit] r6965 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4138">[ date ]</a>
+              <a href="thread.html#4138">[ thread ]</a>
+              <a href="subject.html#4138">[ subject ]</a>
+              <a href="author.html#4138">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

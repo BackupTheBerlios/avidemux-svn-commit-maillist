@@ -1,0 +1,193 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7342 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7342%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample&In-Reply-To=%3C20110724061439.341BF480E9F%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004495.html">
+   <LINK REL="Next"  HREF="004497.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7342 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7342%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample&In-Reply-To=%3C20110724061439.341BF480E9F%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7342 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jul 24 08:14:39 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004495.html">[Avidemux-svn-commit] r7341 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUI/include
+</A></li>
+        <LI>Next message: <A HREF="004497.html">[Avidemux-svn-commit] r7343 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_icons/videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4496">[ date ]</a>
+              <a href="thread.html#4496">[ thread ]</a>
+              <a href="subject.html#4496">[ subject ]</a>
+              <a href="author.html#4496">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-07-24 08:14:38 +0200 (Sun, 24 Jul 2011)
+New Revision: 7342
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample/sampleGl.cpp
+Log:
+[Gl:Sample filter] Simplify
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample/sampleGl.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample/sampleGl.cpp	2011-07-24 06:14:37 UTC (rev 7341)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample/sampleGl.cpp	2011-07-24 06:14:38 UTC (rev 7342)
+@@ -4,6 +4,11 @@
+ 
+     copyright            : (C) 2009 by mean
+ 
++bench : 1280*720, null shader, 20 ms, 95% of it in download texture.
++            Download Texture
++                RGB2Y=5ms               (MMX it)
++                toQimage=14 ms  &lt;&lt;==    TOO SLOW
++
+  ***************************************************************************/
+ 
+ /***************************************************************************
+@@ -25,11 +30,16 @@
+ #include &quot;ADM_coreVideoFilterInternal.h&quot;
+ #include &quot;T_openGL.h&quot;
+ #include &quot;sampleGl.h&quot;
++#include &quot;ADM_clock.h&quot;
+ /**
+ 
+ */
+-extern QGLWidget *topGlWidget;
+ 
++//#define BENCH 1
++//#define BENCH_READTEXTURE
++
++
++
+ /**
+     \class openGlSample
+ */
+@@ -58,8 +68,8 @@
+ // Add the hook to make it valid plugin
+ DECLARE_VIDEO_FILTER(   openGlSample,   // Class
+                         1,0,0,              // Version
+-                        ADM_UI_QT4,         // UI
+-                        VF_MISC,            // Category
++                        ADM_UI_QT4+ADM_UI_GL,         // UI
++                        VF_OPENGL,            // Category
+                         &quot;glsample&quot;,            // internal name (must be uniq!)
+                         &quot;OpenGl Sample&quot;,            // Display name
+                         &quot;Run a fragment shader.&quot; // Description
+@@ -137,10 +147,26 @@
+         ADM_warning(&quot;FlipFilter : Cannot get frame\n&quot;);
+         return false;
+     }
+-    
+-    render(image);
+-    downloadTexture(image);
+-    
++
++#ifdef BENCH
++    ADMBenchmark bench;
++    for(int i=0;i&lt;100;i++)
++    {
++        bench.start();
++#endif
++
++        render(image);
++        
++        
++        downloadTexture(image);
++        
++#ifdef BENCH
++        bench.end();
++    }
++    ADM_info(&quot;GL result: &quot;);
++    bench.printResult();
++#endif    
++
+     return true;
+ }
+ /**
+@@ -217,8 +243,31 @@
+ */
+ bool openGlSample::downloadTexture(ADMImage *image)
+ {
++#ifdef BENCH_READTEXTURE
++    {
++    ADMBenchmark bench;
++    for(int i=0;i&lt;100;i++)
++    {
++        bench.start();
++        QImage qimg(fbo-&gt;toImage());
++        bench.end();
++     }
++    ADM_warning(&quot;convert to Qimage\n&quot;);
++    bench.printResult();
++    }
++#endif
++
+     QImage qimg(fbo-&gt;toImage());
++
++
++
+     // Assume RGB32, read R or A
++#ifdef BENCH_READTEXTURE
++    ADMBenchmark bench;
++    for(int i=0;i&lt;100;i++)
++    {
++        bench.start();
++#endif
+     int stride=image-&gt;GetPitch(PLANAR_Y);
+     uint8_t *to=image-&gt;GetWritePtr(PLANAR_Y);
+     for(int y=0;y&lt;info.height;y++)
+@@ -233,6 +282,13 @@
+             to[x]=src[x*4];
+         to+=stride;
+     }
++#ifdef BENCH_READTEXTURE
++        bench.end();
++    }
++    bench.printResult();
++
++#endif
++
+     return true;
+ }
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004495.html">[Avidemux-svn-commit] r7341 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUI/include
+</A></li>
+	<LI>Next message: <A HREF="004497.html">[Avidemux-svn-commit] r7343 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_icons/videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4496">[ date ]</a>
+              <a href="thread.html#4496">[ thread ]</a>
+              <a href="subject.html#4496">[ subject ]</a>
+              <a href="author.html#4496">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

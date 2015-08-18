@@ -1,0 +1,219 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5716 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5716%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src&In-Reply-To=%3C200912221530.nBMFUFYE024286%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002922.html">
+   <LINK REL="Next"  HREF="002924.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5716 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5716%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src&In-Reply-To=%3C200912221530.nBMFUFYE024286%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5716 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Dec 22 16:30:15 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002922.html">[Avidemux-svn-commit] r5715 - in	branches/avidemux_2.6_branch_mean/avidemux:	cli/ADM_userInterfaces/ADM_gui2 gtk/ADM_userInterfaces/ADM_gui2	qt4/ADM_userInterfaces/ADM_gui
+</A></li>
+        <LI>Next message: <A HREF="002924.html">[Avidemux-svn-commit] r5717 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libpostproc
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2923">[ date ]</a>
+              <a href="thread.html#2923">[ thread ]</a>
+              <a href="subject.html#2923">[ subject ]</a>
+              <a href="author.html#2923">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-12-22 16:30:14 +0100 (Tue, 22 Dec 2009)
+New Revision: 5716
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audioDeviceThreaded.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audiodevice.cpp
+Log:
+[AudioDevice] Add interface to gather stats from next elemts in the queue to feed vumeter + ask each device what is its prefered channel mapping
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audioDeviceThreaded.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audioDeviceThreaded.cpp	2009-12-22 15:30:10 UTC (rev 5715)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audioDeviceThreaded.cpp	2009-12-22 15:30:14 UTC (rev 5716)
+@@ -65,9 +65,10 @@
+     \fn audioDeviceThreaded
+     \brief destructor
+ */
+-uint8_t audioDeviceThreaded::init(uint32_t channel, uint32_t fq )
++uint8_t audioDeviceThreaded::init(uint32_t channel, uint32_t fq ,CHANNEL_TYPE *channelMapping)
+ {
+     // Allocate buffer
++    memcpy(incomingMapping,channelMapping,sizeof(CHANNEL_TYPE)*MAX_CHANNELS);
+     _channels=channel;
+     _frequency=fq;
+     sizeOf10ms=(_channels*_frequency*2)/100;
+@@ -82,6 +83,7 @@
+     // Spawn
+     stopRequest=AUDIO_DEVICE_STARTED;
+     ADM_assert(!pthread_create(&amp;myThread,NULL,bouncer,this));
++    
+ 
+     return 1;
+ }
+@@ -126,6 +128,7 @@
+ }
+ /**
+     \fn write
++    \brief We assume that we have full channels each time
+ 
+ */
+ bool        audioDeviceThreaded::writeData(uint8_t *data,uint32_t lenInByte)
+@@ -143,7 +146,18 @@
+         mutex.unlock();
+         return false;
+     }
++    
+     memcpy(audioBuffer+wrIndex,data,lenInByte);
++    // Reorder channels if needed...
++    uint32_t samples=lenInByte;
++    samples/=sizeof(float);
++    samples/=_channels;
++    ADM_audioReorderChannels(_channels,
++                    (float *)(audioBuffer+wrIndex),
++                    samples,
++                    incomingMapping,
++                    (CHANNEL_TYPE*)getWantedChannelMapping(_channels));
++    //
+     wrIndex+=lenInByte;
+     mutex.unlock();
+     return true;
+@@ -175,5 +189,54 @@
+     return writeData((uint8_t *)data,len);
+ 
+ }
++/**
++    \fn getVolumeStats
++    \brief Return stats about volume for each channel [6] between 0 &amp; 255
++*/
++bool        audioDeviceThreaded::getVolumeStats(uint32_t *vol)
++{
++    float f[6];
++    uint32_t raw[6];
++    memset(vol,0,sizeof(uint32_t)*6);
++    // 20 ms should be enough, i.e. fq/50
++    uint32_t samples=_frequency/50;
++    mutex.lock();
++    if(samples*_channels*2 &gt; (wrIndex-rdIndex))
++            samples=(wrIndex-rdIndex)/(2*_channels);
++    for(int i=0;i&lt;6;i++) f[i]=0;
++    if(!samples) 
++    {
++        mutex.unlock();
++        return true;
++    }
+ 
++    int16_t *base=(int16_t *)(rdIndex+audioBuffer);
++    for(int i=0;i&lt;samples;i++)
++        for(int chan=0;chan&lt;_channels;chan++)
++        {
++                f[chan]+=abs(*base++);
++                
++        }
++    mutex.unlock();
++    // Normalize
++    for(int i=0;i&lt;6;i++)
++    {
++        float d=f[i];
++        d/=samples;
++        d/=128;
++        if(d&gt;127) d=127;
++        raw[i]=(uint32_t)d;
++    }
++    // Move channels around so that they fit Left/Right/Center/Rear Left, Rear Right,LFE
++    const CHANNEL_TYPE *chans=this-&gt;getWantedChannelMapping(_channels);
++    static const CHANNEL_TYPE output[6]={ADM_CH_FRONT_LEFT,ADM_CH_FRONT_RIGHT,ADM_CH_FRONT_CENTER,ADM_CH_REAR_LEFT,ADM_CH_REAR_RIGHT,ADM_CH_LFE};
++    for(int i=0;i&lt;_channels;i++)
++    {
++        CHANNEL_TYPE wanted=output[i];
++        for(int j=0;j&lt;_channels;j++)
++            if(chans[j]==wanted) vol[i]=raw[j];
++    }
++    return true;
++    
++}
+ //**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audiodevice.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audiodevice.cpp	2009-12-22 15:30:10 UTC (rev 5715)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audiodevice.cpp	2009-12-22 15:30:14 UTC (rev 5716)
+@@ -235,10 +235,10 @@
+     \brief Initialize a device
+ 
+ */
+-uint32_t AVDM_AudioSetup(uint32_t fq, uint8_t channel)
++uint32_t AVDM_AudioSetup(uint32_t fq, uint8_t channel,CHANNEL_TYPE *channelMapping)
+ {
+ 	
+-	return device-&gt;init(channel,fq);
++	return device-&gt;init(channel,fq,channelMapping);
+ }
+ /**
+     \fn AVDM_setVolume
+@@ -281,10 +281,21 @@
+     return device-&gt;getBufferFullness();
+ 
+ }
++/**
++    \fn AVDM_getStats
++*/
++bool        AVDM_getStats(uint32_t *vol)
++{
++    return device-&gt;getVolumeStats(vol);
++}
+ 
+ 
+-
+ //**
++const CHANNEL_TYPE dummyAudioDevice::myChannelType[MAX_CHANNELS]=
++                            {ADM_CH_FRONT_LEFT,ADM_CH_FRONT_RIGHT,ADM_CH_FRONT_CENTER,
++                             ADM_CH_REAR_LEFT, ADM_CH_REAR_RIGHT, ADM_CH_LFE,
++                             ADM_CH_INVALID,   ADM_CH_INVALID
++                            };
+ bool dummyAudioDevice::localInit(void)                                {return true;}
+ bool dummyAudioDevice::localStop(void)                                {return true;}
+ void  dummyAudioDevice::sendData(void)                                {ADM_usleep(5000);}
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002922.html">[Avidemux-svn-commit] r5715 - in	branches/avidemux_2.6_branch_mean/avidemux:	cli/ADM_userInterfaces/ADM_gui2 gtk/ADM_userInterfaces/ADM_gui2	qt4/ADM_userInterfaces/ADM_gui
+</A></li>
+	<LI>Next message: <A HREF="002924.html">[Avidemux-svn-commit] r5717 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libpostproc
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2923">[ date ]</a>
+              <a href="thread.html#2923">[ thread ]</a>
+              <a href="subject.html#2923">[ subject ]</a>
+              <a href="author.html#2923">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

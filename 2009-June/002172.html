@@ -1,0 +1,204 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4957 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4957%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src&In-Reply-To=%3C200906251713.n5PHD32N008971%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002171.html">
+   <LINK REL="Next"  HREF="002173.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4957 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4957%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src&In-Reply-To=%3C200906251713.n5PHD32N008971%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4957 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jun 25 19:13:03 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002171.html">[Avidemux-svn-commit] r4956 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_mad/ADM_libMad
+</A></li>
+        <LI>Next message: <A HREF="002173.html">[Avidemux-svn-commit] r4958 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux_plugins cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2172">[ date ]</a>
+              <a href="thread.html#2172">[ thread ]</a>
+              <a href="subject.html#2172">[ subject ]</a>
+              <a href="author.html#2172">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-06-25 19:13:02 +0200 (Thu, 25 Jun 2009)
+New Revision: 4957
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageSave.cpp
+Log:
+[core/image] Begin to reimplement save as jpeg only depends on core
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageSave.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageSave.cpp	2009-06-25 17:13:00 UTC (rev 4956)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageSave.cpp	2009-06-25 17:13:02 UTC (rev 4957)
+@@ -1,5 +1,5 @@
+ /**
+-      \file gui_misc
++      \file A
+       \brief 2nd part of ADMImage, put here to avoid weird dependancies
+ */
+ #include &quot;ADM_default.h&quot;
+@@ -7,6 +7,11 @@
+ #include &quot;ADM_bitmap.h&quot;
+ #include &quot;DIA_coreToolkit.h&quot;
+ #include &quot;ADM_colorspace.h&quot;
++extern &quot;C&quot; 
++{
++#include &quot;ADM_lavcodec.h&quot;
++}
++
+ /**
+     \fn saveAsBmp
+     \brief save current image into filename, into bmp format
+@@ -107,39 +112,78 @@
+ */
+ uint8_t  ADMImage::saveAsJpg(const char *filename)
+ {
+-    #if 0
+- ffmpegEncoderFFMjpeg *codec=NULL;
+-  FILE *fd;
+-  uint8_t *buffer=NULL;
+-  uint32_t sz;
+ 
++AVCodecContext   *context=NULL;   
++AVFrame          frame;     
++bool             result=false;
++AVCodec          *codec=NULL;
++uint8_t          buffer[_width*_height*4];
++int              sz=0,r=0;
+ 
+-        sz = _width*_height*3;
+-        ADMBitstream bitstream(sz);
+-        buffer=new uint8_t[sz];
+-        bitstream.data=buffer;
+-        codec=new  ffmpegEncoderFFMjpeg(_width,_height,FF_MJPEG)  ;
+-        codec-&gt;init( 95,25000);
+-        if(!codec-&gt;encode(this,&amp;bitstream))
++    context=avcodec_alloc_context();
++    if(!context) 
++    {
++        printf(&quot;[saveAsJpg] Cannot allocate context\n&quot;);
++        return false;
++    }
++    codec=avcodec_find_encoder(CODEC_ID_MJPEG);
++    if(!codec)
++    {
++        printf(&quot;[saveAsJpg] Cannot allocate codec\n&quot;);
++        goto jpgCleanup;
++    }
++    context-&gt;pix_fmt =PIX_FMT_YUV420P;
++    context-&gt;strict_std_compliance = -1;
++    r=avcodec_open(context, codec); 
++    if(r&lt;0)
++    {
++        printf(&quot;[saveAsJpg] Cannot mix codec and context\n&quot;);
++        ADM_dealloc (context);
++        return false;
++    }
++    // Setup our image &amp; stuff....
++        
++
++        frame.linesize[0] = _width; 
++        frame.linesize[1] = _width&gt;&gt;1; 
++        frame.linesize[2] = _width&gt;&gt;1; 
++        
++        frame.data[0] = GetWritePtr(PLANAR_Y);
++        frame.data[2] = GetWritePtr(PLANAR_U);
++        frame.data[1] = GetWritePtr(PLANAR_V);
++    // Grab a temp buffer
++    
++    // Encode!
++      context-&gt;flags |= CODEC_FLAG_QSCALE;
++      frame.quality = (int) floor (FF_QP2LAMBDA * 2+ 0.5);
++        
++        if ((sz = avcodec_encode_video (context, buffer, _width*_height*4, &amp;frame)) &lt; 0)
+         {
+-                GUI_Error_HIG(QT_TR_NOOP(&quot;Cannot encode the frame&quot;), NULL);
+-                delete [] buffer;
+-                delete codec;
+-                return 0;
++            printf(&quot;[jpeg] Error %d encoding video\n&quot;,sz);
++            goto  jpgCleanup;
+         }
+-        delete codec;
+-        fd=fopen(filename,&quot;wb&quot;);
+-        if(!fd)
++        // Ok now write our file...
+         {
+-                GUI_Error_HIG(QT_TR_NOOP(&quot;File error&quot;),QT_TR_NOOP( &quot;Cannot open \&quot;%s\&quot; for writing.&quot;), filename);
+-                delete [] buffer;
+-                return 0;
+-        }
+-        fwrite (buffer, bitstream.len, 1, fd);
+-        fclose(fd);
+-        delete [] buffer;
+-        return 1;
+-        #endif
+-#warning save as jpeg disabled
+-        return false;
++            FILE *f=fopen(filename,&quot;wb&quot;);
++            if(f)
++            {
++                fwrite(buffer,sz,1,f);
++                fclose(f);
++                result=true;
++            }else
++            {
++                printf(&quot;[saveAsJpeg] Cannot open %s for writing!\n&quot;,filename);
++
++            }
++       }
++
++// Cleanup
++jpgCleanup:
++    if(context)
++    {
++        avcodec_close (context);
++        ADM_dealloc (context);
++    }
++    context=NULL;
++    return result;
+ }
+\ No newline at end of file
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002171.html">[Avidemux-svn-commit] r4956 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_mad/ADM_libMad
+</A></li>
+	<LI>Next message: <A HREF="002173.html">[Avidemux-svn-commit] r4958 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux_plugins cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2172">[ date ]</a>
+              <a href="thread.html#2172">[ thread ]</a>
+              <a href="subject.html#2172">[ subject ]</a>
+              <a href="author.html#2172">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

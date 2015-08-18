@@ -1,0 +1,295 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6010 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6010%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2%3A%0A%09include%20src&In-Reply-To=%3C201003180649.o2I6noxn025494%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003214.html">
+   <LINK REL="Next"  HREF="003216.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6010 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6010%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2%3A%0A%09include%20src&In-Reply-To=%3C201003180649.o2I6noxn025494%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6010 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Mar 18 07:49:50 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003214.html">[Avidemux-svn-commit] r6009 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/include
+</A></li>
+        <LI>Next message: <A HREF="003216.html">[Avidemux-svn-commit] r6011 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3215">[ date ]</a>
+              <a href="thread.html#3215">[ thread ]</a>
+              <a href="subject.html#3215">[ subject ]</a>
+              <a href="author.html#3215">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-03-18 07:49:50 +0100 (Thu, 18 Mar 2010)
+New Revision: 6010
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_filterThread.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterThread.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/CMakeLists.txt
+Log:
+[videoFilter] Threadify videoFilterQueue
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_filterThread.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_filterThread.h	2010-03-18 06:49:48 UTC (rev 6009)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_filterThread.h	2010-03-18 06:49:50 UTC (rev 6010)
+@@ -0,0 +1,44 @@
++/**
++        \file  ADM_filterThread.h
++        \brief Queue buffered filter. A dedicated thread is filling the queue. To be put just before encoder
++        \author mean, <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++*/
++
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ ***************************************************************************/
++#ifndef ADM_FILTER_THREAD_H
++#define ADM_FILTER_THREAD_H
++#include &quot;ADM_coreVideoFilter.h&quot;
++#include &quot;ADM_threadQueue.h&quot;
++#define ADM_THREAD_QUEUE_SIZE 4
++/**
++ *  \class ADM_videoFilterQueue
++ *  \brief 
++ */
++class ADM_videoFilterQueue : public ADM_coreVideoFilter,public ADM_threadQueue
++{
++protected:
++             ListOfQueuePacket freeList;
++public:
++                            ADM_videoFilterQueue(ADM_coreVideoFilter *son,CONFcouple *conf=NULL);
++       virtual              ~ADM_videoFilterQueue();
++
++       virtual const char   *getConfiguration(void) {return &quot;NONE&quot;;}                    
++       virtual bool         getCoupledConf(CONFcouple **couples) {*couples=NULL;return true;} ;   /// Return the current filter configuration
++       virtual bool         configure(void) {return true;}             /// Start graphical user interface
++/**/
++       virtual bool         goToTime(uint64_t usSeek); 
++       virtual bool         getNextFrame(uint32_t *frameNumber,ADMImage *image);     
++       virtual FilterInfo  *getInfo(void)    ;
++
++protected:
++        virtual bool                runAction(void); 
++};
++
++#endif
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterThread.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterThread.cpp	2010-03-18 06:49:48 UTC (rev 6009)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterThread.cpp	2010-03-18 06:49:50 UTC (rev 6010)
+@@ -0,0 +1,154 @@
++/**
++        \file  ADM_filterThread.cpp
++        \brief Queue buffered filter. A dedicated thread is filling the queue. To be put just before encoder
++        \author mean, <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++*/
++
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ ***************************************************************************/
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_videoFilterApi.h&quot;
++#include &quot;ADM_videoFilters.h&quot;
++#include &quot;ADM_filterThread.h&quot;
++/**
++    \fn     ADM_videoFilterQueue
++    \brief
++*/
++ADM_videoFilterQueue::ADM_videoFilterQueue(ADM_coreVideoFilter *previous,CONFcouple *conf ):
++                ADM_coreVideoFilter(previous,conf)
++{
++    // Allocate buffer
++    for(int i=0;i&lt;ADM_THREAD_QUEUE_SIZE;i++)
++    {
++        ADM_queuePacket item;
++        item.data=(uint8_t *)new ADMImage(info.width,info.height);
++        freeList.push_back(item);
++    }
++}
++/**
++    \fn ~ADM_videoFilterQueue
++    \brief
++*/
++ADM_videoFilterQueue::~ADM_videoFilterQueue()
++{
++        ADM_info(&quot;Destroying video threadQueue\n&quot;);
++        int i;
++        i=freeList.size();
++        for(int j=0;j&lt;i;j++)
++        {
++            ADMImage *image=(ADMImage *)freeList[j].data;
++            delete image;
++        }
++        freeList.clear();
++        i=list.size();
++        for(int j=0;j&lt;i;j++)
++        {
++            ADMImage *image=(ADMImage *)list[j].data;
++            delete image;
++        }
++        list.clear();
++
++}
++/**
++    \fn     goToTime
++    \brief
++*/
++bool         ADM_videoFilterQueue::goToTime(uint64_t usSeek)
++{
++        ADM_assert(0);
++        return false;
++}
++/**
++    \fn     getNextFrame
++    \brief
++*/
++bool         ADM_videoFilterQueue::getNextFrame(uint32_t *frameNumber,ADMImage *image)
++{
++     if(false==started)
++        {
++            startThread();      
++        }
++        while(1)
++        {
++            mutex-&gt;lock();
++            if(list.size())
++            {
++                //
++                // Dequeue one item
++                ADM_queuePacket *pkt=&amp;(list[0]);
++                ADM_assert(pkt-&gt;data);
++                ADMImage *source=(ADMImage *)pkt-&gt;data;
++                *frameNumber=pkt-&gt;pts;
++                image-&gt;duplicateFull(source);
++                list.erase(list.begin());
++                freeList.push_back(*pkt);
++                mutex-&gt;unlock();
++                return true;
++            }
++            // If no item, thread still alive ?
++            if(threadState==RunStateStopped)
++            {
++                ADM_info(&quot;Audio thread stopped, no more data\n&quot;);
++                mutex-&gt;unlock();
++                return false;
++            }
++            mutex-&gt;unlock();
++            ADM_usleep(10*1000); // wait 10 ms
++        }
++        return false;
++}
++/**
++    \fn     getInfo
++    \brief
++*/
++FilterInfo   *ADM_videoFilterQueue::getInfo(void)    
++{
++        return previousFilter-&gt;getInfo();
++}
++/**
++    \fn
++    \brief
++*/
++bool         ADM_videoFilterQueue::runAction(void)
++{
++    while(1)
++    {
++        if(threadState==RunStateStopOrder)  
++        {
++            ADM_info(&quot;Audio Thread, received stop order\n&quot;);
++            goto theEnd;
++        }
++        mutex-&gt;lock();
++        if(!freeList.size())
++        {
++            mutex-&gt;unlock();
++            ADM_usleep(2000);
++            continue;
++        }
++        uint32_t fn=0;
++        ADM_queuePacket pkt=(list[0]);
++        ADM_assert(pkt.data);
++        ADMImage *source=(ADMImage *)pkt.data;
++        list.erase(freeList.begin());
++        mutex-&gt;unlock();
++
++        if(false==previousFilter-&gt;getNextFrame(&amp;fn,source))
++        {
++            pkt.pts=fn;
++            ADM_info(&quot;Video Thread, no more data\n&quot;);
++            mutex-&gt;lock();
++            freeList.push_back(pkt);
++            mutex-&gt;unlock();
++            goto theEnd;
++        }
++    }
++theEnd:
++        ADM_info(&quot;Exiting video thread loop\n&quot;);
++}
++//EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/CMakeLists.txt	2010-03-18 06:49:48 UTC (rev 6009)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/CMakeLists.txt	2010-03-18 06:49:50 UTC (rev 6010)
+@@ -3,5 +3,6 @@
+         ADM_filterChain.cpp
+         ADM_pluginLoad.cpp
+         ADM_videoFilters.cpp
++        ADM_filterThread.cpp
+ )
+ ADD_LIBRARY(ADM_internalVideoFilter6 STATIC ${ADM_internalVideoFilter_SRCS})
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003214.html">[Avidemux-svn-commit] r6009 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/include
+</A></li>
+	<LI>Next message: <A HREF="003216.html">[Avidemux-svn-commit] r6011 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3215">[ date ]</a>
+              <a href="thread.html#3215">[ thread ]</a>
+              <a href="subject.html#3215">[ subject ]</a>
+              <a href="author.html#3215">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

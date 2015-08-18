@@ -1,0 +1,227 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3046 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3046%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4&In-Reply-To=%3C200705070803.l478346L019689%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000348.html">
+   <LINK REL="Next"  HREF="000350.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3046 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3046%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4&In-Reply-To=%3C200705070803.l478346L019689%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3046 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon May  7 10:03:04 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000348.html">[Avidemux-svn-commit] r3044 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+        <LI>Next message: <A HREF="000350.html">[Avidemux-svn-commit] r3047 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#349">[ date ]</a>
+              <a href="thread.html#349">[ thread ]</a>
+              <a href="subject.html#349">[ subject ]</a>
+              <a href="author.html#349">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-05-07 10:03:03 +0200 (Mon, 07 May 2007)
+New Revision: 3046
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Indexer.cpp
+Log:
+handle most (all) configuration for audio track
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp	2007-05-06 23:49:57 UTC (rev 3045)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp	2007-05-07 08:03:03 UTC (rev 3046)
+@@ -541,8 +541,16 @@
+                                 //
+                                 switch(entryName)
+                                 {
+-                                  case MKFCCR('m','p','4','v'):  //mp4v
++                                  case MKFCCR('s','2','6','3'):  //s263 d263
+                                   {
++                                        commonPart(H263);
++                                         adm_atom d263(&amp;son);
++                                         printf(&quot;Reading s253, got %s\n&quot;,fourCC::tostringBE(d263.getFCC()));
++                                          left=0;
++                                  }
++                                  break;
++                                   case MKFCCR('m','p','4','v'):  //mp4v
++                                  {
+                                         commonPart(DIVX);
+                                          adm_atom esds(&amp;son);
+                                          printf(&quot;Reading esds, got %s\n&quot;,fourCC::tostringBE(esds.getFCC()));
+@@ -628,6 +636,7 @@
+                                             {
+                                                 adm_atom avcc(&amp;son);
+                                                 printf(&quot;Reading , got %s\n&quot;,fourCC::tostringBE(avcc.getFCC()));
++                                                left=0;
+                                                 
+                                             }
+                                             break;
+@@ -737,6 +746,21 @@
+                                             audioCodec(8BITS_UNSIGNED);
+                                             ADIO.byterate=ADIO.frequency*ADIO.channels;
+                                             break;
++                                    case MKFCCR('s','a','m','r'):
++                                    {
++                                            audioCodec(AMRNB);
++                                            ADIO.frequency=8000;
++                                            ADIO.channels=1;
++                                            ADIO.bitspersample=16;
++                                            ADIO.byterate=12000/8;
++                                            if(left&gt;10)
++                                            {
++                                               adm_atom amr(&amp;son);
++                                              printf(&quot;Reading wave, got %s\n&quot;,fourCC::tostringBE(amr.getFCC()));
++                                              left=0;
++                                            }
++                                    }
++                                            break;
+                                     
+                                     case MKFCCR('m','s',0,0x55): // why 55 ???
+                                     case MKFCCR('m','p','4','a'):
+@@ -803,7 +827,10 @@
+                                                                decodeEsds(&amp;wave,TRACK_AUDIO);
+                                                                goto foundit; // FIXME!!!
+                                                           } 
+-                                                
++                                                else
++                                                {
++                                                  printf(&quot;UNHANDLED ATOM : %s\n&quot;,fourCC::tostringBE(wave.getFCC())); 
++                                                }
+                                               }
+                                             } // if left &gt; 10
+ foundit: // HACK FIXME     
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Indexer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Indexer.cpp	2007-05-06 23:49:57 UTC (rev 3045)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Indexer.cpp	2007-05-07 08:03:03 UTC (rev 3046)
+@@ -94,37 +94,61 @@
+               for(i=0;i&lt;info-&gt;nbCo;i++)
+                 total+=samplePerChunk[i];
+               
+-              printf(&quot;Total size in byte : %u\n&quot;,total*info-&gt;SzIndentical);
++              printf(&quot;Total size in sample : %u\n&quot;,total);
++              printf(&quot;Sample size          : %u\n&quot;,info-&gt;SzIndentical);
+               track-&gt;index=new MP4Index[info-&gt;nbCo];
+               memset(track-&gt;index,0,info-&gt;nbCo*sizeof(MP4Index));
+               track-&gt;nbIndex=info-&gt;nbCo;;
+               int max=0;
+               totalBytes=0;
+-              for(i=0;i&lt;info-&gt;nbCo;i++)
++              if(info-&gt;SzIndentical!=1)
+               {
+-                  uint32_t sz;
+-#define PACK_SIZE info-&gt;bytePerFrame // perPacket ??
+-                  
+-                  track-&gt;index[i].offset=info-&gt;Co[i];
+-                  sz=samplePerChunk[i];
+-                  /* Sz is in sample, convert it to bytes */
+-                  sz/=info-&gt;samplePerPacket;
+-                  if(sz*info-&gt;samplePerPacket!=samplePerChunk[i])
+-                  {
+-                    printf(&quot;Warning sample per packet not divider of sample per chunk (per packet :%u , chunk :%u)\n&quot;,
+-                              info-&gt;samplePerPacket, samplePerChunk[i]); 
+-                  }
+-                  sz*=PACK_SIZE;
+-                  /* */
+-                  track-&gt;index[i].size=sz;
+-                  track-&gt;index[i].time=0; // No seek
+-                  if(sz&gt;MAX_CHUNK_SIZE)
+-                  {
+-                      max+=sz/MAX_CHUNK_SIZE;
+-                  }
+-                  
+-                  totalBytes+=track-&gt;index[i].size;
++                 for(i=0;i&lt;info-&gt;nbCo;i++)
++                    {
++                        uint32_t sz;
++                        track-&gt;index[i].offset=info-&gt;Co[i];
++                        sz=samplePerChunk[i];
++                        /* Sz is in sample, convert it to bytes */
++                        sz=sz*info-&gt;SzIndentical;
++                        /* */
++                        track-&gt;index[i].size=sz;
++                        track-&gt;index[i].time=0; // No seek
++                        if(sz&gt;MAX_CHUNK_SIZE)
++                        {
++                            max+=sz/MAX_CHUNK_SIZE;
++                        }
++                        
++                        totalBytes+=track-&gt;index[i].size;
++                    }
+               }
++              else
++              {
++                    for(i=0;i&lt;info-&gt;nbCo;i++)
++                    {
++                        uint32_t sz;
++      #define PACK_SIZE info-&gt;bytePerFrame // perPacket ??
++                        
++                        track-&gt;index[i].offset=info-&gt;Co[i];
++                        sz=samplePerChunk[i];
++                        /* Sz is in sample, convert it to bytes */
++                        sz/=info-&gt;samplePerPacket;
++                        if(sz*info-&gt;samplePerPacket!=samplePerChunk[i])
++                        {
++                          printf(&quot;Warning sample per packet not divider of sample per chunk (per packet :%u , chunk :%u)\n&quot;,
++                                    info-&gt;samplePerPacket, samplePerChunk[i]); 
++                        }
++                        sz*=PACK_SIZE;
++                        /* */
++                        track-&gt;index[i].size=sz;
++                        track-&gt;index[i].time=0; // No seek
++                        if(sz&gt;MAX_CHUNK_SIZE)
++                        {
++                            max+=sz/MAX_CHUNK_SIZE;
++                        }
++                        
++                        totalBytes+=track-&gt;index[i].size;
++                    }
++              }
+               printf(&quot;Found %u bytes\n&quot;,totalBytes);
+               // Now time to update the time...
+               // Normally they have all the same duration
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000348.html">[Avidemux-svn-commit] r3044 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+	<LI>Next message: <A HREF="000350.html">[Avidemux-svn-commit] r3047 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#349">[ date ]</a>
+              <a href="thread.html#349">[ thread ]</a>
+              <a href="subject.html#349">[ subject ]</a>
+              <a href="author.html#349">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

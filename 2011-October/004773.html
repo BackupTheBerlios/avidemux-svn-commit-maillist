@@ -1,0 +1,334 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7628 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7628%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062906.91929481404%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004772.html">
+   <LINK REL="Next"  HREF="004774.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7628 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7628%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062906.91929481404%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7628 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Oct 28 08:29:06 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004772.html">[Avidemux-svn-commit] r7627 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+        <LI>Next message: <A HREF="004774.html">[Avidemux-svn-commit] r7629 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4773">[ date ]</a>
+              <a href="thread.html#4773">[ thread ]</a>
+              <a href="subject.html#4773">[ subject ]</a>
+              <a href="author.html#4773">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-10-28 08:29:06 +0200 (Fri, 28 Oct 2011)
+New Revision: 7628
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+Log:
+[ASF/demux] Try to shift audio and video so that they start near zero
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp	2011-10-28 06:29:04 UTC (rev 7627)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp	2011-10-28 06:29:06 UTC (rev 7628)
+@@ -135,6 +135,7 @@
+   memset(&amp;(_audioStreams[0]),0,sizeof(_audioStreams));
+   _nbAudioTrack=0;
+   _videostream.dwRate=0;
++  _shiftUs=0;
+ 
+ }
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h	2011-10-28 06:29:04 UTC (rev 7627)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h	2011-10-28 06:29:06 UTC (rev 7628)
+@@ -190,7 +190,7 @@
+ 
+     uint8_t                 close(void);
+     bool                    setFps(uint64_t usPerFrame);
+-    
++    bool                    shiftAudioVideoBy(uint64_t s);
+   public: // Shared with audio track
+     char                    *myName;
+     uint32_t                nbImage;
+@@ -203,8 +203,9 @@
+     asfAudioTrak             _allAudioTracks[ASF_MAX_AUDIO_TRACK];
+     ADM_audioStream         *_audioStreams[ASF_MAX_AUDIO_TRACK];
+     uint32_t                 _nbPackets;
++    uint64_t                 _shiftUs;
++    uint64_t                 getShift(void) { return _shiftUs;}
+     
+-    
+     // / Shared
+   public:
+                                         asfHeader(void);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp	2011-10-28 06:29:04 UTC (rev 7627)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp	2011-10-28 06:29:06 UTC (rev 7628)
+@@ -92,6 +92,7 @@
+ 
+ bool   asfAudioAccess::goToTime(uint64_t dts_us) // PTS!
+ {
++    dts_us+=_father-&gt;getShift();
+     // Search
+     int size=_seekPoints-&gt;size();
+     if(dts_us&lt;=(*_seekPoints)[0].pts || size&lt;2)
+@@ -118,6 +119,7 @@
+   *len=0;
+   uint32_t delta;
+   uint8_t r;
++  uint64_t shift=_father-&gt;getShift();
+   while(1)
+   {
+    
+@@ -130,6 +132,12 @@
+       memcpy(dest,bit-&gt;data,bit-&gt;len);
+       *len=bit-&gt;len;
+       *dts=bit-&gt;pts; // for audio PTS=DTS...
++      if(*dts&gt;shift) *dts-=shift;
++        else
++        {
++            ADM_error(&quot;ASF audio : Cannot shift, DTS=%&quot;LLU&quot;, shift=%&quot;LLU&quot;\n&quot;,*dts,shift);
++            *dts=ADM_NO_PTS;
++        }
+       storageQueue.push_back(bit);
+       bit=NULL;
+       return 1;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-28 06:29:04 UTC (rev 7627)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-28 06:29:06 UTC (rev 7628)
+@@ -33,9 +33,41 @@
+ 
+ static const uint8_t asf_audio[16]={0x40,0x9e,0x69,0xf8,0x4d,0x5b,0xcf,0x11,0xa8,0xfd,0x00,0x80,0x5f,0x5c,0x44,0x2b};
+ static const uint8_t asf_video[16]={0xc0,0xef,0x19,0xbc,0x4d,0x5b,0xcf,0x11,0xa8,0xfd,0x00,0x80,0x5f,0x5c,0x44,0x2b};
+-
+-
+ /**
++    \fn shiftAudioVideoBy
++    \brief shift audio and video so that they start close to zero
++*/
++bool asfHeader::shiftAudioVideoBy(uint64_t s)
++{
++    int n=_index.size();
++    ADM_info(&quot;Shifting by %s\n&quot;,ADM_us2plain(s));
++    for(int i=0;i&lt;n;i++)
++    {
++        if(_index[i].pts!=ADM_NO_PTS)
++        {
++            if(_index[i].pts&lt;s)
++            {
++                ADM_error(&quot;Shifting too big for frame %d PTS: %s\n&quot;,i,ADM_us2plain(_index[i].pts));
++            }else
++                _index[i].pts-=s;
++        }
++        _index[i].dts=ADM_NO_PTS;
++/*
++        if(_index[i].dts!=ADM_NO_PTS)
++        {
++            if(_index[i].dts&lt;s)
++            {
++                ADM_error(&quot;Shifting too big for frame %d DTS: %s\n&quot;,i,ADM_us2plain(_index[i].dts));
++                _index[i].dts=ADM_NO_PTS;
++            }else
++                _index[i].dts-=s;
++        }
++*/
++    }
++    _shiftUs=s;
++    return true;
++}
++/**
+     \fn setFps
+ */
+ bool asfHeader::setFps(uint64_t usPerFrame)
+@@ -426,7 +458,7 @@
+                                    &amp;readQueue,&amp;storageQueue,_dataStartOffset);
+   uint32_t packet=0;
+ #define MAXIMAGE (_nbPackets)
+-  uint32_t sequence=1;
++  uint32_t sequence=0;
+   uint32_t ceilImage=MAXIMAGE;
+ 
+   nbImage=0;
+@@ -461,19 +493,24 @@
+       // --
+       uint64_t dts=bit-&gt;dts;
+       uint64_t pts=bit-&gt;pts;
++        printf(&quot;** DTS=%s\n&quot;,ADM_us2plain(dts));
++        printf(&quot;** PDTS=%s\n&quot;,ADM_us2plain(pts));
+       if(bit-&gt;stream==_videoStreamId)
+       {
+-          aprintf(&quot;&gt;found packet of size=%d off=%d seq %d, while curseq =%d, dts=%s\n&quot;,
+-                        bit-&gt;len,bit-&gt;offset,  bit-&gt;sequence,curSeq,
+-                        ADM_us2plain(dts));
++          printf(&quot;&gt;found video packet of size=%d off=%d seq %d, while curseq =%d, dts=%s&quot;,
++                        bit-&gt;len,bit-&gt;offset,  bit-&gt;sequence,curSeq, ADM_us2plain(dts));
++          printf(&quot; pts=%s\n&quot;,ADM_us2plain(pts));
+           if(bit-&gt;sequence!=sequence || first==true)
+           {
+             if(first==false)
+             {
+                 indexEntry.frameLen=len;
++                ADM_info(&quot;Pushing video frame seq=%d pts=%s \n&quot;,
++                        indexEntry.segNb,ADM_us2plain(indexEntry.pts));
++                ADM_info(&quot;dts=%s\n&quot;,ADM_us2plain(indexEntry.dts));
+                 _index.append(indexEntry);
+             }
+-            first=false;
++            
+             aprintf(&quot;New sequence\n&quot;);
+             if( ((sequence+1)&amp;0xff)!=(bit-&gt;sequence&amp;0xff))
+             {
+@@ -487,9 +524,9 @@
+             indexEntry.flags=bit-&gt;flags;
+             indexEntry.dts=dts;
+             indexEntry.pts=pts;
+-
+-            readQueue.push_front(bit); // reuse it next time
+-    
++            if(first==false)
++                readQueue.push_front(bit); // reuse it next time
++            first=false;
+             sequence=bit-&gt;sequence;
+             len=0;
+             continue;
+@@ -511,8 +548,14 @@
+                         seek.pts=bit-&gt;pts;
+                         seek.packetNb=bit-&gt;packet;
+                         (audioSeekPoints[i]).append(seek);
++      
++#if 1
++                        if(!lastDts[i])
++                            printf(&quot;Adding seek point for track %d at %s (packet=%d)\n&quot;,
++                            i,ADM_us2plain(bit-&gt;pts),(int)seek.packetNb);
++#endif
+                         lastDts[i]=bit-&gt;pts;
+-                        printf(&quot;Adding seek point for track %d at %s (packet=%d)\n&quot;,
++                        aprintf(&quot;Adding seek point for track %d at %s (packet=%d)\n&quot;,
+                             i,ADM_us2plain(bit-&gt;pts),(int)seek.packetNb);
+                 }
+             }
+@@ -542,22 +585,42 @@
+   printf(&quot;[ASF] ******** End of buildindex *******\n&quot;);
+ 
+   nbImage=_index.size();;
+-  if(nbImage)
++  if(!nbImage) return 0;
++  
++  uint64_t shift=60*1000*1000;
++  bool canShift=false;
++  uint64_t tPts;
++  tPts=_index[0].pts;
++    ADM_info(&quot;First image pts: %s, dts: %s\n&quot;,ADM_us2plain(tPts), ADM_us2plain(_index[0].dts));
++   if(tPts != ADM_NO_PTS)
+     {
+-        ADM_info(&quot;First image pts: %s, dts: %s\n&quot;,ADM_us2plain(_index[0].pts),
+-                ADM_us2plain(_index[0].dts));
+-        for(int i=0;i&lt;_nbAudioTrack;i++)
++        shift=tPts;
++        ADM_info(&quot;Video shift = %s\n&quot;,ADM_us2plain(tPts));
++        canShift=true;
++    }else
++        canShift=false;
++    for(int i=0;i&lt;_nbAudioTrack;i++)
++    {
++        if(!audioSeekPoints[i].size())
+         {
+-            if(!audioSeekPoints[i].size())
+-            {
+-                ADM_info(&quot;audio track : %d, no seek\n&quot;,i);
+-                continue;
+-            }
+-            ADM_info(&quot;audio track : %d, %s\n&quot;,i,ADM_us2plain(audioSeekPoints[i][0].pts));
++            ADM_info(&quot;audio track : %d, no seek\n&quot;,i);
++            canShift=false;
++            continue;
+         }
++        tPts=audioSeekPoints[i][0].pts;
++        ADM_info(&quot;audio track : %d, %s\n&quot;,i,ADM_us2plain(tPts));
++        if(tPts&lt;shift) shift=tPts;
+     }
++    if(canShift)
++    {
++            ADM_info(&quot;Shifting a/v raw=%s\n&quot;,ADM_us2plain(shift));
++    }else
++    {
++            ADM_info(&quot;Can t shift\n&quot;);
++            shift=0;
++    }
+   _videostream.dwLength=_mainaviheader.dwTotalFrames=nbImage;
+-  if(!nbImage) return 0;
++  
+   _index[0].flags=AVI_KEY_FRAME;
+   if(_index[0].pts==ADM_NO_PTS) _index[0].pts=_index[0].dts;
+   // Update fps
+@@ -592,6 +655,18 @@
+             _videostream.dwRate=(uint32_t)30000;;
+         }
+     }
++    if(shift)
++    {
++        double frames3=_videostream.dwScale;
++                frames3/=_videostream.dwRate;
++                frames3*=3*1000*1000; // 
++            ADM_info(&quot;3 frames time = %s\n&quot;,ADM_us2plain((uint64_t)frames3));
++        uint64_t frame64=(uint64_t)frames3;
++        if(frame64&lt;shift) shift=shift-frame64;
++        else shift=0;
++
++        shiftAudioVideoBy(shift);
++    }
+     return 1;
+   
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004772.html">[Avidemux-svn-commit] r7627 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+	<LI>Next message: <A HREF="004774.html">[Avidemux-svn-commit] r7629 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4773">[ date ]</a>
+              <a href="thread.html#4773">[ thread ]</a>
+              <a href="subject.html#4773">[ subject ]</a>
+              <a href="author.html#4773">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

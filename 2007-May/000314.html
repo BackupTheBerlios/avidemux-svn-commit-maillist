@@ -1,0 +1,335 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3002 -	branches/avidemux_2.4_branch/addons/mkvscan
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3002%20-%0A%09branches/avidemux_2.4_branch/addons/mkvscan&In-Reply-To=%3C200705011715.l41HFPpZ029101%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000313.html">
+   <LINK REL="Next"  HREF="000315.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3002 -	branches/avidemux_2.4_branch/addons/mkvscan</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3002%20-%0A%09branches/avidemux_2.4_branch/addons/mkvscan&In-Reply-To=%3C200705011715.l41HFPpZ029101%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3002 -	branches/avidemux_2.4_branch/addons/mkvscan">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue May  1 19:15:25 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000313.html">[Avidemux-svn-commit] r3001 - in branches/avidemux_2.4_branch:	autononreg/dialogFactory avidemux avidemux/ADM_script	avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	avidemux/ADM_userInterfaces/ADM_NONE/ADM_dialogFactory	avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialogFactory	avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+        <LI>Next message: <A HREF="000315.html">[Avidemux-svn-commit] r3003 -	branches/avidemux_2.4_branch/avidemux/ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#314">[ date ]</a>
+              <a href="thread.html#314">[ thread ]</a>
+              <a href="subject.html#314">[ subject ]</a>
+              <a href="author.html#314">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-05-01 19:15:24 +0200 (Tue, 01 May 2007)
+New Revision: 3002
+
+Modified:
+   branches/avidemux_2.4_branch/addons/mkvscan/ebml.cpp
+   branches/avidemux_2.4_branch/addons/mkvscan/mkv_c.cpp
+Log:
+updated mkvscan
+
+Modified: branches/avidemux_2.4_branch/addons/mkvscan/ebml.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/addons/mkvscan/ebml.cpp	2007-05-01 17:14:45 UTC (rev 3001)
++++ branches/avidemux_2.4_branch/addons/mkvscan/ebml.cpp	2007-05-01 17:15:24 UTC (rev 3002)
+@@ -18,15 +18,25 @@
+  *   Free Software Foundation, Inc.,                                       *
+  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+  ***************************************************************************/
+-
+ #include &lt;stdio.h&gt;
+ #include &lt;stdlib.h&gt;
+ #include &lt;stdint.h&gt;
+ #include &lt;assert.h&gt;
+-#define ADM_assert assert
+ #include &quot;ADM_ebml.h&quot;
+ #define aprintf(...) {}
++#define ADM_assert assert
++#if 0
++#define vprintf printf
++#else
++#define vprintf(...) {}
++#endif
+ 
++extern &quot;C&quot;
++{
++  double av_int2dbl(int64_t v);
++  float av_int2flt(int32_t v);
++}
++
+ /*
+   It is slow , optimize later
+ */  
+@@ -90,7 +100,18 @@
+     val=(val&lt;&lt;8)+readu8(); 
+   }
+   // Signed !
+-  //FIXME
++
++  switch(more)
++  {
++    case 0: val-=63;break; 
++    case 1: val-=8191;break;
++    case 2: val-=1048575L;break;  
++    default: 
++        ADM_assert(0);
++        return 0;
++    
++  }
++
+   return val;
+ }
+ /**
+@@ -156,6 +177,29 @@
+     readBin(v,2);
+     return (uint16_t)(v[0]&lt;&lt;8)+v[1];
+ }
++/**
++*/
++float       ADM_ebml::readFloat(uint32_t n)
++{
++  if(n!=4 &amp;&amp; n!=8) ADM_assert(0);
++  
++  switch(n)
++  {
++    case 4:
++    {
++        uint32_t u4=readUnsignedInt(4);
++        return av_int2flt(u4);
++      }
++    case 8:
++    {
++        uint64_t u8=readUnsignedInt(8);
++        return  av_int2dbl(u8);
++    }
++    default:
++        ADM_assert(0);
++  }
++}
++
+ ADM_ebml::ADM_ebml(void)
+ {
+   
+@@ -178,12 +222,15 @@
+ }
+ ADM_ebml_file::ADM_ebml_file(void) : ADM_ebml()
+ {
+-  
++  _close=0;
+ }
+ ADM_ebml_file::~ADM_ebml_file()
+ {
+   ADM_assert(fp);
+-  if(_close) fclose(fp);
++  if(_close)
++  {
++    fclose(fp);
++  }
+   else fseeko(fp,_begin+_size,SEEK_SET);
+   fp=NULL; 
+ }
+@@ -228,4 +275,85 @@
+   if(tell()&gt;(_begin+_size-4)) return 1;
+   return 0; 
+ }
++/** 
++  \fn find
++  \brief Search for the tag given and returns the corresponding atom
++*/
++ uint8_t ADM_ebml_file::find(ADM_MKV_SEARCHTYPE search,MKV_ELEM_ID  prim,MKV_ELEM_ID second,uint32_t *len,uint32_t rewind)
++{
++  uint64_t id,pos;
++  ADM_MKV_TYPE type;
++  const char *ss;
++
++    vprintf(&quot;[MKV]Searching for tag %llx %llx\n&quot;,prim,second);
++    if(rewind) seek(_begin);
++    if(search==ADM_MKV_PRIMARY)
++    {
++          return simplefind(prim,len,rewind);
++      }
++    vprintf(&quot;[MKV]Searching primary : %llx\n&quot;,prim);
++    if(!simplefind(prim,len,rewind))
++    {
++      vprintf(&quot;[MKV] Primary find failed for %llx\n&quot;,prim);
++      return 0; 
++    }
++    // Now we have the father, go inside
++    ADM_ebml_file *son=new ADM_ebml_file(this,*len);
++    vprintf(&quot;[MKV]Searching secondary : %llx\n&quot;,second);
++    if(!son-&gt;simplefind(second,len))
++    {
++      vprintf(&quot;[MKV] secondary find failed for secondary %llx\n&quot;,second);
++      delete son;
++      return 0; 
++    }
++    pos=son-&gt;tell();
++    delete son;
++    seek(pos);
++    return 1;
++}
++
++/** 
++  \fn find
++  \brief Search for the tag given and returns the corresponding atom
++*/
++uint8_t ADM_ebml_file::simplefind(MKV_ELEM_ID  prim,uint32_t *len,uint32_t rewind)
++{
++  uint64_t id,alen;
++  ADM_MKV_TYPE type;
++  const char *ss;
++  
++
++    vprintf(&quot;[MKV] Simple Searching for tag %llx\n&quot;,prim);
++    if(rewind) seek(_begin);
++   
++      while(!finished())
++      {
++          readElemId(&amp;id,&amp;alen);
++          if(!ADM_searchMkvTag( (MKV_ELEM_ID)id,&amp;ss,&amp;type))
++          {
++              vprintf(&quot;[MKV] Tag 0x%x not found\n&quot;,id);
++              skip(alen);
++              continue;
++           }
++          vprintf(&quot;Found Tag : %x (%s)\n&quot;,id,ss);
++          if(id==prim)
++          {
++            *len=(uint32_t )alen;
++            return 1;
++          }else
++            skip(alen);
++      }
++    vprintf(&quot;[MKV] Failed to locate %llx\n&quot;,prim);
++    return 0;
++}
++/**
++    \fn remaining
++    \brief returns the # of bytes remaining in this atom
++*/
++uint64_t ADM_ebml_file::remaining(void)
++{
++  uint64_t pos=tell();
++  ADM_assert(pos&lt;=(_begin+_size));
++  return (_begin+_size)-pos; 
++}
+ //EOF
+
+Modified: branches/avidemux_2.4_branch/addons/mkvscan/mkv_c.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/addons/mkvscan/mkv_c.cpp	2007-05-01 17:14:45 UTC (rev 3001)
++++ branches/avidemux_2.4_branch/addons/mkvscan/mkv_c.cpp	2007-05-01 17:15:24 UTC (rev 3002)
+@@ -23,6 +23,7 @@
+ #include &lt;stdlib.h&gt;
+ #include &lt;stdint.h&gt;
+ #include &lt;assert.h&gt;
++#include &lt;math.h&gt;
+ #define ADM_assert assert
+ #include &quot;ADM_ebml.h&quot;
+ #include &quot;mkv_tags.h&quot;
+@@ -97,6 +98,9 @@
+                   val=son.readUnsignedInt(len);
+                   recTab();printf(&quot;\tval uint: %llu (0x%llx) \n&quot;,val,val);
+                   break;
++        case ADM_MKV_TYPE_FLOAT:
++                  recTab();printf(&quot;\tval float: %f \n&quot;,son.readFloat(len));
++                  break;
+         case ADM_MKV_TYPE_INTEGER:
+                   recTab();printf(&quot;\tval int: %lld \n&quot;,son.readSignedInt(len));
+                   break;
+@@ -109,7 +113,31 @@
+                   break;
+         }
+         default:
+-                son.skip(len);
++                if(id==MKV_BLOCK)
++                {
++                        recTab();printf(&quot;\t\tTrack :%u&quot;,son.readu8()-128); // Assume 1 byte code
++                        //printf(&quot; Timecode:%d&quot;,son.reads16());
++                        son.skip(2);
++                        int lacing=son.readu8();
++                        printf(&quot; Lacing :%x &quot;);
++                        if(lacing&amp;1) printf(&quot; keyframe &quot;);
++                        lacing=(lacing&gt;&gt;1)&amp;3;
++                        switch(lacing)
++                        {
++                                       case 0:printf(&quot;No lacing\n&quot;);break;
++                                       case 1:printf(&quot;Xiph lacing\n&quot;);break;
++                                       case 3:printf(&quot;Ebml lacing\n&quot;);break;
++                                       case 2:printf(&quot;Fixed lacing :%u remaining:%u\n&quot;,son.readu8()+1,len-5);len--;break;
++
++                        }
++                        son.skip(len-4);
++
++                }
++                else
++                {
++                        recTab();printf(&quot;Skipping %s\n&quot;,ss);
++                        son.skip(len);
++                }
+                 break;
+       }
+    }
+@@ -136,4 +164,20 @@
+   }
+   printf(&quot;\n&quot;); 
+ }
++extern &quot;C&quot;
++{
++double av_int2dbl(int64_t v)
++{
++    if(v+v &gt; 0xFFEULL&lt;&lt;52)
++            return 0;
++    return ldexp(((v&amp;((1LL&lt;&lt;52)-1)) + (1LL&lt;&lt;52)) * (v&gt;&gt;63|1), (v&gt;&gt;52&amp;0x7FF)-1075);
++}
++
++float av_int2flt(int32_t v)
++{
++    if(v+v &gt; 0xFF000000U)
++            return 0;
++return ldexp(((v&amp;0x7FFFFF) + (1&lt;&lt;23)) * (v&gt;&gt;31|1), (v&gt;&gt;23&amp;0xFF)-150);
++}
++}
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000313.html">[Avidemux-svn-commit] r3001 - in branches/avidemux_2.4_branch:	autononreg/dialogFactory avidemux avidemux/ADM_script	avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	avidemux/ADM_userInterfaces/ADM_NONE/ADM_dialogFactory	avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialogFactory	avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+	<LI>Next message: <A HREF="000315.html">[Avidemux-svn-commit] r3003 -	branches/avidemux_2.4_branch/avidemux/ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#314">[ date ]</a>
+              <a href="thread.html#314">[ thread ]</a>
+              <a href="subject.html#314">[ subject ]</a>
+              <a href="author.html#314">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

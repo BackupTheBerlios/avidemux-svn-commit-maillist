@@ -1,0 +1,281 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5129 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5129%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI&In-Reply-To=%3C200907231818.n6NIIfuM009213%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002343.html">
+   <LINK REL="Next"  HREF="002345.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5129 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5129%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI&In-Reply-To=%3C200907231818.n6NIIfuM009213%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5129 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jul 23 20:18:41 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002343.html">[Avidemux-svn-commit] r5128 -	branches/avidemux_2.5_branch_gruntster/po
+</A></li>
+        <LI>Next message: <A HREF="002345.html">[Avidemux-svn-commit] r5130 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2344">[ date ]</a>
+              <a href="thread.html#2344">[ thread ]</a>
+              <a href="subject.html#2344">[ subject ]</a>
+              <a href="author.html#2344">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-07-23 20:18:41 +0200 (Thu, 23 Jul 2009)
+New Revision: 5129
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI/DIA_bitrateHisto.cpp
+Log:
+[UI] Fix bitrate histogram
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI/DIA_bitrateHisto.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI/DIA_bitrateHisto.cpp	2009-07-22 17:09:30 UTC (rev 5128)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI/DIA_bitrateHisto.cpp	2009-07-23 18:18:41 UTC (rev 5129)
+@@ -1,11 +1,8 @@
+ /***************************************************************************
+-                          ADM_guiBitrate  -  description
+-                             -------------------
++                            \file   ADM_guiBitrate 
++                            \brief	Simple bitrate analyzer
+ 
+-	Simple bitrate analyzer
+-
+-    begin                : Mon Aug 31 2003
+-    copyright            : (C) 2003 by mean
++    copyright            : (C) 2003/2009 by mean
+     email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+  ***************************************************************************/
+ 
+@@ -19,18 +16,15 @@
+  ***************************************************************************/
+ 
+ #include &lt;math.h&gt;
+-
+-#include &quot;config.h&quot;
+ #include &quot;ADM_default.h&quot;
+ #include &quot;DIA_coreToolkit.h&quot;
+ #include &quot;DIA_factory.h&quot;
+-#include &quot;avi_vars.h&quot;
+-
++#include &quot;ADM_editor/ADM_edit.hxx&quot;
+ /**
+       \fn GUI_displayBitrate
+       \brief display a bargraph with bitrates
+ */
+-
++extern ADM_Composer *video_body;
+ void GUI_displayBitrate( void )
+ {
+ 
+@@ -40,7 +34,7 @@
+ 
+  float f;
+ 
+- float display[20];
++float    display[20];
+ uint32_t medium=0;
+ uint32_t nbIFrame=0;
+ uint32_t nbPFrame=0;
+@@ -48,33 +42,44 @@
+ uint32_t curBFrame=0;
+ uint32_t maxBFrame=0;
+ 	// 1st compute the total
+-	
++	uint32_t start,end;
++    uint64_t deltaTime=video_body-&gt;getMarkerBPts()-video_body-&gt;getMarkerAPts();
++    start=video_body-&gt;searchFrameBefore(video_body-&gt;getMarkerAPts());
++    end=video_body-&gt;searchFrameBefore(video_body-&gt;getMarkerBPts());
++    
++    // Se
+ 	max=0;
+-	if(!(frameEnd&gt;frameStart) || abs(frameStart-frameEnd)&lt;5)
++	if((deltaTime&lt;100000LL) || abs(start-end)&lt;5)
+ 	{
+           GUI_Error_HIG(QT_TR_NOOP(&quot;No data&quot;), NULL);
+ 		return ;
+ 	}
++    uint64_t increment=video_body-&gt;getFrameIncrement();
++    f=increment;
++    if(f&lt;1000) f=1000;
+ 
+-	round=((avifileinfo-&gt;fps1000+990)/1000);
++    f=1000000./f; // ~ FPS
++    f=f*1000;     // 1000*fps
++    uint32_t fps1000=(uint32_t)f;
++	round= (fps1000+990)/1000; // round up of fps
+ 	if(!round) return;
+ 
+-	video_body-&gt;getFrameSize (frameStart, &amp;len);
++    printf(&quot;[Histogram] fps roundup %&quot;LU&quot; fps, time increment=%&quot;LLU&quot; us\n&quot;,round,increment);
++	video_body-&gt;getFrameSize (start, &amp;len);
+ 	for(k=0;k&lt;round;k++) average[k]=0;
+ 
+ 	sum=0;
+ 	changed=0;
+-        total=0;
+-        uint32_t flags;
+-	// 1 st pass, compute max
+-        /*
+-            to do so : We compute the sum of frame size on [changed] frames i.e ~ 1 second
+-        
++    total=0;
++    uint32_t flags;
++
++        /*  1 st pass, compute max
++            to do so : We compute the sum of frame size on [changed] frames i.e ~ 1 second        
+         */
+-	for( k=frameStart;k&lt;frameEnd;k++)
++	for( k=start;k&lt;end;k++)
+ 	{
+  		video_body-&gt;getFrameSize (k, &amp;len);
+-                total+=len;
++        total+=len;
+ 		sum-=average[changed];
+ 		average[changed]=len;
+ 		sum+=average[changed];
+@@ -82,30 +87,30 @@
+ 		if(sum&gt;max) max=sum;
+ 		changed++;
+ 		changed%=round;
+-                video_body-&gt;getFlags (k, &amp;flags);
+-                if(!flags) 
+-                {
+-                  nbPFrame++;
+-                  curBFrame=0;
+-                }
+-                if(flags==AVI_KEY_FRAME) 
+-                {
+-                  nbIFrame++;
+-                  curBFrame=0;
+-                }
+-                if(flags==AVI_B_FRAME)
+-                {
+-                  nbBFrame++;
+-                  curBFrame++;
+-                  if(curBFrame&gt;maxBFrame) 
+-                    maxBFrame=curBFrame;
+-                  
+-                }
++        video_body-&gt;getFlags (k, &amp;flags);
++        if(!flags) 
++        {
++          nbPFrame++;
++          curBFrame=0;
++        }
++        if(flags==AVI_KEY_FRAME) 
++        {
++          nbIFrame++;
++          curBFrame=0;
++        }
++        if(flags==AVI_B_FRAME)
++        {
++          nbBFrame++;
++          curBFrame++;
++          if(curBFrame&gt;maxBFrame) 
++            maxBFrame=curBFrame;
++          
++        }
+ 	}
+         
+         float g=total;
+-        g/=(frameEnd-frameStart);
+-        g*=avifileinfo-&gt;fps1000;
++        g/=(end-start);
++        g*=fps1000; //avifileinfo-&gt;fps1000;
+         g/=(1000.*1000.);
+         medium=(uint32_t)(g*8);
+         
+@@ -124,11 +129,11 @@
+           GUI_Error_HIG(QT_TR_NOOP(&quot;No data&quot;), NULL);
+ 		return ;
+ 	}
+-	nb_frame=frameEnd-frameStart;
++	nb_frame=end-start;
+ 	// and now build an histogram
+ 	for(k=0;k&lt;20;k++) display[k]=0;
+ 
+-	video_body-&gt;getFrameSize (frameStart, &amp;len);
++	video_body-&gt;getFrameSize (start, &amp;len);
+ 	for(k=0;k&lt;round;k++) average[k]=0;
+ 
+ 	sum=0;
+@@ -136,7 +141,7 @@
+         uint32_t step=max/20;
+         uint32_t sumkb;
+         
+-	for(uint32_t k=frameStart;k&lt;frameEnd;k++)
++	for(uint32_t k=start;k&lt;end;k++)
+ 	{
+ 		video_body-&gt;getFrameSize (k, &amp;len);
+ 		// which case ?
+@@ -190,21 +195,6 @@
+           bar[19-i]=new  diaElemBar((uint32_t)display[i],str);
+             
+         }
+-/*
+-        diaElemUInteger mx(&amp;max,&quot;Max bitrate&quot;,0,9999999);
+-        diaElemUInteger med(&amp;medium,&quot;Average bitrate&quot;,0,9999999);
+-        diaElemUInteger nI(&amp;nbIFrame,&quot;Number of I frames&quot;,0,9999999);
+-        diaElemUInteger nP(&amp;nbPFrame,&quot;Number of P frames&quot;,0,9999999);
+-        diaElemUInteger nB(&amp;nbBFrame,&quot;Number of B frames&quot;,0,9999999);
+-        diaElemUInteger nMB(&amp;maxBFrame,&quot;Max B frames&quot;,0,9999999);
+-
+-        mx.setRo();
+-        med.setRo();
+-        nI.setRo();
+-        nP.setRo();
+-        nB.setRo();
+-        nMB.setRo();
+-*/
+ #define DOME(a,b,c)       sprintf(bf,&quot;%u&quot;,b); diaElemReadOnlyText a(bf,c);
+         char bf[100];
+         DOME(mx,max,QT_TR_NOOP(&quot;Max. bitrate:&quot;));
+@@ -233,5 +223,4 @@
+           delete bar[i];
+         }
+ }
+-
+-
++//EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002343.html">[Avidemux-svn-commit] r5128 -	branches/avidemux_2.5_branch_gruntster/po
+</A></li>
+	<LI>Next message: <A HREF="002345.html">[Avidemux-svn-commit] r5130 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2344">[ date ]</a>
+              <a href="thread.html#2344">[ thread ]</a>
+              <a href="subject.html#2344">[ subject ]</a>
+              <a href="author.html#2344">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

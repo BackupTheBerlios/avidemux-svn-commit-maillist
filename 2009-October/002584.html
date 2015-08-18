@@ -1,0 +1,291 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5373 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices:	. Jack
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5373%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices%3A%0A%09.%20Jack&In-Reply-To=%3C200910100940.n9A9e9Oj004480%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002583.html">
+   <LINK REL="Next"  HREF="002586.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5373 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices:	. Jack</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5373%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices%3A%0A%09.%20Jack&In-Reply-To=%3C200910100940.n9A9e9Oj004480%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5373 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices:	. Jack">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Oct 10 11:40:09 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002583.html">[Avidemux-svn-commit] r5372 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple
+</A></li>
+        <LI>Next message: <A HREF="002586.html">[Avidemux-svn-commit] r5374 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_editor ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2584">[ date ]</a>
+              <a href="thread.html#2584">[ thread ]</a>
+              <a href="subject.html#2584">[ subject ]</a>
+              <a href="author.html#2584">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-10-10 11:40:09 +0200 (Sat, 10 Oct 2009)
+New Revision: 5373
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Jack/ADM_deviceJack.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Jack/ADM_deviceJack.h
+Log:
+[Jack] Re-enable Jack, now completely done
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/CMakeLists.txt	2009-10-10 09:40:08 UTC (rev 5372)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/CMakeLists.txt	2009-10-10 09:40:09 UTC (rev 5373)
+@@ -24,9 +24,9 @@
+ #ADD_SUBDIRECTORY(Arts)
+ #endif(USE_ARTS)
+ 
+-#if(USE_JACK)
+-#ADD_SUBDIRECTORY(Jack)
+-#endif(USE_JACK)
++if(USE_JACK)
++ADD_SUBDIRECTORY(Jack)
++endif(USE_JACK)
+ 
+ if(WIN32)
+ ADD_SUBDIRECTORY(Win32)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Jack/ADM_deviceJack.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Jack/ADM_deviceJack.cpp	2009-10-10 09:40:08 UTC (rev 5372)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Jack/ADM_deviceJack.cpp	2009-10-10 09:40:09 UTC (rev 5373)
+@@ -6,16 +6,12 @@
+ //
+ 
+ 
+-#include &lt;unistd.h&gt;
+-#include &lt;stdio.h&gt;
+-#include &lt;stdint.h&gt;
+-
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_audiodevice.h&quot;
+-#include &quot;ADM_assert.h&quot;
++#include &quot;ADM_audioDeviceInternal.h&quot;
+ #include &quot;ADM_deviceJack.h&quot;
+ 
+-
++ADM_DECLARE_AUDIODEVICE(Jack,jackAudioDevice,1,0,0,&quot;Jack audio device (c) M. Zenkov&quot;);
+ #define BUFSIZE 16385
+ 
+ jackAudioDevice::jackAudioDevice()
+@@ -33,7 +29,7 @@
+ 	((jackAudioDevice*)arg)-&gt;stop();
+ }
+ 
+-uint8_t jackAudioDevice::stop()
++bool jackAudioDevice::localStop()
+ {
+ 	if (client) {
+ 		printf(&quot;[JACK] Stop\n&quot;);
+@@ -52,15 +48,17 @@
+ 
+ 	return 1;
+ }
++/**
+ 
+-uint8_t jackAudioDevice::init(uint8_t channels, uint32_t fq)
++*/
++bool jackAudioDevice::localInit(void)
+ {
+ 	jack_status_t status;
+-	_channels = channels;
+ 
++
+ 	if (sizeof(jack_default_audio_sample_t) != sizeof(float)) {
+ 		printf(&quot;[JACK] jack_default_audio_sample_t != float\n&quot;);
+-		return 0;
++		return false;
+ 	}
+ 
+ 	client = jack_client_open(&quot;avidemux&quot;, JackNullOption, &amp;status, NULL);
+@@ -69,24 +67,26 @@
+ 		printf(&quot;[JACK] jack_client_open() failed, status = 0x%2.0x\n&quot;, status);
+ 		if (status &amp; JackServerFailed)
+ 			printf((&quot;[JACK] Unable to connect to server\n&quot;));
+-		return 0;
++		return false;
+ 	}
+ 
+ 	if (status &amp; JackServerStarted)
+ 		printf(&quot;[JACK] Server started\n&quot;);
+ 
+-	if (jack_get_sample_rate(client) == fq) {
++	if (jack_get_sample_rate(client) == _frequency) 
++    {
+ 		jack_set_process_callback(client, process_callback, this);
+-	} else {
+-		printf(&quot;[JACK] audio stream sample rate: %i\n&quot;, fq);
++	} else 
++    {
++		printf(&quot;[JACK] audio stream sample rate: %i\n&quot;, _frequency);
+ 		printf(&quot;[JACK] jack server sample rate: %i\n&quot;, (int)jack_get_sample_rate(client));
+ 		#ifdef USE_SRC
+ 			src_out_buf = new float[BUFSIZE * channels];
+ 			src_state = src_new(SRC_SINC_FASTEST, channels, NULL);
+ 			if (!src_state) {
+ 				printf(&quot;[JACK] Can't init libsamplerate\n&quot;);
+-				stop();
+-				return 0;
++				localStop();
++				return false;
+ 			}
+ 			src_data.data_out = src_out_buf;
+ 			src_data.output_frames = BUFSIZE;
+@@ -95,47 +95,48 @@
+ //			printf(&quot;[JACK] ratio: %f\n&quot;, src_data.src_ratio);
+ 		#else
+ 			printf(&quot;[JACK] For play this, you need avidemux compiled with libsamplerate support\n&quot;);
+-			stop();
+-			return 0;
++			localStop();
++			return false;
+ 		#endif
+ 	}
+ 
+-	ringbuffer = jack_ringbuffer_create(BUFSIZE * channels * sizeof(jack_default_audio_sample_t));
++	ringbuffer = jack_ringbuffer_create(BUFSIZE * _channels * sizeof(jack_default_audio_sample_t));
+ 
+ 	jack_set_process_callback(client, process_callback, this);
+ 	jack_on_shutdown(client, jack_shutdown, this);
+ 
+ 	char name[10];
+-	for (int i = 0; i &lt; channels; i++) {
++	for (int i = 0; i &lt; _channels; i++) {
+ 		snprintf(name, 10, &quot;output-%d&quot;, i);
+ 		ports[i] = jack_port_register(client, name, JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+ 		if (!ports[i]) {
+ 			printf(&quot;[JACK] Can't create new port\n&quot;);
+-			stop();
+-			return 0;
++			localStop();
++			return false;
+ 		}
+ 	}
+ 
+ 	if (jack_activate(client)) {
+ 		printf(&quot;[JACK] Cannot activate client\n&quot;);
+-		stop();
++		localStop();
+ 		return 0;
+ 	}
+ 
+ 	const char **input_ports = jack_get_ports(client, NULL, NULL, JackPortIsInput|JackPortIsPhysical);
+ 
+-	for (int i = 0; i &lt; channels &amp;&amp; input_ports[i]; i++) {
++	for (int i = 0; i &lt; _channels &amp;&amp; input_ports[i]; i++) {
+ 		if (jack_connect(client, jack_port_name(ports[i]), input_ports[i]))
+ 			printf(&quot;[JACK] Connecting failed\n&quot;);
+ 	}
+ 
+-	if (channels == 1 &amp;&amp; input_ports[1])
++	if (_channels == 1 &amp;&amp; input_ports[1])
+ 		if (jack_connect(client, jack_port_name(ports[0]), input_ports[1]))
+ 			printf(&quot;[JACK] Connecting failed\n&quot;);
+ 
+ 	return 1;
+ }
+-
++/**
++*/
+ int jackAudioDevice::process(jack_nframes_t nframes)
+ {
+ 	jack_default_audio_sample_t *pbuf[_channels];
+@@ -171,8 +172,21 @@
+ 	return ((jackAudioDevice*)arg)-&gt;process(nframes);
+ }
+ 
++void jackAudioDevice::sendData(void)
++{
++	mutex.lock();
++    uint32_t avail=wrIndex-rdIndex;
++    if(avail&gt;sizeOf10ms) avail=sizeOf10ms;
++    mutex.unlock();
++    //play(avail,audioBuffer+rdIndex);
++	//int w=write(esdDevice, audioBuffer+rdIndex, avail);
++    mutex.lock();
++    rdIndex+=avail;
++    mutex.unlock();
++	return ;
++}
+ 
+-uint8_t jackAudioDevice::play(uint32_t len, float *data)
++bool jackAudioDevice::tempplay(uint32_t len, float *data)
+ {
+ //	static int min = 5000;
+ 	static int sleep = (int)((float)BUFSIZE / jack_get_sample_rate(client) / 2. * 1000000.);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Jack/ADM_deviceJack.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Jack/ADM_deviceJack.h	2009-10-10 09:40:08 UTC (rev 5372)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Jack/ADM_deviceJack.h	2009-10-10 09:40:09 UTC (rev 5373)
+@@ -16,17 +16,20 @@
+ 
+ #define MAX_CHANNELS 9
+ 
+-class jackAudioDevice : public audioDevice
++class jackAudioDevice : public audioDeviceThreaded
+ {
+ public:
+ 	jackAudioDevice();
+-	virtual uint8_t init(uint8_t channel,uint32_t fq);
+-	virtual uint8_t play(uint32_t len, float *data);
+-	virtual uint8_t stop();
+-	uint8_t setVolume(int volume);
+-	int process(jack_nframes_t nframes);
++    virtual     bool     localInit(void);
++    virtual     bool     localStop(void);
++    virtual     void     sendData(void); 
++                uint8_t  setVolume(int volume);
++                int      process(jack_nframes_t nframes);
+ 
+ protected:
++
++    bool tempplay(uint32_t len, float *data); // FIXME: DOES NOT WORK!
++
+ 	static void jack_shutdown(void *arg);
+ 	static int process_callback(jack_nframes_t nframes, void *arg);
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002583.html">[Avidemux-svn-commit] r5372 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple
+</A></li>
+	<LI>Next message: <A HREF="002586.html">[Avidemux-svn-commit] r5374 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_editor ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2584">[ date ]</a>
+              <a href="thread.html#2584">[ thread ]</a>
+              <a href="subject.html#2584">[ subject ]</a>
+              <a href="author.html#2584">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,151 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3461 - branches/avidemux_2.4_branch/cmake
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3461%20-%20branches/avidemux_2.4_branch/cmake&In-Reply-To=%3C200707301851.l6UIp1sF007877%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000735.html">
+   <LINK REL="Next"  HREF="000737.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3461 - branches/avidemux_2.4_branch/cmake</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3461%20-%20branches/avidemux_2.4_branch/cmake&In-Reply-To=%3C200707301851.l6UIp1sF007877%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3461 - branches/avidemux_2.4_branch/cmake">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Mon Jul 30 20:51:01 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000735.html">[Avidemux-svn-commit] r3460 - in	branches/avidemux_2.4_branch/avidemux: ADM_ocr	ADM_userInterfaces/ADM_GTK/ADM_ocr
+</A></li>
+        <LI>Next message: <A HREF="000737.html">[Avidemux-svn-commit] r3462 - in	branches/avidemux_2.4_branch/avidemux: . ADM_ocr	ADM_userInterfaces/ADM_GTK/ADM_ocr	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#736">[ date ]</a>
+              <a href="thread.html#736">[ thread ]</a>
+              <a href="subject.html#736">[ subject ]</a>
+              <a href="author.html#736">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2007-07-30 20:49:54 +0200 (Mon, 30 Jul 2007)
+New Revision: 3461
+
+Modified:
+   branches/avidemux_2.4_branch/cmake/admSDL.cmake
+   branches/avidemux_2.4_branch/cmake/adm_qt4.cmake
+Log:
+[CMake] support MinGW makefiles (MSYS is no longer required)
+
+Modified: branches/avidemux_2.4_branch/cmake/admSDL.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/cmake/admSDL.cmake	2007-07-30 18:27:36 UTC (rev 3460)
++++ branches/avidemux_2.4_branch/cmake/admSDL.cmake	2007-07-30 18:49:54 UTC (rev 3461)
+@@ -14,14 +14,24 @@
+ if(SDL_EXECUTABLE)
+   MESSAGE(STATUS &quot;sdl-config found ${SDL_EXECUTABLE}&quot;)
+ # Check we can run it
+-    SET(_return_VALUE TRUE)
+-    IF(_return_VALUE)
+-      EXEC_PROGRAM(sh ARGS &quot;${SDL_EXECUTABLE} --libs&quot;   OUTPUT_VARIABLE SDL_LDFLAGS )
+-      EXEC_PROGRAM(sh ARGS &quot;${SDL_EXECUTABLE} --cflags&quot; OUTPUT_VARIABLE SDL_CFLAGS )
++    FIND_PROGRAM(SH_EXECUTABLE NAMES sh)
++
++    IF(SH_EXECUTABLE)
++      MESSAGE(STATUS &quot;sh found ${SH_EXECUTABLE}&quot;)
++    
++      EXEC_PROGRAM(${SH_EXECUTABLE} ARGS &quot;${SDL_EXECUTABLE} --libs&quot;   OUTPUT_VARIABLE SDL_LDFLAGS )
++      EXEC_PROGRAM(${SH_EXECUTABLE} ARGS &quot;${SDL_EXECUTABLE} --cflags&quot; OUTPUT_VARIABLE SDL_CFLAGS )
+       SET(SDL_FOUND TRUE)
++    ELSEIF(WIN32)
++      SET(SDL_FOUND TRUE)
++      SET(SDL_LDFLAGS &quot;-L/mingw/lib -lmingw32 -lSDLmain -lSDL -mwindows&quot;)
++      SET(SDL_CFLAGS &quot;-I/mingw/include/SDL -D_GNU_SOURCE=1 -Dmain=SDL_main&quot;)
++    ENDIF(SH_EXECUTABLE)
++    
++    IF(SDL_FOUND)
+       MESSAGE(STATUS &quot;cflags : ${SDL_CFLAGS}&quot;)
+       MESSAGE(STATUS &quot;libs   : ${SDL_LDFLAGS}&quot;)
+-  ENDIF(_return_VALUE)
++    ENDIF(SDL_FOUND)
+ else(SDL_EXECUTABLE)
+   MESSAGE(STATUS &quot;sdl-config not found &quot;)
+ endif(SDL_EXECUTABLE)
+
+Modified: branches/avidemux_2.4_branch/cmake/adm_qt4.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/cmake/adm_qt4.cmake	2007-07-30 18:27:36 UTC (rev 3460)
++++ branches/avidemux_2.4_branch/cmake/adm_qt4.cmake	2007-07-30 18:49:54 UTC (rev 3461)
+@@ -2,6 +2,12 @@
+ # FOR AQ
+ # Q_foo.cpp and foo.ui =&gt; AQ_foo.cpp, ui_foo.h and Q_foo.moc
+ ##############################################################&quot;
++IF(WIN32)
++	SET(VERBATIM &quot;&quot;)
++ELSE(WIN32)
++	SET(VERBATIM &quot;VERBATIM&quot;)
++ENDIF(WIN32)
++
+ MACRO(Q_UIMOCIFY _source)
+   ADD_CUSTOM_COMMAND(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/AQ_${_source}.cpp
+                      COMMAND  ${QT_UIC_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${_source}.ui -o ui_${_source}.h
+@@ -9,7 +15,7 @@
+                      COMMAND  echo &quot;#include \&quot;Q_${_source}.cpp\&quot;&quot; &gt; AQ_${_source}.cpp
+                      COMMAND  echo &quot;#include \&quot;Q_${_source}.moc\&quot;&quot; &gt;&gt; AQ_${_source}.cpp
+                      DEPENDS  ${CMAKE_CURRENT_SOURCE_DIR}/${_source}.ui  ${CMAKE_CURRENT_SOURCE_DIR}/Q_${_source}.cpp
+-                     VERBATIM
++                     ${VERBATIM}
+                 )
+ ENDMACRO(Q_UIMOCIFY _source)
+ 
+@@ -22,7 +28,7 @@
+   ADD_CUSTOM_COMMAND(OUTPUT   ${CMAKE_CURRENT_BINARY_DIR}/${_source}_rsc.cpp
+                      COMMAND  ${QT_RCC_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${_source}.qrc -o ${_source}_rsc.cpp -name ${_source}
+                      DEPENDS  ${CMAKE_CURRENT_SOURCE_DIR}/${_source}.qrc
+-                     VERBATIM
++                     ${VERBATIM}
+                 )
+ ENDMACRO(Q_RCC _source)
+ 
+@@ -36,7 +42,7 @@
+                      COMMAND  echo &quot;#include \&quot;T_${_source}.cpp\&quot;&quot; &gt; AT_${_source}.cpp
+                      COMMAND  echo &quot;#include \&quot;T_${_source}.moc\&quot;&quot; &gt;&gt; AT_${_source}.cpp
+                      DEPENDS  ${CMAKE_CURRENT_SOURCE_DIR}/T_${_source}.cpp
+-                     VERBATIM
++                     ${VERBATIM}
+                 )
+ ENDMACRO(Q_MOCIFY _source)
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000735.html">[Avidemux-svn-commit] r3460 - in	branches/avidemux_2.4_branch/avidemux: ADM_ocr	ADM_userInterfaces/ADM_GTK/ADM_ocr
+</A></li>
+	<LI>Next message: <A HREF="000737.html">[Avidemux-svn-commit] r3462 - in	branches/avidemux_2.4_branch/avidemux: . ADM_ocr	ADM_userInterfaces/ADM_GTK/ADM_ocr	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#736">[ date ]</a>
+              <a href="thread.html#736">[ thread ]</a>
+              <a href="subject.html#736">[ subject ]</a>
+              <a href="author.html#736">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

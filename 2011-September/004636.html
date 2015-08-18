@@ -1,0 +1,152 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7487 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7487%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src&In-Reply-To=%3C20110909063205.C1BC0481270%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004635.html">
+   <LINK REL="Next"  HREF="004637.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7487 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7487%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src&In-Reply-To=%3C20110909063205.C1BC0481270%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7487 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Sep  9 08:32:05 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004635.html">[Avidemux-svn-commit] r7486 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/common/ADM_audioFilter/src	avidemux/common/ADM_audiocodec avidemux/common/ADM_editor	avidemux/common/ADM_videoEncoder/src	avidemux_core/ADM_coreAudioDevice/src
+</A></li>
+        <LI>Next message: <A HREF="004637.html">[Avidemux-svn-commit] r7488 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4636">[ date ]</a>
+              <a href="thread.html#4636">[ thread ]</a>
+              <a href="subject.html#4636">[ subject ]</a>
+              <a href="author.html#4636">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-09-09 08:32:05 +0200 (Fri, 09 Sep 2011)
+New Revision: 7487
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+Log:
+[vdpau] Avoid dealing with already destroyed buffers/context
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2011-09-08 17:50:09 UTC (rev 7486)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2011-09-09 06:32:05 UTC (rev 7487)
+@@ -20,7 +20,7 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
+-
++#include &quot;ADM_cpp.h&quot;
+ #include &quot;ADM_default.h&quot;
+ 
+ #ifdef USE_VDPAU
+@@ -43,7 +43,8 @@
+ 
+ static bool         vdpauWorking=false;
+ static admMutex     surfaceMutex;
+-
++static bool         destroyingFlag=false;
++static vector   &lt;void *&gt; destroyedList;
+ #define aprintf(...) {}
+ 
+ typedef enum 
+@@ -54,6 +55,21 @@
+     ADM_VDPAU_VC1=3
+ }ADM_VDPAU_TYPE;
+ /**
++    \fn hasBeenDestroyed
++    \brief If the context has been destroyed, dont attempt to manipulate the buffers attached
++*/
++static bool hasBeenDestroyed(void *ptr)
++{
++    int nb=destroyedList.size();
++    for(int i=0;i&lt;nb;i++)
++    {
++        if(destroyedList[i]==ptr)
++            return true;
++    }
++    return false;
++}
++
++/**
+     \fn markSurfaceUsed
+     \brief mark the surfave as used. Can be called multiple time.
+ */
+@@ -61,6 +77,8 @@
+ {
+     vdpauContext *vd=(vdpauContext*)v;
+     vdpau_render_state *render=(vdpau_render_state *)cookie;
++    if(destroyingFlag) // check that the surface has not been destroyed already...
++         if(hasBeenDestroyed(vd)) return true;
+     render-&gt;refCount++;
+     return true;
+ }
+@@ -72,6 +90,8 @@
+ {
+     vdpauContext *vd=(vdpauContext*)v;
+     vdpau_render_state *render=(vdpau_render_state *)cookie;
++    if(destroyingFlag) // check that the surface has not been destroyed already...
++         if(hasBeenDestroyed(vd)) return true;
+     render-&gt;refCount--;
+     if(!render-&gt;refCount)
+     {
+@@ -276,6 +296,8 @@
+ :decoderFF (w,h,fcc,extraDataLen,extraData,bpp)
+ {
+         destroying=false;
++        destroyingFlag=false; 
++        destroyedList.clear();
+         alive=true;
+         scratch=NULL;
+         _context-&gt;opaque          = this;
+@@ -350,6 +372,8 @@
+ {
+         ADM_info(&quot;[VDPAU] Cleaning up\n&quot;);
+         destroying=true;
++        destroyingFlag=true;
++        destroyedList.push_back(VDPAU);
+         for(int i=0;i&lt;NB_SURFACE;i++)
+         {
+             if(VDPAU-&gt;renders[i])
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004635.html">[Avidemux-svn-commit] r7486 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/common/ADM_audioFilter/src	avidemux/common/ADM_audiocodec avidemux/common/ADM_editor	avidemux/common/ADM_videoEncoder/src	avidemux_core/ADM_coreAudioDevice/src
+</A></li>
+	<LI>Next message: <A HREF="004637.html">[Avidemux-svn-commit] r7488 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4636">[ date ]</a>
+              <a href="thread.html#4636">[ thread ]</a>
+              <a href="subject.html#4636">[ subject ]</a>
+              <a href="author.html#4636">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

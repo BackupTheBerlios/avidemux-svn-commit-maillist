@@ -1,0 +1,358 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7410 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7410%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau&In-Reply-To=%3C20110814164843.6AE804815AB%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004560.html">
+   <LINK REL="Next"  HREF="004562.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7410 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7410%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau&In-Reply-To=%3C20110814164843.6AE804815AB%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7410 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Aug 14 18:48:43 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004560.html">[Avidemux-svn-commit] r7409 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau
+</A></li>
+        <LI>Next message: <A HREF="004562.html">[Avidemux-svn-commit] r7411 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4561">[ date ]</a>
+              <a href="thread.html#4561">[ thread ]</a>
+              <a href="subject.html#4561">[ subject ]</a>
+              <a href="author.html#4561">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-08-14 18:48:42 +0200 (Sun, 14 Aug 2011)
+New Revision: 7410
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeint.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeintGl.cpp
+Log:
+[vdpauGl] Do RGB2YUV through CPU if VDPAU2GL does not work
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeint.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeint.h	2011-08-14 13:28:54 UTC (rev 7409)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeint.h	2011-08-14 16:48:42 UTC (rev 7410)
+@@ -51,7 +51,9 @@
+         virtual bool         getCoupledConf(CONFcouple **couples) ;   /// Return the current filter configuration
+         virtual bool         configure(void) {return true;}             /// Start graphical user interface
+ 
+-        bool                 surfaceToImage(VdpOutputSurface surf,ADMImage *image);
++        bool                 surfaceToImage(VdpOutputSurface surf,ADMImage *image); /// VDPAU-&gt;openGL
++        bool                 imageToImage(const char *buffer,ADMImage *image);      /// VDPAU-&gt;CPU-&gt;OpenGL (slow)
++        bool                 probe(VdpOutputSurface surf,ADMImage *image);
+ };
+ 
+ /**
+@@ -86,6 +88,7 @@
+                     bool                 uploadImage(ADMImage *next,const VdpVideoSurface surface) ;
+                     bool                 fillSlot(int slot,ADMImage *image);
+                     bool                 getResult(ADMImage *image);
++                    bool                 getResultSlow(ADMImage *image);
+                     bool                 sendField(bool topField);
+ 
+ public:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeintGl.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeintGl.cpp	2011-08-14 13:28:54 UTC (rev 7409)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeintGl.cpp	2011-08-14 16:48:42 UTC (rev 7410)
+@@ -63,7 +63,12 @@
+     &quot;  float nx = gl_TexCoord[0].x;\n&quot;
+ 	&quot;  float ny = gl_TexCoord[0].y;\n&quot;
+ 	&quot;  vec4 texvalY = texture2DRect(myTextureY, vec2(nx,ny));\n&quot; 
+-	&quot;  gl_FragColor = vec4(texvalY.g, 128,128,1);\n&quot; //texvalU.r, texvalV.r, 1.0);\n&quot;
++    &quot;  float yy=0.299*texvalY.r+0.587*texvalY.g+0.114*texvalY.b;\n&quot;
++    &quot;  float zz=-0.14713*texvalY.r-0.2886*texvalY.g+0.436*texvalY.b;\n&quot;
++    &quot;  float tt=0.615*texvalY.r-0.51499*texvalY.g-0.1001*texvalY.b;\n&quot;
++    &quot;  zz=zz+0.5;\n&quot;
++    &quot;  tt=tt+0.5;\n&quot;
++	&quot;  gl_FragColor = vec4(yy,zz,tt,1);\n&quot; //texvalU.r, texvalV.r, 1.0);\n&quot;
+ 	&quot;}\n&quot;;
+ 
+ //--------------------------------------------------------------------------------------
+@@ -96,13 +101,15 @@
+ /**
+     \fn processError
+ */
+-static void processError(const char *e)
++static bool processError(const char *e)
+ {
+     int x=glGetError();
+     if(x!=GL_NO_ERROR)
+     {
+         ADM_error(&quot;%s: Error : %d %s\n&quot;,e,x,gluErrorString(x));
++        return false;
+     }
++    return true;
+ }
+ /**
+     \fn initGl
+@@ -123,8 +130,11 @@
+     GETFUNC(VDPAUUnmapSurfacesNV);  
+     GETFUNC(VDPAUSurfaceAccessNV);  
+     GETFUNC(VDPAUFiniNV);
+-    VDPAUInitNV(admVdpau::getVdpDevice(),admVdpau::getProcAddress());
+-    processError(&quot;InitNv&quot;);
++    const void *device=admVdpau::getVdpDevice();
++    const void *proc=admVdpau::getProcAddress();
++    ADM_info(&quot;VDPAU InitNv with device=%lx, proc=%lx\n&quot;,(long int)device,(long int)proc);
++    VDPAUInitNV(device,proc);
++    if(false==processError(&quot;InitNv&quot;)) return false;
+     vdpauGlInited=true;
+     return true;
+ }
+@@ -134,7 +144,9 @@
+ bool vdpauVideoFilterDeint::initGl(void)
+ {
+    initOnceGl();
++   ADM_info(&quot;Creating VDPAU GL wrapper\n&quot;);
+    rgb=new glRGB(this,NULL);
++   rgb-&gt;probe(outputSurface,NULL);
+    return true;
+ }
+ 
+@@ -143,26 +155,16 @@
+ */
+ bool vdpauVideoFilterDeint::deInitGl(void)
+ {
+-    ADM_info(&quot;De-Initializing VDPAU&lt;-&gt;openGl\n&quot;);
++    ADM_info(&quot;Destroying VDPAU GL wrapper\n&quot;);
+     delete rgb;
+     rgb=NULL;
+     return true;
+ }
+-
+ /**
+-    \fn     getResult
+-    \brief  Convert the output surface into an ADMImage
++    \fn getResultSlow
+ */
+-bool vdpauVideoFilterDeint::getResult(ADMImage *image)
++bool vdpauVideoFilterDeint::getResultSlow(ADMImage *image)
+ {
+-    
+-    return rgb-&gt;surfaceToImage(outputSurface,image);
+-#ifdef DO_BENCHMARK
+-    ADMBenchmark bmark;
+-    for(int i=0;i&lt;NB_BENCH;i++)
+-    {
+-        bmark.start();
+-#endif
+   
+     if(VDP_STATUS_OK!=admVdpau::outputSurfaceGetBitsNative(outputSurface,
+                                                             tempBuffer, 
+@@ -172,46 +174,18 @@
+         return false;
+     }
+   
+-                     
+-#ifdef DO_BENCHMARK
+-        bmark.end();
+-    }
+-    ADM_warning(&quot;Read surface Benchmark\n&quot;);
+-    bmark.printResult();
+-#endif 
+-    // Convert from VDP_RGBA_FORMAT_B8G8R8A8 to YV12
+-    uint32_t sourceStride[3]={info.width*4,0,0};
+-    uint8_t  *sourceData[3]={tempBuffer,NULL,NULL};
+-    uint32_t destStride[3];
+-    uint8_t  *destData[3];
+-
+-    image-&gt;GetPitches(destStride);
+-    image-&gt;GetWritePlanes(destData);
+-
+-    // Invert U&amp;V
+-    uint32_t ts;
+-    uint8_t  *td;
+-#if 0
+-    ts=destStride[2];destStride[2]=destStride[1];destStride[1]=ts;
+-    td=destData[1];destData[2]=destData[2];destData[1]=td;
+-#endif
+-
+-
+-#ifdef DO_BENCHMARK
+-    ADMBenchmark bmark2;
+-    for(int i=0;i&lt;NB_BENCH;i++)
+-    {
+-        bmark2.start();
+-#endif
+-    scaler-&gt;convertPlanes(  sourceStride,destStride,     
+-                            sourceData,destData);
+-#ifdef DO_BENCHMARK
+-        bmark2.end();
+-    }
+-    ADM_warning(&quot;RGB-&gt;YUV Benchmark\n&quot;);
+-    bmark2.printResult();
+-#endif
+-
++    // tempBuffer                
++    return rgb-&gt;imageToImage((const char *)tempBuffer,image);
++}
++/**
++    \fn     getResult
++    \brief  Convert the output surface into an ADMImage
++*/
++bool vdpauVideoFilterDeint::getResult(ADMImage *image)
++{
++    
++    if(false==rgb-&gt;surfaceToImage(outputSurface,image))
++            return getResultSlow(image);
+     return true;
+ }
+ #else // USE_VDPAU
+@@ -292,10 +266,29 @@
+ bool         glRGB::getNextFrame(uint32_t *fn,ADMImage *image) {ADM_assert(0);return false;}
+ bool         glRGB::getCoupledConf(CONFcouple **couples) {ADM_assert(0);return false;};   
+ /**
++    \fn probe
++*/
++bool   glRGB::probe(VdpOutputSurface surf,ADMImage *image)
++{
++    widget-&gt;makeCurrent();
++    glPushMatrix();
++    // size is the last one...
++    fboY-&gt;bind();
++    processError(&quot;Bind&quot;);
++    GLvdpauSurfaceNV s=VDPAURegisterOutputSurfaceNV((GLvoid *)surf,GL_TEXTURE_2D,1,texName);
++    VDPAUUnregisterSurfaceNV(s);
++    processError(&quot;Unregister&quot;);
++    fboY-&gt;release();
++    firstRun=false;
++    glPopMatrix();
++    widget-&gt;doneCurrent();
++}
++/**
+     \fn surfaceToImage
+ */
+ bool   glRGB::surfaceToImage(VdpOutputSurface surf,ADMImage *image)
+ {
++    bool r=true;
+     widget-&gt;makeCurrent();
+     glPushMatrix();
+     // size is the last one...
+@@ -308,7 +301,11 @@
+     //
+     GLvdpauSurfaceNV s=VDPAURegisterOutputSurfaceNV((GLvoid *)surf,GL_TEXTURE_2D,1,texName);
+     printf(&quot;Surface =%d, GlSurface=%x, texName : %d\n&quot;,(int)surf,(int)s,(int)texName[0]);
+-    processError(&quot;Register&quot;);
++    if(false==processError(&quot;Register&quot;))
++    {
++            r=false;
++            goto skip;
++    }
+     VDPAUSurfaceAccessNV(s,GL_READ_ONLY);
+     VDPAUMapSurfacesNV(1,&amp;s);
+     processError(&quot;Map&quot;);
+@@ -326,15 +323,69 @@
+     processError(&quot;Unmap&quot;);
+     VDPAUUnregisterSurfaceNV(s);
+     processError(&quot;Unregister&quot;);
++skip:
+     fboY-&gt;release();
+     firstRun=false;
+     glPopMatrix();
+     widget-&gt;doneCurrent();
+   
+ 
+-    return true;
++    return r;
+ }
++/**
++    \fn image2image
++*/
++bool glRGB::imageToImage(const char *buffer,ADMImage *image)
++{
++    bool r=true;
++    int width=image-&gt;GetWidth(PLANAR_Y);
++    int height=image-&gt;GetHeight(PLANAR_Y);
++    widget-&gt;makeCurrent();
++    glPushMatrix();
++    // size is the last one...
++    fboY-&gt;bind();
++    processError(&quot;Bind&quot;);
++    glProgramY-&gt;setUniformValue(&quot;myTextureY&quot;, (GLfloat)0); 
++    glProgramY-&gt;setUniformValue(&quot;myWidth&quot;, (GLfloat)width); 
++    glProgramY-&gt;setUniformValue(&quot;myHeight&quot;, (GLfloat)height); 
+ 
++    myGlActiveTexture(GL_TEXTURE0);
++    processError(&quot;Active Texture&quot;);
++    glBindTexture(GL_TEXTURE_RECTANGLE_NV, texName[0]); 
++    processError(&quot;Bind Texture&quot;);
+ 
++    // upload image
++        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
++        if(!firstRun)
++        {
++            glTexImage2D(GL_TEXTURE_RECTANGLE_NV, 0, GL_RGBA, 
++                            width,
++                            height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
++                            buffer);
++        }else
++        {
++            glTexSubImage2D(GL_TEXTURE_RECTANGLE_NV, 0, 0, 0, 
++                width,
++                height,
++                GL_RGBA, GL_UNSIGNED_BYTE, 
++                buffer);
++        }
++    //-----------------
++    render(image,PLANAR_Y,fboY);
++    downloadTextures(image,fboY);
++
++    fboY-&gt;release();
++    firstRun=false;
++    glPopMatrix();
++    widget-&gt;doneCurrent();
++  
++
++    return r;
++}
++
+ //****************
+ // EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004560.html">[Avidemux-svn-commit] r7409 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau
+</A></li>
+	<LI>Next message: <A HREF="004562.html">[Avidemux-svn-commit] r7411 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4561">[ date ]</a>
+              <a href="thread.html#4561">[ thread ]</a>
+              <a href="subject.html#4561">[ subject ]</a>
+              <a href="author.html#4561">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

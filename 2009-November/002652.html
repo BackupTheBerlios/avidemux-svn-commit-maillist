@@ -1,0 +1,200 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5441 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5441%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200911040647.nA46lstQ018270%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002651.html">
+   <LINK REL="Next"  HREF="002653.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5441 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5441%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200911040647.nA46lstQ018270%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5441 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Nov  4 07:47:54 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002651.html">[Avidemux-svn-commit] r5440 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="002653.html">[Avidemux-svn-commit] r5442 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2652">[ date ]</a>
+              <a href="thread.html#2652">[ thread ]</a>
+              <a href="subject.html#2652">[ subject ]</a>
+              <a href="author.html#2652">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-11-04 07:47:54 +0100 (Wed, 04 Nov 2009)
+New Revision: 5441
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h
+Log:
+[Editor] Also switch segment when DTS limit is reached
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp	2009-11-04 06:47:52 UTC (rev 5440)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp	2009-11-04 06:47:54 UTC (rev 5441)
+@@ -221,7 +221,7 @@
+     // Search the frame with correct PTS
+     uint64_t pts=segTime+s-&gt;_refStartTimeUs;
+     uint64_t dts;
+-    if(false==_segments.ptsFromDts(s-&gt;_reference,pts,&amp;dts))
++    if(false==_segments.dtsFromPts(s-&gt;_reference,pts,&amp;dts))
+     {
+         ADM_warning(&quot;Cannot get DTS from PTS=%&quot;LLU&quot;ms\n&quot;,pts/1000);
+         return false;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp	2009-11-04 06:47:52 UTC (rev 5440)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp	2009-11-04 06:47:54 UTC (rev 5441)
+@@ -74,15 +74,35 @@
+     }
+     // Need to switch seg ?
+     tail=seg-&gt;_refStartTimeUs+seg-&gt;_durationUs;
+-    ADM_info(&quot;Frame : Flags :%X, DTS:%&quot;LLD&quot; PTS=%&quot;LLD&quot; tail=%&quot;LLD&quot;\n&quot;,img-&gt;flags,img-&gt;demuxerDts/1000,img-&gt;demuxerPts/1000,tail);
++   // ADM_info(&quot;Frame : Flags :%X, DTS:%&quot;LLD&quot; PTS=%&quot;LLD&quot; tail=%&quot;LLD&quot;\n&quot;,img-&gt;flags,img-&gt;demuxerDts/1000,img-&gt;demuxerPts/1000,tail);
+     if(img-&gt;demuxerDts!= ADM_NO_PTS &amp;&amp; img-&gt;demuxerDts&gt;=tail) goto nextSeg;
+     if(img-&gt;demuxerPts!= ADM_NO_PTS &amp;&amp; img-&gt;demuxerPts&gt;=tail) goto nextSeg;
+     {
+-    // Recalibrate PTS &amp; DTS...
+-    recalibrate(&amp;(img-&gt;demuxerPts),seg);
+-    recalibrate(&amp;(img-&gt;demuxerDts),seg);
++        // Recalibrate PTS &amp; DTS...
++        recalibrate(&amp;(img-&gt;demuxerPts),seg);
++        recalibrate(&amp;(img-&gt;demuxerDts),seg);
+     }
+-    ADM_info(&quot;Frame after RECAL: Flags :%X, DTS:%&quot;LLD&quot; PTS=%&quot;LLD&quot; tail=%&quot;LLD&quot;\n&quot;,img-&gt;flags,img-&gt;demuxerDts/1000,img-&gt;demuxerPts/1000,tail);
++    // Check the DTS is not too late compared to next seg beginning...
++    if(_currentSegment+1&lt;_segments.getNbSegments() &amp;&amp; img-&gt;demuxerDts!=ADM_NO_PTS)
++    {
++        _SEGMENT *nextSeg=_segments.getSegment(_currentSegment+1);
++        int64_t nextDts=nextSeg-&gt;_startTimeUs+nextSeg-&gt;_refStartDts;
++        if(nextDts&lt;nextSeg-&gt;_refStartTimeUs)
++        {
++            ADM_warning(&quot;next DTS is negative %&quot;LLU&quot; %&quot;LLU&quot; ms\n&quot;,nextDts,nextSeg-&gt;_refStartTimeUs);
++        }else       
++        {
++            nextDts-=nextSeg-&gt;_refStartTimeUs;
++            if(img-&gt;demuxerDts&gt;=nextDts)
++            {
++                ADM_warning(&quot;have to switch segment, DTS limit reached %&quot;LLU&quot; %&quot;LLU&quot;\n&quot;,img-&gt;demuxerDts/1000,nextDts/1000);
++                goto nextSeg;
++            }
++        }
++
++
++    }
++   // ADM_info(&quot;Frame after RECAL: Flags :%X, DTS:%&quot;LLD&quot; PTS=%&quot;LLD&quot; tail=%&quot;LLD&quot;\n&quot;,img-&gt;flags,img-&gt;demuxerDts/1000,img-&gt;demuxerPts/1000,tail);
+     return true;
+ 
+ nextSeg:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2009-11-04 06:47:52 UTC (rev 5440)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2009-11-04 06:47:54 UTC (rev 5441)
+@@ -231,6 +231,18 @@
+         segments[i]._startTimeUs=t;
+         t+=segments[i]._durationUs;
+     }
++    // Now set the _refStartDts field
++    for(int i=0;i&lt;n;i++)
++    {
++        _VIDEOS *vid=getRefVideo(segments[i]._reference);
++        _SEGMENT *seg=getSegment(i);
++
++        uint64_t pts,dts;
++        pts=seg-&gt;_refStartTimeUs;
++        dtsFromPts(seg-&gt;_reference,pts,&amp;dts);
++        seg-&gt;_refStartDts=dts;
++    }
++
+     return true;
+ }
+ /**
+@@ -451,15 +463,17 @@
+         printf(&quot;\tReference    :%&quot;LU&quot;\n&quot;,s-&gt;_reference,us2plain(s-&gt;_reference));
+         printf(&quot;\tstartLinear  :%08&quot;LLU&quot; %s\n&quot;,s-&gt;_startTimeUs,us2plain(s-&gt;_startTimeUs));
+         printf(&quot;\tduration     :%08&quot;LLU&quot; %s\n&quot;,s-&gt;_durationUs,us2plain(s-&gt;_durationUs));
+-        printf(&quot;\trefStart     :%08&quot;LLU&quot; %s\n&quot;,s-&gt;_refStartTimeUs,us2plain(s-&gt;_refStartTimeUs));
++        printf(&quot;\trefStartPts  :%08&quot;LLU&quot; %s\n&quot;,s-&gt;_refStartTimeUs,us2plain(s-&gt;_refStartTimeUs));
++        printf(&quot;\trefStartDts  :%08&quot;LLU&quot; %s\n&quot;,s-&gt;_refStartTimeUs,us2plain(s-&gt;_refStartDts));
+ 
+     }
+ }
++
+ /**
+-    \fn ptsFromDts
++    \fn dtsFromPts
+     \brief guestimate DTS from PTS
+ */
+- bool        ADM_EditorSegment::ptsFromDts(uint32_t refVideo,uint64_t pts,uint64_t *dts)
++ bool        ADM_EditorSegment::dtsFromPts(uint32_t refVideo,uint64_t pts,uint64_t *dts)
+ {
+     uint32_t frame,flags;
+     _VIDEOS *vid=getRefVideo(refVideo);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h	2009-11-04 06:47:52 UTC (rev 5440)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h	2009-11-04 06:47:54 UTC (rev 5441)
+@@ -81,6 +81,7 @@
+         uint64_t _startTimeUs; /// Start time in current (=sum(_duration of previous seg))
+         uint64_t _durationUs; ///
+         uint32_t _dropBframes;
++        uint64_t _refStartDts;
+         
+ } _SEGMENT;
+ /*
+@@ -133,7 +134,7 @@
+             bool        isKeyFrameByTime(uint32_t refVideo,uint64_t seekTime);
+ 
+             bool        removeChunk(uint64_t from, uint64_t to);
+-            bool        ptsFromDts(uint32_t refVideo,uint64_t pts,uint64_t *dts);
++            bool        dtsFromPts(uint32_t refVideo,uint64_t pts,uint64_t *dts);
+ };
+ 
+ #endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002651.html">[Avidemux-svn-commit] r5440 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="002653.html">[Avidemux-svn-commit] r5442 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2652">[ date ]</a>
+              <a href="thread.html#2652">[ thread ]</a>
+              <a href="subject.html#2652">[ subject ]</a>
+              <a href="author.html#2652">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,160 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4869 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/OpenDml
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4869%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/OpenDml&In-Reply-To=%3C200905241630.n4OGUrkB032725%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002091.html">
+   <LINK REL="Next"  HREF="002093.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4869 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/OpenDml</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4869%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/OpenDml&In-Reply-To=%3C200905241630.n4OGUrkB032725%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4869 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/OpenDml">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun May 24 18:30:53 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002091.html">[Avidemux-svn-commit] r4868 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+        <LI>Next message: <A HREF="002093.html">[Avidemux-svn-commit] r4870 -	branches/avidemux_2.6_branch_mean/avidemux/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2092">[ date ]</a>
+              <a href="thread.html#2092">[ thread ]</a>
+              <a href="subject.html#2092">[ subject ]</a>
+              <a href="author.html#2092">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-05-24 18:30:52 +0200 (Sun, 24 May 2009)
+New Revision: 4869
+
+Modified:
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/OpenDml/ADM_openDML.cpp
+Log:
+[openDML] initialize audioStream too
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/OpenDml/ADM_openDML.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/OpenDml/ADM_openDML.cpp	2009-05-24 07:24:54 UTC (rev 4868)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/OpenDml/ADM_openDML.cpp	2009-05-24 16:30:52 UTC (rev 4869)
+@@ -33,7 +33,7 @@
+ {
+     UNUSED_ARG(frame);
+     UNUSED_ARG(flags);
+-    
++    if(frame&gt;= (uint32_t)_videostream.dwLength) return 0;
+ 	_idx[frame].intra=flags;    
+ 	return 1;
+ }
+@@ -102,10 +102,9 @@
+ */
+ uint8_t  OpenDMLHeader::getFrame(uint32_t framenum,ADMCompressedImage *img)
+ {
++    if(framenum&gt;= (uint32_t)_videostream.dwLength) return 0;
+ uint64_t offset=_idx[framenum].offset; //+_mdatOffset;
+ 	
+-	if(framenum&gt;= (uint32_t)_videostream.dwLength) return 0;
+-	
+  	fseeko(_fd,offset,SEEK_SET);
+  	fread(img-&gt;data, _idx[framenum].size, 1, _fd);
+   	img-&gt;dataLength=_idx[framenum].size;
+@@ -124,6 +123,7 @@
+ */
+ uint64_t OpenDMLHeader::getTime(uint32_t frameNum)
+ {
++    if(frameNum&gt;= (uint32_t)_videostream.dwLength) return ADM_NO_PTS;
+     return _idx[frameNum].pts; 
+ 
+ }
+@@ -145,8 +145,8 @@
+ 	if(_fd)
+  		{
+                	fclose(_fd);
+-             	}
+-              _fd=NULL;
++        }
++    _fd=NULL;
+ 	if(_idx)
+ 	{
+ 		delete [] _idx;
+@@ -162,11 +162,11 @@
+ 		delete [] _audioTracks;
+ 		_audioTracks=NULL;
+ 	}
+-        if(myName)
+-        {
+-          ADM_dealloc(myName);
+-          myName=NULL; 
+-        }
++    if(myName)
++    {
++      ADM_dealloc(myName);
++      myName=NULL; 
++    }
+     // Destroy audioStreams
+     if(_audioStreams)
+     {
+@@ -196,6 +196,7 @@
+ 	_recHack=0;
+     // Audio
+     _audioTracks=NULL;
++    _audioStreams=NULL;
+     _nbAudioTracks=0;
+     _currentAudioTrack=0;
+     myName=NULL;
+@@ -208,7 +209,7 @@
+ */
+ WAVHeader              *OpenDMLHeader::getAudioInfo(uint32_t i ) 
+ {
+-if(_nbAudioTracks)
++    if(_nbAudioTracks)
+ 		return _audioStreams[_currentAudioTrack]-&gt;getInfo();
+ 	else
+ 		return NULL;
+@@ -259,8 +260,8 @@
+         myName=ADM_strdup(name);
+ #define CLR(x)              memset(&amp; x,0,sizeof(  x));
+ 
+-              CLR( _videostream);
+-              CLR( _mainaviheader);
++          CLR( _videostream);
++          CLR( _mainaviheader);
+ 	      _isvideopresent=1;
+ 	      _isaudiopresent=0;    	     	      	 	      
+ 	      
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002091.html">[Avidemux-svn-commit] r4868 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+	<LI>Next message: <A HREF="002093.html">[Avidemux-svn-commit] r4870 -	branches/avidemux_2.6_branch_mean/avidemux/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2092">[ date ]</a>
+              <a href="thread.html#2092">[ thread ]</a>
+              <a href="subject.html#2092">[ subject ]</a>
+              <a href="author.html#2092">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

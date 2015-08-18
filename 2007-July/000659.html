@@ -1,0 +1,186 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3382 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3382%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf&In-Reply-To=%3C200707161640.l6GGe1Ig006130%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000658.html">
+   <LINK REL="Next"  HREF="000660.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3382 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3382%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf&In-Reply-To=%3C200707161640.l6GGe1Ig006130%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3382 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Mon Jul 16 18:40:01 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000658.html">[Avidemux-svn-commit] r3381 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_toolkit_gtk
+</A></li>
+        <LI>Next message: <A HREF="000660.html">[Avidemux-svn-commit] r3383 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#659">[ date ]</a>
+              <a href="thread.html#659">[ thread ]</a>
+              <a href="subject.html#659">[ subject ]</a>
+              <a href="author.html#659">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2007-07-16 18:39:52 +0200 (Mon, 16 Jul 2007)
+New Revision: 3382
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf/ADM_asf.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf/ADM_asfPacket.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf/ADM_asf_audio.cpp
+Log:
+fix mem leaks (asf)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf/ADM_asf.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf/ADM_asf.cpp	2007-07-16 13:41:41 UTC (rev 3381)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf/ADM_asf.cpp	2007-07-16 16:39:52 UTC (rev 3382)
+@@ -68,6 +68,11 @@
+ 
+ uint8_t asfHeader::close(void)
+ {
++	if (_fd) 
++		fclose(_fd);
++
++	_fd=NULL;
++
+   if(_videoExtraData)
+   {
+     delete [] _videoExtraData;
+@@ -255,7 +260,7 @@
+           {
+             aprintf(&quot;Dropping seq=%u too old for %u delta %d\n&quot;,
+                   bit-&gt;sequence,_index[framenum].segNb,delta);
+-            delete bit-&gt;data;
++            delete[] bit-&gt;data;
+             delete bit;
+             if(delta&lt;230)
+             {
+@@ -271,7 +276,7 @@
+           curSeq=bit-&gt;sequence;
+           memcpy(img-&gt;data,bit-&gt;data,bit-&gt;len);
+           len=bit-&gt;len;
+-          delete bit-&gt;data;
++          delete[] bit-&gt;data;
+           delete bit;
+           continue;
+       }
+@@ -288,6 +293,7 @@
+       // still same sequence ...add
+       memcpy(img-&gt;data+len,bit-&gt;data,bit-&gt;len);
+       len+=bit-&gt;len;
++	  delete[] bit-&gt;data;
+       delete bit;
+     }
+     if(!_packet-&gt;nextPacket(_videoStreamId))
+@@ -722,7 +728,7 @@
+           printf(&quot;Unmapped stream %u\n&quot;,bit-&gt;stream); 
+         }
+       }
+-     delete bit-&gt;data;
++     delete[] bit-&gt;data;
+      delete bit;
+     }
+     //working-&gt;update(packet,_nbPackets);
+@@ -739,7 +745,7 @@
+   delete [] tmpIndex;
+   
+   fseeko(_fd,_dataStartOffset,SEEK_SET);
+-  printf(&quot;[ASF]%u images found\n&quot;,nbImage);
++  printf(&quot;[ASF] %u images found\n&quot;,nbImage);
+   printf(&quot;[ASF] ******** End of buildindex *******\n&quot;);
+   _videostream.dwLength=_mainaviheader.dwTotalFrames=nbImage;
+   if(!nbImage) return 0;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf/ADM_asfPacket.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf/ADM_asfPacket.cpp	2007-07-16 13:41:41 UTC (rev 3381)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf/ADM_asfPacket.cpp	2007-07-16 16:39:52 UTC (rev 3382)
+@@ -50,6 +50,7 @@
+  }
+  asfPacket::~asfPacket()
+  {
++	 purge();
+  }
+  uint8_t   asfPacket::readChunkPayload(uint8_t *data, uint32_t *dataLen)
+  {
+@@ -304,11 +305,14 @@
+    bit-&gt;stream=stream;
+    bit-&gt;packet=packetnb;
+    bit-&gt;flags=keyframe;
++
+    if(!read(bit-&gt;data,bit-&gt;len))
+    {
+-     delete bit;
+-     return 0; 
++		delete[] bit-&gt;data;
++		delete bit;
++		return 0; 
+    }
++
+    queue-&gt;push((void *)bit);
+    return 1;
+  }
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf/ADM_asf_audio.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf/ADM_asf_audio.cpp	2007-07-16 13:41:41 UTC (rev 3381)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_asf/ADM_asf_audio.cpp	2007-07-16 16:39:52 UTC (rev 3382)
+@@ -36,7 +36,16 @@
+ 
+ asfAudio::~asfAudio()
+ {
+-  printf(&quot;[asfAudio] Destroying track\n&quot;);
++	printf(&quot;[asfAudio] Destroying track\n&quot;);
++
++	fclose(_fd);
++	_fd = NULL;
++
++	delete _wavheader;
++	delete _packet;
++
++	_wavheader = NULL;
++	_packet = NULL;
+ }
+ /*
+     __________________________________________________________
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000658.html">[Avidemux-svn-commit] r3381 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_toolkit_gtk
+</A></li>
+	<LI>Next message: <A HREF="000660.html">[Avidemux-svn-commit] r3383 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#659">[ date ]</a>
+              <a href="thread.html#659">[ thread ]</a>
+              <a href="subject.html#659">[ subject ]</a>
+              <a href="author.html#659">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

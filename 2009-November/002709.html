@@ -1,0 +1,177 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5498 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5498%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src&In-Reply-To=%3C200911141523.nAEFNjPC012712%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002708.html">
+   <LINK REL="Next"  HREF="002710.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5498 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5498%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src&In-Reply-To=%3C200911141523.nAEFNjPC012712%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5498 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Nov 14 16:23:45 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002708.html">[Avidemux-svn-commit] r5497 - in	branches/avidemux_2.6_branch_mean/avidemux:	common/ADM_videoFilter2/include common/ADM_videoFilter2/src	qt4/ADM_userInterfaces/ADM_filters
+</A></li>
+        <LI>Next message: <A HREF="002710.html">[Avidemux-svn-commit] r5499 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/verticalFlip
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2709">[ date ]</a>
+              <a href="thread.html#2709">[ thread ]</a>
+              <a href="subject.html#2709">[ subject ]</a>
+              <a href="author.html#2709">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-11-14 16:23:45 +0100 (Sat, 14 Nov 2009)
+New Revision: 5498
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterChain.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilters.cpp
+Log:
+[VideoFilter] Map filterchain to our new video filter engine
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterChain.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterChain.cpp	2009-11-14 15:23:44 UTC (rev 5497)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterChain.cpp	2009-11-14 15:23:45 UTC (rev 5498)
+@@ -23,33 +23,4 @@
+ 
+ 
+ 
+-/**
+-    \fn createVideoFilterChain
+-    \brief Create a filter chain
+-*/
+-ADM_videoFilterChain *createVideoFilterChain(uint64_t startAt,uint64_t endAt)
+-{
+-    ADM_videoFilterChain *chain=new ADM_videoFilterChain;
+-    // 1- Add bridge always # 1
+-    ADM_videoFilterBridge *bridge=new ADM_videoFilterBridge(startAt,endAt);
+-    chain-&gt;push_back(bridge);
+-    return chain;
+-}
+-/**
+-        \fn destroyVideoFilterChain
+-        \brief Destroy a filter chain
+-*/
+-bool                 destroyVideoFilterChain(ADM_videoFilterChain *chain)
+-{
+-    ADM_assert(chain-&gt;size());
+-    for(int i=0;i&lt;chain-&gt;size();i++)
+-    {
+-        ADM_coreVideoFilter *filter=(*chain)[i];
+-        delete filter;
+-        (*chain)[i]=NULL;
+-    }
+-    chain-&gt;clear();
+-    return true;
+-}
+-
+ // EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilters.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilters.cpp	2009-11-14 15:23:44 UTC (rev 5497)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilters.cpp	2009-11-14 15:23:45 UTC (rev 5498)
+@@ -17,6 +17,7 @@
+ #include &quot;ADM_videoFilterApi.h&quot;
+ #include &quot;ADM_videoFilters.h&quot;
+ #include &quot;ADM_videoFilterBridge.h&quot;
++#include &quot;ADM_filterChain.h&quot;
+ static ADM_coreVideoFilter *bridge=NULL;
+ 
+ std::vector&lt;ADM_VideoFilterElement&gt; ADM_VideoFilters;
+@@ -182,4 +183,52 @@
+     ADM_VideoFilters[top+1]=scratch;
+     return ADM_vf_recreateChain();
+ }
++
++
++
++/**
++    \fn createVideoFilterChain
++    \brief Create a filter chain
++*/
++ADM_videoFilterChain *createVideoFilterChain(uint64_t startAt,uint64_t endAt)
++{
++    ADM_videoFilterChain *chain=new ADM_videoFilterChain;
++    // 1- Add bridge always # 1
++    ADM_videoFilterBridge *bridge=new ADM_videoFilterBridge(startAt,endAt);
++    chain-&gt;push_back(bridge);
++    ADM_coreVideoFilter *f=bridge;
++    // Now create a clone of the videoFilterChain we have here
++    int nb=ADM_VideoFilters.size();
++    for(int i=0;i&lt;nb;i++)
++    {
++            // Get configuration
++            CONFcouple *c;
++            ADM_coreVideoFilter *old=ADM_VideoFilters[i].instance;
++            uint32_t tag=ADM_VideoFilters[i].tag;
++            old-&gt;getCoupledConf(&amp;c);
++
++            ADM_coreVideoFilter *nw=ADM_vf_createFromTag(tag,f,c);
++            if(c) delete c;
++            f=nw;
++            chain-&gt;push_back(nw);
++    }
++    return chain;
++}
++/**
++        \fn destroyVideoFilterChain
++        \brief Destroy a filter chain
++*/
++bool                 destroyVideoFilterChain(ADM_videoFilterChain *chain)
++{
++    ADM_assert(chain-&gt;size());
++    int nb=chain-&gt;size();
++    for(int i=0;i&lt;nb;i++)
++    {
++        ADM_coreVideoFilter *filter=(*chain)[i];
++        delete filter;
++        (*chain)[i]=NULL;
++    }
++    chain-&gt;clear();
++    return true;
++}
+ // EOF
+\ No newline at end of file
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002708.html">[Avidemux-svn-commit] r5497 - in	branches/avidemux_2.6_branch_mean/avidemux:	common/ADM_videoFilter2/include common/ADM_videoFilter2/src	qt4/ADM_userInterfaces/ADM_filters
+</A></li>
+	<LI>Next message: <A HREF="002710.html">[Avidemux-svn-commit] r5499 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/verticalFlip
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2709">[ date ]</a>
+              <a href="thread.html#2709">[ thread ]</a>
+              <a href="subject.html#2709">[ subject ]</a>
+              <a href="author.html#2709">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,182 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3195 - in branches/avidemux_2.4_branch: .	avidemux/ADM_audiofilter cmake
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3195%20-%20in%20branches/avidemux_2.4_branch%3A%20.%0A%09avidemux/ADM_audiofilter%20cmake&In-Reply-To=%3C200706021308.l52D8lZK020414%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000489.html">
+   <LINK REL="Next"  HREF="000491.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3195 - in branches/avidemux_2.4_branch: .	avidemux/ADM_audiofilter cmake</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3195%20-%20in%20branches/avidemux_2.4_branch%3A%20.%0A%09avidemux/ADM_audiofilter%20cmake&In-Reply-To=%3C200706021308.l52D8lZK020414%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3195 - in branches/avidemux_2.4_branch: .	avidemux/ADM_audiofilter cmake">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jun  2 15:08:47 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000489.html">[Avidemux-svn-commit] r3194 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+        <LI>Next message: <A HREF="000491.html">[Avidemux-svn-commit] r3196 - in	branches/avidemux_2.4_branch/avidemux: ADM_script ADM_video
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#490">[ date ]</a>
+              <a href="thread.html#490">[ thread ]</a>
+              <a href="subject.html#490">[ subject ]</a>
+              <a href="author.html#490">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-06-02 15:08:47 +0200 (Sat, 02 Jun 2007)
+New Revision: 3195
+
+Modified:
+   branches/avidemux_2.4_branch/ConfigureChecks.cmake
+   branches/avidemux_2.4_branch/avidemux/ADM_audiofilter/audioencoder_aften.cpp
+   branches/avidemux_2.4_branch/cmake/adm_checkHeaderLib.cmake
+   branches/avidemux_2.4_branch/cmake/conf_summary.cmake
+   branches/avidemux_2.4_branch/config.h.cmake
+Log:
+aften (only 0.7) support for cmake
+
+Modified: branches/avidemux_2.4_branch/ConfigureChecks.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/ConfigureChecks.cmake	2007-06-02 09:45:15 UTC (rev 3194)
++++ branches/avidemux_2.4_branch/ConfigureChecks.cmake	2007-06-02 13:08:47 UTC (rev 3195)
+@@ -142,6 +142,21 @@
+ ADM_CHECK_HL(Esd esd.h  esd esd_close USE_ESD)
+ endif(NOT WIN32)
+ ########################################
++# Aften
++########################################
++if(WIN32)
++SET(CMAKE_REQUIRED_FLAGS &quot;-lm -lpthreadGC2&quot;)
++else(WIN32)
++SET(CMAKE_REQUIRED_FLAGS &quot;-lm -lpthread&quot;)
++endif(WIN32)
++
++ADM_CHECK_HL(Aften aften.h  aften aften_encode_init USE_AFTEN)
++if(USE_AFTEN)
++# TODO! Check aften version 5/6/7!
++SET(USE_AFTEN_07 1)
++endif(USE_AFTEN)
++SET(CMAKE_REQUIRED_FLAGS &quot;&quot;)
++########################################
+ # ICONV
+ ########################################
+ # search ICON.h
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiofilter/audioencoder_aften.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiofilter/audioencoder_aften.cpp	2007-06-02 09:45:15 UTC (rev 3194)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiofilter/audioencoder_aften.cpp	2007-06-02 13:08:47 UTC (rev 3195)
+@@ -33,7 +33,7 @@
+ //
+ extern &quot;C&quot;
+ {
+-#ifdef USE_AFTEN_06
++#if !defined(USE_AFTEN_05)
+ 	#include &quot;aften.h&quot;
+ #else
+ 	#include &quot;aften/aften.h&quot;
+@@ -51,7 +51,9 @@
+   memset(_handle,0,sizeof(AftenContext));
+   aften_set_defaults(_HANDLE);
+   _wavheader-&gt;encoding=WAV_AC3;
+-  
++#ifdef USE_AFTEN_07
++  _HANDLE-&gt;params.n_threads=1; // MThread collides with avidemux multithreading
++#endif
+ };
+ 
+ 
+
+Modified: branches/avidemux_2.4_branch/cmake/adm_checkHeaderLib.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/cmake/adm_checkHeaderLib.cmake	2007-06-02 09:45:15 UTC (rev 3194)
++++ branches/avidemux_2.4_branch/cmake/adm_checkHeaderLib.cmake	2007-06-02 13:08:47 UTC (rev 3195)
+@@ -3,8 +3,11 @@
+ MACRO (ADM_CHECK_HL _banner _includeName _libName _libFunc _varToSet)
+ MESSAGE(STATUS &quot;&lt;Checking for ${_banner}&gt;&quot;)
+ MESSAGE(STATUS &quot;&lt;******************************&gt;&quot;)
+-#set(${_varToSet} FALSE)
+-CHECK_INCLUDE_FILES(&quot;${_includeName}&quot; ${_varToSet}_H)
++ SET(_oldCRF ${CMAKE_REQUIRED_FLAGS})
++ SET(CMAKE_REQUIRED_FLAGS &quot;$ENV{CFLAGS} ${_oldCRF}&quot;)
++#MESSAGE(STATUS &quot;CMAKE_REQUIRED_FLAGS:${CMAKE_REQUIRED_FLAGS}&quot;)
++#MESSAGE(STATUS &quot;ENV:&quot;$ENV{CFLAGS})
++CHECK_INCLUDE_FILES(&quot;${_includeName}&quot; &quot;${_varToSet}_H&quot;)
+ #MESSAGE(&quot;OUT ${HAVE_IT_H}&quot;)
+ if(${_varToSet}_H)
+   MESSAGE(STATUS &quot;Header ${_includeName} Found&quot;)
+@@ -25,7 +28,7 @@
+ else(${_varToSet})
+      MESSAGE(STATUS &quot;${_banner} support off&quot;)
+ endif(${_varToSet})
+-
++SET(CMAKE_REQUIRED_FLAGS &quot;${_oldCRF}&quot;)
+ ENDMACRO (ADM_CHECK_HL _includeName _libName _libFunc _varToSet)
+ 
+ 
+
+Modified: branches/avidemux_2.4_branch/cmake/conf_summary.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/cmake/conf_summary.cmake	2007-06-02 09:45:15 UTC (rev 3194)
++++ branches/avidemux_2.4_branch/cmake/conf_summary.cmake	2007-06-02 13:08:47 UTC (rev 3195)
+@@ -23,6 +23,8 @@
+ ADM_DISPLAY(&quot;FAAD      &quot; USE_FAAD)
+ ADM_DISPLAY(&quot;FAAC      &quot; USE_FAAC)
+ ADM_DISPLAY(&quot;Vorbis    &quot; USE_VORBIS)
++ADM_DISPLAY(&quot;Aften     &quot; USE_AFTEN)
++
+ MESSAGE(&quot;*** Misc       ***&quot;)
+ ADM_DISPLAY(&quot;SDL       &quot; USE_SDL)
+ ADM_DISPLAY(&quot;FreeType  &quot; USE_FREETYPE)
+
+Modified: branches/avidemux_2.4_branch/config.h.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/config.h.cmake	2007-06-02 09:45:15 UTC (rev 3194)
++++ branches/avidemux_2.4_branch/config.h.cmake	2007-06-02 13:08:47 UTC (rev 3195)
+@@ -437,6 +437,8 @@
+ 
+ /* Use Aften 0.06 */
+ #cmakedefine USE_AFTEN_06
++/*               */
++#cmakedefine USE_AFTEN_07
+ 
+ /* AltiVec for mpeg2enc */
+ #cmakedefine USE_ALTIVEC
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000489.html">[Avidemux-svn-commit] r3194 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+	<LI>Next message: <A HREF="000491.html">[Avidemux-svn-commit] r3196 - in	branches/avidemux_2.4_branch/avidemux: ADM_script ADM_video
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#490">[ date ]</a>
+              <a href="thread.html#490">[ thread ]</a>
+              <a href="subject.html#490">[ subject ]</a>
+              <a href="author.html#490">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

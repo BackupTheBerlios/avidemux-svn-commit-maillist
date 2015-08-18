@@ -1,0 +1,330 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6996 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6996%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS&In-Reply-To=%3C20110215070736.E5A76480A86%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004168.html">
+   <LINK REL="Next"  HREF="004170.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6996 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6996%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS&In-Reply-To=%3C20110215070736.E5A76480A86%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6996 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Feb 15 08:07:36 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004168.html">[Avidemux-svn-commit] r6995 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="004170.html">[Avidemux-svn-commit] r6998 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4169">[ date ]</a>
+              <a href="thread.html#4169">[ thread ]</a>
+              <a href="subject.html#4169">[ subject ]</a>
+              <a href="author.html#4169">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-02-15 08:07:36 +0100 (Tue, 15 Feb 2011)
+New Revision: 6996
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPSConfig.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/ps_muxer.conf
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/ps_muxer.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/ps_muxer_desc.cpp
+Log:
+[ps/mux] Add free format muxer
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.cpp	2011-02-15 07:07:35 UTC (rev 6995)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.cpp	2011-02-15 07:07:36 UTC (rev 6996)
+@@ -29,26 +29,12 @@
+ #define aprintf printf
+ #endif
+ 
+-typedef struct
++ps_muxer psMuxerConfig=   // Default is standard DVD
+ {
+-    const char *fmt;
+-    uint32_t   bufferSizekBytes;
+-    uint32_t   muxRatekBits;
+-    uint32_t   videoRatekBits;
+-}mpegPsStruct;
+-
+-const mpegPsStruct psDescriptor[3]=
+-{
+-    { &quot;vcd&quot;,  40,1400,1152},  // Verify, not sure!
+-    { &quot;svcd&quot;,112,2800,2400},
+-    { &quot;dvd&quot;, 224,11000,9800},
++    MUXER_DVD,false,
++    11000,9800,224
+ };
+ 
+-ps_muxer psMuxerConfig=
+-{
+-    MUXER_DVD,false
+-};
+-
+ /**
+     \fn     muxerffPS
+     \brief  Constructor
+@@ -79,9 +65,16 @@
+         return false;
+     }
+ 
+-    mpegPsStruct myself=psDescriptor[psMuxerConfig.muxingType];
+-    if(false==setupMuxer(myself.fmt,file))
++    const char *fmt;
++    switch(psMuxerConfig.muxingType)
+     {
++        default:
++        case MUXER_DVD: fmt=&quot;dvd&quot;;break;
++        case MUXER_VCD: fmt=&quot;vcd&quot;;break;
++        case MUXER_SVCD: fmt=&quot;svcd&quot;;break;
++    }
++    if(false==setupMuxer(fmt,file))
++    {
+         printf(&quot;[ffPS] Failed to open muxer\n&quot;);
+         return false;
+     }
+@@ -98,9 +91,9 @@
+ 
+         // Override codec settings
+         rescaleFps(s-&gt;getAvgFps1000(),&amp;(c-&gt;time_base));
+-        c-&gt;bit_rate=myself.videoRatekBits*1000;
+-        c-&gt;rc_buffer_size=myself.bufferSizekBytes*8*1024;
+-        c-&gt;rc_buffer_size_header=myself.bufferSizekBytes*8*1024;
++        c-&gt;bit_rate=psMuxerConfig.videoRatekBits*1000;
++        c-&gt;rc_buffer_size=psMuxerConfig.bufferSizekBytes*8*1024;
++        c-&gt;rc_buffer_size_header=psMuxerConfig.bufferSizekBytes*8*1024;
+         c-&gt;gop_size=15;
+ 
+         // Audio
+@@ -111,7 +104,7 @@
+         }
+         audio_st-&gt;codec-&gt;bit_rate=a[0]-&gt;getInfo()-&gt;byterate*8;        
+         // /audio
+-        oc-&gt;mux_rate=myself.muxRatekBits*1000;
++        oc-&gt;mux_rate=psMuxerConfig.muxRatekBits*1000;
+         // Also copy audio &amp; video bitrate
+ 
+ 
+@@ -210,6 +203,7 @@
+                             FAIL(&quot; Bad width/height for DVD\n&quot;);
+                     }
+                     break;
++            case MUXER_FREE: break;
+             default:
+                     ADM_assert(0);
+         }
+@@ -230,20 +224,24 @@
+                     {
+                         FAIL(&quot; VCD : only MP2 audio accepted\n&quot;);
+                     }
+-                    if(head-&gt;frequency!=44100) 
+-                    {
+-                        FAIL(&quot; VCD : only 44.1 khz audio accepted\n&quot;);
+-                    }
++                    if(!nonCompliantOk)
++                        if(head-&gt;frequency!=44100) 
++                        {
++                            FAIL(&quot; VCD : only 44.1 khz audio accepted\n&quot;);
++                        }
+                     break;
+             case MUXER_DVD:
++                    if(!nonCompliantOk)
++                        if(head-&gt;frequency!=48000) 
++                        {
++                            FAIL(&quot; DVD : only 48 khz audio accepted\n&quot;);
++                        }
++                    // no break
++            case MUXER_FREE:
+                     if(head-&gt;encoding!=WAV_MP2 &amp;&amp; head-&gt;encoding!=WAV_AC3 &amp;&amp; head-&gt;encoding!=WAV_DTS) 
+                     {
+                         FAIL(&quot;[ffPS] DVD : only MP2/AC3/DTS audio accepted\n&quot;);
+                     }
+-                    if(head-&gt;frequency!=48000) 
+-                    {
+-                        FAIL(&quot; DVD : only 48 khz audio accepted\n&quot;);
+-                    }
+                     break;
+             default:
+                     ADM_assert(0);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.h	2011-02-15 07:07:35 UTC (rev 6995)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.h	2011-02-15 07:07:36 UTC (rev 6996)
+@@ -24,7 +24,8 @@
+ {
+     MUXER_VCD=0,
+     MUXER_SVCD=1,
+-    MUXER_DVD=2
++    MUXER_DVD=2,
++    MUXER_FREE=3
+ }psMuxingType;
+ 
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPSConfig.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPSConfig.cpp	2011-02-15 07:07:35 UTC (rev 6995)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPSConfig.cpp	2011-02-15 07:07:36 UTC (rev 6996)
+@@ -19,20 +19,66 @@
+ #define ADM_MINIMAL_UI_INTERFACE
+ #include &quot;DIA_factory.h&quot;
+ #include &quot;fourcc.h&quot;
++
++
++typedef struct
++{
++    const char *fmt;
++    uint32_t   bufferSizekBytes;
++    uint32_t   muxRatekBits;
++    uint32_t   videoRatekBits;
++}mpegPsStruct;
++
++const mpegPsStruct psDescriptor[4]=
++{
++    { &quot;vcd&quot;,  40,1400,1152},  // Verify, not sure!
++    { &quot;svcd&quot;,112,2800,2400},
++    { &quot;dvd&quot;, 224,11000,9800},
++    { &quot;free&quot;, 1024,70000,30000}
++};
++#define PS_NB_MUXERS (sizeof(psDescriptor)/sizeof(mpegPsStruct))
++
++/**
++    \fn ffPSConfigure
++*/
+ bool ffPSConfigure(void)
+ {
+-        uint32_t mux=(uint32_t)psMuxerConfig.muxingType;
+         uint32_t tolerance=(uint32_t)psMuxerConfig.acceptNonCompliant;
+-        diaMenuEntry format[]={{MUXER_VCD,&quot;VCD&quot;},{MUXER_SVCD,&quot;SVCD&quot;},{MUXER_DVD,&quot;DVD&quot;}};
++        #define TX(x) &amp;(psMuxerConfig.x)
+ 
+-        diaElemMenu  menuFormat(&amp;mux,&quot;Muxing Format&quot;,3,format,&quot;&quot;);
++
++        diaMenuEntry format[]={{MUXER_VCD,&quot;VCD&quot;},{MUXER_SVCD,&quot;SVCD&quot;},{MUXER_DVD,&quot;DVD&quot;},    
++                                {MUXER_FREE,&quot;Free&quot;}};
++
++        diaElemMenu  menuFormat(TX(muxingType),&quot;Muxing Format&quot;,4,format,&quot;&quot;);
+         diaElemToggle alternate(&amp;tolerance,&quot;Allow non compliant stream&quot;);
++        diaElemUInteger muxRate(TX(muxRatekBits),&quot;Total Muxrate (kbits)&quot;,500,80000);
++        diaElemUInteger videoRate(TX(videoRatekBits),&quot;Video Muxrate (kbits)&quot;,500,80000);
++        diaElemUInteger vbvBuffer(TX(bufferSizekBytes),&quot;VBV size (kBytes)&quot;,10,500);
++        diaElemFrame   frameAdvanced(&quot;Advanced&quot;);
+ 
+-        diaElem *tabs[]={&amp;menuFormat,&amp;alternate};
+-        if( diaFactoryRun((&quot;Mpeg PS Muxer&quot;),2,tabs))
++        frameAdvanced.swallow(&amp;muxRate);
++        frameAdvanced.swallow(&amp;videoRate);
++        frameAdvanced.swallow(&amp;vbvBuffer);
++
++#define LINK(x,y,z)   menuFormat.link((diaMenuEntry *)(format+x),y,&amp;z);
++        
++        LINK(3,1,muxRate)
++        LINK(3,1,videoRate)
++        LINK(3,1,vbvBuffer)
++        
++        diaElem *tabs[]={&amp;menuFormat,&amp;alternate,&amp;frameAdvanced};
++        if( diaFactoryRun((&quot;Mpeg PS Muxer&quot;),3,tabs))
+         {
+-            psMuxerConfig.muxingType=(psMuxingType)mux;
+             psMuxerConfig.acceptNonCompliant=tolerance;
++            // Override with pre-defined value
++            if(psMuxerConfig.muxingType&lt;3)
++            {
++                const mpegPsStruct *p=&amp;(psDescriptor[psMuxerConfig.muxingType]);
++                psMuxerConfig.muxRatekBits    =p-&gt;muxRatekBits;
++                psMuxerConfig.videoRatekBits  =p-&gt;videoRatekBits;
++                psMuxerConfig.bufferSizekBytes=p-&gt;bufferSizekBytes;
++            }
+             return true;
+         }
+         return false;
+@@ -40,3 +86,4 @@
+ // EOF
+ 
+ 
++
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/ps_muxer.conf
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/ps_muxer.conf	2011-02-15 07:07:35 UTC (rev 6995)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/ps_muxer.conf	2011-02-15 07:07:36 UTC (rev 6996)
+@@ -1,2 +1,5 @@
+ uint32_t:muxingType
+ bool:acceptNonCompliant
++uint32_t:muxRatekBits
++uint32_t:videoRatekBits
++uint32_t:bufferSizekBytes
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/ps_muxer.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/ps_muxer.h	2011-02-15 07:07:35 UTC (rev 6995)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/ps_muxer.h	2011-02-15 07:07:36 UTC (rev 6996)
+@@ -4,6 +4,9 @@
+ typedef struct {
+    uint32_t muxingType;
+    bool acceptNonCompliant;
++   uint32_t muxRatekBits;
++   uint32_t videoRatekBits;
++   uint32_t bufferSizekBytes;
+ }ps_muxer;
+ #endif //ps_muxer
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/ps_muxer_desc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/ps_muxer_desc.cpp	2011-02-15 07:07:35 UTC (rev 6995)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/ps_muxer_desc.cpp	2011-02-15 07:07:36 UTC (rev 6996)
+@@ -2,5 +2,8 @@
+ const ADM_paramList ps_muxer_param[]={
+  {&quot;muxingType&quot;,offsetof( ps_muxer,muxingType),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;acceptNonCompliant&quot;,offsetof( ps_muxer,acceptNonCompliant),&quot;bool&quot;,ADM_param_bool},
++ {&quot;muxRatekBits&quot;,offsetof( ps_muxer,muxRatekBits),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;videoRatekBits&quot;,offsetof( ps_muxer,videoRatekBits),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;bufferSizekBytes&quot;,offsetof( ps_muxer,bufferSizekBytes),&quot;uint32_t&quot;,ADM_param_uint32_t},
+ {NULL,0,NULL}
+ };
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004168.html">[Avidemux-svn-commit] r6995 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="004170.html">[Avidemux-svn-commit] r6998 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4169">[ date ]</a>
+              <a href="thread.html#4169">[ thread ]</a>
+              <a href="subject.html#4169">[ subject ]</a>
+              <a href="author.html#4169">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,245 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6978 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6978%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser%3A%0A%09include%20src&In-Reply-To=%3C20110205164317.920BA48135F%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004150.html">
+   <LINK REL="Next"  HREF="004152.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6978 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6978%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser%3A%0A%09include%20src&In-Reply-To=%3C20110205164317.920BA48135F%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6978 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Feb  5 17:43:17 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004150.html">[Avidemux-svn-commit] r6977 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src
+</A></li>
+        <LI>Next message: <A HREF="004152.html">[Avidemux-svn-commit] r6979 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4151">[ date ]</a>
+              <a href="thread.html#4151">[ thread ]</a>
+              <a href="subject.html#4151">[ subject ]</a>
+              <a href="author.html#4151">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-02-05 17:43:17 +0100 (Sat, 05 Feb 2011)
+New Revision: 6978
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacadts.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacadts.cpp
+Log:
+[AAC/ADTS] Wrap ffmpeg adts to aac bitstream filter
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacadts.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacadts.h	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacadts.h	2011-02-05 16:43:17 UTC (rev 6978)
+@@ -0,0 +1,24 @@
++
++
++#ifndef ADM_AAC_ADTS
++#define ADM_AAC_ADTS
++/**
++    \class ADM_adts2aac
++*/
++class ADM_adts2aac
++{
++private:
++		void * cookie;
++        void * codec;
++		
++public:
++		bool getExtraData(uint32_t *len,uint8_t **data);
++		bool convert(int incomingLen,uint8_t *intData,int *outLen,uint8_t *out);
++        int getFrequency(void);
++        int getChannels(void);
++             ADM_adts2aac();
++             ~ADM_adts2aac();
++
++};
++#endif
++
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacadts.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacadts.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacadts.cpp	2011-02-05 16:43:17 UTC (rev 6978)
+@@ -0,0 +1,137 @@
++/***************************************************************************
++  \file ADM_aacadts.cpp
++  \brief wrapper around libavcodec bitstream filter
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include &lt;math.h&gt;
++#include &quot;ADM_default.h&quot;
++extern &quot;C&quot; {
++#include &quot;libavcodec/avcodec.h&quot;
++}
++#include &quot;ADM_aacadts.h&quot;
++#define COOKIE   ((AVBitStreamFilterContext *)cookie)
++#define CONTEXT  ((AVCodecContext *)codec)
++
++static const int aacChannels[16]=
++{
++0, //0: Defined in AOT Specifc Config
++1, //1: 1 channel: front-center
++2, //2: 2 channels: front-left, front-right
++3, //3: 3 channels: front-center, front-left, front-right
++4, //4: 4 channels: front-center, front-left, front-right, back-center
++5, // 5: 5 channels: front-center, front-left, front-right, back-left, back-right
++6, // 6: 6 channels: front-center, front-left, front-right, back-left, back-right, LFE-channel
++8, // 7: 8 channels: front-center, front-left, front-right, side-left, side-right, back-left, back-right, LFE-channel
++0,0,0,0,
++0,0,0,0,
++};
++
++static 	uint32_t aacSampleRate[16]=
++{
++	96000, 88200, 64000, 48000,
++	44100, 32000, 24000, 22050,
++	16000, 12000, 11025,  8000,
++	0,     0,     0,     0 
++};
++/**
++    \fn getExtraData
++*/
++bool ADM_adts2aac::getExtraData(uint32_t *len,uint8_t **data)
++{
++    *data=CONTEXT-&gt;extradata;
++    *len=CONTEXT-&gt;extradata_size;
++    return true;
++}
++/**
++
++*/
++int ADM_adts2aac::getFrequency(void)
++{
++    if(!(CONTEXT-&gt;extradata))
++    {
++            ADM_error(&quot;No extradata in aac! using default of 48 kHz&quot;);
++            return 48000;
++    }
++    uint8_t *p=CONTEXT-&gt;extradata ;
++    int dex=((p[0]&amp;7)&lt;&lt;1)+(p[1]&gt;&gt;7);
++    return aacSampleRate[dex];
++}
++int ADM_adts2aac::getChannels(void)
++{
++    if(!(CONTEXT-&gt;extradata))
++    {
++            ADM_error(&quot;No extradata in aac! using default of 2 channels&quot;);
++            return 2;
++    }
++    uint8_t *p=CONTEXT-&gt;extradata ;
++    int dex=((p[1]&gt;&gt;3)&amp;0xf);
++    return aacChannels[dex];
++}
++
++/**
++    \fn convert
++*/
++
++bool ADM_adts2aac::convert(int incomingLen,uint8_t *inData,int *outLen,uint8_t *out)
++{
++    uint8_t *o;
++    *outLen=0;
++    av_bitstream_filter_filter(COOKIE,CONTEXT,NULL,
++                            &amp;o,outLen,inData,incomingLen,0);
++    if(!*outLen)
++        return false;
++    if(out)
++        memcpy(out,o,*outLen);
++    return true;
++}
++/**
++    \fn ctor
++*/
++
++ADM_adts2aac::ADM_adts2aac(void)
++{
++    AVBitStreamFilterContext *bsfc= av_bitstream_filter_init(&quot;aac_adtstoasc&quot;);
++    if (!bsfc) 
++    {
++        ADM_error(&quot;Cannot get adts filter...\n&quot;);
++        ADM_assert(0);
++    }
++    cookie=(void *)bsfc;
++    //****
++    AVCodecContext *context = avcodec_alloc_context ();
++    AVCodec *dec=avcodec_find_decoder(CODEC_ID_AAC);
++    if (avcodec_open(context, dec) &lt; 0)
++    {
++        ADM_error(&quot;Cannot get aac codec...\n&quot;);
++        ADM_assert(0);
++    }
++    codec=(void *)context;
++}
++/**
++    \fn dtor
++*/
++
++ADM_adts2aac::~ADM_adts2aac()
++{
++    if(cookie)
++    {
++        av_bitstream_filter_close(COOKIE);  
++        cookie=NULL;
++    }
++    if(codec)
++    {
++        av_free(CONTEXT);
++        codec=NULL;
++    }
++}
++
++//EOF
+\ No newline at end of file
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004150.html">[Avidemux-svn-commit] r6977 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src
+</A></li>
+	<LI>Next message: <A HREF="004152.html">[Avidemux-svn-commit] r6979 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4151">[ date ]</a>
+              <a href="thread.html#4151">[ thread ]</a>
+              <a href="subject.html#4151">[ subject ]</a>
+              <a href="author.html#4151">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

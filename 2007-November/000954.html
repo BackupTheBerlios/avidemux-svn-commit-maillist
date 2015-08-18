@@ -1,0 +1,148 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3685 - branches/avidemux_2.4_branch/avidemux
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3685%20-%20branches/avidemux_2.4_branch/avidemux&In-Reply-To=%3C200711081837.lA8IbnMV003549%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000953.html">
+   <LINK REL="Next"  HREF="000955.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3685 - branches/avidemux_2.4_branch/avidemux</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3685%20-%20branches/avidemux_2.4_branch/avidemux&In-Reply-To=%3C200711081837.lA8IbnMV003549%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3685 - branches/avidemux_2.4_branch/avidemux">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Nov  8 19:37:49 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000953.html">[Avidemux-svn-commit] r3684 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv
+</A></li>
+        <LI>Next message: <A HREF="000955.html">[Avidemux-svn-commit] r3686 -	branches/avidemux_2.4_branch/avidemux/ADM_audiodevice
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#954">[ date ]</a>
+              <a href="thread.html#954">[ thread ]</a>
+              <a href="subject.html#954">[ subject ]</a>
+              <a href="author.html#954">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-11-08 19:37:49 +0100 (Thu, 08 Nov 2007)
+New Revision: 3685
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/gui_navigate.cpp
+Log:
+[UI] Repair scan for all black frames too
+
+Modified: branches/avidemux_2.4_branch/avidemux/gui_navigate.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/gui_navigate.cpp	2007-11-08 18:23:57 UTC (rev 3684)
++++ branches/avidemux_2.4_branch/avidemux/gui_navigate.cpp	2007-11-08 18:37:49 UTC (rev 3685)
+@@ -278,12 +278,12 @@
+ 
+    return ;
+ }
++/**
++    \fn A_ListAllBlackFrames
++    \brief Scan for all black frames and output that in a separate (text) file
++*/
+ uint8_t A_ListAllBlackFrames(char *name)
+ {
+-  return 0;
+-#if 0
+-// Print a list of all black frames
+-//_____________________________________________________________
+     uint32_t f;
+     uint32_t flags;
+     uint32_t startframe;
+@@ -300,7 +300,8 @@
+         return 0;
+     if ( !avifileinfo )
+         return 0;
+-
++   ADMImage *buffer=admPreview::getBuffer();
++    if(!buffer) return 0;
+    
+     if ( !outfile )
+         return 0;
+@@ -320,14 +321,14 @@
+     for (f=0; f&lt;avifileinfo-&gt;nb_frames; f++) {
+        if( work-&gt;update( 100 * f / avifileinfo-&gt;nb_frames ) ) 
+             break;
+-        if ( !video_body-&gt;getUncompressedFrame(f,rdr_decomp_buffer,&amp;flags) ) {
+-            curframe=0;
+-            video_body-&gt;getUncompressedFrame(0,rdr_decomp_buffer);
++        if ( !video_body-&gt;getUncompressedFrame(f,buffer,&amp;flags) ) 
++        {
+             break;
+         }
+ 
+         curframe=f;
+-        if ( !fastIsNotBlack(darkness) ) {
++        if ( !fastIsNotBlack(darkness,buffer) ) 
++        {
+             frame2time(curframe,avifileinfo-&gt;fps1000,&amp;hh,&amp;mm,&amp;ss,&amp;ms);
+             printf(&quot;\tBlack frame: frame %d  time %02d:%02d:%02d.%03d\n&quot;, curframe, hh, mm, ss, ms);
+             fprintf(fd, &quot;\tBlack frame: frame %d  time %02d:%02d:%02d.%03d\n&quot;, curframe, hh, mm, ss, ms);
+@@ -335,7 +336,7 @@
+         reresh_count++;
+         if(reresh_count&gt;100)
+         {
+-                update_status_bar(rdr_decomp_buffer);
++                update_status_bar();
+                 reresh_count=0;
+         }
+     }
+@@ -343,16 +344,8 @@
+     printf(&quot;** done **\n\n&quot;);
+     fclose(fd);
+     delete work;
+-    curframe=startframe;
+-    if ( !video_body-&gt;getUncompressedFrame(curframe,rdr_decomp_buffer,&amp;flags) ) {
+-        curframe=0;
+-        video_body-&gt;getUncompressedFrame(0,rdr_decomp_buffer);
+-    }
+-     admPreview::update( curframe,rdr_decomp_buffer) ;
+-     update_status_bar(rdr_decomp_buffer);
+-
++    GUI_GoToFrame(startframe);
+     return 1;
+-#endif
+ }
+ //**********************************************************************
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000953.html">[Avidemux-svn-commit] r3684 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv
+</A></li>
+	<LI>Next message: <A HREF="000955.html">[Avidemux-svn-commit] r3686 -	branches/avidemux_2.4_branch/avidemux/ADM_audiodevice
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#954">[ date ]</a>
+              <a href="thread.html#954">[ thread ]</a>
+              <a href="subject.html#954">[ subject ]</a>
+              <a href="author.html#954">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

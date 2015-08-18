@@ -1,0 +1,465 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7314 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7314%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide&In-Reply-To=%3C20110710143128.A7EDE4813BB%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004467.html">
+   <LINK REL="Next"  HREF="004469.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7314 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7314%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide&In-Reply-To=%3C20110710143128.A7EDE4813BB%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7314 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jul 10 16:31:28 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004467.html">[Avidemux-svn-commit] r7313 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreImage/include	avidemux_plugins/ADM_videoFilters6/telecide
+</A></li>
+        <LI>Next message: <A HREF="004469.html">[Avidemux-svn-commit] r7315 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	. decimate
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4468">[ date ]</a>
+              <a href="thread.html#4468">[ thread ]</a>
+              <a href="subject.html#4468">[ subject ]</a>
+              <a href="author.html#4468">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-07-10 16:31:28 +0200 (Sun, 10 Jul 2011)
+New Revision: 7314
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide_getFrame.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide_utils.cpp
+Log:
+[telecide] Simplify, begin to refactor. It is incorrect.
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide.h	2011-07-10 14:31:27 UTC (rev 7313)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide.h	2011-07-10 14:31:28 UTC (rev 7314)
+@@ -148,4 +148,9 @@
+ 	struct PREDICTION *PredictSoftYUY2(int frame);
+ 
+ 	void WriteHints(unsigned char *dst, bool film, bool inpattern);
++
++    bool doInterpolate(ADMImage *dst, ADM_PLANE plane);
++    bool blendPlane(ADMImage *dst, ADMImage *src,ADM_PLANE plane);
++
++
+ };
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide_getFrame.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide_getFrame.cpp	2011-07-10 14:31:27 UTC (rev 7313)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide_getFrame.cpp	2011-07-10 14:31:28 UTC (rev 7314)
+@@ -69,7 +69,7 @@
+ #define y1      _param-&gt;y1
+ 
+ /**
+-
++    \fn copyField
+ */
+ static bool copyField(ADMImage *target, ADMImage *source, bool top)
+ {
+@@ -407,215 +407,21 @@
+ 
+                 if (blend == true)
+                 {
+-                        // Blend mode.
+-                        final = output_image; //env-&gt;NewVideoFrame(vi);
+-                        // Do first and last lines.
+-                        finalp = final-&gt;GetWritePtr(PLANAR_Y);
+-                        dstp = dst-&gt;GetWritePtr(PLANAR_Y);
+-                        dstpn = dstp + dpitch;
+-                        for (x = 0; x &lt; w; x++)
+-                        {
+-                                finalp[x] = (((int)dstp[x] + (int)dstpn[x]) &gt;&gt; 1);
+-                        }
+-                        finalp = final-&gt;GetWritePtr(PLANAR_Y) + (h-1)*dpitch;
+-                        dstp = dst-&gt;GetWritePtr(PLANAR_Y) + (h-1)*dpitch;
+-                        dstpp = dstp - dpitch;
+-                        for (x = 0; x &lt; w; x++)
+-                        {
+-                                finalp[x] = (((int)dstp[x] + (int)dstpp[x]) &gt;&gt; 1);
+-                        }
+-                        // Now do the rest.
+-                        dstp = dst-&gt;GetWritePtr(PLANAR_Y) + dpitch;
+-                        dstpp = dstp - dpitch;
+-                        dstpn = dstp + dpitch;
+-                        finalp = final-&gt;GetWritePtr(PLANAR_Y) + dpitch;
+-                        for (y = 1; y &lt; h - 1; y++)
+-                        {
+-                                for (x = 0; x &lt; w; x++)
+-                                {
+-                                        v1 = (int)(dstp[x] - dthresh);
+-                                        if (v1 &lt; 0) v1 = 0; 
+-                                        v2 = (int) (dstp[x] + dthresh);
+-                                        if (v2 &gt; 235) v2 = 235; 
+-                                        if ((v1 &gt; dstpp[x] &amp;&amp; v1 &gt; dstpn[x]) || (v2 &lt; dstpp[x] &amp;&amp; v2 &lt; dstpn[x]))
+-                                        {
+-                                                if (post == POST_FULL_MAP || post == POST_FULL_NOMATCH_MAP)
+-                                                {
+-                                                        if (0) //(vi.IsYUY2())
+-                                                        {
+-                                                                if (x &amp; 1) finalp[x] = 128;
+-                                                                else finalp[x] = 235;
+-                                                        }
+-                                                        else
+-                                                        {
+-                                                                finalp[x] = 235;
+-                                                        }
+-                                                }
+-                                                else
+-                                                        finalp[x] = ((int)dstpp[x] + (int)dstpn[x] + (int)dstp[x] + (int)dstp[x]) &gt;&gt; 2;
+-                                        }
+-                                        else finalp[x] = dstp[x];
+-                                }
+-                                finalp += dpitch;
+-                                dstp += dpitch;
+-                                dstpp += dpitch;
+-                                dstpn += dpitch;
+-                        }
+-
+-                      //  if (vi.IsYV12())
+-                        {
+-                                // Chroma planes.
+-                                for (z = 0; z &lt; 2; z++)
+-                                {
+-                                        if (z == 0)
+-                                        {
+-                                                // Do first and last lines.
+-                                                finalp = final-&gt;GetWritePtr(PLANAR_U);
+-                                                dstp = dst-&gt;GetWritePtr(PLANAR_U);
+-                                                dstpn = dstp + dpitch/2;
+-                                                for (x = 0; x &lt; wover2; x++)
+-                                                {
+-                                                        finalp[x] = (((int)dstp[x] + (int)dstpn[x]) &gt;&gt; 1);
+-                                                }
+-                                                finalp = final-&gt;GetWritePtr(PLANAR_U) + (hover2-1)*dpitch/2;
+-                                                dstp = dst-&gt;GetWritePtr(PLANAR_U) + (hover2-1)*dpitch/2;
+-                                                dstpp = dstp - dpitch/2;
+-                                                for (x = 0; x &lt; wover2; x++)
+-                                                {
+-                                                        finalp[x] = (((int)dstp[x] + (int)dstpp[x]) &gt;&gt; 1);
+-                                                }
+-                                                // Now do the rest.
+-                                                finalp = final-&gt;GetWritePtr(PLANAR_U) + dpitch/2;
+-                                                dstp = dst-&gt;GetWritePtr(PLANAR_U) + dpitch/2;
+-                                        }
+-                                        else
+-                                        {
+-                                                // Do first and last lines.
+-                                                finalp = final-&gt;GetWritePtr(PLANAR_V);
+-                                                dstp = dst-&gt;GetWritePtr(PLANAR_V);
+-                                                dstpn = dstp + dpitch/2;
+-                                                for (x = 0; x &lt; wover2; x++)
+-                                                {
+-                                                        finalp[x] = (((int)dstp[x] + (int)dstpn[x]) &gt;&gt; 1);
+-                                                }
+-                                                finalp = final-&gt;GetWritePtr(PLANAR_V) + (hover2-1)*dpitch/2;
+-                                                dstp = dst-&gt;GetWritePtr(PLANAR_V) + (hover2-1)*dpitch/2;
+-                                                dstpp = dstp - dpitch/2;
+-                                                for (x = 0; x &lt; wover2; x++)
+-                                                {
+-                                                        finalp[x] = (((int)dstp[x] + (int)dstpp[x]) &gt;&gt; 1);
+-                                                }
+-                                                // Now do the rest.
+-                                                finalp = final-&gt;GetWritePtr(PLANAR_V) + dpitch/2;
+-                                                dstp = dst-&gt;GetWritePtr(PLANAR_V) + dpitch/2;
+-                                        }
+-                                        dstpp = dstp - dpitch/2;
+-                                        dstpn = dstp + dpitch/2;
+-                                        for (y = 1; y &lt; hover2 - 1; y++)
+-                                        {
+-                                                for (x = 0; x &lt; wover2; x++)
+-                                                {
+-                                                        v1 = (int)( dstp[x] - dthresh);
+-                                                        if (v1 &lt; 0) v1 = 0; 
+-                                                        v2 = (int)( dstp[x] + dthresh);
+-                                                        if (v2 &gt; 235) v2 = 235; 
+-                                                        if ((v1 &gt; dstpp[x] &amp;&amp; v1 &gt; dstpn[x]) || (v2 &lt; dstpp[x] &amp;&amp; v2 &lt; dstpn[x]))
+-                                                        {
+-                                                                if (post == POST_FULL_MAP || post == POST_FULL_NOMATCH_MAP)
+-                                                                {
+-                                                                        finalp[x] = 128;
+-                                                                }
+-                                                                else
+-                                                                        finalp[x] = ((int)dstpp[x] + (int)dstpn[x] + (int)dstp[x] + (int)dstp[x]) &gt;&gt; 2;
+-                                                        }
+-                                                        else finalp[x] = dstp[x];
+-                                                }
+-                                                finalp += dpitch/2;
+-                                                dstp += dpitch/2;
+-                                                dstpp += dpitch/2;
+-                                                dstpn += dpitch/2;
+-                                        }
+-                                }
+-                        }
+-                        if (show == true) Show(final, frame);
++                        blendPlane(final,dst,PLANAR_Y);
++                        blendPlane(final,dst,PLANAR_U);
++                        blendPlane(final,dst,PLANAR_V);
++                       
++                        if (show == true)  Show(final, frame);
+                         if (debug == true) Debug(frame);
+                         if (hints == true) WriteHints(final-&gt;GetWritePtr(PLANAR_Y), film, inpattern);
+                        // return final;
+                         vidCache-&gt;unlockAll();
+                         return 1;
+                 }
+-
+-                // Interpolate mode.
+-                // Luma plane.
+-                dstp = dst-&gt;GetWritePtr(PLANAR_Y) + dpitch;
+-                dstpp = dstp - dpitch;
+-                dstpn = dstp + dpitch;
+-                for (y = 1; y &lt; h - 1; y+=2)
+-                {
+-                        for (x = 0; x &lt; w; x++)
+-                        {
+-                                v1 = (int) (dstp[x] - dthresh);
+-                                if (v1 &lt; 0) v1 = 0; 
+-                                v2 = (int) dstp[x] + dthresh;
+-                                if (v2 &gt; 235) v2 = 235; 
+-                                if ((v1 &gt; dstpp[x] &amp;&amp; v1 &gt; dstpn[x]) || (v2 &lt; dstpp[x] &amp;&amp; v2 &lt; dstpn[x]))
+-                                {
+-                                        if (post == POST_FULL_MAP || post == POST_FULL_NOMATCH_MAP)
+-                                        {
+-                                                if(0) // (vi.IsYUY2())
+-                                                {
+-                                                        if (x &amp; 1) dstp[x] = 128;
+-                                                        else dstp[x] = 235;
+-                                                }
+-                                                else
+-                                                {
+-                                                        dstp[x] = 235;
+-                                                }
+-                                        }
+-                                        else
+-                                                dstp[x] = (dstpp[x] + dstpn[x]) &gt;&gt; 1;
+-                                }
+-                        }
+-                        dstp += 2*dpitch;
+-                        dstpp += 2*dpitch;
+-                        dstpn += 2*dpitch;
+-                }
+-
+-               // if (vi.IsYV12())
+-                {
+-                        // Chroma planes.
+-                        for (z = 0; z &lt; 2; z++)
+-                        {
+-                                if (z == 0) dstp = dst-&gt;GetWritePtr(PLANAR_U) + dpitch/2;
+-                                else dstp = dst-&gt;GetWritePtr(PLANAR_V) + dpitch/2;
+-                                dstpp = dstp - dpitch/2;
+-                                dstpn = dstp + dpitch/2;
+-                                for (y = 1; y &lt; hover2 - 1; y+=2)
+-                                {
+-                                        for (x = 0; x &lt; wover2; x++)
+-                                        {
+-                                                v1 = (int) dstp[x] - dthresh;
+-                                                if (v1 &lt; 0) v1 = 0; 
+-                                                v2 = (int) dstp[x] + dthresh;
+-                                                if (v2 &gt; 235) v2 = 235; 
+-                                                if ((v1 &gt; dstpp[x] &amp;&amp; v1 &gt; dstpn[x]) || (v2 &lt; dstpp[x] &amp;&amp; v2 &lt; dstpn[x]))
+-                                                {
+-                                                        if (post == POST_FULL_MAP || post == POST_FULL_NOMATCH_MAP)
+-                                                        {
+-                                                                dstp[x] = 128;
+-                                                        }
+-                                                        else
+-                                                                dstp[x] = (dstpp[x] + dstpn[x]) &gt;&gt; 1;
+-                                                }
+-                                        }
+-                                        dstp += dpitch;
+-                                        dstpp += dpitch;
+-                                        dstpn += dpitch;
+-                                }
+-                        }
+-                }
++                doInterpolate(final,PLANAR_Y);
++                doInterpolate(final,PLANAR_U);
++                doInterpolate(final,PLANAR_V);
+         }
+-
+         if (show == true) Show(dst, frame);
+         if (debug == true) Debug(frame);
+         if (hints == true) WriteHints(dst-&gt;GetWritePtr(PLANAR_Y), film, inpattern);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide_utils.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide_utils.cpp	2011-07-10 14:31:27 UTC (rev 7313)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide_utils.cpp	2011-07-10 14:31:28 UTC (rev 7314)
+@@ -1,10 +1,5 @@
+ 
+ /***************************************************************************
+-                          ADM_vidDecTelecide  -  description
+-                             -------------------
+-    
+-    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+-
+     Port of Donal Graft Telecide which is (c) Donald Graft
+     <A HREF="http://www.neuron2.net">http://www.neuron2.net</A>
+     <A HREF="http://puschpull.org/avisynth/decomb_reference_manual.html">http://puschpull.org/avisynth/decomb_reference_manual.html</A>
+@@ -822,4 +817,123 @@
+         CacheInsert(frame, p, highest_sump, c, highest_sumc);
+ #endif
+ }
++/**
++    \fn blendPlane
++    \brief We do it inplace
++*/
++bool Telecide::blendPlane(ADMImage *final,ADMImage *src, ADM_PLANE plane)
++{
++uint8_t *finalp=final-&gt;GetWritePtr(plane);
++uint8_t *dstp=src-&gt;GetReadPtr(plane);
++
++
++uint32_t fpitch=final-&gt;GetPitch(plane);
++uint32_t dpitch=src-&gt;GetPitch(plane);
++
++uint32_t h=final-&gt;GetHeight(plane);
++uint32_t w=final-&gt;GetWidth(plane);
++
++uint8_t *dstpn,*dstn,*dstpp;
++
++uint8_t CLAMP=235;
++
++    float dthresh=configuration.dthresh;
++    int v1,v2;
++
++    if(plane!=0) CLAMP=128;
++
++// Do first and last lines.
++
++    dstpn = dstp + dpitch;
++    for (x = 0; x &lt; w; x++)
++    {
++            finalp[x] = (((int)dstp[x] + (int)dstpn[x]) &gt;&gt; 1);
++    }
++    finalp = final-&gt;GetWritePtr(plane) + (h-1)*fpitch;
++    dstp = src-&gt;GetWritePtr(plane) + (h-1)*dpitch;
++    
++    dstpp = dstp - dpitch;
++    for (x = 0; x &lt; w; x++)
++    {
++            finalp[x] = (((int)dstp[x] + (int)dstpp[x]) &gt;&gt; 1);
++    }
++    // Now do the rest.
++    dstp = src-&gt;GetWritePtr(plane) + dpitch;
++    dstpp = dstp - dpitch;
++    dstpn = dstp + dpitch;
++    finalp = final-&gt;GetWritePtr(plane) + fpitch;
++    for (y = 1; y &lt; h - 1; y++)
++    {
++            for (x = 0; x &lt; w; x++)
++            {
++                    v1 = (int)(dstp[x] - dthresh);
++                    if (v1 &lt; 0) v1 = 0; 
++                    v2 = (int) (dstp[x] + dthresh);
++                    if (v2 &gt; 235) v2 = 235; 
++                    if ((v1 &gt; dstpp[x] &amp;&amp; v1 &gt; dstpn[x]) || (v2 &lt; dstpp[x] &amp;&amp; v2 &lt; dstpn[x]))
++                    {
++                            if (post == POST_FULL_MAP || post == POST_FULL_NOMATCH_MAP)
++                            {
++                                    finalp[x] = CLAMP;
++                            }
++                            else
++                                    finalp[x] = ((int)dstpp[x] + (int)dstpn[x] + (int)dstp[x] + (int)dstp[x]) &gt;&gt; 2;
++                    }
++                    else finalp[x] = dstp[x];
++            }
++            finalp += fpitch;
++            dstp += dpitch;
++            dstpp += dpitch;
++            dstpn += dpitch;
++    }
++    return true;
++}
++/**
++    \fn doInterpolate
++*/
++bool Telecide::doInterpolate(ADMImage *dst, ADM_PLANE plane)
++{
++
++    // Interpolate mode.
++    // Luma plane.
++    uint32_t dpitch=dst-&gt;GetPitch(plane);
++    uint8_t *dstp = dst-&gt;GetWritePtr(plane) + dpitch;
++    uint32_t w=dst-&gt;GetWidth(plane);
++    uint32_t h=dst-&gt;GetHeight(plane);
++
++    uint8_t *dstpp = dstp - dpitch;
++    uint8_t *dstpn = dstp + dpitch;
++
++    uint8_t CLAMP=235;
++    int v1,v2;
++    if(plane!=0) CLAMP=128;
++
++    float dthresh=configuration.dthresh;
++
++    for (y = 1; y &lt; h - 1; y+=2)
++    {
++            for (x = 0; x &lt; w; x++)
++            {
++                    v1 = (int) (dstp[x] - dthresh);
++                    if (v1 &lt; 0) v1 = 0; 
++                    v2 = (int) dstp[x] + dthresh;
++                    if (v2 &gt; 235) v2 = 235; 
++                    if ((v1 &gt; dstpp[x] &amp;&amp; v1 &gt; dstpn[x]) || (v2 &lt; dstpp[x] &amp;&amp; v2 &lt; dstpn[x]))
++                    {
++                            if (post == POST_FULL_MAP || post == POST_FULL_NOMATCH_MAP)
++                            {
++                                    dstp[x] = CLAMP;
++                            }
++                            else
++                                    dstp[x] = (dstpp[x] + dstpn[x]) &gt;&gt; 1;
++                    }
++            }
++            dstp += 2*dpitch;
++            dstpp += 2*dpitch;
++            dstpn += 2*dpitch;
++    }
++
++    return true;
++}
++
+ // EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004467.html">[Avidemux-svn-commit] r7313 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreImage/include	avidemux_plugins/ADM_videoFilters6/telecide
+</A></li>
+	<LI>Next message: <A HREF="004469.html">[Avidemux-svn-commit] r7315 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	. decimate
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4468">[ date ]</a>
+              <a href="thread.html#4468">[ thread ]</a>
+              <a href="subject.html#4468">[ subject ]</a>
+              <a href="author.html#4468">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

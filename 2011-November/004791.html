@@ -1,0 +1,179 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7646 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7646%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src&In-Reply-To=%3C20111103064439.70E8548157C%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004790.html">
+   <LINK REL="Next"  HREF="004792.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7646 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7646%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src&In-Reply-To=%3C20111103064439.70E8548157C%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7646 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Nov  3 07:44:39 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004790.html">[Avidemux-svn-commit] r7645 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+</A></li>
+        <LI>Next message: <A HREF="004792.html">[Avidemux-svn-commit] r7647 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4791">[ date ]</a>
+              <a href="thread.html#4791">[ thread ]</a>
+              <a href="subject.html#4791">[ subject ]</a>
+              <a href="author.html#4791">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-11-03 07:44:38 +0100 (Thu, 03 Nov 2011)
+New Revision: 7646
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoder.cpp
+Log:
+[videoEncoder] Preset management, try2 : work with win32 paths
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoder.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoder.cpp	2011-11-02 07:03:56 UTC (rev 7645)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoder.cpp	2011-11-03 06:44:38 UTC (rev 7646)
+@@ -30,6 +30,9 @@
+ #else
+ const std::string slash=std::string(&quot;/&quot;);
+ #endif
++
++#define MAX_NB_PRESET 30
++
+ /**
+     \fn ADM_coreVideoEncoder
+ */                          
+@@ -173,6 +176,28 @@
+     return true;
+ }
+ /**
++    \fn getFileNameAndExt
++    \brief only keep filename and ext from input (i.e. remove folders)
++*/
++static bool getFileNameAndExt(const std::string &amp;input, std::string &amp;output)
++{
++    std::string s=input;
++    size_t lastSlash,lastBackSlash;
++    
++     lastSlash=s.find_last_of(&quot;/&quot;);
++     if(lastSlash!=-1)
++        s.replace(0,lastSlash+1,std::string(&quot;&quot;));
++#ifdef __WIN32
++     lastBackSlash=s.find_last_of(&quot;\\&quot;);
++     if(lastBackSlash!=-1)
++        s.replace(0,lastBackSlash+1,std::string(&quot;&quot;));
++#endif
++    ADM_info(&quot;Stripping : %s =&gt; %s\n&quot;,input.c_str(),s.c_str());
++    output=s;   
++    return true;
++}
++
++/**
+     \fn ADM_pluginInstallSystem
+     \brief Copy if needed the system presets to the user presets list
+ */
+@@ -181,11 +206,10 @@
+     std::string sysPath,userPath;
+     ADM_pluginSystemPath(pluginName,pluginVersion,sysPath);
+     ADM_pluginGetPath(pluginName,pluginVersion,userPath);
+-#define NB 20
+-    char *list[NB];
++    char *list[MAX_NB_PRESET];
+     uint32_t nb=0;
+     ADM_info(&quot;Looking for file %s in folder %s\n&quot;,ext.c_str(),sysPath.c_str());
+-    if(false==buildDirectoryContent(&amp;nb,sysPath.c_str(),list,NB,ext.c_str()))
++    if(false==buildDirectoryContent(&amp;nb,sysPath.c_str(),list,MAX_NB_PRESET,ext.c_str()))
+     {
+         ADM_info(&quot;No preset found\n&quot;);
+         return true;
+@@ -194,10 +218,9 @@
+     for( int i=0;i&lt;nb;i++)
+     {
+         std::string s=std::string(list[i]);
+-        size_t lastSlash=s.find_last_of('/');
+-        s.replace(0,lastSlash+1,std::string(&quot;&quot;)); // filename+ext
+-        std::string file=s;
+-        s=userPath+std::string(&quot;/&quot;)+s; // 
++        std::string file;
++        getFileNameAndExt(s,file);
++        s=userPath+slash+file; // 
+         if(!ADM_fileExist(s.c_str()))
+         {
+             ADM_info(&quot;%s exists in system folder, but not in user folder, copying..\n&quot;,file.c_str());
+@@ -213,7 +236,7 @@
+ */
+ bool ADM_listFile(const std::string path,const std::string extension,vector &lt;std::string &gt; &amp; listOut)
+ {
+-#define NB 20
++#define NB 30
+     char *list[NB];
+     uint32_t nb=0;
+ 
+@@ -223,20 +246,17 @@
+         ADM_info(&quot;No preset found\n&quot;);
+         return true;
+     }
+-    size_t lastSlash,lastBackSlash,lastDot;
++    size_t lastDot;
+     for(int i=0;i&lt;nb;i++)
+     {
+         std::string s=std::string(list[i]);
+-        lastSlash=s.find_last_of('/');
+-        s.replace(0,lastSlash+1,std::string(&quot;&quot;));
+-#ifdef __WIN32 // also replace \ 
+-        lastBackSlash=s.find_last_of('\\');
+-        s.replace(0,lastBackSlash+1,std::string(&quot;&quot;));
+-#endif // 
+-        lastDot=s.find_last_of('.');
+-        s.replace(lastDot,s.size(),std::string(&quot;&quot;));
++        std::string file;
++        getFileNameAndExt(s,file);
++        lastDot=file.find_last_of('.');
+         // Remove extension
+-        listOut.push_back(s);
++        if(lastDot!=-1)
++            file.replace(lastDot,file.size(),std::string(&quot;&quot;));
++        listOut.push_back(file);
+     }
+     clearDirectoryContent(nb,list);
+     return true;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004790.html">[Avidemux-svn-commit] r7645 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+</A></li>
+	<LI>Next message: <A HREF="004792.html">[Avidemux-svn-commit] r7647 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4791">[ date ]</a>
+              <a href="thread.html#4791">[ thread ]</a>
+              <a href="subject.html#4791">[ subject ]</a>
+              <a href="author.html#4791">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

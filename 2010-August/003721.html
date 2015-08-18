@@ -1,0 +1,269 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6534 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6534%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C20100818190325.731A44808B3%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003720.html">
+   <LINK REL="Next"  HREF="003722.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6534 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6534%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C20100818190325.731A44808B3%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6534 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Aug 18 21:03:25 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003720.html">[Avidemux-svn-commit] r6533 - in branches/avidemux_2.6_branch_mean:	avidemux/qt4/ADM_userInterfaces/ADM_dialog	avidemux_core/ADM_coreVideoFilter/include	avidemux_plugins/ADM_videoFilters6	avidemux_plugins/ADM_videoFilters6/stackField
+</A></li>
+        <LI>Next message: <A HREF="003722.html">[Avidemux-svn-commit] r6535 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3721">[ date ]</a>
+              <a href="thread.html#3721">[ thread ]</a>
+              <a href="subject.html#3721">[ subject ]</a>
+              <a href="author.html#3721">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-08-18 21:03:25 +0200 (Wed, 18 Aug 2010)
+New Revision: 6534
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/mkv_tagenum.h
+Log:
+[mkv] add support for stripped/repeat headers, fixes # 106
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2010-08-17 05:36:34 UTC (rev 6533)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2010-08-18 19:03:25 UTC (rev 6534)
+@@ -361,9 +361,7 @@
+   mkvIndex *dx=&amp;(_tracks[0]._index[framenum]);
+ 
+   _parser-&gt;seek(dx-&gt;pos);
+-  _parser-&gt;readBin(img-&gt;data,dx-&gt;size);
+-  img-&gt;dataLength=dx-&gt;size;
+-
++   img-&gt;dataLength=readAndRepeat(0,img-&gt;data,dx-&gt;size);
+   img-&gt;flags=dx-&gt;flags;
+ 
+   if(!framenum) img-&gt;flags=AVI_KEY_FRAME;
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h	2010-08-17 05:36:34 UTC (rev 6533)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h	2010-08-18 19:03:25 UTC (rev 6534)
+@@ -23,6 +23,7 @@
+ #include &quot;ADM_editor/ADM_Video.h&quot;
+ #include &quot;ADM_audio/aviaudio.hxx&quot;
+ #include &quot;ADM_inputs/ADM_matroska/ADM_ebml.h&quot;
++#define MKV_MAX_REPEAT_HEADER_SIZE 16
+ 
+ 
+ typedef struct
+@@ -46,6 +47,11 @@
+   /* Used for both */
+   uint8_t    *extraData;
+   uint32_t   extraDataLen;
++  /* */
++  uint32_t   headerRepeatSize;
++  uint8_t    headerRepeat[MKV_MAX_REPEAT_HEADER_SIZE];
++
++
+   mkvIndex  *_index;
+   uint32_t  _nbIndex;  // current size of the index
+   uint32_t  _indexMax; // Max size of the index
+@@ -73,6 +79,17 @@
+     uint8_t                     goToCluster(uint32_t x);
+     uint8_t                     getPacket(uint8_t *dest, uint32_t *packlen, uint32_t *samples,uint32_t *timecode);
+     uint32_t                    _curTimeCode;
++
++  int                       readAndRepeat(uint8_t *buffer, uint32_t len)
++                            {
++                                 uint32_t rpt=_track-&gt;headerRepeatSize;
++                                  _parser-&gt;readBin(buffer+rpt,len);
++                                  if(rpt)
++                                    memcpy(buffer,_track-&gt;headerRepeat,rpt);
++                                  return len+rpt;
++                            }
++
++
+   public:
+                                 mkvAudio(const char *name,mkvTrak *track,mkvIndex *clust,uint32_t nbClusters);
+ 
+@@ -125,6 +142,16 @@
+     uint32_t                getCurrentAudioStreamNumber(void);
+     uint8_t                 getAudioStreamsInfo(uint32_t *nbStreams, audioInfo **infos);
+     uint8_t                 rescaleTrack(mkvTrak *track,uint32_t durationMs);
++    int                     readAndRepeat(int index,uint8_t *buffer, uint32_t len)
++                            {
++                                 uint32_t rpt=_tracks[index].headerRepeatSize;
++                                  _parser-&gt;readBin(buffer+rpt,len);
++                                  if(rpt)
++                                    memcpy(buffer,_tracks[index].headerRepeat,rpt);
++                                  return len+rpt;
++                            }
++   //__________________________
++
+   public:
+ 
+       uint8_t               hasPtsDts(void) {return 1;} // Return 1 if the container gives PTS &amp; DTS info
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp	2010-08-17 05:36:34 UTC (rev 6533)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp	2010-08-18 19:03:25 UTC (rev 6534)
+@@ -46,6 +46,10 @@
+           uint8_t *extraData;
+ 
+           void dump(void);
++          uint32_t   headerRepeatSize;
++          uint8_t    headerRepeat[MKV_MAX_REPEAT_HEADER_SIZE];
++
++
+ };
+ /* Prototypes */
+ static uint8_t entryWalk(ADM_ebml_file *head,uint32_t headlen,entryDesc *entry);
+@@ -146,6 +150,13 @@
+         _tracks[0].extraData=entry.extraData;
+         _tracks[0].extraDataLen=entry.extraDataLen;
+         _tracks[0].streamIndex=entry.trackNo;
++         uint32_t hdr=entry.headerRepeatSize;
++        if(hdr)
++        {
++            _tracks[0].headerRepeatSize=entry.headerRepeatSize;
++            memcpy(_tracks[0].headerRepeat,entry.headerRepeat,hdr);
++            printf(&quot;video has %d bytes of repeated headers\n&quot;,hdr);
++        }
+ 
+         return 1;
+       }
+@@ -166,6 +177,14 @@
+           t-&gt;_defaultFrameDuration=entry.defaultDuration;
+          else
+            t-&gt;_defaultFrameDuration=0;
++         uint32_t hdr=entry.headerRepeatSize;
++         if(hdr)
++         {
++            t-&gt;headerRepeatSize=entry.headerRepeatSize;
++            memcpy(t-&gt;headerRepeat,entry.headerRepeat,hdr);
++         }
++
++
+         _nbAudioTrack++;
+         return 1;
+       }
+@@ -196,6 +215,14 @@
+       }
+       switch(id)
+       {
++        case  MKV_CONTENT_COMPRESSION_SETTINGS: 
++#warning todo: check it is stripping
++                    if(len&lt;=MKV_MAX_REPEAT_HEADER_SIZE)
++                    {
++                        father.readBin(entry-&gt;headerRepeat,len);
++                        entry-&gt;headerRepeatSize=len;
++                    };
++                    break;
+ 
+         case  MKV_TRACK_NUMBER: entry-&gt;trackNo=father.readUnsignedInt(len);break;
+         case  MKV_TRACK_TYPE: entry-&gt;trackType=father.readUnsignedInt(len);break;
+@@ -218,6 +245,10 @@
+         }
+         case  MKV_AUDIO_SETTINGS:
+         case  MKV_VIDEO_SETTINGS:
++        case  MKV_CONTENT_ONE_ENCODING:
++        case  MKV_CONTENT_ENCODINGS:
++        case  MKV_CONTENT_COMPRESSION:
++
+                   entryWalk(&amp;father,len,entry);
+                   break;
+         case MKV_CODEC_ID:
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2010-08-17 05:36:34 UTC (rev 6533)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2010-08-18 19:03:25 UTC (rev 6534)
+@@ -88,8 +88,9 @@
+     // Have we still lace to go ?
+     if(_currentLace&lt;_maxLace)
+     {
+-      _clusterParser-&gt;readBin(dest,_Laces[_currentLace]);
+-      *packlen= _Laces[_currentLace];
++      
++      *packlen= readAndRepeat(dest, _Laces[_currentLace]);
++
+       vprintf(&quot;Continuing lacing : %u bytes, lacing %u/%u\n&quot;,*packlen,_currentLace,_maxLace);
+ 
+      
+@@ -160,9 +161,7 @@
+                       case 0 : // no lacing
+ 
+                               vprintf(&quot;No lacing :%d bytes\n&quot;,remaining);
+-                              _clusterParser-&gt;readBin(dest,remaining);
+-                              *packlen=remaining;
+-                              
++                              *packlen= readAndRepeat(dest, remaining);          
+                               _currentLace=_maxLace=0;
+ 
+                               return 1;
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/mkv_tagenum.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/mkv_tagenum.h	2010-08-17 05:36:34 UTC (rev 6533)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska/mkv_tagenum.h	2010-08-18 19:03:25 UTC (rev 6534)
+@@ -129,6 +129,14 @@
+    MKTAG(MKV_CRC32,0xBF,ADM_MKV_TYPE_BINARY),
+    MKTAG(MKV_PREV_SIZE,0xAB,ADM_MKV_TYPE_UINTEGER),
+    MKTAG(MKV_POSITION,0xA7,ADM_MKV_TYPE_UINTEGER),
++   //*********** COMPRESSION ETC...**************
++    MKTAG(MKV_CONTENT_ENCODINGS,0x6d80,ADM_MKV_TYPE_CONTAINER),
++    MKTAG(MKV_CONTENT_ONE_ENCODING,0x6240,ADM_MKV_TYPE_CONTAINER),
++    MKTAG(MKV_CONTENT_ENCODING_TYPE,0x5033,ADM_MKV_TYPE_UINTEGER),
++    MKTAG(MKV_CONTENT_COMPRESSION,0x5034,ADM_MKV_TYPE_CONTAINER),
++    MKTAG(MKV_CONTENT_COMPRESSION_ALGO,0x4254,ADM_MKV_TYPE_UINTEGER),
++    MKTAG(MKV_CONTENT_COMPRESSION_SETTINGS,0x4255,ADM_MKV_TYPE_BINARY),
++   //*********** The END.**************
+ 
+          //*************************
+    MKTAG(MKV_MAX,0xFFFF,ADM_MKV_TYPE_UNKNOWN)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003720.html">[Avidemux-svn-commit] r6533 - in branches/avidemux_2.6_branch_mean:	avidemux/qt4/ADM_userInterfaces/ADM_dialog	avidemux_core/ADM_coreVideoFilter/include	avidemux_plugins/ADM_videoFilters6	avidemux_plugins/ADM_videoFilters6/stackField
+</A></li>
+	<LI>Next message: <A HREF="003722.html">[Avidemux-svn-commit] r6535 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3721">[ date ]</a>
+              <a href="thread.html#3721">[ thread ]</a>
+              <a href="subject.html#3721">[ subject ]</a>
+              <a href="author.html#3721">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

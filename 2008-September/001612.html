@@ -1,0 +1,241 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4372 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4372%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_encoder&In-Reply-To=%3C200809191639.m8JGdvqd022622%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001611.html">
+   <LINK REL="Next"  HREF="001613.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4372 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4372%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_encoder&In-Reply-To=%3C200809191639.m8JGdvqd022622%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4372 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Fri Sep 19 18:39:57 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001611.html">[Avidemux-svn-commit] r4371 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+</A></li>
+        <LI>Next message: <A HREF="001613.html">[Avidemux-svn-commit] r4373 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_dummy
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1612">[ date ]</a>
+              <a href="thread.html#1612">[ thread ]</a>
+              <a href="subject.html#1612">[ subject ]</a>
+              <a href="author.html#1612">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-09-19 18:39:50 +0200 (Fri, 19 Sep 2008)
+New Revision: 4372
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp
+Log:
+[libavcodec] support flushing using null frames
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2008-09-19 16:03:49 UTC (rev 4371)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2008-09-19 16:39:50 UTC (rev 4372)
+@@ -116,7 +116,7 @@
+ {
+     int32_t sz = 0;
+     ADM_assert(out-&gt;bufferSize);
+-    encodePreamble (in-&gt;data);
++	encodePreamble (in ? in-&gt;data : NULL);
+     if ((sz = avcodec_encode_video (_context, out-&gt;data, out-&gt;bufferSize, &amp;_frame)) &lt; 0)
+         return 0;
+     postAmble(out,sz);
+@@ -146,28 +146,32 @@
+   _frame.key_frame = 0;
+   _frame.pict_type = 0;
+ 
+-  switch(_targetColorSpace)
++  if (in)
+   {
+-    case PIX_FMT_YUV420P:
+-        _frame.linesize[0] = _w;
+-        _frame.linesize[1] = _w &gt;&gt; 1;
+-        _frame.linesize[2] = _w &gt;&gt; 1;
+-        _frame.data[0] = in;
+-        _frame.data[2] = in + _w * _h;
+-        _frame.data[1] = in + _w * _h + ((_w * _h) &gt;&gt; 2);
+-        break;
+- case PIX_FMT_YUV422P:
+-        _frame.linesize[0] = _w;
+-        _frame.linesize[1] = _w &gt;&gt; 1;
+-        _frame.linesize[2] = _w &gt;&gt; 1;
+-        _frame.data[0] = in;
+-        _frame.data[2] = in + _w * _h;
+-        _frame.data[1] = in + _w * _h + ((_w * _h) &gt;&gt; 1);
+-      
+-        break;
+-    default:
+-      ADM_assert(0);
++	  switch(_targetColorSpace)
++	  {
++		case PIX_FMT_YUV420P:
++			_frame.linesize[0] = _w;
++			_frame.linesize[1] = _w &gt;&gt; 1;
++			_frame.linesize[2] = _w &gt;&gt; 1;
++			_frame.data[0] = in;
++			_frame.data[2] = in + _w * _h;
++			_frame.data[1] = in + _w * _h + ((_w * _h) &gt;&gt; 2);
++			break;
++	 case PIX_FMT_YUV422P:
++			_frame.linesize[0] = _w;
++			_frame.linesize[1] = _w &gt;&gt; 1;
++			_frame.linesize[2] = _w &gt;&gt; 1;
++			_frame.data[0] = in;
++			_frame.data[2] = in + _w * _h;
++			_frame.data[1] = in + _w * _h + ((_w * _h) &gt;&gt; 1);
++	      
++			break;
++		default:
++		  ADM_assert(0);
++	  }
+   }
++
+   return 1;
+ }
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp	2008-09-19 16:03:49 UTC (rev 4371)
++++ branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp	2008-09-19 16:39:50 UTC (rev 4372)
+@@ -14,8 +14,10 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
+-#include &lt;config.h&gt;
++#define __STDC_LIMIT_MACROS
+ 
++#include &quot;config.h&quot;
++
+ #include &lt;stdio.h&gt;
+ #include &lt;stdlib.h&gt;
+ #include &lt;math.h&gt;
+@@ -33,7 +35,7 @@
+ #include &quot;fourcc.h&quot;
+ #include &quot;avi_vars.h&quot;
+ #include &quot;ADM_toolkit/toolkit.hxx&quot;
+-#include &lt;ADM_assert.h&gt;
++#include &quot;ADM_assert.h&quot;
+ #include &quot;ADM_encoder/ADM_vidEncode.hxx&quot;
+ 
+ #include &quot;ADM_video/ADM_genvideo.hxx&quot;
+@@ -495,31 +497,42 @@
+   ADM_assert (_codec);
+   ADM_assert (_in);
+ 
+-  if (!_in-&gt;getFrameNumberNoAlloc (frame, &amp;l, _vbuffer, &amp;f))
+-    {
+-      printf (&quot;\n Error : Cannot read incoming frame !&quot;);
+-      return 0;
+-    }
++  if (frame != UINT32_MAX)
++  {
++	  if (!_in-&gt;getFrameNumberNoAlloc (frame, &amp;l, _vbuffer, &amp;f))
++	  {
++		  printf (&quot;\n Error : Cannot read incoming frame !&quot;);
++		  return 0;
++	  }
++  }
+ 
+   switch (_state)
+     {
+     case enc_CBR:
+     case enc_CQ:
+-      return _codec-&gt;encode (_vbuffer, out );
++      return _codec-&gt;encode (frame == UINT32_MAX ? NULL : _vbuffer, out );
+       break;
+     case enc_Same:
+       {
+-	uint32_t inq;
+-        if (_vbuffer-&gt;flags &amp; AVI_KEY_FRAME)
+-            out-&gt;flags = AVI_KEY_FRAME;
+-	else
+-	   out-&gt;flags = 0;
+-	inq = _vbuffer-&gt;_Qp;
+-        if(inq&gt;31) inq=31;
+-        if(inq&lt;2) inq=2;
+-        out-&gt;in_quantizer =inq;
++		  if (frame != UINT32_MAX)
++		  {
++			  if (_vbuffer-&gt;flags &amp; AVI_KEY_FRAME)
++				  out-&gt;flags = AVI_KEY_FRAME;
++			  else
++				  out-&gt;flags = 0;
+ 
+-	if (!_codec-&gt;encode (_vbuffer, out ))
++			  int inq = _vbuffer-&gt;_Qp;
++
++			  if (inq &gt; 31)
++				  inq = 31;
++
++			  if (inq &lt; 2)
++				  inq = 2;
++
++			  out-&gt;in_quantizer = inq;
++		  }
++
++	if (!_codec-&gt;encode (frame == UINT32_MAX ? NULL : _vbuffer, out ))
+ 	  {
+ 	    printf (&quot;\n codec error on 1st pass !&quot;);
+ 	    return 0;
+@@ -532,7 +545,7 @@
+     case enc_Pass1:
+ 
+       //              ADM_assert(fd);
+-      if (!_codec-&gt;encode (_vbuffer, out ))
++      if (!_codec-&gt;encode (frame == UINT32_MAX ? NULL : _vbuffer, out ))
+ 	{
+ 	  printf (&quot;\n codec error on 1st pass !&quot;);
+ 	  return 0;
+@@ -542,7 +555,7 @@
+       break;
+     case enc_Pass2:
+       // Encode it !
+-      if (!_codec-&gt;encode (_vbuffer, out ))
++      if (!_codec-&gt;encode (frame == UINT32_MAX ? NULL : _vbuffer, out ))
+             return 0;
+       return 1;
+       break;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001611.html">[Avidemux-svn-commit] r4371 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+</A></li>
+	<LI>Next message: <A HREF="001613.html">[Avidemux-svn-commit] r4373 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_dummy
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1612">[ date ]</a>
+              <a href="thread.html#1612">[ thread ]</a>
+              <a href="subject.html#1612">[ subject ]</a>
+              <a href="author.html#1612">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

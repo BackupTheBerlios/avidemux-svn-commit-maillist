@@ -1,0 +1,175 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7061 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxer/include
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7061%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxer/include&In-Reply-To=%3C20110311183021.B3F67481391%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004226.html">
+   <LINK REL="Next"  HREF="004228.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7061 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxer/include</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7061%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxer/include&In-Reply-To=%3C20110311183021.B3F67481391%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7061 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxer/include">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Mar 11 19:30:21 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004226.html">[Avidemux-svn-commit] r7060 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="004228.html">[Avidemux-svn-commit] r7062 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4227">[ date ]</a>
+              <a href="thread.html#4227">[ thread ]</a>
+              <a href="subject.html#4227">[ subject ]</a>
+              <a href="author.html#4227">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-03-11 19:30:21 +0100 (Fri, 11 Mar 2011)
+New Revision: 7061
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxer/include/ADM_coreDemuxerMpegTemplate.cpp
+Log:
+[ts/demux] Better estimate of video duration. We do a slightly overduration to compensate from missing pts
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxer/include/ADM_coreDemuxerMpegTemplate.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxer/include/ADM_coreDemuxerMpegTemplate.cpp	2011-03-11 06:46:00 UTC (rev 7060)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxer/include/ADM_coreDemuxerMpegTemplate.cpp	2011-03-11 18:30:21 UTC (rev 7061)
+@@ -23,45 +23,68 @@
+ */
+ uint64_t MY_CLASS::getVideoDuration(void)
+ {
+-    int index=ListOfFrames.size();
+-    if(!index) return 0;
+-    index--;
++    int lastFrame=ListOfFrames.size();
++    if(!lastFrame) return 0;
++    lastFrame--;
+     int maxLookup=100;
+-    if(maxLookup&gt;index) maxLookup=index;
+-    int offset=0;
+-    int maxPts=0;
+-    do
++    if(maxLookup&gt;lastFrame) maxLookup=lastFrame;
++    int start=lastFrame-maxLookup;
++
++    uint64_t maxPts=0,maxDts=0;
++    int      maxPtsIndex=-1,maxDtsIndex=-1;
++
++    // Search for higher PTS in the last N frames
++    // and note down its position..
++    for(int i=start;i&lt;=lastFrame;i++)
+     {
+-        if(maxLookup)
+-        {
+-            uint64_t p=ListOfFrames[index]-&gt;pts;
+-            if(p!=ADM_NO_PTS) 
++            uint64_t p=ListOfFrames[i]-&gt;pts;
++            if(p==ADM_NO_PTS) 
++                continue;
++            if(p&gt;maxPts) 
+             {
+-                if(p&gt;maxPts) maxPts=p;
++                maxPts=p;
++                maxPtsIndex=i;
+             }
+-            maxLookup--;
+-        }
+-        if(ListOfFrames[index]-&gt;dts!=ADM_NO_PTS) break;
+-        index--;
+-        offset++;
+-    }while(index);
+-
+-    if(!index)
++    }
++    ADM_info(&quot;Found maxPts =%s, %d frames from the end\n&quot;,ADM_us2plain(maxPts),lastFrame-maxPtsIndex);
++    for(int i=lastFrame;i&gt;=start;i--)
+     {
+-        ADM_warning(&quot;Cannot find a valid DTS in the file\n&quot;);
+-        ADM_warning(&quot;Using PTS instead\n&quot;);
+-        return maxPts;
++            uint64_t p=ListOfFrames[i]-&gt;dts;
++            if(p==ADM_NO_PTS) 
++                continue;
++            maxDtsIndex=i;
++            maxDts=p;
++            break;
+     }
+-    ADM_info(&quot;Found max PTS=%s\n&quot;,ADM_us2plain(maxPts));
+-    ADM_info(&quot;Found max DTS=%s\n&quot;,ADM_us2plain(ListOfFrames[index]-&gt;dts));
+-    float f,g;
++    ADM_info(&quot;Found maxDts =%s, %d frames from the end\n&quot;,ADM_us2plain(maxDts),lastFrame-maxDtsIndex);
++    // Case 1: No Pts
++    bool usePts=true;
++    if(maxPtsIndex==-1)
++    {
++        usePts=false;
++    }
++    uint64_t refTime;
++    double refDistance;
++    if(usePts==true)
++    { 
++        ADM_info(&quot;Using PTS..\n&quot;);
++        refTime=maxPts;
++        refDistance=lastFrame-maxPtsIndex;
++    }else   
++    {
++        ADM_info(&quot;Using DTS..\n&quot;);
++        refTime=maxDts;
++        refDistance=lastFrame-maxDtsIndex;    
++    }
++    double f,g;
+     f=1000*1000*1000;
+     f/=_videostream.dwRate; 
+-    g=ListOfFrames[index]-&gt;dts;
+-    g+=f*offset;
+-    ADM_info(&quot;Using duration of %s\n&quot;,ADM_us2plain(g));
+-    //return (uint64_t)g;
+-    return maxPts;
++    g=refTime;
++    f=f*refDistance;
++    g+=f;
++    uint64_t duration=(uint64_t)g;
++    ADM_info(&quot;Using duration of %s\n&quot;,ADM_us2plain(duration));
++    return duration;
+ }
+ 
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004226.html">[Avidemux-svn-commit] r7060 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="004228.html">[Avidemux-svn-commit] r7062 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4227">[ date ]</a>
+              <a href="thread.html#4227">[ thread ]</a>
+              <a href="subject.html#4227">[ subject ]</a>
+              <a href="author.html#4227">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

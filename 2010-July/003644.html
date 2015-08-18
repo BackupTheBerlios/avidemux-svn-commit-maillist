@@ -1,0 +1,234 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6456 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6456%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render&In-Reply-To=%3C20100714121731.1BE02480BDF%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003643.html">
+   <LINK REL="Next"  HREF="003645.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6456 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6456%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render&In-Reply-To=%3C20100714121731.1BE02480BDF%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6456 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Jul 14 14:17:31 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003643.html">[Avidemux-svn-commit] r6455 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_render avidemux_core/ADM_coreVdpau/include	avidemux_core/ADM_coreVdpau/src
+</A></li>
+        <LI>Next message: <A HREF="003645.html">[Avidemux-svn-commit] r6457 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVdpau/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3644">[ date ]</a>
+              <a href="thread.html#3644">[ thread ]</a>
+              <a href="subject.html#3644">[ subject ]</a>
+              <a href="author.html#3644">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-07-14 14:17:30 +0200 (Wed, 14 Jul 2010)
+New Revision: 6456
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.h
+Log:
+[Render/Vdpau] Do hw resize by vdpau if needed
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp	2010-07-14 12:17:29 UTC (rev 6455)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp	2010-07-14 12:17:30 UTC (rev 6456)
+@@ -1,6 +1,7 @@
+ /***************************************************************************
+     \file GUI_vdpauRender.cpp
+     \author mean <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A> (C) 2010
++    \brief  Use vdpau as renderer with hw rescaling.
+ 
+  ***************************************************************************/
+ 
+@@ -15,18 +16,16 @@
+ 
+ #include &quot;ADM_default.h&quot;
+ #ifdef USE_VDPAU
+-
+-
+ #include &quot;GUI_render.h&quot;
+ 
+ #include &quot;GUI_accelRender.h&quot;
+ #include &quot;GUI_vdpauRender.h&quot;
+ #include &quot;ADM_coreVdpau/include/ADM_coreVdpau.h&quot;
+ 
+-static VdpOutputSurface surface[2]={VDP_INVALID_HANDLE,VDP_INVALID_HANDLE};
+-static VdpVideoSurface  input=VDP_INVALID_HANDLE;
+-static VdpVideoMixer    mixer=VDP_INVALID_HANDLE;
+-static int              currentSurface=0;
++static VdpOutputSurface     surface[2]={VDP_INVALID_HANDLE,VDP_INVALID_HANDLE};
++static VdpVideoSurface      input=VDP_INVALID_HANDLE;
++static VdpVideoMixer        mixer=VDP_INVALID_HANDLE;
++static int                  currentSurface=0;
+ static VdpPresentationQueue queue=VDP_INVALID_HANDLE;
+ //________________Wrapper around Xv_______________
+ /**
+@@ -51,21 +50,15 @@
+     // Create couple of outputSurface
+     surface[0]=surface[1]=VDP_INVALID_HANDLE;
+     currentSurface=0;
+-    if(VDP_STATUS_OK!=admVdpau::surfaceCreate(w,h,&amp;input)) 
++    if(!reallocOutputSurface(displayWidth,displayHeight))
+     {
+-        ADM_error(&quot;Cannot create input Surface\n&quot;);
+         goto badInit;
+     }
+-    if(VDP_STATUS_OK!=admVdpau::outputSurfaceCreate(VDP_RGBA_FORMAT_B8G8R8A8,w,h,&amp;surface[0])) 
++    if(VDP_STATUS_OK!=admVdpau::surfaceCreate(w,h,&amp;input)) 
+     {
+-        ADM_error(&quot;Cannot create outputSurface0\n&quot;);
++        ADM_error(&quot;Cannot create input Surface\n&quot;);
+         goto badInit;
+     }
+-    if(VDP_STATUS_OK!=admVdpau::outputSurfaceCreate(VDP_RGBA_FORMAT_B8G8R8A8,w,h,&amp;surface[1])) 
+-    {
+-        ADM_error(&quot;Cannot create outputSurface1\n&quot;);
+-        goto badInit;
+-    }
+     if(VDP_STATUS_OK!=admVdpau::presentationQueueCreate(&amp;queue)) 
+     {
+         ADM_error(&quot;Cannot create queue\n&quot;);
+@@ -83,6 +76,26 @@
+     return false;
+ }
+ /**
++    \fn reallocOutputSurface
++*/
++bool vdpauRender::reallocOutputSurface(uint32_t tgtWidth, uint32_t tgtHeight)
++{
++    if(surface[0]!=VDP_INVALID_HANDLE)  admVdpau::outputSurfaceDestroy(surface[0]);
++    if(surface[1]!=VDP_INVALID_HANDLE)  admVdpau::outputSurfaceDestroy(surface[1]);
++    surface[0]=surface[1]=VDP_INVALID_HANDLE;
++    if(VDP_STATUS_OK!=admVdpau::outputSurfaceCreate(VDP_RGBA_FORMAT_B8G8R8A8,tgtWidth,tgtHeight,&amp;surface[0])) 
++    {
++        ADM_error(&quot;Cannot create outputSurface0\n&quot;);
++        return false;
++    }
++    if(VDP_STATUS_OK!=admVdpau::outputSurfaceCreate(VDP_RGBA_FORMAT_B8G8R8A8,tgtWidth,tgtHeight,&amp;surface[1])) 
++    {
++        ADM_error(&quot;Cannot create outputSurface1\n&quot;);
++        return false;
++    }
++    return true;
++}
++/**
+     \fn cleanup
+ */
+ bool vdpauRender::cleanup(void)
+@@ -104,7 +117,7 @@
+ bool vdpauRender::stop(void)
+ {
+ 	 
+-	 printf(&quot;[Vdpau]Xv end\n&quot;);
++	 printf(&quot;[Vdpau]Vdpau render end\n&quot;);
+      cleanup();
+ 	 return 1;
+ }
+@@ -126,7 +139,7 @@
+             input,
+             planes,pitches))
+     {
+-        ADM_warning(&quot;video surface : Cannot putbits\n&quot;);
++        ADM_warning(&quot;[Vdpau] video surface : Cannot putbits\n&quot;);
+         return false;
+     }
+ 
+@@ -134,13 +147,13 @@
+     if(VDP_STATUS_OK!=admVdpau::mixerRender( mixer,input,surface[next], pic-&gt;_width,pic-&gt;_height))
+ 
+     {
+-        ADM_warning(&quot;Cannot mixerRender\n&quot;);
++        ADM_warning(&quot;[Vdpau] Cannot mixerRender\n&quot;);
+         return false;
+     }
+     // Display!
+     if(VDP_STATUS_OK!=admVdpau::presentationQueueDisplay(queue,surface[next]))
+     {
+-        ADM_warning(&quot;Cannot display on presenation queue\n&quot;);
++        ADM_warning(&quot;[Vdpau] Cannot display on presenation queue\n&quot;);
+         return false;
+     }
+     currentSurface=next;
+@@ -152,9 +165,13 @@
+ */
+ bool vdpauRender::changeZoom(renderZoom newZoom)
+ {
+-        ADM_info(&quot;[Vdpau]changing zoom, xv render.\n&quot;);
++        ADM_info(&quot;[Vdpau]changing zoom.\n&quot;);
+         calcDisplayFromZoom(newZoom);
+         currentZoom=newZoom;
++        if(!reallocOutputSurface(displayWidth,displayHeight))
++        {
++            ADM_error(&quot;[VdpauRender] Change zoome failed\n&quot;);
++        }
+         return true;
+ }
+ /**
+@@ -163,10 +180,10 @@
+ bool vdpauRender::refresh(void)
+ {
+     // since we dont know how to redraw without help, ask above
+-    ADM_info(&quot;[Vdpau]refresh\n&quot;);
++    ADM_info(&quot;[Vdpau]Rrefresh\n&quot;);
+     if(VDP_STATUS_OK!=admVdpau::presentationQueueDisplay(queue,surface[currentSurface]))
+     {
+-        ADM_warning(&quot;[refresh]Cannot display on presenation queue\n&quot;);
++        ADM_warning(&quot;[Vdpau] Refresh : Cannot display on presenation queue\n&quot;);
+         return false;
+     }
+     renderCompleteRedrawRequest();
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.h	2010-07-14 12:17:29 UTC (rev 6455)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.h	2010-07-14 12:17:30 UTC (rev 6456)
+@@ -25,6 +25,7 @@
+       protected:
+                             GUI_WindowInfo info;
+                         bool cleanup(void);
++                        bool reallocOutputSurface(uint32_t tgtWidth, uint32_t tgtHeight);
+       public:
+                              vdpauRender( void ) ;
+                              ~vdpauRender();
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003643.html">[Avidemux-svn-commit] r6455 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_render avidemux_core/ADM_coreVdpau/include	avidemux_core/ADM_coreVdpau/src
+</A></li>
+	<LI>Next message: <A HREF="003645.html">[Avidemux-svn-commit] r6457 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVdpau/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3644">[ date ]</a>
+              <a href="thread.html#3644">[ thread ]</a>
+              <a href="subject.html#3644">[ subject ]</a>
+              <a href="author.html#3644">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

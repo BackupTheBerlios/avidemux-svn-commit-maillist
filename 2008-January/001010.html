@@ -1,0 +1,2796 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3742 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3742%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_videoFilter&In-Reply-To=%3C200801131005.m0DA5PiV000861%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001009.html">
+   <LINK REL="Next"  HREF="001011.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3742 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3742%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_videoFilter&In-Reply-To=%3C200801131005.m0DA5PiV000861%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3742 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jan 13 11:05:25 CET 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001009.html">[Avidemux-svn-commit] r3741 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+        <LI>Next message: <A HREF="001011.html">[Avidemux-svn-commit] r3743 -	branches/avidemux_2.4_branch/avidemux/ADM_filter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1010">[ date ]</a>
+              <a href="thread.html#1010">[ thread ]</a>
+              <a href="subject.html#1010">[ subject ]</a>
+              <a href="author.html#1010">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-01-13 11:05:24 +0100 (Sun, 13 Jan 2008)
+New Revision: 3742
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidEraser.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidEraser.h
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidComputeAverage.h
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidParticle.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidParticle.h
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidSwissArmyKnife.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidSwissArmyKnife.h
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/CMakeLists.txt
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/Makefile.am
+Log:
+[Filters] Chris Mc Gregor weird filters + fixes
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidComputeAverage.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidComputeAverage.h	2008-01-13 09:46:19 UTC (rev 3741)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidComputeAverage.h	2008-01-13 10:05:24 UTC (rev 3742)
+@@ -97,6 +97,11 @@
+                most_recent_frame (0)
+          {
+          }
++
++        ~PersistentInfo ()
++        {
++            delete [] sums;
++        }
+      };
+ 
+      typedef std::map &lt;CONFcouple *, PersistentInfo *&gt; PImap;
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidEraser.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidEraser.cpp	2008-01-13 09:46:19 UTC (rev 3741)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidEraser.cpp	2008-01-13 10:05:24 UTC (rev 3742)
+@@ -0,0 +1,537 @@
++/***************************************************************************
++                          ADM_vidEraser.cpp  -  &quot;Erase&quot; arbitrary areas of
++                                                        each frame
++                             -------------------
++                         Chris MacGregor, December 2007
++                         <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">chris-avidemux at bouncingdog.com</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++ 
++#include &quot;default.h&quot;
++
++#include &lt;ctype.h&gt;
++#include &lt;errno.h&gt;
++#include &lt;math.h&gt;
++#include &lt;sys/types.h&gt;
++#include &lt;sys/stat.h&gt;
++
++#include &lt;iostream&gt;
++#include &lt;fstream&gt;
++#include &lt;iterator&gt;
++
++#include &quot;ADM_assert.h&quot;
++#include &quot;fourcc.h&quot;
++#include &quot;avio.hxx&quot;
++#include &quot;avi_vars.h&quot;
++
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
++#include &quot;ADM_editor/ADM_edit.hxx&quot;
++#include &quot;ADM_video/ADM_genvideo.hxx&quot;
++
++#include &quot;ADM_encoder/ADM_vidEncode.hxx&quot;
++#include &quot;ADM_encoder/adm_encoder.h&quot;
++
++#include &quot;ADM_filter/video_filters.h&quot;
++
++#include &quot;ADM_userInterfaces/ADM_commonUI/DIA_factory.h&quot;
++
++#include &quot;ADM_vidEraser.h&quot;
++#include &quot;DIA_flyDialog.h&quot; // for MenuMapping
++
++using namespace std;
++
++static const int MAX_PIXEL_LUMA = 255;
++
++static FILTER_PARAM eraserParam =
++{
++    5,
++    { &quot;brush_mode&quot;, &quot;brush_size&quot;, &quot;output_color&quot;, &quot;data_file&quot;, &quot;debug&quot; // 4
++    }
++};
++
++// This is a hack to work around the fact that the ctor &amp; dtor get called
++// too often.  The right solution would be to arrange for the filter
++// objects to be constructed and destructed only when really necessary:
++// when a new instance of a filter is added to the list (by the user), it
++// is constructed, and when it is removed from the list (by the user), it
++// is destructed, and anything else is handled by a separate init() or
++// configure() method.  This would allow the objects to maintain a
++// persistent state in a more straightforward way.
++
++ADMVideoEraser::PImap ADMVideoEraser::pimap;
++
++
++SCRIPT_CREATE(eraser_script,ADMVideoEraser,eraserParam);
++
++BUILD_CREATE(eraser_create,ADMVideoEraser);
++
++ADMVideoEraser::ADMVideoEraser (AVDMGenericVideoStream *in, CONFcouple *couples)
++{
++    _in = in;
++    memcpy (&amp;_info, in-&gt;getInfo(), sizeof(_info));
++    _info.encoding = 1;
++    _uncompressed = new ADMImage (_in-&gt;getInfo()-&gt;width, _in-&gt;getInfo()-&gt;height);
++    ADM_assert (_uncompressed);
++    _param = new ERASER_PARAM;
++
++    if (couples)
++    {
++        GET(brush_mode);
++        GET(brush_size);
++        GET(output_color);
++        char * tmp;
++        GET2(data_file, tmp);
++        GET(debug);
++    }
++    else
++    {
++        _param-&gt;brush_mode = 1; // erase
++        _param-&gt;brush_size = 1; // 3x3
++        _param-&gt;output_color = 0;
++        // _param-&gt;data_file = &quot;&quot;; // implicit
++        _param-&gt;debug = 0;
++    }
++
++    // This is a hack to work around the fact that the ctor &amp; dtor get called
++    // too often.  The right solution would be to arrange for the filter
++    // objects to be constructed and destructed only when really necessary:
++    // when a new instance of a filter is added to the list (by the user), it
++    // is constructed, and when it is removed from the list (by the user), it
++    // is destructed, and anything else is handled by a separate init() or
++    // configure() method.  This would allow the objects to maintain a
++    // persistent state in a more straightforward way.
++
++    // This explicit check wouldn't be necessary if there was an easier way of
++    // ensuring that we got a 0 pointer when a new map entry was auto-consed
++    // up...
++
++    if (pimap.count (couples) == 0)
++    {
++        myInfo = new PersistentInfo;
++        myInfo-&gt;conf = couples;
++        pimap [couples] = myInfo;
++    }
++    else
++    {
++        myInfo = pimap [couples];
++        if (couples)
++        {
++            if (myInfo-&gt;oldConf == couples)
++            {
++                pimap.erase (myInfo-&gt;conf);
++                myInfo-&gt;conf = myInfo-&gt;oldConf;
++                myInfo-&gt;oldConf = 0;
++            }
++            else
++            {
++                ADM_assert (myInfo-&gt;conf == couples);
++
++                if (myInfo-&gt;oldConf)
++                {
++                    pimap.erase (myInfo-&gt;oldConf);
++                    myInfo-&gt;oldConf = 0;
++                }
++            }
++        }
++    }
++
++    myInfo-&gt;refCount++;
++
++    printf (&quot;ADMVideoEraser ctor (%p, conf = %p), pi = %p, rc now %d\n&quot;,
++            this, couples, myInfo, myInfo-&gt;refCount);
++}
++
++uint8_t	ADMVideoEraser::getCoupledConf (CONFcouple **couples)
++{
++
++    ADM_assert (_param);
++    *couples = new CONFcouple (eraserParam.nb);
++
++    // This is a hack to work around the fact that the ctor &amp; dtor get called
++    // too often.  The right solution would be to arrange for the filter
++    // objects to be constructed and destructed only when really necessary:
++    // when a new instance of a filter is added to the list (by the user), it
++    // is constructed, and when it is removed from the list (by the user), it
++    // is destructed, and anything else is handled by a separate init() or
++    // configure() method.  This would allow the objects to maintain a
++    // persistent state in a more straightforward way.
++
++    printf (&quot;ADMVideoEraser::getCoupledConf(): this = %p, couples = %p, &quot;
++            &quot;oldConf = %p (was %p), pi = %p\n&quot;,
++            this, *couples, myInfo-&gt;conf, myInfo-&gt;oldConf, myInfo);
++
++    if (myInfo-&gt;oldConf)
++        pimap.erase (myInfo-&gt;oldConf);
++    myInfo-&gt;oldConf = myInfo-&gt;conf;
++    myInfo-&gt;conf = *couples;
++    pimap [myInfo-&gt;conf] = myInfo;
++    if (myInfo-&gt;oldConf == 0)
++        pimap.erase (0);
++
++    CSET(brush_mode);
++    CSET(brush_size);
++    CSET(output_color);
++    (*couples)-&gt;setCouple(&quot;data_file&quot;, _param-&gt;data_file.c_str());
++    CSET(debug);
++
++    return 1;
++}
++
++uint8_t ADMVideoEraser::configure (AVDMGenericVideoStream *in)
++{
++    diaMenuEntry tBrushMode [] = {
++        { 1, QT_TR_NOOP(&quot;Erase&quot;), NULL },
++        { 0, QT_TR_NOOP(&quot;Un-Erase&quot;), NULL },
++    };
++
++    diaMenuEntry tBrushSize [] = {
++        { 0, QT_TR_NOOP(&quot;1x1&quot;), NULL },
++        { 1, QT_TR_NOOP(&quot;3x3&quot;), NULL },
++        { 2, QT_TR_NOOP(&quot;5x5&quot;), NULL },
++        { 3, QT_TR_NOOP(&quot;7x7&quot;), NULL },
++        { 4, QT_TR_NOOP(&quot;9x9&quot;), NULL },
++        { 5, QT_TR_NOOP(&quot;11x11&quot;), NULL },
++        { 7, QT_TR_NOOP(&quot;15x15&quot;), NULL },
++        { 10, QT_TR_NOOP(&quot;21x21&quot;), NULL },
++    };
++
++    diaElemMenu brush_mode
++        (&amp;(_param-&gt;brush_mode), QT_TR_NOOP(&quot;Brush _Mode:&quot;),
++         sizeof (tBrushMode) / sizeof (diaMenuEntry), tBrushMode);
++
++    diaElemMenu brush_size
++        (&amp;(_param-&gt;brush_size), QT_TR_NOOP(&quot;Brush _Size:&quot;),
++         sizeof (tBrushSize) / sizeof (diaMenuEntry), tBrushSize);
++
++    MenuMapping menu_mapping [] = {
++        { &quot;brushModeMenu&quot;, my_offsetof (ERASER_PARAM, brush_mode),
++          sizeof (tBrushMode) / sizeof (diaMenuEntry), tBrushMode },
++        { &quot;brushSizeMenu&quot;, my_offsetof (ERASER_PARAM, brush_size),
++          sizeof (tBrushSize) / sizeof (diaMenuEntry), tBrushSize },
++    };
++
++    if (myInfo-&gt;masks.empty() || myInfo-&gt;mask_data_invalid)
++        readDataFile (_info.width);
++
++    // printf (&quot;ADM_vidEraser: _param = %p\n&quot;, _param);
++    uint8_t ret = DIA_eraser (_in, this, _param, menu_mapping,
++                              sizeof (menu_mapping) / sizeof (MenuMapping));
++    if (ret == 1)
++    {
++        writeDataFile();
++        return ret;
++    }
++    else if (ret == 0) // 0 = cancel
++    {
++        myInfo-&gt;mask_data_invalid = true;
++        return ret;
++    }
++    else
++    {
++        ADM_assert (ret == 255); // 255 = whizzy dialog not implemented
++    }
++
++    diaElemUSlider output_color
++        (&amp;(_param-&gt;output_color),
++         QT_TR_NOOP(&quot;Output \&quot;_Color\&quot; for all masked pixels:&quot;), 0, 255);
++
++    char * file = ADM_strdup (_param-&gt;data_file.c_str());
++
++    diaElemFile data_file
++        (0, &amp;file,
++         QT_TR_NOOP(&quot;Eraser _Data File:&quot;), 0, QT_TR_NOOP(&quot;Select data file&quot;));
++
++    // TODO: The configuration of the masks is not implemented!!!
++
++    diaElemUInteger debug
++        (&amp;(_param-&gt;debug), QT_TR_NOOP(&quot;_Debugging settings (bits):&quot;),
++         0, 0x7fffffff);
++
++    diaElem * elems[] = { &amp;brush_mode, &amp;brush_size, &amp;output_color,
++                          &amp;data_file, &amp;debug };
++
++    ret = diaFactoryRun (QT_TR_NOOP(&quot;Eraser Configuration&quot;),
++                         sizeof (elems) / sizeof (diaElem *), elems);
++    if (ret) // 0 = cancel
++    {
++        writeDataFile();
++        myInfo-&gt;mask_data_invalid = true;
++    }
++
++    _param-&gt;data_file = file;
++    delete[] file;
++
++    return ret;
++}
++
++ADMVideoEraser::~ADMVideoEraser()
++{
++    // This is a hack to work around the fact that the ctor &amp; dtor get called
++    // too often.  The right solution would be to arrange for the filter
++    // objects to be constructed and destructed only when really necessary:
++    // when a new instance of a filter is added to the list (by the user), it
++    // is constructed, and when it is removed from the list (by the user), it
++    // is destructed, and anything else is handled by a separate init() or
++    // configure() method.  This would allow the objects to maintain a
++    // persistent state in a more straightforward way.
++
++    myInfo-&gt;refCount--;
++    printf (&quot;ADMVideoEraser dtor (%p), conf = %p, pi = %p, rc now %d\n&quot;,
++            this, myInfo-&gt;conf, myInfo, myInfo-&gt;refCount);
++
++    if (myInfo-&gt;oldConf)
++    {
++        pimap.erase (myInfo-&gt;oldConf);
++        myInfo-&gt;oldConf = 0;
++    }
++
++    if (myInfo-&gt;refCount &lt; 1)
++    {
++        pimap.erase (myInfo-&gt;conf);
++        delete myInfo;
++    }
++
++    DELETE (_param);
++    delete _uncompressed;
++    _uncompressed = NULL;
++}
++
++char * ADMVideoEraser::printConf ()
++{
++    const int CONF_LEN = 1024;
++    static char conf[CONF_LEN];
++
++    const char * data_file = _param-&gt;data_file.c_str();
++    if (!data_file || !*data_file)
++        data_file = &quot;**** no file selected ****&quot;;
++
++    char * cptr = conf;
++    cptr += snprintf (conf, CONF_LEN, &quot;Eraser: erase to %d, data in %s&quot;,
++                      _param-&gt;output_color, data_file);
++
++    if (_param-&gt;debug)
++        cptr += snprintf (cptr, CONF_LEN - (cptr - conf),
++                          &quot;, debug = 0x%x&quot;, _param-&gt;debug);
++    return conf;
++}
++
++void ADMVideoEraser::writeDataFile () const
++{
++    const char * filename = _param-&gt;data_file.c_str();
++    ofstream outputStream (filename);
++    if (!outputStream)
++    {
++        perror (filename);
++        fprintf (stderr, &quot;******** FAILED to write eraser data to %s (%d)\n&quot;,
++                 filename, errno);
++        return;
++    }
++
++    Eraser::MaskVec &amp; masks = myInfo-&gt;masks;
++
++    outputStream &lt;&lt; &quot;# avidemux Eraser video filter data\n&quot;
++                 &lt;&lt; &quot;version: 1&quot;
++                 &lt;&lt; &quot;\ndimensions: &quot; &lt;&lt; _info.width &lt;&lt; &quot; &quot; &lt;&lt; _info.height
++                 &lt;&lt; &quot;\nmaskcount: &quot; &lt;&lt; masks.size()
++                 &lt;&lt; &quot;\n&quot;;
++
++    for (Eraser::MaskVec::const_iterator maskit = masks.begin();
++         maskit != masks.end();
++         ++maskit)
++    {
++        const Eraser::Mask &amp; mask = *maskit;
++        const Eraser::LineVec &amp; lines = mask.lines;
++        outputStream &lt;&lt; &quot;\nmask: &quot; &lt;&lt; mask.first_frame &lt;&lt; &quot; &quot;
++                     &lt;&lt; mask.last_frame &lt;&lt; &quot; &quot; &lt;&lt; lines.size() &lt;&lt; &quot;\n&quot;;
++
++        for (Eraser::LineVec::const_iterator lineit = lines.begin();
++             lineit != lines.end();
++             ++lineit)
++        {
++            outputStream &lt;&lt; lineit-&gt;x &lt;&lt; &quot; &quot; &lt;&lt; lineit-&gt;y &lt;&lt; &quot; &quot;
++                         &lt;&lt; lineit-&gt;count &lt;&lt; &quot;\n&quot;;
++        }
++    }
++
++    outputStream &lt;&lt; &quot;\nend\n&quot;;
++}
++
++uint8_t ADMVideoEraser::readDataFile (uint32_t width)
++{
++    Eraser::MaskVec &amp; masks = myInfo-&gt;masks;
++
++//    uint32_t &amp; mask_w = myInfo-&gt;mask_w;
++//    uint32_t &amp; mask_h = myInfo-&gt;mask_h;
++
++    masks.clear();
++//    mask_w = 0;
++//    mask_h = 0;
++
++    const char * filename = _param-&gt;data_file.c_str();
++    ifstream inputStream (filename);
++    if (!inputStream)
++    {
++        fprintf (stderr, &quot;Eraser: can't open input file %s, &quot;
++                 &quot;but it apparently does exist...(%d)\n&quot;,
++                 filename, errno);
++        return 0;
++    }
++
++    string buffer;
++
++    while (inputStream)
++    {
++        inputStream &gt;&gt; buffer;
++        if (buffer [0] == '#')
++        {
++            // toss rest of line
++            inputStream.ignore (1000000,'\n');
++        }
++        else if (buffer == &quot;mask:&quot;)
++        {
++            uint32_t first_frame, last_frame, linecount;
++            inputStream &gt;&gt; first_frame &gt;&gt; last_frame &gt;&gt; linecount;
++            masks.push_back (Eraser::Mask (first_frame, last_frame));
++            Eraser::MaskVec::iterator maskit = masks.end() - 1;
++            Eraser::LineVec &amp; lines = maskit-&gt;lines;
++            lines.reserve (linecount);
++            while (linecount--)
++            {
++                uint16_t x, y, count;
++                inputStream &gt;&gt; x &gt;&gt; y &gt;&gt; count;
++                if (count == 0)
++                {
++                    fprintf (stderr, &quot;%s: bad count (x = %d, y = %d)\n&quot;,
++                             filename, x, y);
++                    return 0;
++                }
++                lines.push_back (Eraser::Line (x, y, count));
++            }
++            printf (&quot;mask %d: %d lines\n&quot;, masks.size() - 1, lines.size());
++        }
++        else if (buffer == &quot;maskcount:&quot;)
++        {
++            uint32_t count;
++            inputStream &gt;&gt; count;
++            masks.reserve (count);
++        }
++        else if (buffer == &quot;version:&quot;)
++        {
++            int version;
++            inputStream &gt;&gt; version;
++            if (version != 1)
++            {
++                fprintf (stderr, &quot;%s: unsupported version: %d\n&quot;,
++                         filename, version);
++                return 0;
++            }
++        }
++        else if (buffer == &quot;dimensions:&quot;)
++        {
++            int dummy;
++            inputStream &gt;&gt; dummy; // width
++            inputStream &gt;&gt; dummy; // height
++        }
++        else if (buffer != &quot;end&quot;)
++        {
++            fprintf (stderr, &quot;%s: unrecognized gunk: \&quot;%s\&quot;\n&quot;,
++                     filename, buffer.c_str());
++            return 0;
++        }
++    }
++
++    myInfo-&gt;mask_data_invalid = false;
++    return 1;
++}
++
++//============================================================================
++
++uint8_t ADMVideoEraser::getFrameNumberNoAlloc (uint32_t frame, uint32_t *len,
++                                               ADMImage *data, uint32_t *flags)
++{
++    if (frame &gt;= _info.nb_frames)
++        return 0;
++
++    if (_param-&gt;debug &amp; 1)
++        printf (&quot;in ADMVideoEraser::getFrameNumberNoAlloc(%d, ...)\n&quot;, frame);
++
++    if (!_in-&gt;getFrameNumberNoAlloc (frame, len, _uncompressed, flags))
++        return 0;
++
++    if (myInfo-&gt;masks.empty() || myInfo-&gt;mask_data_invalid)
++        readDataFile (_info.width);
++
++    uint32_t planesize = _info.width * _info.height;
++    uint32_t size = (planesize * 3) &gt;&gt; 1;
++    *len = size;
++
++    uint32_t real_frame = frame + _info.orgFrame;
++    uint8_t ret = doEraser (_uncompressed, data, _in, real_frame,
++                            this, _param, _info.width, _info.height);
++    return ret;
++}
++
++uint8_t
++ADMVideoEraser::doEraser (ADMImage * image, ADMImage * data,
++                          AVDMGenericVideoStream * in,
++                          uint32_t real_frame,
++                          ADMVideoEraser * eraser, ERASER_PARAM * param,
++                          uint32_t width, uint32_t height)
++{
++    PersistentInfo * myInfo = eraser-&gt;myInfo;
++    uint32_t debug = param-&gt;debug;
++
++    Eraser::MaskVec &amp; masks = myInfo-&gt;masks;
++    uint32_t planesize = width * height;
++    uint8_t * outPixels = YPLANE (data);
++
++    memcpy (outPixels, YPLANE (image), planesize);
++
++    // HERE: for better performance, especially with more than a small number
++    // of masks, figure out how to use lower_bound() or some other binary
++    // search type of thing (write our own if necessary to handle comparing an
++    // int to an Eraser::Mask) to find the mask whose range includes
++    // real_frame, rather than linear searching on every frame.
++
++    for (Eraser::MaskVec::const_iterator maskit = masks.begin();
++         maskit != masks.end();
++         ++maskit)
++    {
++        const Eraser::Mask &amp; mask = *maskit;
++
++        if (real_frame &lt; mask.first_frame)
++            break; // they're sorted, so no more will match
++
++        if (real_frame &gt; mask.last_frame)
++            continue;
++
++        const Eraser::LineVec &amp; lines = mask.lines;
++        for (Eraser::LineVec::const_iterator lineit = lines.begin();
++             lineit != lines.end();
++             ++lineit)
++        {
++            memset (outPixels + (lineit-&gt;y * width) + lineit-&gt;x,
++                    param-&gt;output_color, lineit-&gt;count);
++        }
++
++        break; // only one can match any given frame number, since they can't
++               // overlap.
++    }
++
++    // HERE: the following two lines do a luma-only-ize
++
++    memset (UPLANE (data), 128, planesize &gt;&gt; 2);
++    memset (VPLANE (data), 128, planesize &gt;&gt; 2);
++
++    data-&gt;copyInfo (image);
++
++    return 1;
++}	                           
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidEraser.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidEraser.h	2008-01-13 09:46:19 UTC (rev 3741)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidEraser.h	2008-01-13 10:05:24 UTC (rev 3742)
+@@ -0,0 +1,198 @@
++/***************************************************************************
++                          ADM_vidEraser.h  -  &quot;Erase&quot; arbitrary areas of
++                                                      each frame
++                             -------------------
++                         Chris MacGregor, December 2007
++                         <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">chris-avidemux at bouncingdog.com</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++ 
++#ifndef __ERASER__
++#define __ERASER__   
++
++#include &lt;map&gt;
++
++#include &quot;ADM_video/ADM_cache.h&quot;
++
++#include &lt;vector&gt;
++#include &lt;string&gt;
++
++#include &lt;sys/time.h&gt;
++
++struct ERASER_PARAM
++{
++    uint32_t brush_mode; // 0 = un-erase, 1 = erase
++    uint32_t brush_size; // NxN where N = brush_size * 2 + 1
++    uint32_t output_color; // 0 - 255
++    std::string data_file;
++    uint32_t debug;
++};
++
++// Alas, because offsetof() is only supposed to work on POD (plain old data)
++// structs, and our ERASER_PARAM includes a std::string (which has a
++// constructor, and which causes ERASER_PARAM to therefore have an implicit
++// constructor), we need to define our own offsetof() to use for the dialog
++// menus.  See
++// <A HREF="http://www.cplusplus.com/reference/clibrary/cstddef/offsetof.html">http://www.cplusplus.com/reference/clibrary/cstddef/offsetof.html</A> for more
++// on offsetof().
++
++#define my_offsetof(_type, _memb) (size_t (&amp;(((_type *)1)-&gt;_memb)) - 1)
++
++namespace Eraser
++{
++    // The mask for a range of frames is represented as a list (vector) of
++    // lines, where each line is a horizontal line of pixels.  Thus, each Line
++    // has a y coordinate, and a range of x coordinates (represented as the
++    // leftmost x coordinate and a count of pixels).  The list of lines is
++    // kept sorted by y and then by x, to make it more efficient to merge in
++    // new pixels or find ones to remove while maintaining the most compact
++    // (and thus most efficient to apply to an image) representation.
++
++    struct Line
++    {
++        uint16_t x;
++        uint16_t y;
++        uint16_t count;
++
++        Line ()
++            : x(), y(), count()
++        {
++        }
++
++        Line (uint16_t x, uint16_t y, uint16_t count)
++            : x (x), y (y), count (count)
++        {
++        }
++    };
++
++    typedef std::vector &lt;Line&gt; LineVec;
++
++    struct Mask
++    {
++        uint32_t first_frame;
++        uint32_t last_frame;
++        LineVec lines;
++
++        Mask (uint32_t first_frame, uint32_t last_frame)
++            : first_frame (first_frame),
++              last_frame (last_frame)
++        {
++        }
++
++        Mask (uint32_t first_frame, uint32_t last_frame,
++              const LineVec &amp; lines)
++            : first_frame (first_frame),
++              last_frame (last_frame),
++              lines (lines)
++        {
++        }
++    };
++
++    typedef std::vector &lt;Mask&gt; MaskVec;
++}
++
++class ADMVideoEraser : public AVDMGenericVideoStream
++{
++protected:
++    	
++    // This is a hack to work around the fact that the ctor &amp; dtor get called
++    // too often.  The right solution would be to arrange for the filter
++    // objects to be constructed and destructed only when really necessary:
++    // when a new instance of a filter is added to the list (by the user), it
++    // is constructed, and when it is removed from the list (by the user), it
++    // is destructed, and anything else is handled by a separate init() or
++    // configure() method.  This would allow the objects to maintain a
++    // persistent state in a more straightforward way.
++
++    class PersistentInfo
++    {
++    public:
++        CONFcouple *  conf;
++        CONFcouple *  oldConf;
++        uint32_t      refCount;
++
++//        uint32_t      mask_w;
++//        uint32_t      mask_h;
++
++//        std::string   data_file_name;
++//        time_t        data_file_mtime;
++
++        Eraser::MaskVec masks;
++
++        bool          mask_data_invalid;
++
++        PersistentInfo ()
++            : conf (0),
++              oldConf (0),
++              refCount (0),
++
++//              mask_w (0),
++//              mask_h (0),
++
++//              data_file_mtime (0),
++              mask_data_invalid (true)
++        {
++        }
++    };
++
++    typedef std::map &lt;CONFcouple *, PersistentInfo *&gt; PImap;
++    static PImap pimap;
++
++    PersistentInfo * myInfo;
++
++    ERASER_PARAM * _param;
++
++public:
++
++    ADMVideoEraser (AVDMGenericVideoStream * in, CONFcouple * setup);
++    ~ADMVideoEraser();
++
++    virtual uint8_t getFrameNumberNoAlloc (uint32_t frame, uint32_t * len,
++                                           ADMImage * data, uint32_t * flags);
++
++    virtual uint8_t configure (AVDMGenericVideoStream * instream);
++    virtual char * printConf (void);
++    virtual uint8_t getCoupledConf (CONFcouple ** couples);
++
++    static uint8_t doEraser (ADMImage * from_image,
++                             ADMImage * to_image,
++                             AVDMGenericVideoStream * in,
++                             uint32_t real_frame,
++                             ADMVideoEraser * eraserp,
++                             ERASER_PARAM * param,
++                             uint32_t width, uint32_t height);
++
++    Eraser::MaskVec &amp; getMasks ()
++    {
++        return myInfo-&gt;masks;
++    }
++
++protected:
++
++    uint8_t readDataFile (uint32_t width);
++    void writeDataFile () const;
++
++private:
++
++    const ADV_Info &amp; getInfo () const
++    {
++        return _info;
++    }
++};
++
++struct MenuMapping;
++uint8_t DIA_eraser (AVDMGenericVideoStream * in,
++                    ADMVideoEraser * eraserp,
++                    ERASER_PARAM * param,
++                    const MenuMapping * menu_mapping,
++                    uint32_t menu_mapping_count);
++
++#endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidParticle.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidParticle.cpp	2008-01-13 09:46:19 UTC (rev 3741)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidParticle.cpp	2008-01-13 10:05:24 UTC (rev 3742)
+@@ -15,11 +15,17 @@
+  *                                                                         *
+  ***************************************************************************/
+  
++#include &lt;math.h&gt;
++#include &lt;algorithm&gt;
++#include &lt;string&gt;
++#include &lt;vector&gt;
++using namespace std;
++
+ #include &quot;default.h&quot;
++#include &lt;ctype.h&gt;
+ 
+-#include &lt;math.h&gt;
+-
+ #include &quot;ADM_assert.h&quot;
++#undef memcpy   // avoid compile errors due to macro
+ #include &quot;fourcc.h&quot;
+ #include &quot;avio.hxx&quot;
+ #include &quot;avi_vars.h&quot;
+@@ -46,7 +52,8 @@
+     10,
+     { &quot;min_area&quot;, &quot;max_area&quot;, &quot;left_crop&quot;, &quot;right_crop&quot;,          // 4
+       &quot;top_crop&quot;, &quot;bottom_crop&quot;, &quot;output_format&quot;, &quot;output_file&quot;,  // + 4 = 8
+-      &quot;camera_number&quot;, &quot;debug&quot;                                    // + 2 = 10
++//      &quot;camera_number&quot;, &quot;min_dim_pctile&quot;, &quot;max_dim_pctile&quot;, &quot;debug&quot; // + 4 = 12
++      &quot;camera_number&quot;, &quot;debug&quot; // + 2 = 10
+     }
+ };
+ 
+@@ -74,9 +81,11 @@
+         GET(bottom_crop);
+         GET(output_format);
+ 
+-		char* tmp;
++	char* tmp;
+         GET2(output_file, tmp);
+         GET(camera_number);
++//        GET(min_dim_pctile);
++//        GET(max_dim_pctile);
+         GET(debug);
+     }
+     else
+@@ -90,6 +99,8 @@
+         _param-&gt;output_format = OUTPUTFMT_FORMAT_NEW;
+         // _param-&gt;output_file = &quot;&quot;; // implicit
+         _param-&gt;camera_number = 1;
++//        _param-&gt;min_dim_pctile = 0;
++//        _param-&gt;max_dim_pctile = 100;
+         _param-&gt;debug = 0;
+     }
+ }
+@@ -109,6 +120,8 @@
+     CSET(output_format);
+ 	(*couples)-&gt;setCouple(&quot;output_file&quot;, _param-&gt;output_file.c_str());
+     CSET(camera_number);
++//    CSET(min_dim_pctile);
++//    CSET(max_dim_pctile);
+     CSET(debug);
+ 
+     return 1;
+@@ -120,6 +133,10 @@
+     diaMenuEntry tOutputFmt [] = {
+         { OUTPUTFMT_FORMAT_NEW,
+           QT_TR_NOOP(&quot;New format, preferred, good for Tracker3D&quot;), NULL },
++        { OUTPUTFMT_FORMAT_DG_UWA,
++          QT_TR_NOOP(&quot;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">DG at UWA</A> format (includes shape info &amp; bounding box)&quot;), NULL },
++        { OUTPUTFMT_FORMAT_AB_ODU,
++          QT_TR_NOOP(&quot;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">AB at ODU</A> format (includes shape info)&quot;), NULL },
+         { OUTPUTFMT_FORMAT_OLD,
+           QT_TR_NOOP(&quot;Old format that Tracker3D can't read directly&quot;), NULL },
+     };
+@@ -242,7 +259,7 @@
+     if (frame &gt;= _info.nb_frames)
+         return 0;
+ 
+-    if (_param-&gt;debug &amp; 1)
++    if (_param-&gt;debug &amp; (0x01 &lt;&lt; ImageTool::SHIFT_PAST_SHOW_FLAGS))
+         printf (&quot;in ADMVideoParticle::getFrameNumberNoAlloc(%d, ...)\n&quot;, frame);
+ 
+     if (!_in-&gt;getFrameNumberNoAlloc (frame, len, _uncompressed, flags))
+@@ -267,10 +284,44 @@
+         }
+         else if (real_frame == 0) // ick
+         {
+-            if (outfmt == OUTPUTFMT_FORMAT_NEW)
++            switch (outfmt)
++            {
++            case OUTPUTFMT_FORMAT_OLD:
++                fprintf (outfp, &quot;%% Particle  Area  X  Y  Frame\n&quot;);
++                break;
++
++            case OUTPUTFMT_FORMAT_NEW:
+                 fprintf (outfp, &quot;%% Frame  Camera  X  Y  Area  Particle\n&quot;);
+-            else
+-                fprintf (outfp, &quot;%% Particle  Area  X  Y  Frame\n&quot;);
++                break;
++
++            case OUTPUTFMT_FORMAT_DG_UWA:
++                fprintf (outfp,
++                         &quot;%% Frame #, Camera #, X, Y, Area, Particle #, &quot;
++                         &quot;Bounding Box Width, Bounding Box Height, &quot;
++                         &quot;Min Dim, Max Dim, Min Dim Angle, Max Dim Angle, &quot;
++                         &quot;Max / Min, Length, Length Angle, &quot;
++                         &quot;Width, Width Angle, Length / Width\n&quot;);
++                break;
++
++            case OUTPUTFMT_FORMAT_AB_ODU:
++#ifdef OLD_PARTICLE_WEDGE_SCHEME
++                fprintf (outfp,
++                         &quot;Frame #,Particle #,Area,X,Y,Min Dim,Max Dim,&quot;
++                         &quot;Min Dim Angle,Max Dim Angle,Min / Max\n&quot;);
++#else // ! OLD_PARTICLE_WEDGE_SCHEME
++                fprintf (outfp,
++                         &quot;Frame #,Particle #,Area,X,Y, Min Dim,Max Dim, &quot;
++                         &quot;Min Dim Angle,Max Dim Angle, Max / Min,  &quot;
++                         &quot;Length,Length Angle, Width,Width Angle, &quot;
++                         &quot;Length / Width\n&quot;);
++#endif // ? OLD_PARTICLE_WEDGE_SCHEME
++                break;
++
++            default:
++                fprintf (outfp, &quot;%% Uh oh, unknown output format %d!\n&quot;,
++                         outfmt);
++                break;
++            }
+         }
+     }
+ 
+@@ -311,16 +362,23 @@
+     // HERE: we should erase anything outside the ROI (region of interest),
+     // unless we decide to handle that some other way and/or place...
+ 
++    OutputFmt outfmt = static_cast &lt;OutputFmt&gt; (param-&gt;output_format);
++    bool fancyOutput = (outfmt == OUTPUTFMT_FORMAT_AB_ODU ||
++                        outfmt == OUTPUTFMT_FORMAT_DG_UWA);
++
+     uint8_t * imagePixels = YPLANE (image);
+-    ImageTool imtool (imagePixels, width, height, data);
++    uint32_t imagetool_flags
++        = fancyOutput ? ImageTool::FLAG_DO_SHAPE : ImageTool::FLAG_NONE;
++
++    ImageTool imtool (imagePixels, width, height, data, imagetool_flags);
+     imtool.setDebug (debug);
+     imtool.setMinArea (param-&gt;min_area);
+     imtool.setMaxArea (param-&gt;max_area);
+     imtool.setCropping (param-&gt;left_crop, param-&gt;right_crop,
+                         param-&gt;top_crop, param-&gt;bottom_crop);
+-    static uint32_t particleNum = 0;
++    static uint32_t totalParticleNum = 0;
++    uint32_t frameParticleNum = 0;
+ 
+-    OutputFmt outfmt = static_cast &lt;OutputFmt&gt; (param-&gt;output_format);
+     uint32_t camera_number = param-&gt;camera_number;
+ 
+     for (uint32_t y = param-&gt;top_crop; y &lt; height - param-&gt;bottom_crop; y++)
+@@ -333,29 +391,104 @@
+                 if (imtool.autoOutline (x, y) == 0)
+                     continue;
+ 
+-                uint32_t area = imtool.particleArea();
+-                float centroid_x = imtool.particleCentroidX();
+-                float centroid_y = imtool.particleCentroidY();
++                const Particle &amp; particle = imtool.getParticle();
++                uint32_t area = particle.area;
++                float centroid_x = particle.centroidX;
++                float centroid_y = particle.centroidY;
+ 
+-                if (debug &amp; 0x01)
+-                    printf (&quot;%d %d %.6f %.6f %d\n&quot;,
+-                            ++particleNum, area, centroid_x, centroid_y,
+-                            real_frame + 1);
++                if (debug &amp; (0x02 &lt;&lt; ImageTool::SHIFT_PAST_SHOW_FLAGS))
++                    printf (&quot;frame %d, particle %d (%d total), &quot;
++                            &quot;%d pixels centered at (%.6f,%.6f)\n&quot;,
++                            real_frame + 1, frameParticleNum,
++                            totalParticleNum, area, centroid_x, centroid_y);
+ 
+                 if (!do_outfp)
+                     continue;
+ 
+-                if (outfmt == OUTPUTFMT_FORMAT_NEW)
++                ++totalParticleNum;
++                ++frameParticleNum;
++
++                if (fancyOutput)
+                 {
+-                    fprintf (do_outfp, &quot;%d %d %.6f %.6f %d %d\n&quot;,
+-                             real_frame + 1, camera_number, centroid_x, centroid_y,
+-                             area, ++particleNum);
++#ifdef OLD_PARTICLE_WEDGE_SCHEME
++                    uint32_t mindim = particle.getMinDimCount();
++                    uint32_t maxdim = particle.getMaxDimCount();
++                    float mindimangle = particle.getMinDimAngle();
++                    float maxdimangle = particle.getMaxDimAngle();
++                    float minmaxratio = float (mindim) / float (maxdim);
++#else // ! OLD_PARTICLE_WEDGE_SCHEME
++                    float mindist = particle.getMinDistance();
++                    float maxdist = particle.getMaxDistance();
++                    float mindistangle = particle.getMinDistAngle();
++                    float maxdistangle = particle.getMaxDistAngle();
++                    float maxminratio = float (maxdist) / float (mindist);
++                    const Particle::BestFit &amp; bf = particle.getBestFit();
++                    float lenwidthratio = bf.length / bf.width;
++#endif // ? OLD_PARTICLE_WEDGE_SCHEME
++
++                    if (outfmt == OUTPUTFMT_FORMAT_DG_UWA)
++                    {
++                        fprintf (do_outfp,
++                                 &quot;%d %d &quot;
++                                 &quot;%.6f %.6f &quot; // x, y
++                                 &quot;%d %d &quot; // area, totalParticleNum
++                                 &quot;%d %d &quot; // bbox width, bbox height
++                                 &quot;%.5f %.5f &quot; // min, max
++                                 &quot;%.5f %.5f %.5f  &quot; // minang,maxang,max/min
++                                 &quot;%.5f %.5f &quot; // len, len_angle
++                                 &quot;%.5f %.5f %.5f\n&quot;, // wid, wid_ang, len/wid
++                                 real_frame + 1, camera_number,
++                                 centroid_x, centroid_y,
++                                 area, totalParticleNum,
++                                 particle.maxx - particle.minx + 1,
++                                 particle.maxy - particle.miny + 1,
++                                 mindist, maxdist,
++                                 mindistangle, maxdistangle, maxminratio,
++                                 bf.length, bf.length_angle,
++                                 bf.width, bf.width_angle, lenwidthratio);
++                    }
++                    else if (outfmt == OUTPUTFMT_FORMAT_AB_ODU)
++                    {
++#ifdef OLD_PARTICLE_WEDGE_SCHEME
++                        fprintf (do_outfp,
++                                 &quot;%d,%d,%d,%.6f,%.6f,%d,%d,%.5f,%.5f,%.5f\n&quot;,
++                                 real_frame + 1, frameParticleNum, area,
++                                 centroid_x, centroid_y, mindim, maxdim,
++                                 mindimangle, maxdimangle, minmaxratio);
++#else // ! OLD_PARTICLE_WEDGE_SCHEME
++                        fprintf (do_outfp,
++                                 &quot;%d,%d,%d,&quot;
++                                 &quot;%.6f,%.6f, %.5f,%.5f, &quot; // x, y, min, max
++                                 &quot;%.5f,%.5f, %.5f,  &quot; // minang,maxang,max/min
++                                 &quot;%.5f,%.5f, &quot; // len, len_angle
++                                 &quot;%.5f,%.5f, %.5f\n&quot;, // wid, wid_ang, len/wid
++                                 real_frame + 1, frameParticleNum, area,
++                                 centroid_x, centroid_y, mindist, maxdist,
++                                 mindistangle, maxdistangle, maxminratio,
++                                 bf.length, bf.length_angle,
++                                 bf.width, bf.width_angle, lenwidthratio);
++#endif // ? OLD_PARTICLE_WEDGE_SCHEME
++                    }
++                    else
++                        fprintf (do_outfp,
++                                 &quot;uh oh, unknown fancy output format %d\n&quot;,
++                                 outfmt);
+                 }
+                 else
+                 {
+-                    fprintf (do_outfp, &quot;%d %d %.6f %.6f %d\n&quot;,
+-                             ++particleNum, area, centroid_x, centroid_y,
+-                             real_frame + 1);
++                    if (outfmt == OUTPUTFMT_FORMAT_NEW)
++                    {
++                        fprintf (do_outfp, &quot;%d %d %.6f %.6f %d %d\n&quot;,
++                                 real_frame + 1, camera_number,
++                                 centroid_x, centroid_y,
++                                 area, totalParticleNum);
++                    }
++                    else
++                    {
++                        fprintf (do_outfp, &quot;%d %d %.6f %.6f %d\n&quot;,
++                                 totalParticleNum, area,
++                                 centroid_x, centroid_y, real_frame + 1);
++                    }
+                 }
+             }
+         }
+@@ -367,6 +500,22 @@
+ 
+ //////////////////////////////////////////////////////////////////////////////
+ 
++#ifdef OLD_PARTICLE_WEDGE_SCHEME
++inline void Particle_Old::Wedge::trim_to_edge ()
++{
++    for (int i = pixel_distance.size() - 1; i &gt;= 0; --i)
++    {
++        if (pixel_distance [i] &gt; max_white_distance)
++        {
++            // toss it; to save time we just mark it invalid instead of
++            // deleting from the various vectors.
++            pixel_distance [i] = -1;
++            --pixel_count;
++        }
++    }
++}
++#endif
++
+ char ImageTool::directionLetters [] = &quot;ESWN#?&quot;;
+ 
+ PixelOffset ImageTool::leftOffset [ImageTool::DIRECTION_COUNT] =
+@@ -398,9 +547,19 @@
+ 
+ uint8_t ImageTool::autoOutline (uint32_t x, uint32_t y)
+ {
+-    pixelList.clear();
++    my_particle.init (debug);
++    PixelLocVec &amp; outline = my_particle.outline;
+ 
+-    if (debug &amp; 0x02)
++    static int needbar = 1;
++
++    if (needbar &amp;&amp; (debug &amp; 0xffff)) // anything
++    {
++        printf (&quot;\n=======================================&quot;
++                &quot;=======================================\n\n&quot;);
++        needbar = 0;
++    }
++
++    if ((debug &amp; (0x04 &lt;&lt; SHIFT_PAST_SHOW_FLAGS)) &amp;&amp; ++needbar)
+         printf (&quot;autoOutline(%d,%d):&quot;, x, y);
+ 
+     ADM_assert (goodPixel (x, y));
+@@ -431,8 +590,8 @@
+         prevY = y;
+ #endif
+ 
+-        pixelList.push_back (PixelLoc (x, y));
+-        if (debug &amp; 0x04)
++        outline.push_back (PixelLoc (x, y));
++        if ((debug &amp; (0x08 &lt;&lt; SHIFT_PAST_SHOW_FLAGS)) &amp;&amp; ++needbar)
+             printf (&quot; %c(%d,%d)%c&quot;, directionLetters [direction],
+                     x, y, directionLetters [newDirection]);
+ 
+@@ -440,7 +599,8 @@
+         {
+             printf (&quot;\nUh oh!  Too many points!! (%d) (@(%d,%d), dir %c)\n&quot;,
+                     pointCount, x, y, directionLetters [direction]);
+-            showStuff();
++            showStuff (SHOW_INPUT);
++            showStuff (SHOW_OUTLINE);
+             break;
+         }
+ 
+@@ -518,13 +678,14 @@
+             // Apparently there is nowhere to go.  This should happen only if
+             // we're looking at an isolated pixel (a one-pixel particle).
+ 
+-            if (pixelList.size() &gt; 1)
++            if (outline.size() &gt; 1)
+             {
+                 printf (&quot;\nUh oh!  We're stuck, but it's not a lonely pixel!  &quot;
+                         &quot;(@(%d,%d), dir %c)\n&quot;,
+                         x, y, directionLetters [direction]);
+-                showStuff();
+-                ADM_assert (pixelList.size() &gt; 1);
++                showStuff (SHOW_INPUT);
++                showStuff (SHOW_OUTLINE);
++                ADM_assert (outline.size() &gt; 1);
+             }
+ 
+             break; // we'd fall out anyway, but this is faster &amp; more explicit
+@@ -532,35 +693,21 @@
+ 
+     } while (x != startingX || y != startingY);
+ 
+-    if (debug &amp; 0x02)
+-        printf (&quot; done! %d points in all\n&quot;, pixelList.size());
++    if ((debug &amp; (0x04 &lt;&lt; SHIFT_PAST_SHOW_FLAGS)) &amp;&amp; ++needbar)
++        printf (&quot; done! %d points in all\n&quot;, outline.size());
+ 
+-    // HERE: if we moved this to below the loop that does the centroid, etc.,
+-    // then we could show that info and also the fill-in of the particle,
+-    // based on reading the output image (if it exists).
+-
+-    if (debug &amp; 0x08)
+-        showStuff();
+-
+-    // We now do 4 things in one pass: 1. count the pixels in the particle
++    // We now do 5 things in one pass: 1. count the pixels in the particle
+     // (thus computing the area, defined as the number of pixels in the
+     // particle); 2. clear those pixels in the input image so that we don't
+     // count the particle more than once; 3. compute the centroid (defined as
+     // the point whose x is the average of all the x's in the particle, and
+-    // whose y is the average of all the y's in particle); 4. if there is an
+-    // output image, draw the particle in the output, with the outline
+-    // highlighted.
++    // whose y is the average of all the y's in the particle); 4. if there is
++    // an output image, draw the particle in the output, with the outline
++    // highlighted; 5. compute the bounding box (rectangle that completely
++    // encloses the particle).
+ 
+-    my_particleArea = 0;
+-    my_particleCentroidX = 0;
+-    my_particleCentroidY = 0;
+-
+-    uint32_t sumOfXs = 0;
+-    uint32_t sumOfYs = 0;
+-    uint32_t count = 0;
+-
+-    PixelList::iterator plit = pixelList.begin();
+-    while (plit != pixelList.end())
++    PixelLocVec::iterator plit = outline.begin();
++    while (plit != outline.end())
+     {
+         uint32_t px = plit-&gt;x;
+         uint32_t py = plit-&gt;y;
+@@ -596,16 +743,12 @@
+ 
+         uint32_t startX = px;
+ 
+-        count++;
+-        sumOfXs += px;
+-        sumOfYs += py;
++        my_particle.addWhitePixel (px, py);
+         getPixel (px, py) = 0; // erase to prevent being counted again
+ 
+         while (goodPixel (++px, py))
+         {
+-            count++;
+-            sumOfXs += px;
+-            sumOfYs += py;
++            my_particle.addWhitePixel (px, py);
+             getPixel (px, py) = 0; // erase to prevent being counted again
+             if (my_outImage)
+                 outPixel (px, py) = 128;
+@@ -617,58 +760,45 @@
+         px = startX;
+         while (goodPixel (--px, py))
+         {
+-            count++;
+-            sumOfXs += px;
+-            sumOfYs += py;
++            my_particle.addWhitePixel (px, py);
+             getPixel (px, py) = 0; // erase to prevent being counted again
+             if (my_outImage)
+                 outPixel (px, py) = 128;
+         }
+     }
+ 
+-    my_particleArea = count;
+-
+-    if (my_particleArea &lt; my_minArea || my_particleArea &gt; my_maxArea)
++    if (my_particle.area &lt; my_minArea || my_particle.area &gt; my_maxArea)
+     {
+         if (my_outImage)
+         {
+             // We need to erase the particle we just drew. :-(
+ 
+-            plit = pixelList.begin();
+-            while (plit != pixelList.end())
++            plit = my_particle.white_pixels.begin();
++            while (plit != my_particle.white_pixels.end())
+             {
+-                uint32_t px = plit-&gt;x;
+-                uint32_t py = plit-&gt;y;
+-
++                outPixel (plit-&gt;x, plit-&gt;y) = 0;
+                 ++plit;
+-
+-                // First, we erase the pixel itself, and any pixels to the right of
+-                // it (if they are on).
+-
+-                uint32_t startX = px;
+-
+-                while (validPixel (px, py) &amp;&amp; outPixel (px, py))
+-                    outPixel (px++, py) = 0;
+-
+-                // Now, we process any pixels to the left of the original one (if they
+-                // are on).
+-
+-                px = startX;
+-                while (validPixel (--px, py) &amp;&amp; outPixel (px, py))
+-                    outPixel (px, py) = 0;
+             }
+         }
+ 
+         return 0;
+     }
+ 
+-    my_particleCentroidX = float (sumOfXs) / count;
+-    my_particleCentroidY = float (sumOfYs) / count;
++    needbar = 1;
+ 
++    my_particle.computeCentroid();
++
++    if (debug &amp; (0x0002 &lt;&lt; ImageTool::SHIFT_PAST_SHOW_FLAGS))
++        printf (&quot;    particle has %d pixels from (%d,%d) to (%d,%d) &quot;
++                &quot;with centroid at (%.5f,%.5f)\n&quot;,
++                my_particle.area, my_particle.minx, my_particle.miny,
++                my_particle.maxx, my_particle.maxy,
++                my_particle.centroidX, my_particle.centroidY);
++
+     if (my_outImage)
+     {
+-        uint32_t px = static_cast &lt;uint32_t&gt; (nearbyintf (my_particleCentroidX));
+-        uint32_t py = static_cast &lt;uint32_t&gt; (nearbyintf (my_particleCentroidY));
++        uint32_t px = static_cast &lt;uint32_t&gt; (nearbyintf (my_particle.centroidX));
++        uint32_t py = static_cast &lt;uint32_t&gt; (nearbyintf (my_particle.centroidY));
+         if (validPixel (px, py))
+             outPixel (px, py) = 255;
+         else
+@@ -680,95 +810,657 @@
+ #endif
+     }
+ 
++    if (debug &amp; SHOW_INPUT)
++        showStuff (SHOW_INPUT);
++
++    if (debug &amp; SHOW_OUTLINE)
++        showStuff (SHOW_OUTLINE);
++
++#ifdef OLD_PARTICLE_WEDGE_SCHEME
++
++    if (my_flags &amp; FLAG_DO_SHAPE)
++    {
++        typedef Particle::Wedge Wedge;
++        typedef Particle::WedgeVec WedgeVec;
++        typedef Particle::WedgePair WedgePair;
++        typedef Particle::WedgePairVec WedgePairVec;
++
++        // HERE: for DG/UWA format, we may only need the white pixels.  For
++        // AB/ODU format, we need to find all the pixels which are no further
++        // from the centroid than the furthest white pixel in the same wedge.
++        // For now, for DG/UWA format, we will show both numbers, so we need
++        // to measure the distance from the centroid for both formats.
++
++        my_particle.init_wedges();
++
++        // HERE: we don't need to sort the white_pixels vector unless we're
++        // counting non-white pixels in the shape stuff.
++
++        PixelLocVec &amp; white_pixels = my_particle.white_pixels;
++        sort (white_pixels.begin(), white_pixels.end(), PixelLoc::Compare());
++
++        WedgeVec &amp; wedges = my_particle.wedges;
++
++        uint16_t minx = my_particle.minx;
++        uint16_t miny = my_particle.miny;
++        uint16_t maxx = my_particle.maxx;
++        uint16_t maxy = my_particle.maxy;
++
++        const float pi_plus_half_wedge_arc
++            = M_PI + my_particle.half_wedge_arc;
++        const float wedge_arc = my_particle.wedge_arc;
++        const uint32_t num_wedges = my_particle.num_wedges;
++
++        for (uint16_t py = miny; py &lt;= maxy; py++)
++        {
++            const float dy = py - my_particle.centroidY;
++            const float dy_squared = dy * dy;
++
++            for (uint16_t px = minx; px &lt;= maxx; px++)
++            {
++                float dx = px - my_particle.centroidX;
++                float angle = atan2f (dy, dx);
++                uint32_t wedgeIndex
++                    = int ((angle + pi_plus_half_wedge_arc) / wedge_arc);
++                wedgeIndex %= num_wedges; // just in case
++
++                // uint8_t value = getPixel (px, py);
++                // oops, can't use that - we erased it already. :-(
++                bool value
++                    = binary_search (white_pixels.begin(), white_pixels.end(),
++                                     PixelLoc (px, py), PixelLoc::Compare());
++                float distance = sqrtf (dx * dx + dy_squared);
++                wedges [wedgeIndex].add_pixel (px, py, value, distance);
++                                               
++                printf (&quot;%d @ (%d,%d) %.5f -&gt; %d @ %.5f\n&quot;,
++                        value, px, py, distance,
++                        wedgeIndex, wedges[wedgeIndex].center_angle);
++            }
++        }
++
++        // See note in init_wedges() about what we're doing with the last
++        // wedge here.
++
++        wedges [0] += wedges [num_wedges];
++        wedges.pop_back();
++
++        // Now, in each wedge, toss any non-white pixels that are further out
++        // than the furthest white pixel in that wedge.
++
++        for (WedgeVec::iterator wit = wedges.begin();
++             wit != wedges.end();
++             ++wit)
++        {
++            printf (&quot;wedge @ %.5f: max white distance = %.5f\n&quot;,
++                    wit-&gt;center_angle, wit-&gt;max_white_distance);
++            wit-&gt;trim_to_edge();
++        }
++
++        // Next, we combine opposite wedges so that we can report the
++        // dimension along a line through the centroid across the whole
++        // particle (not just from the centroid to the particle boundary).
++
++        WedgePairVec &amp; wedge_pairs = my_particle.wedge_pairs;
++        int num_lines = my_particle.num_wedges / 2;
++        for (int widx = 0; widx &lt; num_lines; ++widx)
++        {
++            const Wedge &amp; neg_wedge = wedges [widx];
++            const Wedge &amp; pos_wedge = wedges [widx + num_lines];
++
++            float angle = pos_wedge.center_angle;
++            printf (&quot;wedge %d at %.5f = %d of %d  &quot;
++                    &quot;wedge %d at %.5f = %d of %d\n&quot;,
++                    widx, neg_wedge.center_angle, neg_wedge.pixel_count,
++                    neg_wedge.pixel_distance.size(),
++                    widx + num_lines, angle, pos_wedge.pixel_count,
++                    pos_wedge.pixel_distance.size());
++            uint32_t pixel_count
++                = pos_wedge.pixel_count + neg_wedge.pixel_count;
++            wedge_pairs.push_back (WedgePair (angle, pixel_count));
++        }
++
++        // Now we (effectively) sort the wedges by the number of pixels in
++        // them.
++
++        sort (wedge_pairs.begin(), wedge_pairs.end(), WedgePair::Less());
++
++        if (debug &amp; SHOW_WEDGE_PIXELS)
++            showStuff (SHOW_WEDGE_PIXELS);
++    }
++
++#else // ! OLD_PARTICLE_WEDGE_SCHEME
++
++    if (my_flags &amp; FLAG_DO_SHAPE)
++    {
++        typedef Particle::Wedge Wedge;
++        typedef Particle::WedgeVec WedgeVec;
++        typedef Particle::WedgePair WedgePair;
++        typedef Particle::WedgePairVec WedgePairVec;
++
++        my_particle.init_wedges();
++
++        PixelLocVec &amp; white_pixels = my_particle.white_pixels;
++        WedgeVec &amp; wedges = my_particle.wedges;
++
++        uint16_t minx = my_particle.minx;
++        uint16_t miny = my_particle.miny;
++        uint16_t maxx = my_particle.maxx;
++        uint16_t maxy = my_particle.maxy;
++
++        const float wedge_interval = my_particle.wedge_interval;
++        const uint32_t num_wedges = my_particle.num_wedges;
++
++        for (PixelLocVec::const_iterator wpit = white_pixels.begin();
++             wpit != white_pixels.end();
++             ++wpit)
++        {
++            const uint16_t px = wpit-&gt;x;
++            const uint16_t py = wpit-&gt;y;
++            const float dy = py - my_particle.centroidY;
++            const float dx = px - my_particle.centroidX;
++            float angle = atan2f (dy, dx);
++            uint32_t wedgeIndex = int ((angle + M_PI) / wedge_interval);
++            float distance = sqrtf (dx * dx + dy * dy);
++
++            while (1)
++            {
++                wedgeIndex %= num_wedges + 1;
++
++                Wedge &amp; wedge = wedges [wedgeIndex];
++
++                if (angle &lt; wedge.min_angle || angle &gt; wedge.max_angle)
++                {
++                    if (debug &amp; (0x0020 &lt;&lt; SHIFT_PAST_SHOW_FLAGS))
++                        printf (&quot;(%d,%d) = %.5f @ %.5f out of range for &quot;
++                                &quot;%d @ %.5f (%.5f to %.5f)\n&quot;,
++                                px, py, distance, angle,
++                                wedgeIndex, wedge.center_angle,
++                                wedge.min_angle, wedge.max_angle);
++                    break;
++                }
++
++                wedge.add_pixel (px, py, distance, angle);
++
++                if (debug &amp; (0x0010 &lt;&lt; SHIFT_PAST_SHOW_FLAGS))
++                    printf (&quot;(%d,%d) = %.5f @ %.5f -&gt; %d @ %.5f (%.5f)\n&quot;,
++                            px, py, distance, angle, wedgeIndex,
++                            wedge.angle_for_mwd, wedge.center_angle);
++                ++wedgeIndex;
++            }
++        }
++
++        // See note in init_wedges() about what we're doing with the last
++        // wedge here.
++
++        wedges [0] += wedges [num_wedges];
++        wedges.pop_back();
++
++        // Next, we combine opposite wedges so that we can report the
++        // dimension along a line through the centroid across the whole
++        // particle (not just from the centroid to the particle boundary).
++
++        WedgePairVec &amp; wedge_pairs = my_particle.wedge_pairs;
++        int num_lines = my_particle.num_wedges / 2;
++        for (int widx = 0; widx &lt; num_lines; ++widx)
++        {
++            const Wedge &amp; neg_wedge = wedges [widx];
++            const Wedge &amp; pos_wedge = wedges [widx + num_lines];
++
++            wedge_pairs.push_back (WedgePair (neg_wedge, pos_wedge));
++            const WedgePair &amp; wp = wedge_pairs.end()[-1];
++            if (debug &amp; (0x0100 &lt;&lt; ImageTool::SHIFT_PAST_SHOW_FLAGS))
++                printf (&quot;%c: wedge %d = %8.5f @ %.5f (%.5f), + &quot;
++                        &quot;wedge %d = %8.5f @ %.5f (%.5f), --&gt; %9.5f @ %.5f\n&quot;,
++                        widx + 'a', widx, neg_wedge.max_white_distance,
++                        neg_wedge.angle_for_mwd, neg_wedge.center_angle,
++                        widx + num_lines, pos_wedge.max_white_distance,
++                        pos_wedge.angle_for_mwd, pos_wedge.center_angle,
++                        wp.total_distance, wp.angle);
++        }
++
++        // Now, we find the pair of perpendicular wedges with the greatest
++        // ratio of length to width, where length and width are arbitrary
++        // designations (but length will never be less than width).
++
++        float best_ratio = -1;
++        int best_ratio_index = -1;
++        for (int wpidx = 0; wpidx &lt; num_lines; ++wpidx)
++        {
++            const WedgePair &amp; wp = wedge_pairs [wpidx];
++            // Find the perpendicular wedge.
++            int pwpidx = (wpidx + (num_lines / 2)) % num_lines;
++            const WedgePair &amp; pwp = wedge_pairs [pwpidx];
++            float ratio = wp.total_distance / pwp.total_distance;
++            if (debug &amp; (0x0200 &lt;&lt; ImageTool::SHIFT_PAST_SHOW_FLAGS))
++                printf (&quot;%c: wedgepair %d = %9.5f @ %.5f / &quot;
++                        &quot;wedgepair %d = %9.5f @ %.5f = %.5f\n&quot;,
++                        wpidx + 'a', wpidx, wp.total_distance, wp.angle,
++                        pwpidx, pwp.total_distance, pwp.angle, ratio);
++            if (ratio &gt; best_ratio)
++            {
++                best_ratio = ratio;
++                best_ratio_index = wpidx;
++            }
++        }
++
++        Particle::BestFit &amp; best_fit = my_particle.best_fit;
++        const WedgePair &amp; wp = wedge_pairs [best_ratio_index];
++        best_fit.length = wp.total_distance;
++        best_fit.length_angle = wp.angle;
++        int best_ratio_width_index
++            = (best_ratio_index + (num_lines / 2)) % num_lines;
++        const WedgePair &amp; pwp = wedge_pairs [best_ratio_width_index];
++        best_fit.width = pwp.total_distance;
++        best_fit.width_angle = pwp.angle;
++
++        if (debug &amp; (0x0200 &lt;&lt; ImageTool::SHIFT_PAST_SHOW_FLAGS))
++            printf (&quot;\nbest fit: length = wedgepair %d (%.5f @ %.5f) X &quot;
++                    &quot;wedgepair %d (%.5f @ %.5f); len/wid = %.5f\n\n&quot;,
++                    best_ratio_index, wp.total_distance, wp.angle,
++                    best_ratio_width_index, pwp.total_distance, pwp.angle,
++                    best_ratio);
++
++        // Finally, we (effectively) sort the wedges by the number of pixels
++        // in them.
++
++        sort (wedge_pairs.begin(), wedge_pairs.end(), WedgePair::Less());
++
++        if (debug &amp; SHOW_WEDGE_PIXELS)
++            showStuff (SHOW_WEDGE_PIXELS);
++    }
++
++#endif // ? OLD_PARTICLE_WEDGE_SCHEME
++
+     return 1;
+ }
+ 
+-void ImageTool::showStuff () const
++const PixelLoc PixelLoc::INVALID (0xffff, 0xffff);
++
++#ifdef OLD_PARTICLE_WEDGE_SCHEME
++
++void Particle_Old::init_wedges ()
+ {
+-    uint32_t minx = 0xffffffff;
+-    uint32_t miny = 0xffffffff;
+-    uint32_t maxx = 0;
+-    uint32_t maxy = 0;
++    // num_wedges = (maxx - minx + 1 + maxy - miny + 1) * 2;
++    //    The above was too many - not enough pixels in any one wedge, and
++    //    minimum was always zero.
++    // num_wedges = maxx - minx + 1 + maxy - miny + 1;
++    //    The above was still too many.
++    num_wedges = min (int (area / 2), maxx - minx + 1 + maxy - miny + 1);
+ 
+-    PixelList::const_iterator plit = pixelList.begin();
+-    while (plit != pixelList.end())
++    num_wedges = (num_wedges + 3) &amp; ~3; // round up to multiple of 4
++    wedge_arc = 2.0 * M_PI / num_wedges;
++    half_wedge_arc = wedge_arc / 2;
++    printf (&quot;init_wedges(): area = %d; %d wedges of arc %.5f\n&quot;,
++            area, num_wedges, wedge_arc);
++
++    // We are going to set up one extra wedge, because out on the negative X
++    // axis, there is a discontinuity: angles will be around +pi or -pi,
++    // depending on whether they are just above or below the negative X axis.
++    // So with the extra wedge, we have two exactly overlapping wedges (the
++    // first and last ones), with the first one catching all the ~-pi values
++    // and the last one catching the ~+pi values.  Later, we'll dump the last
++    // one into the first one before we process the wedges themselves.
++
++    wedges.reserve (num_wedges + 1);
++    double angle = -M_PI;
++    uint32_t wedge_index = 0;
++    while (wedge_index &lt;= num_wedges)
+     {
+-        uint32_t px = plit-&gt;x;
+-        uint32_t py = plit-&gt;y;
++        wedges.push_back (Wedge (angle, half_wedge_arc));
++        angle += wedge_arc;
++        ++wedge_index;
++    }
++}
+ 
+-        if (px &lt; minx)
+-            minx = px;
+-        if (px &gt; maxx)
+-            maxx = px;
+-        if (py &lt; miny)
+-            miny = py;
+-        if (py &gt; maxy)
+-            maxy = py;
++#else // ! OLD_PARTICLE_WEDGE_SCHEME
+ 
+-        ++plit;
++void Particle::init_wedges ()
++{
++    // We've tried various other things, but they didn't work out well.
++    // Now we have a fixed number of wedges, and each wedge overlaps with 50%
++    // of each of its neighbors (e.g., 16 wedges, each one 1/8 of the circle).
++
++    num_wedges = 16;
++    wedge_interval = 2.0 * M_PI / num_wedges;
++    wedge_arc = wedge_interval * 2;
++    half_wedge_arc = wedge_arc / 2;
++    if (debug &amp; (0x40 &lt;&lt; ImageTool::SHIFT_PAST_SHOW_FLAGS))
++        printf (&quot;init_wedges(): %d wedges of arc %.5f, centered every %.5f\n&quot;,
++                num_wedges, wedge_arc, wedge_interval);
++
++    // We are going to set up one extra wedge, because out on the negative X
++    // axis, there is a discontinuity: angles will be around +pi or -pi,
++    // depending on whether they are just above or below the negative X axis.
++    // So with the extra wedge, we have two exactly overlapping wedges (the
++    // first and last ones), with the first one catching all the ~-pi values
++    // and the last one catching the ~+pi values.  Later, we'll dump the last
++    // one into the first one before we process the wedges themselves.
++
++    wedges.reserve (num_wedges + 1);
++    double angle = -M_PI;
++    uint32_t wedge_index = 0;
++    while (wedge_index &lt;= num_wedges)
++    {
++        if (debug &amp; (0x80 &lt;&lt; ImageTool::SHIFT_PAST_SHOW_FLAGS))
++            printf (&quot;    wedge %2d: %.5f (%.5f to %.5f)\n&quot;,
++                    wedge_index, angle, angle - half_wedge_arc,
++                    angle + half_wedge_arc);
++        wedges.push_back (Wedge (angle, half_wedge_arc));
++        angle += wedge_interval;
++        ++wedge_index;
+     }
++}
+ 
+-    minx -= (minx &gt; 0);
+-    miny -= (miny &gt; 0);
+-    maxx += (maxx &lt; my_w - 1);
+-    maxy += (maxy &lt; my_h - 1);
++#endif // ? OLD_PARTICLE_WEDGE_SCHEME
+ 
+-    printf (&quot;(%d..%d, %d..%d):\n&quot;, minx, maxx, miny, maxy);
++static inline
++char &amp; pixel_char (vector &lt;string&gt; &amp; grid, int16_t xbase, int16_t ybase,
++                   float cX, float cY, float dX, float dY)
++{
++    uint16_t x = static_cast &lt;uint16_t&gt; (nearbyintf (cX + dX));
++    uint16_t y = static_cast &lt;uint16_t&gt; (nearbyintf (cY + dY));
++    return grid [y - ybase][x - xbase];
++}
+ 
+-    for (uint32_t py = miny; py &lt;= maxy; py++)
++static inline
++char &amp; pixel_char_from_angle (vector &lt;string&gt; &amp; grid, int16_t xbase, int16_t ybase,
++                              float cX, float cY, float distance, float angle)
++{
++    float dX = distance * cosf (angle);
++    float dY = distance * sinf (angle);
++    return pixel_char (grid, xbase, ybase, cX, cY, dX, dY);
++}
++
++void ImageTool::showStuff (ShowStuff what) const
++{
++    const PixelLocVec &amp; outline = my_particle.outline;
++
++    const int margin = 5;
++
++    uint16_t bbminx = my_particle.minx;
++    uint16_t bbminy = my_particle.miny;
++    uint16_t bbmaxx = my_particle.maxx;
++    uint16_t bbmaxy = my_particle.maxy;
++
++    if (bbminx &gt; bbmaxx)
+     {
+-        printf (&quot;    &quot;);
+-        for (uint32_t px = minx; px &lt;= maxx; px++)
++        PixelLocVec::const_iterator plit = outline.begin();
++        while (plit != outline.end())
+         {
+-            if (goodPixel (px, py))
+-            {
+-                printf (&quot;*&quot;);
+-#if 0
+-// This is now done in autoOutline() where it belongs (more so than here,
+-// anyway).
+-                outPixel (px, py) = 64;
++            uint32_t px = plit-&gt;x;
++            uint32_t py = plit-&gt;y;
++
++            if (px &lt; bbminx)
++                bbminx = px;
++            if (px &gt; bbmaxx)
++                bbmaxx = px;
++            if (py &lt; bbminy)
++                bbminy = py;
++            if (py &gt; bbmaxy)
++                bbmaxy = py;
++
++            ++plit;
++        }
++    }
++
++    uint16_t minx = max (int16_t (bbminx) - margin, 0);
++    uint16_t miny = max (int16_t (bbminy) - margin, 0);
++    uint16_t maxx = min (bbmaxx + margin, int16_t (my_w) - 1);
++    uint16_t maxy = min (bbmaxy + margin, int16_t (my_h) - 1);
++
++    switch (what)
++    {
++    case SHOW_INPUT:
++        printf (&quot;Input (after previous particle(s) erased):\n\n&quot;);
++        break;
++
++    case SHOW_OUTLINE:
++        printf (&quot;Outline (%d points):\n\n&quot;, outline.size());
++        break;
++
++#ifdef OLD_PARTICLE_WEDGE_SCHEME
++    case SHOW_WEDGE_PIXELS:
++        printf (&quot;Wedge pair assignments (%d wedges):\n\n&quot;,
++                my_particle.num_wedges);
++        break;
++#else
++    case SHOW_WEDGE_PIXELS:
++        printf (&quot;Wedge distances (%d wedges, %.5f arc at %.5f interval):\n\n&quot;,
++                my_particle.num_wedges, my_particle.wedge_arc,
++                my_particle.wedge_interval);
++        break;
+ #endif
+-            }
+-            else
+-                printf (&quot;.&quot;);
++
++    default:
++        break;
++    }
++
++    uint16_t dimx = maxx - minx + 1;
++    uint16_t dimy = maxy - miny + 1;
++    int16_t xbase = minx - 1;
++    int16_t ybase = miny;
++
++    if (debug &amp; (0x0400 &lt;&lt; ImageTool::SHIFT_PAST_SHOW_FLAGS))
++        printf (&quot;%dx%d (%d,%d - %d,%d; %d,%d - %d,%d; base = %d,%d)\n&quot;,
++                dimx, dimy, bbminx, bbminy, bbmaxx, bbmaxy,
++                minx, miny, maxx, maxy, xbase, ybase);
++
++    string ruler (dimx + 2, '-');
++    ruler [0] = '+';
++    ruler [dimx + 1] = '+';
++    printf (&quot;  x|&quot;);
++    const int x_ruler_spacing = 5;
++    unsigned xtick = minx + x_ruler_spacing - (minx % x_ruler_spacing);
++    unsigned field_width = xtick - minx + 2;
++    while (xtick &lt; maxx)
++    {
++        printf (&quot;%*d&quot;, field_width, xtick);
++        ruler [xtick - xbase] = '+';
++        xtick += x_ruler_spacing;
++        field_width = x_ruler_spacing;
++    }
++    ruler [bbminx - xbase] = '|';
++    ruler [bbmaxx - xbase] = '|';
++    printf (&quot;\ny: %s\n&quot;, ruler.c_str());
++
++    string blankLine (dimx + 2, '.');
++    blankLine [0] = '|';
++    blankLine [dimx + 1] = '|';
++    vector &lt;string&gt; grid (dimy, blankLine);
++    grid [bbminy - ybase][0] = '=';
++    grid [bbminy - ybase][dimx + 1] = '=';
++    grid [bbmaxy - ybase][0] = '=';
++    grid [bbmaxy - ybase][dimx + 1] = '=';
++
++    switch (what)
++    {
++    case SHOW_INPUT:
++    case SHOW_OUTLINE:
++    {
++        for (uint32_t py = miny; py &lt;= maxy; py++)
++        {
++            string &amp; gridline = grid [py - ybase];
++            for (uint32_t px = minx; px &lt;= maxx; px++)
++                if (goodPixel (px, py))
++                    gridline [px - xbase] = 'x';
+         }
+-        printf (&quot;\n&quot;);
+     }
+ 
+-    printf (&quot;\nOutline (%d points):\n\n&quot;, pixelList.size());
++    // case SHOW_OUTLINE:
++    {
++        PixelLocVec::const_iterator plit = my_particle.white_pixels.begin();
++        while (plit != my_particle.white_pixels.end())
++        {
++            grid [plit-&gt;y - ybase][plit-&gt;x - xbase] = '*';
++            ++plit;
++        }
+ 
+-    std::string blankLine (maxx - minx + 1, '.');
+-    std::vector &lt;std::string&gt; showOutline (maxy - miny + 1, blankLine);
++        if (what == SHOW_INPUT)
++            break;
+ 
+-    plit = pixelList.begin();
+-    while (plit != pixelList.end())
++        plit = outline.begin();
++        while (plit != outline.end())
++        {
++            uint32_t px = plit-&gt;x;
++            uint32_t py = plit-&gt;y;
++
++            char &amp; ch = grid [py - ybase][px - xbase];
++            // printf (&quot;(%d,%d)%c&quot;, px, py, ch);
++            if (ch == '*')
++                ch = '1';
++            else if (ch == '9')
++                ch = '+';
++            else if (ch == '.')
++                ch = '1';
++            else if (ch != '+')
++                ++ch;
++            // printf (&quot;-&gt;%c  &quot;, ch);
++
++            ++plit;
++        }
++
++        uint32_t px = static_cast &lt;uint32_t&gt; (nearbyintf (my_particle.centroidX));
++        uint32_t py = static_cast &lt;uint32_t&gt; (nearbyintf (my_particle.centroidY));
++        char &amp; ch = grid [py - ybase][px - xbase];
++        if (ch == 'x')
++            ch = 'X';
++        else if (ch == '.')
++            ch = 'c';
++        else
++            ch = 'C';
++        break;
++    }
++
++#ifdef OLD_PARTICLE_WEDGE_SCHEME
++    case SHOW_WEDGE_PIXELS:
+     {
+-        uint32_t px = plit-&gt;x;
+-        uint32_t py = plit-&gt;y;
++        const Particle::WedgeVec &amp; wedges = my_particle.wedges;
++        int num_lines = my_particle.num_wedges / 2;
++        for (int widx = 0; widx &lt; num_lines; ++widx)
++        {
++            char ch = 'a' + (widx % 26);
++            for (int incr = 0; incr &lt;= num_lines; incr += num_lines)
++            {
++                const Particle::Wedge &amp; wedge = wedges [widx + incr];
++                PixelLocVec::const_iterator plit = wedge.pixel_locs.begin();
++                vector &lt;float&gt;::const_iterator fit
++                    = wedge.pixel_distance.begin();
++                while (plit != wedge.pixel_locs.end())
++                {
++                    if (*fit++ &gt; 0)
++                        grid [plit-&gt;y - ybase][plit-&gt;x - xbase] = ch;
++                    ++plit;
++                }
++            }
++        }
++        uint32_t px = static_cast &lt;uint32_t&gt; (nearbyintf (my_particle.centroidX));
++        uint32_t py = static_cast &lt;uint32_t&gt; (nearbyintf (my_particle.centroidY));
++        char &amp; ch = grid [py - ybase][px - xbase];
++        if (ch == '.')
++            ch = '*';
++        else
++            ch = toupper (ch);
++        break;
++    }
++#else // ! OLD_PARTICLE_WEDGE_SCHEME
++    case SHOW_WEDGE_PIXELS:
++    {
++        // For each wedge, we mark the max distance for it with a lowercase
++        // letter at the point along the angle for that wedge that is the max
++        // distance from the centroid.
++        // 
++        // We mark the best-fit points with an L at points half the &quot;length&quot;
++        // from the centroid along the angle for the length and a W at points
++        // half the &quot;width&quot; from the centroid along the angle for the width.
+ 
+-        char &amp; ch = showOutline [py - miny][px - minx];
++        const Particle::WedgeVec &amp; wedges = my_particle.wedges;
++        const float centroidX = my_particle.centroidX;
++        const float centroidY = my_particle.centroidY;
++        int num_lines = my_particle.num_wedges / 2;
++        for (int widx = 0; widx &lt; num_lines; ++widx)
++        {
++            char newch = 'a' + (widx % 26);
++            for (int incr = 0; incr &lt;= num_lines; incr += num_lines)
++            {
++                const Particle::Wedge &amp; wedge = wedges [widx + incr];
++                char &amp; ch = pixel_char_from_angle (grid, xbase, ybase,
++                                                   centroidX, centroidY,
++                                                   wedge.max_white_distance,
++                                                   wedge.angle_for_mwd);
++                // printf (&quot;(%d,%d) = '%c' (%.5f @ %.5f)\n&quot;,
++                //         x, y, newch, wedge.max_white_distance,
++                //         wedge.angle_for_mwd);
++                ch = newch;
++            }
++        }
++        const Particle::BestFit &amp; bf = my_particle.best_fit;
++        pixel_char_from_angle (grid, xbase, ybase, centroidX, centroidY,
++                               bf.length / 2, bf.length_angle)
++            = 'L';
++        pixel_char_from_angle (grid, xbase, ybase, centroidX, centroidY,
++                               bf.length / 2, bf.length_angle - M_PI)
++            = 'L';
++        pixel_char_from_angle (grid, xbase, ybase, centroidX, centroidY,
++                               bf.width / 2, bf.width_angle)
++            = 'W';
++        pixel_char_from_angle (grid, xbase, ybase, centroidX, centroidY,
++                               bf.width / 2, bf.width_angle - M_PI)
++            = 'W';
++        char &amp; ch = pixel_char (grid, xbase, ybase,
++                                centroidX, centroidY, 0, 0);
+         if (ch == '.')
+-            ch = '1';
+-        else if (ch == '9')
+-            ch = '+';
+-        else if (ch != '+')
+-            ++ch;
++            ch = '*';
++        else
++            ch = '@';
++        break;
++    }
++#endif // ? OLD_PARTICLE_WEDGE_SCHEME
+ 
+-#if 0
+-// This is now done in autoOutline() where it belongs (more so than here,
+-// anyway).
+-        getPixel (px, py) = 0;
+-        outPixel (px, py) = 255;
+-        outUPixel (px, py) = 0;
+-        outVPixel (px, py) = 0;
+-#endif
+-
+-        ++plit;
++    default:
++        break;
+     }
+ 
+-    std::vector &lt;std::string&gt;::iterator oit = showOutline.begin();
+-    while (oit != showOutline.end())
+-        std::cout &lt;&lt; *oit++ &lt;&lt; &quot;\n&quot;;
++    for (unsigned i = miny; i &lt;= maxy; ++i)
++        printf (&quot;%3d%s\n&quot;, i, grid [i - ybase].c_str());
+ 
+-    std::cout &lt;&lt; &quot;\npixelList: &quot; &lt;&lt; pixelList &lt;&lt; &quot;\n\n&quot;;
++    printf (&quot;   %s\n\n&quot;, ruler.c_str());
+ }
++
++// Debug output should be able to show:
++
++// input: contents of entire bounding box plus 5-pixel margin on all sides
++// (with box boundaries marked somehow)
++
++// outline (current showStuff()) but with margin as above and showing all
++// pixel states (on/off) (on = *, C for centroid; . = off)
++
++// all pixels considered part of the particle, with wedge assignments if using
++// a shape-reporting format, and showing centroid.  each pixel is shown as
++// (wedge # % 26) + 'a', and (closest pixel to) centroid is in uppercase, or
++// a * if not actually a white pixel.  (use same letter for opposite wedges.)
++
++// list of wedges in angle order, showing their angles (center &amp; bounds),
++// on/off/included pixel counts, and optionally list of all pixels in them
++
++// should show the angles to the bounding box corners, for comparison
++
++// list of wedges in percentile order, showing their percentiles, angles, etc.
++
++// debug option to draw line through the max angle - better, draw bounding box
++// (+1 on all sides), with lines from bounding box edges outward (20 pixels
++// for len, 10 for width)
++
++//   x|260 264 268 272 276
++// y: +-+-|-+---+---+-|-+-+
++// 120|...................|
++// 121|...................|
++// 122|...................|
++// 123=.....11111.........=
++// 124|...111***1111......|
++// 125|....111**C**111....|
++// 126|......111**11111...|
++// 127=........1111.......=
++// 128|...................|
++// 129|...................|
++// 130|...................|
++//    +---|-----------|---+
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidParticle.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidParticle.h	2008-01-13 09:46:19 UTC (rev 3741)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidParticle.h	2008-01-13 10:05:24 UTC (rev 3742)
+@@ -18,6 +18,8 @@
+ #define __PARTICLE__   
+ 
+ #include &lt;string&gt;
++#include &lt;algorithm&gt;
++#include &lt;math.h&gt;
+ 
+ #include &quot;ADM_video/ADM_cache.h&quot;
+ 
+@@ -32,6 +34,8 @@
+     uint32_t output_format;
+     std::string output_file;
+     uint32_t camera_number;
++    uint32_t min_dim_pctile;
++    uint32_t max_dim_pctile;
+     uint32_t debug;
+ };
+ 
+@@ -62,12 +66,13 @@
+          OUTPUTFMT_INVALID = 0,
+ 
+          OUTPUTFMT_FORMAT_NEW,
++         OUTPUTFMT_FORMAT_DG_UWA,
++         OUTPUTFMT_FORMAT_AB_ODU,
+          OUTPUTFMT_FORMAT_OLD,
+ 
+          OUTPUTFMT_COUNT
+      };
+ 
+-
+      ADMVideoParticle (AVDMGenericVideoStream *in, CONFcouple *setup);
+ 
+      ~ADMVideoParticle();
+@@ -121,12 +126,16 @@
+             return ((p1.y == p2.y) ? (p1.x &lt; p2.x) : (p1.y &lt; p2.y));
+         }
+     };
++
++    bool operator == (const PixelLoc &amp; rhs)
++    {
++        return (x == rhs.x &amp;&amp; y == rhs.y);
++    }
++
++    static const PixelLoc INVALID;
+ };
+ 
+-// Now that we no longer need to sort the list or insert anything into it, a
+-// vector should be faster.
+-// typedef std::list &lt;PixelLoc&gt; PixelList;
+-typedef std::vector &lt;PixelLoc&gt; PixelList;
++typedef std::vector &lt;PixelLoc&gt; PixelLocVec;
+ 
+ inline std::ostream &amp;
+ operator &lt;&lt; (std::ostream &amp; s, const PixelLoc &amp; pl)
+@@ -135,7 +144,7 @@
+ }
+ 
+ inline std::ostream &amp;
+-operator &lt;&lt; (std::ostream &amp; s, const PixelList &amp; theList)
++operator &lt;&lt; (std::ostream &amp; s, const PixelLocVec &amp; theList)
+ {
+     s &lt;&lt; &quot;[ &quot;;
+     std::copy (theList.begin(), theList.end(),
+@@ -144,6 +153,470 @@
+     return s;
+ }
+ 
++class ImageTool;
++
++#ifdef OLD_PARTICLE_WEDGE_SCHEME
++
++class Particle_Old
++{
++    struct Wedge
++    {
++        // HERE: if we're only counting white pixels, then we actually don't
++        // need any of the three vectors except for debugging output - we
++        // could just keep a count of pixels and that would be enough.
++
++        uint32_t pixel_count;
++        std::vector &lt;float&gt; pixel_distance;
++        PixelLocVec pixel_locs; // used only for debug output, else empty
++        std::vector &lt;char&gt; is_white; // faster than vector&lt;bool&gt;
++        float max_white_distance;
++        float min_angle;
++        float center_angle;
++        float max_angle;
++        float percentile;
++
++    private: // probably we don't need the default ctor - let's see...
++        Wedge ()
++            : pixel_count (0),
++              max_white_distance (-1),
++              min_angle (-10 * M_PI),
++              center_angle (-10 * M_PI),
++              max_angle (-10 * M_PI),
++              percentile (-1)
++        {
++        }
++    public:
++
++        Wedge (float angle, float half_arc)
++            : pixel_count (0),
++              max_white_distance (-1),
++              min_angle (angle - half_arc),
++              center_angle (angle),
++              max_angle (angle + half_arc),
++              percentile (-1)
++        {
++        }
++
++        void add_pixel (uint16_t x, uint16_t y)
++        {
++            ++pixel_count;
++            pixel_locs.push_back (PixelLoc (x, y));
++        }
++
++        void add_pixel (uint16_t x, uint16_t y, bool is_it_white, float distance)
++        {
++            ++pixel_count;
++            is_white.push_back (is_it_white);
++            if (is_it_white &amp;&amp; max_white_distance &lt; distance)
++                max_white_distance = distance;
++            pixel_distance.push_back (distance);
++            pixel_locs.push_back (PixelLoc (x, y));
++        }
++
++        Wedge &amp; operator += (const Wedge &amp; rhs)
++        {
++            pixel_count += rhs.pixel_count;
++            pixel_distance.insert (pixel_distance.end(),
++                                   rhs.pixel_distance.begin(),
++                                   rhs.pixel_distance.end());
++            pixel_locs.insert (pixel_locs.end(),
++                               rhs.pixel_locs.begin(),
++                               rhs.pixel_locs.end());
++            is_white.insert (is_white.end(),
++                             rhs.is_white.begin(),
++                             rhs.is_white.end());
++            if (rhs.max_white_distance &gt; max_white_distance)
++                max_white_distance = rhs.max_white_distance;
++
++            return *this;
++        }
++
++        class Less
++        {
++        public:
++            bool operator () (const Wedge &amp; lhs, const Wedge &amp; rhs) const
++            {
++                return (lhs.pixel_count &lt; rhs.pixel_count);
++            }
++        };
++
++        void trim_to_edge ();
++    };
++
++    typedef std::vector &lt;Wedge&gt; WedgeVec;
++
++    struct WedgePair
++    {
++        float angle;
++        uint32_t pixel_count;
++
++        WedgePair (float angle, uint32_t pixel_count)
++            : angle (angle),
++              pixel_count (pixel_count)
++        {
++        }
++
++        class Less
++        {
++        public:
++            bool operator () (const WedgePair &amp; lhs,
++                              const WedgePair &amp; rhs) const
++            {
++                return (lhs.pixel_count &lt; rhs.pixel_count);
++            }
++        };
++    };
++
++    typedef std::vector &lt;WedgePair&gt; WedgePairVec;
++
++public:
++    uint16_t minx, maxx; // bounding box x
++    uint16_t miny, maxy; // bounding box y
++    uint32_t area;
++    float centroidX, centroidY;
++
++private:
++    uint32_t sumOfXs;
++    uint32_t sumOfYs;
++    uint32_t num_wedges;
++    // doubles used to minimize error accumulation when generating wedges
++    double wedge_arc;
++    double half_wedge_arc;
++
++    PixelLocVec outline;
++    PixelLocVec white_pixels;
++    WedgeVec wedges;
++    WedgePairVec wedge_pairs;
++
++public:
++    Particle ()
++    {
++        init();
++    }
++
++private:
++    void init ()
++    {
++        minx = 0xffff;
++        maxx = 0;
++        miny = 0xffff;
++        maxy = 0;
++        area = 0;
++        centroidX = -1;
++        centroidY = -1;
++        sumOfXs = 0;
++        sumOfYs = 0;
++        num_wedges = 0;
++        wedge_arc = -1;
++        half_wedge_arc = -1;
++        outline.clear();
++        white_pixels.clear();
++        wedges.clear();
++        wedge_pairs.clear();
++    }
++
++    void init_wedges ();
++
++    void addWhitePixel (uint16_t x, uint16_t y)
++    {
++        ++area;
++        sumOfXs += x;
++        if (x &lt; minx)
++            minx = x;
++        if (x &gt; maxx)
++            maxx = x;
++        sumOfYs += y;
++        if (y &lt; miny)
++            miny = y;
++        if (y &gt; maxy)
++            maxy = y;
++        white_pixels.push_back (PixelLoc (x, y));
++    }
++
++    void computeCentroid ()
++    {
++        if (!area)
++        {
++            fprintf (stderr, &quot;Can't compute centroid of zero-pixel particle!\n&quot;);
++            centroidX = 0;
++            centroidY = 0;
++            return;
++        }
++        centroidX = float (sumOfXs) / area;
++        centroidY = float (sumOfYs) / area;
++    }
++
++public:
++    const WedgePair &amp; getMinDim () const
++    {
++        WedgePairVec::const_iterator wit = wedge_pairs.begin();
++        while (!wit-&gt;pixel_count)
++            ++wit;
++        return *wit;
++    }
++
++    const WedgePair &amp; getMaxDim () const
++    {
++        WedgePairVec::const_iterator wit = wedge_pairs.end();
++        return *--wit;
++    }
++
++    uint32_t getMinDimCount () const
++    {
++        return getMinDim().pixel_count;
++    }
++
++    uint32_t getMaxDimCount () const
++    {
++        return getMaxDim().pixel_count;
++    }
++
++    float getMinDimAngle () const
++    {
++        return getMinDim().angle;
++    }
++
++    float getMaxDimAngle () const
++    {
++        return getMaxDim().angle;
++    }
++
++    friend class ImageTool;
++};
++
++#else // ! OLD_PARTICLE_WEDGE_SCHEME
++
++class Particle
++{
++    struct Wedge
++    {
++        float max_white_distance;
++        float angle_for_mwd;
++        float min_angle;
++        float center_angle;
++        float max_angle;
++        float percentile;
++
++        Wedge (float angle, float half_arc)
++            : max_white_distance (.5), // minimum width is 1
++              angle_for_mwd (angle),
++              min_angle (angle - half_arc),
++              center_angle (angle),
++              max_angle (angle + half_arc),
++              percentile (-1)
++        {
++        }
++
++        void add_pixel (uint16_t x, uint16_t y, float distance, float angle)
++        {
++            if (max_white_distance &lt; distance)
++            {
++                max_white_distance = distance;
++                angle_for_mwd = angle;
++            }
++        }
++
++        Wedge &amp; operator += (const Wedge &amp; rhs)
++        {
++            if (rhs.max_white_distance &gt; max_white_distance)
++            {
++                max_white_distance = rhs.max_white_distance;
++                angle_for_mwd = rhs.angle_for_mwd;
++            }
++
++            return *this;
++        }
++
++        class Less
++        {
++        public:
++            bool operator () (const Wedge &amp; lhs, const Wedge &amp; rhs) const
++            {
++                return (lhs.max_white_distance &lt; rhs.max_white_distance);
++            }
++        };
++    };
++
++    typedef std::vector &lt;Wedge&gt; WedgeVec;
++
++    struct WedgePair
++    {
++        float angle;
++        float total_distance;
++
++        WedgePair (const Wedge &amp; w1, const Wedge &amp; w2)
++            : total_distance (w1.max_white_distance + w2.max_white_distance)
++        {
++            float a1 = w1.angle_for_mwd;
++            float a2 = w2.angle_for_mwd;
++            if (a1 &gt; a2)
++                std::swap (a1, a2);
++            a1 += M_PI;
++            float avg = (a1 + a2) / 2;
++            if (avg &lt; 0)
++                avg += M_PI;
++            angle = avg;
++        }
++
++        class Less
++        {
++        public:
++            bool operator () (const WedgePair &amp; lhs,
++                              const WedgePair &amp; rhs) const
++            {
++                return (lhs.total_distance &lt; rhs.total_distance);
++            }
++        };
++    };
++
++    typedef std::vector &lt;WedgePair&gt; WedgePairVec;
++
++public:
++    uint16_t minx, maxx; // bounding box x
++    uint16_t miny, maxy; // bounding box y
++    uint32_t area;
++    float centroidX, centroidY;
++
++    struct BestFit
++    {
++        float length;
++        float length_angle;
++        float width;
++        float width_angle;
++
++        BestFit ()
++            : length (-1),
++              length_angle (0),
++              width (-1),
++              width_angle (0)
++        {
++        }
++    };
++
++private:
++    uint32_t debug;
++    uint32_t sumOfXs;
++    uint32_t sumOfYs;
++    uint32_t num_wedges;
++    // doubles used to minimize error accumulation when generating wedges
++    double wedge_interval; // 2*PI / num_wedges
++    double wedge_arc;      // is &gt; wedge_interval if overlapped with neighbors
++    double half_wedge_arc;
++    BestFit best_fit;
++
++    PixelLocVec outline;
++    PixelLocVec white_pixels;
++    WedgeVec wedges;
++    WedgePairVec wedge_pairs;
++
++public:
++    Particle ()
++    {
++        init (debug);
++    }
++
++private:
++    void init (uint32_t a_debug)
++    {
++        minx = 0xffff;
++        maxx = 0;
++        miny = 0xffff;
++        maxy = 0;
++        area = 0;
++        centroidX = -1;
++        centroidY = -1;
++        sumOfXs = 0;
++        sumOfYs = 0;
++        num_wedges = 0;
++        wedge_arc = -1;
++        wedge_interval = -1;
++        half_wedge_arc = -1;
++        best_fit = BestFit();
++        outline.clear();
++        white_pixels.clear();
++        wedges.clear();
++        wedge_pairs.clear();
++        debug = a_debug;
++    }
++
++    void init_wedges ();
++
++    void addWhitePixel (uint16_t x, uint16_t y)
++    {
++        ++area;
++        sumOfXs += x;
++        if (x &lt; minx)
++            minx = x;
++        if (x &gt; maxx)
++            maxx = x;
++        sumOfYs += y;
++        if (y &lt; miny)
++            miny = y;
++        if (y &gt; maxy)
++            maxy = y;
++        white_pixels.push_back (PixelLoc (x, y));
++    }
++
++    void computeCentroid ()
++    {
++        if (!area)
++        {
++            fprintf (stderr, &quot;Can't compute centroid of zero-pixel particle!\n&quot;);
++            centroidX = 0;
++            centroidY = 0;
++            return;
++        }
++        centroidX = float (sumOfXs) / area;
++        centroidY = float (sumOfYs) / area;
++    }
++
++public:
++    const BestFit &amp; getBestFit () const
++    {
++        return best_fit;
++    }
++
++    const WedgePair &amp; getMinDist () const
++    {
++        WedgePairVec::const_iterator wit = wedge_pairs.begin();
++#if 0
++        while (!wit-&gt;total_distance)
++            ++wit;
++#endif
++        return *wit;
++    }
++
++    const WedgePair &amp; getMaxDist () const
++    {
++        WedgePairVec::const_iterator wit = wedge_pairs.end();
++        return *--wit;
++    }
++
++    float getMinDistance () const
++    {
++        return getMinDist().total_distance;
++    }
++
++    float getMaxDistance () const
++    {
++        return getMaxDist().total_distance;
++    }
++
++    float getMinDistAngle () const
++    {
++        return getMinDist().angle;
++    }
++
++    float getMaxDistAngle () const
++    {
++        return getMaxDist().angle;
++    }
++
++    friend class ImageTool;
++};
++
++#endif // ? OLD_PARTICLE_WEDGE_SCHEME
++
+ struct PixelOffset
+ {
+     int8_t x;
+@@ -163,11 +636,9 @@
+     ADMImage * my_outImage;
+     uint32_t my_minArea;
+     uint32_t my_maxArea;
+-    uint32_t my_particleArea;
+-    float my_particleCentroidX;
+-    float my_particleCentroidY;
++    uint32_t my_flags;
+     uint32_t debug;
+-    PixelList pixelList;
++    Particle my_particle;
+ 
+     enum TracingDirection
+     {
+@@ -194,7 +665,14 @@
+     static PixelOffset aheadOffset [DIRECTION_COUNT];
+ 
+ public:
+-    ImageTool (uint8_t * pixels, uint32_t w, uint32_t h, ADMImage * outImage = 0)
++    enum Flags
++    {
++        FLAG_NONE = 0,
++        FLAG_DO_SHAPE = 1,
++    };
++
++    ImageTool (uint8_t * pixels, uint32_t w, uint32_t h, ADMImage * outImage = 0,
++               uint32_t flags = 0)
+         : my_pixels (pixels),
+           my_w (w),
+           my_h (h),
+@@ -203,9 +681,7 @@
+           my_top_margin (0),
+           my_bottom_margin (h),
+           my_outImage (outImage),
+-          my_particleArea (0),
+-          my_particleCentroidX (0),
+-          my_particleCentroidY (0),
++          my_flags (flags),
+           debug (0)
+     {
+     }
+@@ -306,25 +782,41 @@
+         return my_h;
+     }
+ 
++#if 0
+     uint32_t particleArea () const
+     {
+-        return my_particleArea;
++        return my_particle.area;
+     }
+ 
+     float particleCentroidX () const
+     {
+-        return my_particleCentroidX;
++        return my_particle.centroidX;
+     }
+ 
+     float particleCentroidY () const
+     {
+-        return my_particleCentroidY;
++        return my_particle.centroidY;
+     }
++#endif
+ 
++    const Particle &amp; getParticle () const
++    {
++        return my_particle;
++    }
++
+     uint8_t autoOutline (uint32_t x, uint32_t y);
+ 
+-    void showStuff () const;
++    enum ShowStuff
++    {
++        SHOW_NOTHING = 0,
++        SHOW_INPUT          = 0x0001,
++        SHOW_OUTLINE        = 0x0002,
++        SHOW_WEDGE_PIXELS   = 0x0004,
++        SHIFT_PAST_SHOW_FLAGS = 4, // leave room for one more for now
++    };
+ 
++    void showStuff (ShowStuff what) const;
++
+     // implementation is in ADM_vidSwissArmyKnife.cpp - nothing else uses it
+     // (currently).
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidSwissArmyKnife.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidSwissArmyKnife.cpp	2008-01-13 09:46:19 UTC (rev 3741)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidSwissArmyKnife.cpp	2008-01-13 10:05:24 UTC (rev 3742)
+@@ -93,14 +93,13 @@
+ 
+ BUILD_CREATE(swissarmyknife_create,ADMVideoSwissArmyKnife);
+ 
+-ADMVideoSwissArmyKnife::ADMVideoSwissArmyKnife(AVDMGenericVideoStream *in,CONFcouple *couples)
+-			
++ADMVideoSwissArmyKnife::ADMVideoSwissArmyKnife (AVDMGenericVideoStream *in, CONFcouple *couples)
+ {
+     _in = in;
+-    memcpy(&amp;_info, in-&gt;getInfo(), sizeof(_info));
++    memcpy (&amp;_info, in-&gt;getInfo(), sizeof(_info));
+     _info.encoding = 1;
+-    _uncompressed = new ADMImage(_in-&gt;getInfo()-&gt;width, _in-&gt;getInfo()-&gt;height);
+-    ADM_assert(_uncompressed);
++    _uncompressed = new ADMImage (_in-&gt;getInfo()-&gt;width, _in-&gt;getInfo()-&gt;height);
++    ADM_assert (_uncompressed);
+     _param = new SWISSARMYKNIFE_PARAM;
+ 
+     if (couples)
+@@ -206,8 +205,8 @@
+ uint8_t	ADMVideoSwissArmyKnife::getCoupledConf (CONFcouple **couples)
+ {
+ 
+-    ADM_assert(_param);
+-    *couples = new CONFcouple(swissArmyKnifeParam.nb);
++    ADM_assert (_param);
++    *couples = new CONFcouple (swissArmyKnifeParam.nb);
+ 
+     // This is a hack to work around the fact that the ctor &amp; dtor get called
+     // too often.  The right solution would be to arrange for the filter
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidSwissArmyKnife.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidSwissArmyKnife.h	2008-01-13 09:46:19 UTC (rev 3741)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidSwissArmyKnife.h	2008-01-13 10:05:24 UTC (rev 3742)
+@@ -151,11 +151,11 @@
+ 
+         ~PersistentInfo ()
+         {
+-            delete image_int;
+-            delete image_float;
+-            delete bg;
+-            delete histogram_input_data;
+-            delete histogram_output_data;
++            delete [] image_int;
++            delete [] image_float;
++            delete [] bg;
++            delete [] histogram_input_data;
++            delete [] histogram_output_data;
+         }
+     };
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/CMakeLists.txt	2008-01-13 09:46:19 UTC (rev 3741)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/CMakeLists.txt	2008-01-13 10:05:24 UTC (rev 3742)
+@@ -42,6 +42,7 @@
+ ADM_vidSwissArmyKnife.cpp
+ ADM_vidThreshold.cpp
+ ADM_vidParticle.cpp
++ADM_vidEraser.cpp
+ 
+ )
+ ADD_LIBRARY(ADM_videoFilter STATIC ${ADM_videoFilter_SRCS})
+@@ -52,4 +53,4 @@
+ 
+ IF (ADM_OS_APPLE AND ADM_DEBUG)
+ 	SET_SOURCE_FILES_PROPERTIES(ADM_vidYadif_asm.c PROPERTIES COMPILE_FLAGS &quot;-O2&quot;)
+-ENDIF (ADM_OS_APPLE AND ADM_DEBUG)
+\ No newline at end of file
++ENDIF (ADM_OS_APPLE AND ADM_DEBUG)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/Makefile.am
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/Makefile.am	2008-01-13 09:46:19 UTC (rev 3741)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/Makefile.am	2008-01-13 10:05:24 UTC (rev 3742)
+@@ -1,4 +1,4 @@
+-####### kdevelop will overwrite this part!!! (begin)##########
++####### generated by kdevelop long, long ago; now maintained by hand
+ noinst_LIBRARIES = libADM_videoFilter.a
+ 
+ ## INCLUDES were found outside kdevelop specific part
+@@ -80,10 +80,9 @@
+  ADM_vidComputeAverage.cpp \
+  ADM_vidSwissArmyKnife.cpp \
+  ADM_vidThreshold.cpp \
+- ADM_vidParticle.cpp       
+-			
++ ADM_vidParticle.cpp       \
++ ADM_vidEraser.cpp
+ 
+ 
+-####### kdevelop will overwrite this part!!! (end)############
+ INCLUDES = $(all_includes) -I../ADM_libraries -I../ADM_libraries/ADM_utilities -I../ADM_libraries/ADM_lavutil \
+ 			 $(FREETYPE_CFLAGS) $(ALTIVEC_SWITCH) -I../ADM_userInterfaces/ADM_commonUI -I../ADM_inputs -I../ADM_video
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001009.html">[Avidemux-svn-commit] r3741 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+	<LI>Next message: <A HREF="001011.html">[Avidemux-svn-commit] r3743 -	branches/avidemux_2.4_branch/avidemux/ADM_filter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1010">[ date ]</a>
+              <a href="thread.html#1010">[ thread ]</a>
+              <a href="subject.html#1010">[ subject ]</a>
+              <a href="author.html#1010">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

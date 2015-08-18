@@ -1,0 +1,145 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3882 - in	branches/avidemux_2.5_branch_mean_merged/avidemux:	ADM_audiocodec ADM_core/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3882%20-%20in%0A%09branches/avidemux_2.5_branch_mean_merged/avidemux%3A%0A%09ADM_audiocodec%20ADM_core/src&In-Reply-To=%3C200803121855.m2CItUbf002993%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001144.html">
+   <LINK REL="Next"  HREF="001146.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3882 - in	branches/avidemux_2.5_branch_mean_merged/avidemux:	ADM_audiocodec ADM_core/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3882%20-%20in%0A%09branches/avidemux_2.5_branch_mean_merged/avidemux%3A%0A%09ADM_audiocodec%20ADM_core/src&In-Reply-To=%3C200803121855.m2CItUbf002993%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3882 - in	branches/avidemux_2.5_branch_mean_merged/avidemux:	ADM_audiocodec ADM_core/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Mar 12 19:55:30 CET 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001144.html">[Avidemux-svn-commit] r3880 - in	branches/avidemux_2.5_branch_mean_merged:	avidemux/ADM_libraries/ADM_lavformat	avidemux/plugins/ADM_audiodecoder/ADM_ad_ac3	avidemux/plugins/ADM_audiodecoder/ADM_ad_ac3/ADM_liba52 cmake
+</A></li>
+        <LI>Next message: <A HREF="001146.html">[Avidemux-svn-commit] r3883 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1145">[ date ]</a>
+              <a href="thread.html#1145">[ thread ]</a>
+              <a href="subject.html#1145">[ subject ]</a>
+              <a href="author.html#1145">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-03-12 19:55:29 +0100 (Wed, 12 Mar 2008)
+New Revision: 3882
+
+Modified:
+   branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_pluginLoad.cpp
+   branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_core/src/ADM_fileio.cpp
+Log:
+[Patch] Sync with r3870
+
+
+Modified: branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_pluginLoad.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_pluginLoad.cpp	2008-03-12 18:55:28 UTC (rev 3881)
++++ branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_pluginLoad.cpp	2008-03-12 18:55:29 UTC (rev 3882)
+@@ -94,24 +94,33 @@
+ uint8_t ADM_ad_loadPlugins(const char *path)
+ {
+ #define MAX_EXTERNAL_FILTER 50
+-	  char *files[MAX_EXTERNAL_FILTER];
+-	  uint32_t nbFile;
+-	  
+-	  
+-	  memset(files,0,sizeof(char *)*MAX_EXTERNAL_FILTER);
+-	  printf(&quot;[ADM_ad_plugin] Scanning directory %s\n&quot;,path);
+-	  if(!buildDirectoryContent(&amp;nbFile,path,
+-			  files,MAX_EXTERNAL_FILTER,&quot;so&quot;))
+-	  {
+-		  printf(&quot;[AudioPlugin] Cannot Parse plugin&quot;);
+-		  return 0;
+-	  }
+-	  for(int i=0;i&lt;nbFile;i++)
+-	   {
+-	     tryLoadingAudioPlugin(files[i]);
+-	   }
+-	   printf(&quot;[ADM_ad_plugin] Scanning done,found %d codec \n&quot;,ADM_audioPlugins.size());
+-	   return 1;
++
++#ifdef __WIN32
++#define SHARED_LIB_EXT &quot;dll&quot;
++#elif defined(__APPLE__)
++#define SHARED_LIB_EXT &quot;dylib&quot;
++#else
++#define SHARED_LIB_EXT &quot;so&quot;
++#endif
++
++	char *files[MAX_EXTERNAL_FILTER];
++	uint32_t nbFile;
++
++	memset(files,0,sizeof(char *)*MAX_EXTERNAL_FILTER);
++	printf(&quot;[ADM_ad_plugin] Scanning directory %s\n&quot;,path);
++
++	if(!buildDirectoryContent(&amp;nbFile, path, files, MAX_EXTERNAL_FILTER, SHARED_LIB_EXT))
++	{
++		printf(&quot;[ADM_ad_plugin] Cannot parse plugin&quot;);
++		return 0;
++	}
++
++	for(int i=0;i&lt;nbFile;i++)
++		tryLoadingAudioPlugin(files[i]);
++
++	printf(&quot;[ADM_ad_plugin] Scanning done, found %d codec\n&quot;, ADM_audioPlugins.size());
++
++	return 1;
+ }
+ /**
+  * 	\fn ADM_ad_searchCodec
+
+Modified: branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_core/src/ADM_fileio.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_core/src/ADM_fileio.cpp	2008-03-12 18:55:28 UTC (rev 3881)
++++ branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_core/src/ADM_fileio.cpp	2008-03-12 18:55:29 UTC (rev 3882)
+@@ -21,6 +21,10 @@
+ #include &lt;sys/stat.h&gt;
+ #include &lt;unistd.h&gt;
+ 
++#ifdef __WIN32
++#include &lt;windows.h&gt;
++#endif
++
+ #ifdef __MINGW32__
+ #include &lt;glib.h&gt;
+ #endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001144.html">[Avidemux-svn-commit] r3880 - in	branches/avidemux_2.5_branch_mean_merged:	avidemux/ADM_libraries/ADM_lavformat	avidemux/plugins/ADM_audiodecoder/ADM_ad_ac3	avidemux/plugins/ADM_audiodecoder/ADM_ad_ac3/ADM_liba52 cmake
+</A></li>
+	<LI>Next message: <A HREF="001146.html">[Avidemux-svn-commit] r3883 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1145">[ date ]</a>
+              <a href="thread.html#1145">[ thread ]</a>
+              <a href="subject.html#1145">[ subject ]</a>
+              <a href="author.html#1145">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

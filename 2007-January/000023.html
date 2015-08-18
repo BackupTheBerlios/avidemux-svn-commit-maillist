@@ -1,0 +1,193 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2695 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_inputs/ADM_openDML
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2695%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%0A%09ADM_inputs/ADM_openDML&In-Reply-To=%3C200701082019.l08KJFFg006387%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000022.html">
+   <LINK REL="Next"  HREF="000024.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2695 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_inputs/ADM_openDML</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2695%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%0A%09ADM_inputs/ADM_openDML&In-Reply-To=%3C200701082019.l08KJFFg006387%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2695 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_inputs/ADM_openDML">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Jan  8 21:19:15 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000022.html">[Avidemux-svn-commit] r2694 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+        <LI>Next message: <A HREF="000024.html">[Avidemux-svn-commit] r2696 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces:	ADM_NONE ADM_NONE/ADM_dialogFactory ADM_QT4	ADM_QT4/ADM_dialogFactory
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#23">[ date ]</a>
+              <a href="thread.html#23">[ thread ]</a>
+              <a href="subject.html#23">[ subject ]</a>
+              <a href="author.html#23">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-01-08 21:19:14 +0100 (Mon, 08 Jan 2007)
+New Revision: 2695
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_openDML/ADM_openDML.cpp
+Log:
+fix flags issues
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2007-01-08 19:35:28 UTC (rev 2694)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2007-01-08 20:19:14 UTC (rev 2695)
+@@ -71,9 +71,7 @@
+ 
+ uint8_t decoderFF::clonePic (AVFrame * src, ADMImage * out)
+ {
+-  uint32_t
+-    u,
+-    v;
++  uint32_t    u,v;
+   out-&gt;_planes[0] = (uint8_t *) src-&gt;data[0];
+   out-&gt;_planeStride[0] = src-&gt;linesize[0];
+   if (_swapUV)
+@@ -109,7 +107,7 @@
+       out-&gt;_qSize = out-&gt;_qStride = 0;
+       out-&gt;quant = NULL;
+     }
+-
++  out-&gt;demuxerFrameno=(uint32_t) (uint64_t)(src-&gt;opaque);
+ }
+ void
+ decoderFF::decoderMultiThread (void)
+@@ -334,7 +332,9 @@
+       }
+       return 1;
+     }
+-
++  
++  _frame.opaque=(void *)in-&gt;demuxerFrameNo;
++  
+   ret = avcodec_decode_video (_context, &amp;_frame, &amp;got_picture, in-&gt;data, in-&gt;dataLength);
+   out-&gt;_qStride = 0;		//Default = no quant
+   if (0 &gt; ret &amp;&amp; !_context-&gt;hurry_up)
+@@ -417,10 +417,15 @@
+       printf (&quot;\n Unhandled colorspace:%d\n&quot;, _context-&gt;pix_fmt);
+       return 0;
+     }
+-  clonePic (&amp;_frame, out);
++    clonePic (&amp;_frame, out);
++    printf(&quot;Frame bitstream order : %u, display order %u Incoming :%u outgoing :%u\n&quot;,_frame.coded_picture_number,_frame.display_picture_number,
++         in-&gt;demuxerFrameNo,out-&gt;demuxerFrameno);
++    printf(&quot;in flags :%x out flags :%x\n&quot;,in-&gt;flags, out-&gt;flags);
++  
+   return 1;
+ }
+ 
++#define LOWDELAY() _context-&gt;flags |= CODEC_FLAG_LOW_DELAY
+ 
+ 
+ decoderFFDiv3::decoderFFDiv3 (uint32_t w, uint32_t h):decoderFF (w, h)
+@@ -431,8 +436,7 @@
+ decoderFFMpeg4VopPacked::decoderFFMpeg4VopPacked (uint32_t w, uint32_t h):decoderFF (w,
+ 	   h)
+ {
+-// force low delay as avidemux don't handle B-frames
+-
++/* In that case, we cannot use lowdelay...*/
+   _refCopy = 1;			// YUV420 only
+   _allowNull = 1;
+   decoderMultiThread ();
+@@ -442,8 +446,9 @@
+ 	   h)
+ {
+ // force low delay as avidemux don't handle B-frames
++  LOWDELAY();
+   printf (&quot;Using %d bytes of extradata for MPEG4 decoder\n&quot;, l);
+-  _context-&gt;flags |= CODEC_FLAG_LOW_DELAY;
++  
+   _refCopy = 1;			// YUV420 only
+   _context-&gt;extradata = (void *) d;
+   _context-&gt;extradata_size = (int) l;
+@@ -470,7 +475,7 @@
+ {
+   int
+     got_picture = 0;
+-  _context-&gt;flags |= CODEC_FLAG_LOW_DELAY;
++  LOWDELAY();
+   _refCopy = 1;			// YUV420 only
+   decoderMultiThread ();
+   WRAP_Open (CODEC_ID_MPEG2VIDEO);
+@@ -481,7 +486,7 @@
+   int
+     got_picture = 0;
+ 
+-  _context-&gt;flags |= CODEC_FLAG_LOW_DELAY;
++  LOWDELAY();
+   _context-&gt;extradata = (void *) extraData;
+   _context-&gt;extradata_size = (int) extraLen;
+   WRAP_Open (CODEC_ID_SVQ3);
+@@ -515,7 +520,7 @@
+   _context-&gt;extradata = (void *) d;
+   _context-&gt;extradata_size = (int) l;
+   if(lowdelay)
+-    _context-&gt;flags |= CODEC_FLAG_LOW_DELAY;
++    LOWDELAY();
+   printf (&quot;Initializing lavcodec H264 decoder with %d extradata\n&quot;, l);
+   WRAP_Open (CODEC_ID_H264);
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_openDML/ADM_openDML.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_openDML/ADM_openDML.cpp	2007-01-08 19:35:28 UTC (rev 2694)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_openDML/ADM_openDML.cpp	2007-01-08 20:19:14 UTC (rev 2695)
+@@ -97,13 +97,14 @@
+ // 	if(_recHack)
+ // 	{
+ // 		offset=4+4+4;
+-// 	}
++// 	} odmlIndex
+ // 	
+ 	
+ 	
+  	fseeko(_fd,offset,SEEK_SET);
+  	fread(img-&gt;data, _idx[framenum].size, 1, _fd);
+   	img-&gt;dataLength=_idx[framenum].size;
++        img-&gt;flags=_idx[framenum].intra;
+ 	aprintf(&quot;Size: %lu\n&quot;,_idx[framenum].size);
+ //	if(offset &amp; 1) printf(&quot;odd!\n&quot;);
+  	return 1;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000022.html">[Avidemux-svn-commit] r2694 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+	<LI>Next message: <A HREF="000024.html">[Avidemux-svn-commit] r2696 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces:	ADM_NONE ADM_NONE/ADM_dialogFactory ADM_QT4	ADM_QT4/ADM_dialogFactory
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#23">[ date ]</a>
+              <a href="thread.html#23">[ thread ]</a>
+              <a href="subject.html#23">[ subject ]</a>
+              <a href="author.html#23">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

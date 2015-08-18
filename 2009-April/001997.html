@@ -1,0 +1,377 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4770 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4770%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904301707.n3UH74IK011047%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001996.html">
+   <LINK REL="Next"  HREF="001998.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4770 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4770%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904301707.n3UH74IK011047%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4770 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Apr 30 19:07:04 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001996.html">[Avidemux-svn-commit] r4769 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="001998.html">[Avidemux-svn-commit] r4771 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_editor plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1997">[ date ]</a>
+              <a href="thread.html#1997">[ thread ]</a>
+              <a href="subject.html#1997">[ subject ]</a>
+              <a href="author.html#1997">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-04-30 19:07:02 +0200 (Thu, 30 Apr 2009)
+New Revision: 4770
+
+Modified:
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+Log:
+[Plugin/Ts] Change way of indexing
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-28 05:38:10 UTC (rev 4769)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-30 17:07:02 UTC (rev 4770)
+@@ -78,8 +78,8 @@
+ }indexerState;
+ typedef struct
+ {
+-    uint64_t pts,dts,startAt;
+-    uint32_t offset;
++    uint64_t pts,dts; //startAt;
++    //uint32_t offset;
+     uint32_t frameType;
+     uint32_t nbPics;
+     indexerState state;
+@@ -106,6 +106,10 @@
+ class TsIndexer
+ {
+ protected:
++        uint32_t        currentFrameType;
++        uint32_t        beginConsuming;
++        indexerState    currentIndexState;
++protected:
+         FILE *index;
+         tsPacketLinearTracker  *pkt;
+         listOfTsAudioTracks    *audioTracks;
+@@ -118,7 +122,7 @@
+         bool    writeVideo(PSVideo *video,ADM_TS_TRACK_TYPE trkType);
+         bool    writeAudio(void);
+         bool    writeSystem(const char *filename,bool append);
+-        bool    Mark(indexerData *data,dmxPacketInfo *s,markType update,uint32_t formatOffset);
++        bool    Mark(indexerData *data,dmxPacketInfo *s,uint32_t overRead);
+ 
+ };
+ /**
+@@ -210,7 +214,7 @@
+ indexerData  data;    
+ uint64_t fullSize;
+ dmxPacketInfo info;
+-
++#if 0
+     printf(&quot;Starting H264 indexer\n&quot;);
+     if(!videoTrac) return false;
+     if(videoTrac[0].trackType!=ADM_TS_H264)
+@@ -280,13 +284,13 @@
+                       uint8_t buffer[60] ; // should be enough
+                       uint32_t xA,xR;
+                       // Get info
+-                      pkt-&gt;read(60,buffer);
+-                      if (extractSPSInfo(buffer, 60, &amp;video.w,&amp;video.h,&amp;video.fps,&amp;xA,&amp;xR))
++                      pkt-&gt;read(16,buffer);
++                      if (extractSPSInfo(buffer, 16, &amp;video.w,&amp;video.h,&amp;video.fps,&amp;xA,&amp;xR))
+                       {
+ 						  
+                           printf(&quot;[TsIndexer] Found video %&quot;LU&quot;x%&quot;LU&quot;, fps=%&quot;LU&quot;\n&quot;,video.w,video.h,video.fps);
+                           seq_found=1;
+-                          Mark(&amp;data,&amp;info,markStart,4);
++                          Mark(&amp;data,&amp;info,markStart,4+16);
+                           data.state=idx_startAtGopOrSeq;
+                           writeVideo(&amp;video,ADM_TS_H264);
+                           writeAudio();
+@@ -383,8 +387,10 @@
+         audioTracks=NULL;
+         delete pkt;
+         pkt=NULL;
++#endif
+         return true; 
+ }
++//***********************************************************************
+ /**
+     \fn runMpeg2
+ */  
+@@ -408,6 +414,8 @@
+     video.pid=videoTrac[0].trackPid;
+ 
+     memset(&amp;data,0,sizeof(data));
++
++
+     char indexName[strlen(file)+5];
+     sprintf(indexName,&quot;%s.idx&quot;,file);
+     index=qfopen(indexName,&quot;wt&quot;);
+@@ -433,16 +441,16 @@
+         if(!pkt-&gt;stillOk()) break;
+         uint8_t startCode=pkt-&gt;readi8();
+ 
+-        pkt-&gt;getInfo(&amp;info);
+-        info.offset-=4;
+ 
+           switch(startCode)
+                   {
+                   case 0xB3: // sequence start
+-                          Mark(&amp;data,&amp;info,markStart,2);
+-                          data.state=idx_startAtGopOrSeq;
+                           if(seq_found)
+                           {
++                                  pkt-&gt;getInfo(&amp;info);
++                                  data.frameType=1;
++                                  Mark(&amp;data,&amp;info,4);
++                                  data.state=idx_startAtGopOrSeq;
+                                   pkt-&gt;forward(8);  // Ignore
+                                   continue;
+                           }
+@@ -454,19 +462,24 @@
+                           video.h= (((val&gt;&gt;8) &amp; 0xfff)+15)&amp; ~15;
+ 
+                           video.ar = (val &gt;&gt; 4) &amp; 0xf;
+-
+-                          
+                           video.fps= FPS[val &amp; 0xf];
+                           pkt-&gt;forward(4);
+                           writeVideo(&amp;video,ADM_TS_MPEG2);
+                           writeAudio();
+-                          //pkt-&gt;resetStats();
+                           qfprintf(index,&quot;[Data]&quot;);
++                          pkt-&gt;getInfo(&amp;info);
++                          data.frameType=1;
++                          Mark(&amp;data,&amp;info,4+8);
++                          data.state=idx_startAtGopOrSeq;
++                          continue;
++
+                           break;
+                   case 0xb8: // GOP
+                           // Update ui
+                             {
+-                                float pos=data.startAt;
++                                uint64_t p;
++                                p=pkt-&gt;getPos();
++                                float pos=p;
+                                 pos=pos/(float)fullSize;
+                                 pos*=100;
+                                 ui-&gt;update( (uint32_t)pos);
+@@ -478,8 +491,8 @@
+                           {         
+                                   continue;;
+                           }
+-                          
+-                          Mark(&amp;data,&amp;info,markStart,2);
++                          pkt-&gt;getInfo(&amp;info);
++                          Mark(&amp;data,&amp;info,4);
+                           data.state=idx_startAtGopOrSeq;
+                           break;
+                   case 0x00 : // picture
+@@ -505,12 +518,17 @@
+                           
+                           if(data.state==idx_startAtGopOrSeq) 
+                           {
+-                                update=markEnd;
+-                          }
+-                          data.frameType=type;
+-                          Mark(&amp;data,&amp;info,update,2);
+-                          data.state=idx_startAtImage;
+-                          data.nbPics++;
++                                  currentFrameType=type;
++                          }else
++                            {
++                                  data.frameType=type;
++                                  pkt-&gt;getInfo(&amp;info);
++                                  Mark(&amp;data,&amp;info,4+2);
++
++
++                            }
++                            data.state=idx_startAtImage;
++                            data.nbPics++;
+                         }
+                           break;
+                   default:
+@@ -519,7 +537,7 @@
+       }
+     
+         printf(&quot;\n&quot;);
+-        Mark(&amp;data,&amp;info,markStart,2);
++        Mark(&amp;data,&amp;info,2);
+         qfprintf(index,&quot;\n[End]\n&quot;);
+         qfclose(index);
+         index=NULL;
+@@ -537,36 +555,26 @@
+     If the beginning is not a pic, but a gop start for example, we had to add/remove those.
+ 
+ */
+-bool  TsIndexer::Mark(indexerData *data,dmxPacketInfo *info,markType update,uint32_t formatOffset)
++bool  TsIndexer::Mark(indexerData *data,dmxPacketInfo *info,uint32_t overRead)
+ {
+-    int offset=data-&gt;nextOffset;
+-    data-&gt;nextOffset=0;
+-    
+-
+- 
+-     if( update==markStart)
+-     {
+-                offset=formatOffset;
+-     }
+-    if(update==markStart || update==markNow)
+-    {
++      
++        uint32_t consumed=pkt-&gt;getConsumed()-overRead;
+         if(data-&gt;nbPics)
+         {
+-            // Write previous image data (size) : TODO
+-            qfprintf(index,&quot;:%06&quot;LX&quot; &quot;,data-&gt;pkt-&gt;getConsumed()+offset); // Size
++            qfprintf(index,&quot; %c:%06&quot;LX,Type[currentFrameType],consumed-beginConsuming);
++            beginConsuming=consumed;
++        }else
++        {
++            beginConsuming=overRead;
++            pkt-&gt;setConsumed(beginConsuming);
+         }
+-        else data-&gt;pkt-&gt;getConsumed();
+-    }
+-    if(update==markEnd || update==markNow)
+-    {
++            
++        // If audio, also dump audio
+         if(data-&gt;frameType==1)
+         {
+-
+-            // If audio, also dump audio
+             if(audioTracks)
+             {
+-
+-                qfprintf(index,&quot;\nAudio bf:%08&quot;LLX&quot; &quot;,data-&gt;startAt);
++                qfprintf(index,&quot;\nAudio bf:%08&quot;LLX&quot; &quot;,info-&gt;startAt);
+                 packetTSStats *s;
+                 uint32_t na;
+                 pkt-&gt;getStats(&amp;na,&amp;s);      
+@@ -576,26 +584,14 @@
+                     packetTSStats *current=s+i;
+                     qfprintf(index,&quot;Pes:%x:%08&quot;LLX&quot;:%&quot;LD&quot;:%&quot;LLD&quot; &quot;,
+                                 current-&gt;pid,current-&gt;startAt,current-&gt;startSize,current-&gt;startDts);
+-                }
+-                
++                }                
+             }
+             // start a new line
+-            qfprintf(index,&quot;\nVideo at:%08&quot;LLX&quot;:%04&quot;LX&quot; Pts:%08&quot;LLD&quot;:%08&quot;LLD&quot; &quot;,data-&gt;startAt,data-&gt;offset,info-&gt;pts,info-&gt;dts);
+-            data-&gt;nextOffset=-formatOffset;
++            qfprintf(index,&quot;\nVideo at:%08&quot;LLX&quot;:%04&quot;LX&quot; Pts:%08&quot;LLD&quot;:%08&quot;LLD&quot; &quot;,info-&gt;startAt,info-&gt;offset-overRead,info-&gt;pts,info-&gt;dts);
+         }
+-    
+-        qfprintf(index,&quot;%c&quot;,Type[data-&gt;frameType]);
+-    }
+-    if(update==markEnd || update==markNow)
+-    {
+-        data-&gt;pts=info-&gt;pts;
+-        data-&gt;dts=info-&gt;dts;
+-    }
+-    if(update==markStart || update==markNow)
+-    {
+-        data-&gt;startAt=info-&gt;startAt;
+-        data-&gt;offset=info-&gt;offset;
+-    }
++        currentFrameType=data-&gt;frameType;
++        
++    return true;
+ }
+ 
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-28 05:38:10 UTC (rev 4769)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-30 17:07:02 UTC (rev 4770)
+@@ -687,10 +687,19 @@
+ uint32_t tsPacketLinear::getConsumed(void)
+ {
+     uint32_t c=consumed;
+-    consumed=0;
+     return c;
+ }
+ /**
++    \fn setConsumed
++    \brief set consumed bytes
++*/
++bool tsPacketLinear::setConsumed(uint32_t v)
++{
++    consumed=v;
++    return true;
++}
++
++/**
+     \fn changePid
+     \brief change the pid of the stream we read (used when probing all tracks)
+ */
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-28 05:38:10 UTC (rev 4769)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-30 17:07:02 UTC (rev 4770)
+@@ -115,7 +115,7 @@
+ 
+     bool                getNextPSI(uint32_t pid,TS_PSIpacketInfo *psi);
+     bool                getNextPES(TS_PESpacket *pes);
+-
++    
+ };
+ /**
+     \class tsPacketLinear
+@@ -148,6 +148,7 @@
+         bool    getInfo(dmxPacketInfo *info);
+         bool    seek(uint64_t packetStart, uint32_t offset);
+         bool    changePid(uint32_t pid) ;
++        bool    setConsumed(uint32_t v);
+ };
+ 
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001996.html">[Avidemux-svn-commit] r4769 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="001998.html">[Avidemux-svn-commit] r4771 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_editor plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1997">[ date ]</a>
+              <a href="thread.html#1997">[ thread ]</a>
+              <a href="subject.html#1997">[ subject ]</a>
+              <a href="author.html#1997">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

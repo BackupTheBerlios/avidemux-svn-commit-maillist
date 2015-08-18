@@ -1,0 +1,1291 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5040 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5040%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src&In-Reply-To=%3C200907111017.n6BAH2td002037%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002254.html">
+   <LINK REL="Next"  HREF="002256.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5040 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5040%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src&In-Reply-To=%3C200907111017.n6BAH2td002037%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5040 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jul 11 12:17:02 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002254.html">[Avidemux-svn-commit] r5039 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavcodec
+</A></li>
+        <LI>Next message: <A HREF="002256.html">[Avidemux-svn-commit] r5041 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2255">[ date ]</a>
+              <a href="thread.html#2255">[ thread ]</a>
+              <a href="subject.html#2255">[ subject ]</a>
+              <a href="author.html#2255">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-07-11 12:17:01 +0200 (Sat, 11 Jul 2009)
+New Revision: 5040
+
+Removed:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp.orig
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_win32.cpp.orig
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/CMakeLists.txt
+Log:
+[core] Cleanup + fileio-&gt;file
+
+Deleted: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp.orig
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp.orig	2009-07-11 08:33:48 UTC (rev 5039)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp.orig	2009-07-11 10:17:01 UTC (rev 5040)
+@@ -1,687 +0,0 @@
+-/***************************************************************************
+-                    
+-    copyright            : (C) 2006 by mean
+-    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+- ***************************************************************************/
+-
+-/***************************************************************************
+- *                                                                         *
+- *   This program is free software; you can redistribute it and/or modify  *
+- *   it under the terms of the GNU General Public License as published by  *
+- *   the Free Software Foundation; either version 2 of the License, or     *
+- *   (at your option) any later version.                                   *
+- *                                                                         *
+- ***************************************************************************/
+-
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+-#include &lt;string.h&gt;
+-#include &lt;dirent.h&gt;
+-#include &lt;errno.h&gt;
+-#include &lt;sys/stat.h&gt;
+-#include &lt;unistd.h&gt;
+-
+-#ifdef __WIN32
+-#include &lt;direct.h&gt;
+-#include &lt;shlobj.h&gt;
+-#include &lt;fcntl.h&gt;
+-#elif defined(__APPLE__)
+-#include &lt;Carbon/Carbon.h&gt;
+-#endif
+-
+-#include &quot;ADM_default.h&quot;
+-#include &quot;DIA_fileSel.h&quot;
+-
+-
+-#ifdef __WIN32
+-static const char *separator=&quot;\\&quot;;
+-const char *ADM_DIR_NAME=&quot;\\avidemux&quot;;
+-#else
+-static const char *separator=&quot;/&quot;;
+-const char *ADM_DIR_NAME=&quot;/.avidemux&quot;;
+-#endif
+-
+-static char ADM_basedir[1024] = {0};
+-static char *ADM_jobdir = NULL;
+-static char *ADM_customdir = NULL;
+-static int baseDirDone = 0;
+-
+-#undef fread
+-#undef fwrite
+-#undef fopen
+-#undef fclose
+-
+-#ifdef __WIN32
+-extern int utf8StringToWideChar(const char *utf8String, int utf8StringLength, wchar_t *wideCharString);
+-extern int wideCharStringToUtf8(const wchar_t *wideCharString, int wideCharStringLength, char *utf8String);
+-#endif
+-
+-size_t ADM_fread (void *ptr, size_t size, size_t n, FILE *sstream)
+-{
+-	return fread(ptr,size,n,sstream);
+-}
+-
+-size_t ADM_fwrite(void *ptr, size_t size, size_t n, FILE *sstream)
+-{
+-	return fwrite(ptr,size,n,sstream);
+-}
+-
+-FILE *ADM_fopen(const char *file, const char *mode)
+-{
+-#ifdef __MINGW32__
+-	// Override fopen to handle Unicode filenames and to ensure exclusive access when initially writing to a file.
+-	int fileNameLength = utf8StringToWideChar(file, -1, NULL);
+-	wchar_t wcFile[fileNameLength];
+-	int creation = 0, access = 0;
+-	HANDLE hFile;
+-
+-	utf8StringToWideChar(file, -1, wcFile);
+-
+-	if (strchr(mode, 'w'))
+-	{
+-		creation = CREATE_ALWAYS;
+-		access = GENERIC_WRITE;
+-
+-		if (strchr(mode, '+'))
+-			access |= GENERIC_READ;
+-	}
+-	else if (strchr(mode, 'r'))
+-	{
+-		creation = OPEN_EXISTING;
+-		access = GENERIC_READ;
+-
+-		if (strchr(mode, '+'))
+-			access = GENERIC_WRITE;
+-	}
+-	else if (strchr(mode, 'a'))
+-	{
+-		creation = OPEN_ALWAYS;
+-		access = GENERIC_WRITE;
+-
+-		if (strchr(mode, '+'))
+-			access |= GENERIC_READ;
+-	}
+-
+-	if (creation &amp; GENERIC_WRITE)
+-	{
+-		hFile = CreateFileW(wcFile, access, 0, NULL, creation, 0, NULL);
+-
+-		if (hFile == INVALID_HANDLE_VALUE)
+-			return NULL;
+-		else
+-			CloseHandle(hFile);
+-	}
+-
+-	hFile = CreateFileW(wcFile, access, FILE_SHARE_READ, NULL, creation, 0, NULL);
+-
+-	if (hFile == INVALID_HANDLE_VALUE)
+-		return NULL;
+-	else
+-		return _fdopen(_open_osfhandle((intptr_t)hFile, 0), mode);
+-#else
+-	return fopen(file, mode);
+-#endif
+-}
+-
+-#if __WIN32
+-extern &quot;C&quot;
+-{
+-	// libavformat uses open (in the file_open function) so we need to override that too.
+-	// Following the same rules as ADM_fopen.
+-	int ADM_open(const char *path, int oflag, ...)
+-	{
+-		int fileNameLength = utf8StringToWideChar(path, -1, NULL);
+-		wchar_t wcFile[fileNameLength];
+-		int creation = 0, access = 0;
+-		HANDLE hFile;
+-
+-		utf8StringToWideChar(path, -1, wcFile);
+-
+-		if (oflag &amp; O_WRONLY || oflag &amp; O_RDWR)
+-		{
+-			access = GENERIC_WRITE;
+-
+-			if (oflag &amp; O_RDWR)
+-				access |= GENERIC_READ;
+-
+-			if (oflag &amp; O_CREAT)
+-			{
+-				if (oflag &amp; O_EXCL)
+-					creation = CREATE_NEW;
+-				else if (oflag &amp; O_TRUNC)
+-					creation = CREATE_ALWAYS;
+-				else
+-					creation = OPEN_ALWAYS;
+-			}
+-			else if (oflag &amp; O_TRUNC)
+-				creation = TRUNCATE_EXISTING;
+-		}
+-		else if (oflag &amp; O_RDONLY)
+-			creation = OPEN_EXISTING;
+-
+-		if (creation &amp; GENERIC_WRITE)
+-		{
+-			hFile = CreateFileW(wcFile, access, 0, NULL, creation, 0, NULL);
+-
+-			if (hFile == INVALID_HANDLE_VALUE)
+-				return -1;
+-			else
+-				CloseHandle(hFile);
+-		}
+-
+-		hFile = CreateFileW(wcFile, access, FILE_SHARE_READ, NULL, creation, 0, NULL);
+-
+-		if (hFile == INVALID_HANDLE_VALUE)
+-			return -1;
+-		else
+-			return _open_osfhandle((intptr_t)hFile, oflag);
+-	}
+-}
+-#endif
+-
+-int ADM_fclose(FILE *file)
+-{
+-	return fclose(file); 
+-}
+-
+-/*
+-      Get the  directory where jobs are stored
+-******************************************************/
+-char *ADM_getCustomDir(void)
+-{
+-	if (ADM_customdir)
+-		return ADM_customdir;
+-
+-	ADM_customdir = ADM_getHomeRelativePath(&quot;custom&quot;);
+-
+-	if (!ADM_mkdir(ADM_customdir))
+-	{
+-		printf(&quot;can't create custom directory (%s).\n&quot;, ADM_customdir);
+-		return NULL;
+-	}
+-
+-	return ADM_customdir;
+-}
+-
+-/*
+-      Get the  directory where jobs are stored
+-******************************************************/
+-char *ADM_getJobDir(void)
+-{
+-	if (ADM_jobdir)
+-		return ADM_jobdir;
+-
+-	ADM_jobdir = ADM_getHomeRelativePath(&quot;jobs&quot;);
+-
+-	if (!ADM_mkdir(ADM_jobdir))
+-	{
+-		printf(&quot;can't create custom directory (%s).\n&quot;, ADM_jobdir);
+-		return NULL;
+-	}
+-
+-	return ADM_jobdir;
+-}
+-
+-/**
+- * 	\fn ADM_getRelativePath
+- */
+-static char *ADM_getRelativePath(const char *base0,const char *base1, const char *base2,const char *base3)
+-{
+-	char *result;
+-	int length = strlen(base1);
+-
+-	if (base2)
+-		length += strlen(base2);
+-
+-	if (base3)
+-		length += strlen(base3);
+-
+-	length += strlen(base0);
+-	length += 5; // Slashes + end 0
+-	result = (char *)new char [length];
+-	strcpy(result, base0);
+-	strcat(result, separator);
+-
+-	strcat(result, base1);
+-	strcat(result, separator);
+-
+-	if (base2)
+-	{
+-		strcat(result, base2);
+-		strcat(result, separator);
+-
+-		if (base3)
+-		{
+-			strcat(result, base3);
+-			strcat(result, separator);
+-		}
+-	}
+-
+-	return result;
+-}
+-
+-/**
+- * 	\fn char *ADM_getHomeRelativePath(const char *base1, const char *base2=NULL,const char *base3=NULL);
+- *  \brief Returns home directory +base 1 + base 2... The return value is a copy, and must be deleted []
+- */
+-char *ADM_getHomeRelativePath(const char *base1, const char *base2,const char *base3)
+-{
+-	return ADM_getRelativePath(ADM_getBaseDir(), base1, base2, base3);
+-}
+-
+-char *ADM_getInstallRelativePath(const char *base1, const char *base2,const char *base3)
+-{
+-#ifdef __WIN32
+-	char moduleName[MAX_PATH];
+-
+-	GetModuleFileName(0, moduleName, sizeof(moduleName) / sizeof(char));
+-
+-	char *slash = strrchr(moduleName, '\\');
+-		
+-	if (slash)
+-		*slash = '\0';
+-
+-	return ADM_getRelativePath(moduleName, base1, base2, base3);
+-#elif defined(__APPLE__)
+-#define MAX_PATH_SIZE 1024
+-
+-	char buffer[MAX_PATH_SIZE];
+-
+-	CFURLRef url(CFBundleCopyExecutableURL(CFBundleGetMainBundle()));
+-	buffer[0] = '\0';
+-
+-	if (url)
+-	{
+-		CFURLGetFileSystemRepresentation(url, true, (UInt8*)buffer, MAX_PATH_SIZE);
+-		CFRelease(url);
+-
+-		char *slash = strrchr(buffer, '/');
+-		
+-		if (slash)
+-			*slash = '\0';
+-	}
+-
+-	return ADM_getRelativePath(buffer, base1, base2, base3);
+-#else
+-	return ADM_getRelativePath(ADM_INSTALL_DIR, base1, base2, base3);
+-#endif
+-}
+-
+-char *ADM_getPluginPath(void)
+-{
+-	return ADM_getInstallRelativePath(&quot;lib&quot;, &quot;ADM_plugins&quot;, &quot;videoEncoder&quot;);
+-}
+-/*
+-      Get the root directory for .avidemux stuff
+-******************************************************/
+-char *ADM_getBaseDir(void)
+-{
+-	char *home;
+-
+-	if (baseDirDone)
+-		return ADM_basedir;
+-
+-	// Get the base directory
+-#ifdef __WIN32
+-	wchar_t wcHome[MAX_PATH];
+-
+-	if (SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, wcHome) == S_OK)
+-	{
+-		int len = wideCharStringToUtf8(wcHome, -1, NULL);
+-		home = new char[len];
+-
+-		wideCharStringToUtf8(wcHome, -1, home);
+-	}
+-	else
+-	{
+-		printf(&quot;Oops: can't determine the Application Data folder.&quot;);
+-		home = ADM_strdup(&quot;c:\\&quot;);
+-	}
+-#else
+-	const char* homeEnv = getenv(&quot;HOME&quot;);
+-
+-	if (homeEnv)
+-	{
+-		home = new char[strlen(homeEnv) + 1];
+-		strcpy(home, homeEnv);
+-	}
+-	else
+-	{
+-		printf(&quot;Oops: can't determine $HOME.&quot;);
+-
+-		return NULL;
+-	}
+-#endif
+-
+-	// Try to open the .avidemux directory
+-	char *dirname = new char[strlen(home) + strlen(ADM_DIR_NAME) + 2];
+-	strcpy(dirname, home);
+-	strcat(dirname, ADM_DIR_NAME);
+-
+-	if (!ADM_mkdir(dirname))
+-	{
+-		printf(&quot;Oops: cannot create the .avidemux directory&quot;, NULL);
+-		delete [] dirname;
+-		return NULL;
+-	}
+-
+-	delete [] dirname;
+-
+-	// Now built the filename
+-	strncpy(ADM_basedir,home, 1023);
+-	strncat(ADM_basedir, ADM_DIR_NAME, 1023 - strlen(ADM_basedir));
+-	baseDirDone = 1;
+-	printf(&quot;Using %s as base directory for prefs/jobs/...\n&quot;, ADM_basedir);
+-
+-	return ADM_basedir;
+-}
+-
+-#ifdef __WIN32
+-#define DIR _WDIR
+-#define dirent _wdirent
+-#define opendir _wopendir
+-#define readdir _wreaddir
+-#define closedir _wclosedir
+-#endif
+-
+-/*----------------------------------------
+-      Create a directory
+-      If it already exists, do nothing
+-------------------------------------------*/
+-uint8_t ADM_mkdir(const char *dirname)
+-{
+-	DIR *dir = NULL;
+-
+-#ifdef __WIN32
+-	int dirNameLength = utf8StringToWideChar(dirname, -1, NULL);
+-	wchar_t dirname2[dirNameLength];
+-
+-	utf8StringToWideChar(dirname, -1, dirname2);
+-#else
+-	const char* dirname2 = dirname;
+-#endif
+-
+-	// Check it already exists ?
+-	dir = opendir(dirname2);
+-
+-	if (dir)
+-	{ 
+-		printf(&quot;Directory %s exists.Good.\n&quot;, dirname);
+-		closedir(dir);
+-		return 1;
+-	}
+-#ifdef __WIN32
+-	if (_wmkdir(dirname2))
+-	{
+-		printf(&quot;Oops: mkdir failed on %s\n&quot;, dirname);
+-		return 0;
+-	}
+-#else
+-	char *sys = new char[strlen(dirname2) + strlen(&quot;mkdir &quot;) + 2];
+-
+-	strcpy(sys, &quot;mkdir &quot;);
+-	strcat(sys, dirname2);
+-	printf(&quot;Creating dir :%s\n&quot;, sys);
+-	system(sys);
+-
+-	delete [] sys;
+-#endif
+-
+-	if ((dir = opendir(dirname2)) == NULL)
+-		return 0;
+-
+-	closedir(dir);
+-
+-	return 1;
+-}
+-/**
+- *  \fn buildDirectoryContent
+- * 	\brief Returns the content of a dir with the extension ext. The receiving array must be allocated by caller
+- * (just the array, not the names themselves)
+- */
+-uint8_t buildDirectoryContent(uint32_t *outnb, const char *base, char *jobName[], int maxElems, const char *ext)
+-{
+-	DIR *dir;
+-	struct dirent *direntry;
+-	int dirmax = 0, len;
+-	int extlen = strlen(ext);
+-
+-	ADM_assert(extlen);
+-
+-#ifdef __WIN32
+-	int dirNameLength = utf8StringToWideChar(base, -1, NULL);
+-	wchar_t base2[dirNameLength];
+-
+-	utf8StringToWideChar(base, -1, base2);
+-#else
+-	const char *base2 = base;
+-#endif
+-
+-	dir = opendir(base2);
+-	if (!dir)
+-		return 0;
+-
+-	while (direntry = readdir(dir))
+-	{
+-#ifdef __WIN32
+-		int dirLength = wideCharStringToUtf8(direntry-&gt;d_name, -1, NULL);
+-		char d_name[dirLength];
+-
+-		wideCharStringToUtf8(direntry-&gt;d_name, -1, d_name);
+-#else
+-		const char *d_name = direntry-&gt;d_name;
+-#endif
+-
+-		len = strlen(d_name);
+-
+-		if (len &lt; (extlen + 1))
+-			continue;
+-
+-		int xbase = len - extlen;
+-
+-		if (memcmp(d_name + xbase, ext, extlen))
+-			//if (direntry-&gt;d_name[len-1]!='s' || direntry-&gt;d_name[len-2]!='j' || direntry-&gt;d_name[len-3]!='.')
+-		{
+-			printf(&quot;ignored: %s\n&quot;, d_name);
+-			continue;
+-		}
+-
+-		jobName[dirmax] = (char *)ADM_alloc(strlen(base) + strlen(d_name) + 2);
+-		strcpy(jobName[dirmax], base);
+-		strcat(jobName[dirmax], &quot;/&quot;);
+-		strcat(jobName[dirmax], d_name);
+-		dirmax++;
+-
+-		if (dirmax &gt;= maxElems)
+-		{
+-			printf(&quot;[jobs]: Max # of jobs exceeded\n&quot;);
+-			break;
+-		}
+-	}
+-
+-	closedir(dir);
+-	*outnb = dirmax;
+-
+-	return 1;
+-}
+-//------------------------------------------------------------------
+-
+-/*
+-
+-** note: it modifies it's first argument
+-*/
+-void simplify_path(char **buf)
+-{
+-	unsigned int last1slash = 0;
+-	unsigned int last2slash = 0;
+-
+-	while (!strncmp(*buf, &quot;/../&quot;, 4))
+-		memmove(*buf, *buf + 3, strlen(*buf + 3) + 1);
+-
+-	for (unsigned int i = 0; i &lt; strlen(*buf) - 2; i++)
+-		while (!strncmp(*buf + i, &quot;/./&quot;, 3))
+-			memmove(*buf + i, *buf + i + 2, strlen(*buf + i + 2) + 1);
+-
+-	for (unsigned int i = 0; i &lt; strlen(*buf) - 3; i++)
+-	{
+-		if (*(*buf + i) == '/')
+-		{
+-			last2slash = last1slash;
+-			last1slash = i;
+-		}
+-
+-		if (!strncmp(*buf + i, &quot;/../&quot;, 4))
+-		{
+-			memmove(*buf + last2slash, *buf + i + 3, strlen(*buf + i + 3) + 1);
+-
+-			return simplify_path(buf);
+-		}
+-	}
+-}
+-
+-/**
+-        \fn ADM_PathCanonize
+-        \brief Canonize the path, returns a copy of the absolute path given as parameter
+-*/
+-char *ADM_PathCanonize(const char *tmpname)
+-{
+-	char path[300];
+-	char *out;
+-
+-	if (!getcwd(path, 300))
+-	{
+-		fprintf(stderr, &quot;\ngetcwd() failed with: %s (%u)\n&quot;, strerror(errno), errno);
+-		path[0] = '\0';
+-	}
+-
+-	if (!tmpname || tmpname[0] == 0)
+-	{
+-		out = new char[strlen(path) + 2];
+-		strcpy(out, path);
+-#ifndef __WIN32
+-		strcat(out, &quot;/&quot;);
+-#else
+-		strcat(out, &quot;\\&quot;);
+-#endif
+-		printf(&quot;\n Canonizing null string ??? (%s)\n&quot;, out);
+-	}
+-	else if (tmpname[0] == '/'
+-#if defined(__WIN32)
+-		|| tmpname[1] == ':'
+-#endif
+-		)
+-	{
+-		out = new char[strlen(tmpname) + 1];
+-		strcpy(out, tmpname);
+-
+-		return out;
+-	}
+-	else
+-	{
+-		out = new char[strlen(path) + strlen(tmpname) + 6];
+-		strcpy(out, path);
+-#ifndef __WIN32
+-		strcat(out, &quot;/&quot;);
+-#else
+-		strcat(out, &quot;\\&quot;);
+-#endif
+-		strcat(out, tmpname);
+-	}
+-
+-	simplify_path(&amp;out);
+-
+-	return out;
+-}
+-
+-/**
+-        \fn ADM_PathStripName
+-	\brief Returns path only /foo/bar.avi -&gt; /foo INPLACE, no copy done
+-
+-*/
+-void ADM_PathStripName(char *str)
+-{
+-	int len = strlen(str);
+-
+-	if (len &lt;= 1)
+-		return;
+-
+-	len--;
+-
+-#ifndef __WIN32
+-	while (*(str + len) != '/' &amp;&amp; len)
+-#else
+-	while (*(str + len) != '\\' &amp;&amp; len)
+-#endif
+-	{
+-		*(str + len) = 0;
+-		len--;
+-	}
+-}
+-
+-/**
+-    \fn ADM_GetFileName
+-    \brief Get the filename without path. /foo/bar.avi -&gt; bar.avi INPLACE, NO COPY
+-
+-*/
+-const char *ADM_GetFileName(const char *str)
+-{
+-	char *filename;
+-	char *filename2;
+-
+-#ifndef __WIN32
+-	filename = strrchr(str, '/');
+-#else
+-	filename = strrchr(str, '\\');
+-	filename2 = strrchr(str, '/');
+-
+-	if (filename2 &amp;&amp; filename)
+-		if (filename2 &gt; filename)
+-			filename = filename2;
+-#endif
+-
+-	if (filename)
+-		return filename + 1;
+-	else
+-		return str;
+-}
+-
+-/**
+-    \fn ADM_PathSplit
+-    \brief Split path into absolute path+name and extention i.e. /foo/bar/zee.avi -&gt; /foo/bar/zee,avi.             Copy are returned
+-
+-*/
+-void ADM_PathSplit(const char *str, char **root, char **ext)
+-{
+-	char *full;
+-	uint32_t l;
+-
+-	full = ADM_PathCanonize(str);
+-	// Search the last
+-	l = strlen(full);
+-	l--;
+-	ADM_assert(l &gt; 0);
+-
+-	while (*(full + l) != '.' &amp;&amp; l)
+-		l--;
+-
+-	if (!l || l == (strlen(full) - 1))
+-	{
+-		if (l == (strlen(full) - 1))
+-			*(full + l) = 0;  // remove trailing
+-
+-		*ext = new char[2];
+-		*root = full;
+-		strcpy(*ext, &quot;&quot;);
+-
+-		return;
+-	}
+-	// else we do get an extension
+-	// starting at l+1
+-	uint32_t suff;
+-
+-	suff = strlen(full) - l - 1;
+-	*ext = new char[suff + 1];
+-	strcpy(*ext, full + l + 1);
+-	*(full + l) = 0;
+-	*root = full;
+-}
+
+Deleted: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_win32.cpp.orig
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_win32.cpp.orig	2009-07-11 08:33:48 UTC (rev 5039)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_win32.cpp.orig	2009-07-11 10:17:01 UTC (rev 5040)
+@@ -1,506 +0,0 @@
+-#ifdef __WIN32
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+-#include &lt;windows.h&gt;
+-
+-#ifdef __MINGW32__
+-#include &lt;winsock2.h&gt;
+-#endif
+-
+-#include &quot;ADM_default.h&quot; 
+-
+-extern char *ADM_getBaseDir(void);
+-
+-void ADM_usleep(unsigned long us)
+-{
+-	Sleep(us/1000);
+-}
+-
+-#ifdef __MINGW32__
+-uint8_t win32_netInit(void)
+-{
+-	WSADATA wsaData;
+-	int iResult;
+-
+-	printf(&quot;Initializing WinSock\n&quot;);
+-	iResult = WSAStartup(MAKEWORD(2,2), &amp;wsaData);
+-
+-	if (iResult != NO_ERROR)
+-	{
+-		printf(&quot;Error at WSAStartup()\n&quot;);
+-		return 0;
+-	}	
+-
+-	printf(&quot;WinSock ok\n&quot;);
+-	return 1;
+-}
+-#endif
+-
+-#ifndef HAVE_GETTIMEOFDAY
+-extern &quot;C&quot;
+-{
+-void gettimeofday(struct timeval *p, void *tz);
+-}
+-
+-void gettimeofday(struct timeval *p, void *tz)
+-{
+-    unsigned long int sec;
+-    SYSTEMTIME  tme;
+-
+-    GetSystemTime(&amp;tme);
+-
+-    sec=tme.wSecond;
+-    sec+=60*tme.wMinute;
+-    sec+=60*60*tme.wHour;
+-    
+-	p-&gt;tv_sec=sec;
+-	p-&gt;tv_usec=tme.wMilliseconds*1000;
+-
+-	return;
+-}
+-#endif	// HAVE_GETTIMEOFDAY
+-
+-int getpriority(int which, int who)
+-{
+-	unsigned int priorityClass;
+-
+-	ADM_assert(which == PRIO_PROCESS);
+-	ADM_assert(who == 0);
+-
+-	priorityClass = GetPriorityClass(GetCurrentProcess());
+-
+-	switch (priorityClass)
+-	{
+-		case HIGH_PRIORITY_CLASS:
+-			return -18;
+-			break;
+-		case ABOVE_NORMAL_PRIORITY_CLASS:
+-			return -10;
+-			break;
+-		case NORMAL_PRIORITY_CLASS:
+-			return 0;
+-			break;
+-		case BELOW_NORMAL_PRIORITY_CLASS:
+-			return 10;
+-			break;
+-		case IDLE_PRIORITY_CLASS:
+-			return 18;
+-			break;
+-		default:
+-			ADM_assert(0);
+-	}
+-}
+-
+-int setpriority(int which, int who, int value)
+-{
+-	unsigned int priorityClass;
+-
+-	ADM_assert(which == PRIO_PROCESS);
+-	ADM_assert(who == 0);
+-	ADM_assert(value &gt;= PRIO_MIN &amp;&amp; value &lt;= PRIO_MAX);
+-
+-	if (value &gt;= -20 &amp;&amp; value &lt;= -16)
+-	{
+-		priorityClass = HIGH_PRIORITY_CLASS;
+-	}
+-	else if (value &gt;= -15 &amp;&amp; value &lt;= -6)
+-	{
+-		priorityClass = ABOVE_NORMAL_PRIORITY_CLASS;
+-	}
+-	else if (value &gt;= -5 &amp;&amp; value &lt;= 4)
+-	{
+-		priorityClass = NORMAL_PRIORITY_CLASS;
+-	}
+-	else if (value &gt;= 6 &amp;&amp; value &lt;= 15)
+-	{
+-		priorityClass = BELOW_NORMAL_PRIORITY_CLASS;
+-	}
+-	else if (value &gt;= 16 &amp;&amp; value &lt;= 20)
+-	{
+-		priorityClass = IDLE_PRIORITY_CLASS;
+-	}
+-
+-	if (!SetPriorityClass(GetCurrentProcess(), priorityClass))
+-	{
+-		return -1;
+-	}
+-
+-	return 0;
+-}
+-
+-int shutdown_win32(void)
+-{
+-	HANDLE hToken;
+-	TOKEN_PRIVILEGES tkp;
+-
+-	// Get a token for this process. 
+-	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &amp;hToken))
+-	{
+-		return -1;
+-	}
+-
+-	// Get the LUID for the shutdown privilege.
+-	LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME, &amp;tkp.Privileges[0].Luid);
+-
+-	tkp.PrivilegeCount = 1;  // one privilege to set
+-	tkp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+-
+-	// Get the shutdown privilege for this process.
+-	AdjustTokenPrivileges(hToken, FALSE, &amp;tkp, 0, (PTOKEN_PRIVILEGES)NULL, 0);
+-
+-	if (GetLastError() != ERROR_SUCCESS)
+-	{
+-		return -1;
+-	}
+-
+-	// Shut down the system and force all applications to close.
+-	if (!ExitWindowsEx(EWX_POWEROFF | EWX_FORCE, SHTDN_REASON_FLAG_PLANNED))
+-	{
+-		return -1;
+-	}
+-
+-	return 0;
+-}
+-
+-#ifndef PRODUCT_BUSINESS
+-#define PRODUCT_BUSINESS 0x00000006
+-#endif
+-
+-#ifndef PRODUCT_BUSINESS_N
+-#define PRODUCT_BUSINESS_N 0x00000010
+-#endif
+-
+-#ifndef PRODUCT_HOME_BASIC
+-#define PRODUCT_HOME_BASIC 0x00000002
+-#endif
+-
+-#ifndef PRODUCT_HOME_BASIC_N
+-#define PRODUCT_HOME_BASIC_N 0x00000005
+-#endif
+-
+-#ifndef PRODUCT_HOME_PREMIUM
+-#define PRODUCT_HOME_PREMIUM 0x00000003
+-#endif 
+-
+-#ifndef PRODUCT_STARTER
+-#define PRODUCT_STARTER 0x0000000B
+-#endif
+-
+-#ifndef PRODUCT_ENTERPRISE
+-#define PRODUCT_ENTERPRISE 0x00000004
+-#endif 
+-
+-#ifndef PRODUCT_ULTIMATE
+-#define PRODUCT_ULTIMATE 0x00000001
+-#endif
+-
+-bool getWindowsVersion(char* version)
+-{
+-	int index = 0;
+-	OSVERSIONINFOEX osvi = {};
+-
+-	osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+-
+-	if (!GetVersionEx((OSVERSIONINFO*)&amp;osvi))
+-		return false;
+-
+-	if (osvi.dwPlatformId != VER_PLATFORM_WIN32_NT)
+-		return false;
+-// Vista
+-	if (osvi.dwMajorVersion == 6 &amp;&amp; osvi.dwMinorVersion == 0)
+-	{
+-		if (osvi.wProductType == VER_NT_WORKSTATION)
+-		{
+-			index += sprintf(version + index, &quot;Microsoft Windows Vista&quot;);
+-
+-			uint32_t productType = 0;
+-
+-			HMODULE hKernel = GetModuleHandle(&quot;KERNEL32.DLL&quot;);
+-
+-			if (hKernel)
+-			{
+-				typedef bool (__stdcall *funcGetProductInfo)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t*);
+-				funcGetProductInfo pGetProductInfo = (funcGetProductInfo)GetProcAddress(hKernel, &quot;GetProductInfo&quot;); 
+-
+-				if (pGetProductInfo)
+-					pGetProductInfo(6, 0, 0, 0, &amp;productType);
+-	  
+-				switch (productType)
+-				{
+-				case PRODUCT_STARTER:
+-				{
+-					index += sprintf(version + index, &quot; Starter&quot;);
+-					break;
+-				}
+-				case PRODUCT_HOME_BASIC_N:
+-				{
+-					index += sprintf(version + index, &quot; Home Basic N&quot;);
+-					break;
+-				}
+-				case PRODUCT_HOME_BASIC:
+-				{
+-					index += sprintf(version + index, &quot; Home Basic&quot;);
+-					break;
+-				}
+-				case PRODUCT_HOME_PREMIUM:
+-				{
+-					index += sprintf(version + index, &quot; Home Premium&quot;);
+-					break;
+-				}
+-				case PRODUCT_BUSINESS_N:
+-				{
+-					index += sprintf(version + index, &quot; Business N&quot;);
+-					break;
+-				}
+-				case PRODUCT_BUSINESS:
+-				{
+-					index += sprintf(version + index, &quot; Business&quot;);
+-					break;
+-				}
+-				case PRODUCT_ENTERPRISE:
+-				{
+-					index += sprintf(version + index, &quot; Enterprise&quot;);
+-					break;
+-				}
+-				case PRODUCT_ULTIMATE:
+-				{
+-					index += sprintf(version + index, &quot; Ultimate&quot;);
+-					break;
+-				}
+-				default:
+-					break;
+-				}
+-			}
+-		}
+-		else if (osvi.wProductType == VER_NT_SERVER)
+-		{
+-			index += sprintf(version + index, &quot;Microsoft Windows Server 2008&quot;);
+-
+-			if (osvi.wSuiteMask &amp; VER_SUITE_DATACENTER)
+-				index += sprintf(version + index, &quot; Datacenter Edition&quot;);
+-			else if (osvi.wSuiteMask &amp; VER_SUITE_ENTERPRISE)
+-				index += sprintf(version + index, &quot; Enterprise Edition&quot;);
+-			else if (osvi.wSuiteMask == VER_SUITE_BLADE)
+-				index += sprintf(version + index, &quot; Web Edition&quot;);
+-			else
+-				index += sprintf(version + index, &quot; Standard Edition&quot;);
+-		}
+-	}
+-// Windows Server 2003
+-	else if (osvi.dwMajorVersion == 5 &amp;&amp; osvi.dwMinorVersion == 2)
+-	{
+-		index += sprintf(version + index, &quot;Microsoft Windows Server 2003&quot;);
+-
+-		if (GetSystemMetrics(SM_SERVERR2))
+-			index += sprintf(version + index, &quot; R2&quot;);
+-
+-		if (osvi.wSuiteMask &amp; VER_SUITE_DATACENTER)
+-			index += sprintf(version + index, &quot; Datacenter Edition&quot;);
+-		else if (osvi.wSuiteMask &amp; VER_SUITE_ENTERPRISE)
+-			index += sprintf(version + index, &quot; Enterprise Edition&quot;);
+-		else if (osvi.wSuiteMask == VER_SUITE_BLADE)
+-			index += sprintf(version + index, &quot; Web Edition&quot;);
+-		else
+-			index += sprintf(version + index, &quot; Standard Edition&quot;);
+-	}
+-// Windows XP
+-	else if (osvi.dwMajorVersion == 5 &amp;&amp; osvi.dwMinorVersion == 1)
+-	{
+-		index += sprintf(version + index, &quot;Microsoft Windows XP&quot;);
+-
+-		if (GetSystemMetrics(SM_MEDIACENTER))
+-			index += sprintf(version + index, &quot; Media Center Edition&quot;);
+-		else if (GetSystemMetrics(SM_STARTER))
+-			index += sprintf(version + index, &quot; Starter Edition&quot;);
+-		else if (GetSystemMetrics(SM_TABLETPC))
+-			index += sprintf(version + index, &quot; Tablet PC Edition&quot;);
+-		else if (osvi.wSuiteMask &amp; VER_SUITE_PERSONAL)
+-			index += sprintf(version + index, &quot; Home Edition&quot;);
+-		else
+-			index += sprintf(version + index, &quot; Professional&quot;);
+-	}
+-// Windows 2000
+-	else if (osvi.dwMajorVersion == 5 &amp;&amp; osvi.dwMinorVersion == 0)
+-	{
+-		index += sprintf(version + index, &quot;Microsoft Windows 2000&quot;);
+-
+-		if (osvi.wProductType == VER_NT_WORKSTATION)
+-		{
+-			index += sprintf(version + index, &quot; Professional&quot;);
+-		}
+-		else if (osvi.wProductType == VER_NT_SERVER)
+-		{
+-			if (osvi.wSuiteMask &amp; VER_SUITE_DATACENTER)
+-				index += sprintf(version + index, &quot; Datacenter Server&quot;);
+-			else if (osvi.wSuiteMask &amp; VER_SUITE_ENTERPRISE)
+-				index += sprintf(version + index, &quot; Advanced Server&quot;);
+-			else
+-				index += sprintf(version + index, &quot; Server&quot;);
+-		}
+-	}
+-// Windows NT 4
+-	else if (osvi.dwMajorVersion == 4)
+-	{
+-		index += sprintf(version + index, &quot;Microsoft Windows NT 4&quot;);
+-
+-		if (osvi.wProductType == VER_NT_WORKSTATION)
+-		{
+-			index += sprintf(version + index, &quot; Workstation&quot;);
+-		}
+-		else if (osvi.wProductType == VER_NT_SERVER)
+-		{
+-			if (osvi.wSuiteMask &amp; VER_SUITE_ENTERPRISE)
+-				index += sprintf(version + index, &quot; Server, Enterprise Edition&quot;);
+-			else
+-				index += sprintf(version + index, &quot; Server&quot;);
+-		}
+-	}
+-	else
+-	{
+-		index += sprintf(version + index, &quot;Microsoft Windows&quot;);
+-	}
+-
+-// Service pack and full version info
+-	if (strlen(osvi.szCSDVersion) &gt; 0)
+-	{
+-		index += sprintf(version + index, &quot; %s&quot;, osvi.szCSDVersion);
+-	}
+-
+-	index += sprintf(version + index, &quot; (%d.%d.%d&quot;, osvi.dwMajorVersion, osvi.dwMinorVersion, osvi.dwBuildNumber &amp; 0xFFFF);
+-
+-// 64-bit Windows
+-	bool isWow64 = false;
+-	HMODULE hKernel = GetModuleHandle(&quot;kernel32.dll&quot;);
+-
+-	if (hKernel)
+-	{
+-		typedef bool (*funcIsWow64Process)(void*, bool*);  
+-
+-	    funcIsWow64Process pIsWow64Process = (funcIsWow64Process)GetProcAddress(hKernel, &quot;IsWow64Process&quot;); 
+-
+-	    if (pIsWow64Process)
+-	    {
+-			pIsWow64Process(GetCurrentProcess(), &amp;isWow64);
+-		}
+-	}
+-
+-	if (isWow64)
+-		index += sprintf(version + index, &quot;; 64-bit&quot;);
+-	else
+-		index += sprintf(version + index, &quot;; 32-bit&quot;);
+-
+-	index += sprintf(version + index, &quot;)&quot;);
+-	
+-	return true;
+-}
+-
+-void redirectStdoutToFile(void)
+-{
+-	// Don't redirect stdout and stderr if SDL hasn't already hijacked it.
+-	// This allows us to optionally compile all EXEs as console applications
+-	// so the output can be printed to the terminal for debugging purposes.
+-
+-	// Close SDL generated logs
+-	fclose(stdout);
+-	fclose(stderr);
+-
+-	// Briefly redirect to console
+-	freopen(&quot;CON&quot;, &quot;w&quot;, stdout);
+-	freopen(&quot;CON&quot;, &quot;w&quot;, stderr);
+-
+-	// Remove SDL logs to avoid confusion
+-	char path[MAX_PATH];
+-	char stdoutPath[MAX_PATH];
+-	char stderrPath[MAX_PATH];
+-	DWORD pathlen = GetModuleFileName(NULL, path, MAX_PATH);
+-
+-	while (pathlen &gt; 0 &amp;&amp; path[pathlen] != '\\')
+-		pathlen--;
+-
+-	path[pathlen] = '\0';
+-
+-	strcpy(stdoutPath, path);
+-	strcat(stdoutPath, &quot;\\stdout.txt&quot;);
+-	strcpy(stderrPath, path);
+-	strcat(stderrPath, &quot;\\stderr.txt&quot;);
+-
+-	remove(stdoutPath);
+-	remove(stderrPath);
+-
+-	// Redirect output to log file in the user's profile directory
+-	const char* logFile = &quot;admlog.txt&quot;;
+-	char* baseDir = ADM_getBaseDir();
+-	char *logPath = new char[strlen(baseDir) + 2 + strlen(logFile)];
+-	FILE* stream;
+-
+-	strcpy(logPath, baseDir);
+-	strcat(logPath, &quot;/&quot;);
+-	strcat(logPath, logFile);
+-
+-	fclose(stdout);
+-	fclose(stderr);
+-
+-	stream = fopen(logPath, &quot;w&quot;);
+-
+-	if (stream)
+-	{
+-		*stdout = *stream;
+-		*stderr = *stream;
+-	}
+-
+-	// Line buffering
+-	setvbuf(stdout, NULL, _IONBF, BUFSIZ); 
+-	setvbuf(stderr, NULL, _IONBF, BUFSIZ);
+-
+-	delete[] logPath;
+-}
+-
+-// Convert string from ANSI code page to wide char
+-int ansiStringToWideChar(const char *ansiString, int ansiStringLength, wchar_t *wideCharString)
+-{
+-	int wideCharStringLen = MultiByteToWideChar(CP_ACP, 0, ansiString, ansiStringLength, NULL, 0);
+-
+-	if (wideCharString)
+-		MultiByteToWideChar(CP_ACP, 0, ansiString, ansiStringLength, wideCharString, wideCharStringLen);
+-
+-	return wideCharStringLen;
+-}
+-
+-// Convert UTF-8 string to wide char
+-int utf8StringToWideChar(const char *utf8String, int utf8StringLength, wchar_t *wideCharString)
+-{
+-	int wideCharStringLength = MultiByteToWideChar(CP_UTF8, 0, utf8String, utf8StringLength, NULL, 0);
+-
+-	if (wideCharString)
+-		MultiByteToWideChar(CP_UTF8, 0, utf8String, utf8StringLength, wideCharString, wideCharStringLength);
+-
+-	return wideCharStringLength;
+-}
+-
+-// Convert Wide Char string to UTF-8
+-int wideCharStringToUtf8(const wchar_t *wideCharString, int wideCharStringLength, char *utf8String)
+-{
+-	int utf8StringLen = WideCharToMultiByte(CP_UTF8, 0, wideCharString, wideCharStringLength, NULL, 0, NULL, NULL);
+-
+-	if (utf8String)
+-		WideCharToMultiByte(CP_UTF8, 0, wideCharString, wideCharStringLength, utf8String, utf8StringLen, NULL, NULL);
+-
+-	return utf8StringLen;
+-}
+-
+-// Convert string from ANSI code page to UTF-8
+-int ansiStringToUtf8(const char *ansiString, int ansiStringLength, char *utf8String)
+-{
+-	int wideCharStringLen = ansiStringToWideChar(ansiString, ansiStringLength, NULL);
+-	wchar_t wideCharString[wideCharStringLen];
+-
+-	ansiStringToWideChar(ansiString, ansiStringLength, wideCharString);
+-
+-	int multiByteStringLen = wideCharStringToUtf8(wideCharString, wideCharStringLen, NULL);
+-
+-	if (utf8String)
+-		wideCharStringToUtf8(wideCharString, wideCharStringLen, utf8String);
+-
+-	return multiByteStringLen;
+-}
+-#endif	// __WIN32
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/CMakeLists.txt	2009-07-11 08:33:48 UTC (rev 5039)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/CMakeLists.txt	2009-07-11 10:17:01 UTC (rev 5040)
+@@ -2,6 +2,7 @@
+ 	ADM_cpuCap.cpp  ADM_memcpy.cpp  ADM_memsupport.cpp  ADM_threads.cpp  ADM_win32.cpp
+ 	ADM_memory.cpp  ADM_misc.cpp  TLK_clock.cpp  ADM_crashdump.cpp  ADM_fileio.cpp ADM_dynamicLoading.cpp
+         ADM_debug.cpp 
++        ADM_file.cpp
+ )
+ 
+ ADD_LIBRARY(ADM_core SHARED ${ADM_core_SRCS})
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002254.html">[Avidemux-svn-commit] r5039 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavcodec
+</A></li>
+	<LI>Next message: <A HREF="002256.html">[Avidemux-svn-commit] r5041 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2255">[ date ]</a>
+              <a href="thread.html#2255">[ thread ]</a>
+              <a href="subject.html#2255">[ subject ]</a>
+              <a href="author.html#2255">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

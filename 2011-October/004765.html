@@ -1,0 +1,144 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7620 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7620%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062855.D5D76481404%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004764.html">
+   <LINK REL="Next"  HREF="004766.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7620 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7620%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062855.D5D76481404%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7620 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Oct 28 08:28:55 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004764.html">[Avidemux-svn-commit] r7619 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+        <LI>Next message: <A HREF="004766.html">[Avidemux-svn-commit] r7621 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4765">[ date ]</a>
+              <a href="thread.html#4765">[ thread ]</a>
+              <a href="subject.html#4765">[ subject ]</a>
+              <a href="author.html#4765">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-10-28 08:28:55 +0200 (Fri, 28 Oct 2011)
+New Revision: 7620
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+Log:
+[asf] Take timing info from replica
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2011-10-28 06:28:54 UTC (rev 7619)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2011-10-28 06:28:55 UTC (rev 7620)
+@@ -168,6 +168,7 @@
+        for(int seg=0;seg&lt;nbSeg;seg++)
+        {
+          r=read8(); // Read stream Id
++         uint64_t pts=ADM_NO_PTS;
+          if(r&amp;0x80) 
+          {
+             keyframe=AVI_KEY_FRAME;
+@@ -180,8 +181,14 @@
+          offset=readVCL(offsetLenType,0);
+          replica=readVCL(replicaLenType,0);
+          if(replica==1) ADM_error(&quot;Replica==1 : Compressed data!\n&quot;);
+-         printf(&quot;replica                %d\n&quot;,replica);
+-         skip(replica);
++         if(replica&gt;=8)
++         {
++            read32(); // size
++            pts=read32()*1000; // PTS
++            skip(replica-8);
++         }
++         else
++            skip(replica);
+          payloadLen=readVCL(payloadLengthType,0);
+          remaining=pakSize-_offset;
+          remaining=remaining-paddingLen;
+@@ -201,8 +208,7 @@
+            // else we read &quot;payloadLen&quot; bytes and put them at offset &quot;offset&quot;
+            if(streamId==streamWanted|| streamWanted==0xff)
+            {
+-             pushPacket(keyframe,currentPacket,offset,mediaObjectNumber,payloadLen,streamId,sendTime);   
+-             sendTime=ADM_NO_PTS;
++             pushPacket(keyframe,currentPacket,offset,mediaObjectNumber,payloadLen,streamId,pts);   
+            }else
+             skip(payloadLen);
+         }
+@@ -224,7 +230,14 @@
+          offset=readVCL(offsetLenType,0);
+          replica=readVCL(replicaLenType,0);
+          printf(&quot;replica                %d\n&quot;,replica);
+-         skip(replica);
++         if(replica&gt;8)
++         {
++            printf(&quot;replica size:1=%d\n&quot;,read32());
++            printf(&quot;replica pts :2=%d\n&quot;,read32());
++            skip(replica-8);
++         }
++            else
++                skip(replica);
+          remaining=pakSize-_offset;
+          remaining=remaining-paddingLen;
+          if(remaining&lt;=0) 
+@@ -270,7 +283,8 @@
+  
+  */
+ 
+- uint8_t asfPacket::pushPacket(uint32_t keyframe,uint32_t packetnb,uint32_t offset,uint32_t sequence,uint32_t payloadLen,uint32_t stream,uint64_t dts)
++ uint8_t asfPacket::pushPacket(uint32_t keyframe,uint32_t packetnb,
++                uint32_t offset,uint32_t sequence,uint32_t payloadLen,uint32_t stream,uint64_t dts)
+  {
+    asfBit *bit=new asfBit;
+    printf(&quot;Pushing packet stream=%d len=%d offset=%d seq=%d packet=%d dts=%s \n&quot;,
+@@ -283,7 +297,6 @@
+    bit-&gt;packet=packetnb;
+    bit-&gt;flags=keyframe;
+    bit-&gt;dts=dts;
+-
+    if(!read(bit-&gt;data,bit-&gt;len))
+    {
+ 		delete[] bit-&gt;data;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004764.html">[Avidemux-svn-commit] r7619 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+	<LI>Next message: <A HREF="004766.html">[Avidemux-svn-commit] r7621 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4765">[ date ]</a>
+              <a href="thread.html#4765">[ thread ]</a>
+              <a href="subject.html#4765">[ subject ]</a>
+              <a href="author.html#4765">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

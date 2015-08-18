@@ -1,0 +1,400 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6670 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6670%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script&In-Reply-To=%3C20100926220244.6848F481006%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003853.html">
+   <LINK REL="Next"  HREF="003855.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6670 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6670%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script&In-Reply-To=%3C20100926220244.6848F481006%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6670 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Mon Sep 27 00:02:44 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003853.html">[Avidemux-svn-commit] r6669 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4
+</A></li>
+        <LI>Next message: <A HREF="003855.html">[Avidemux-svn-commit] r6671 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3854">[ date ]</a>
+              <a href="thread.html#3854">[ thread ]</a>
+              <a href="subject.html#3854">[ subject ]</a>
+              <a href="author.html#3854">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2010-09-27 00:02:44 +0200 (Mon, 27 Sep 2010)
+New Revision: 6670
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDirectorySearch.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/DirectorySearch.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/DirectorySearch.h
+Log:
+[win32] unicode support for js directory search class
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDirectorySearch.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDirectorySearch.cpp	2010-09-26 19:39:57 UTC (rev 6669)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDirectorySearch.cpp	2010-09-26 22:02:44 UTC (rev 6670)
+@@ -151,7 +151,7 @@
+ 	*rval = BOOLEAN_TO_JSVAL(false);
+ 	if(argc != 0)
+ 		return JS_FALSE;
+-	*rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx,p-&gt;getObject()-&gt;GetExtension()));
++	*rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx,p-&gt;getObject()-&gt;GetExtension().c_str()));
+ 	return JS_TRUE;
+ }// end GetExtension
+ 
+@@ -233,7 +233,7 @@
+ 	*rval = BOOLEAN_TO_JSVAL(false);
+ 	if(argc != 0)
+ 		return JS_FALSE;
+-	*rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx,p-&gt;getObject()-&gt;GetFileName()));
++	*rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx,p-&gt;getObject()-&gt;GetFileName().c_str()));
+ 	return JS_TRUE;
+ }// end GetFileName
+ 
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/DirectorySearch.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/DirectorySearch.cpp	2010-09-26 19:39:57 UTC (rev 6669)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/DirectorySearch.cpp	2010-09-26 22:02:44 UTC (rev 6670)
+@@ -11,13 +11,18 @@
+ #include &quot;config.h&quot;
+ #include &quot;DirectorySearch.h&quot;
+ 
++#ifdef __WIN32
++extern int wideCharStringToUtf8(const wchar_t *wideCharString, int wideCharStringLength, char *utf8String);
++extern int utf8StringToWideChar(const char *utf8String, int utf8StringLength, wchar_t *wideCharString);
++#endif
++
+ //////////////////////////////////////////////////////////////////////
+ // Construction/Destruction
+ //////////////////////////////////////////////////////////////////////
+ 
+ #if defined(__unix__) || defined(__APPLE__)
+-int CDirectorySearch::_findnext(unsigned long int hDir,_finddata_t *pfdData)
+-{// begin _findnext
++int CDirectorySearch::_wfindnext(unsigned long int hDir,_wfinddata_t *pfdData)
++{// begin _wfindnext
+ 	if(!hDir || hDir == 0xFFFFFFFF)
+ 		return -1; // need to call opendir first
+ 	struct stat stInfo;
+@@ -58,17 +63,17 @@
+ 	S_ISFIFO(stInfo.st_mode))
+ 		pfdData-&gt;attrib = _A_NONFILE;
+ 	return 0;
+-}// end _findnext
++}// end _wfindnext
+ 
+-int CDirectorySearch::_findfirst(const char *path,_finddata_t *pfdData)
+-{// begin _findfirst
++int CDirectorySearch::_wfindfirst(const char *path,_wfinddata_t *pfdData)
++{// begin _wfindfirst
+ 	unsigned long int hDir = (unsigned long int)opendir(path);
+ 	if(!hDir)
+ 		return -1;
+-	if(_findnext(hDir,pfdData) == -1)
++	if(_wfindnext(hDir,pfdData) == -1)
+ 		return -1;
+ 	return hDir;
+-}// end _findfirst
++}// end _wfindfirst
+ 
+ int CDirectorySearch::_findclose(unsigned long int hDir)
+ {// begin _findclose
+@@ -91,29 +96,39 @@
+ 
+ bool CDirectorySearch::Init(std::string sDirectory)
+ {// begin Init
+-char *s;
+ 	// check for no search query
+ 	if(sDirectory[sDirectory.length()-1] == DIRECTORY_DELIMITOR)
+ 	{
+ 		printf(&quot;End with directory delimitor\n&quot;);
+ 		return false;
+ 	}
+-	const char *old=sDirectory.c_str();
+-	s=new char[strlen(old)+10];
+-	strcpy(s,old);
+-#ifdef __WIN32	
+-	strcat(s,&quot;\\*&quot;);
++
++#ifdef __WIN32
++	const char *old = sDirectory.c_str();
++
++	int len = utf8StringToWideChar(old, -1, NULL);
++	wchar_t s[len + 2];
++
++	utf8StringToWideChar(old, -1, s);
++	wcscat(s, L&quot;\\*&quot;);
++
++	printf(&quot;&gt;%ls&lt;\n&quot;, s);
++#else
++	const char *s = sDirectory.c_str();
++
++	printf(&quot;&gt;%s&lt;\n&quot;,s);
+ #endif
+-	
+-	printf(&quot;&gt;%s&lt;\n&quot;,s);
+-	m_hSearch = _findfirst(s,&amp;m_fdData);
+-	delete [] s;	
++
++	m_hSearch = _wfindfirst(s,&amp;m_fdData);
++
+ 	if(m_hSearch == -1)
+ 	{
+ 		printf(&quot;Find first failed\n&quot;);
+ 		return false;
+ 	}
++
+ 	m_sDirectory = sDirectory;
++
+ 	return true;
+ }// end Init
+ 
+@@ -130,13 +145,42 @@
+ 	return bRtn;
+ }// end Close
+ 
++std::string CDirectorySearch::GetFileName()
++{
++	std::string sBuffer;
++
++#if defined(__WIN32)
++	int len = wideCharStringToUtf8(m_fdData.name, -1, NULL);
++	char fileName[len];
++
++	wideCharStringToUtf8(m_fdData.name, -1, fileName);
++
++	sBuffer = fileName;
++#else
++	sBuffer = m_fdData.name;
++#endif
++
++	return sBuffer;
++}
++
+ std::string CDirectorySearch::GetFilePath()
+ {// begin GetFilePath
+-	std::string sBuffer = &quot;&quot;;
+-	sBuffer = m_sDirectory;
++	std::string sBuffer = m_sDirectory;
++
+ 	if(sBuffer[sBuffer.length()-1] != DIRECTORY_DELIMITOR &amp;&amp; m_fdData.name[0] != DIRECTORY_DELIMITOR)
+ 		sBuffer += DIRECTORY_DELIMITOR;
++
++#if defined(__WIN32)
++	int len = wideCharStringToUtf8(m_fdData.name, -1, NULL);
++	char filePath[len];
++
++	wideCharStringToUtf8(m_fdData.name, -1, filePath);
++
++	sBuffer += filePath;
++#else
+ 	sBuffer += m_fdData.name;
++#endif
++
+ 	return sBuffer;
+ }// end GetFilePath
+ 
+@@ -166,26 +210,30 @@
+ 
+ bool CDirectorySearch::IsSingleDot()
+ {// begin IsSingleDot
+-	if(IsDirectory())
+-		if(strcmp(&quot;.&quot;,m_fdData.name) == 0)
+-			return true;
+-	return false;
++#if defined(__WIN32)
++	return (IsDirectory() &amp;&amp; wcscmp(L&quot;.&quot;, m_fdData.name) == 0);
++#else
++	return (IsDirectory() &amp;&amp; strcmp(&quot;.&quot;,m_fdData.name) == 0);
++#endif
+ }// end IsSingleDot
+ 
+ bool CDirectorySearch::IsDoubleDot()
+ {// begin IsDoubleDot
+-	if(IsDirectory())
+-		if(strcmp(&quot;..&quot;,m_fdData.name) == 0)
+-			return true;
+-	return false;
++#if defined(__WIN32)
++	return (IsDirectory() &amp;&amp; wcscmp(L&quot;..&quot;, m_fdData.name) == 0);
++#else
++	return (IsDirectory() &amp;&amp; strcmp(&quot;..&quot;,m_fdData.name) == 0);
++#endif
+ }// end IsDoubleDot
+ 
+ bool CDirectorySearch::IsExtension(const char *pExtension)
+ {// begin IsExtension
+ 	int nExtLen = strlen(pExtension);
+ 	char *pTempBuffer = new char[nExtLen+1];
+-	const char *pFileExt = GetExtension();
+-	strcpy(pTempBuffer,pExtension);
++	std::string fileExt = GetExtension();
++
++	strcpy(pTempBuffer, fileExt.c_str());
++
+ 	for(int i = 0,nCurrExtLen = 0;i &lt; nExtLen;i++,nCurrExtLen++)
+ 	{
+ 		if(pTempBuffer[i+1] == '\0')
+@@ -198,7 +246,7 @@
+ 		{
+ 			pTempBuffer[i] = '\0';
+ 			if(pTempBuffer[i-nCurrExtLen] == '*' || pTempBuffer[i-nCurrExtLen] == '?' 
+-				|| (pFileExt &amp;&amp; strcmp(&amp;pTempBuffer[i-nCurrExtLen],pFileExt) == 0))
++				|| strcmp(&amp;pTempBuffer[i-nCurrExtLen], fileExt.c_str()) == 0)
+ 			{
+ 				// free the buffer
+ 				delete []pTempBuffer;
+@@ -212,13 +260,25 @@
+ 	return false;
+ }// end IsExtension
+ 
+-const char * CDirectorySearch::GetExtension()
++std::string CDirectorySearch::GetExtension()
+ {// begin GetExtension
+-	for(int i = strlen(m_fdData.name)-1;i &gt;= 0;i--)
+-	{// begin search
+-		if(m_fdData.name[i] == '.')
+-			return &amp;m_fdData.name[i+1];
+-	}// end search
+-	return NULL;
++#if defined(__WIN32)
++	int len = wideCharStringToUtf8(m_fdData.name, -1, NULL);
++	char filePath[len];
++
++	wideCharStringToUtf8(m_fdData.name, -1, filePath);
++#else
++	char *filePath = m_fdData.name;
++#endif
++
++	std::string sBuffer;
++
++	for (int i = strlen(filePath) - 1; i &gt;= 0; i--)
++	{
++		if (filePath[i] == '.')
++			sBuffer = &amp;filePath[i + 1];
++	}
++
++	return sBuffer;
+ }// end GetExtension
+ 
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/DirectorySearch.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/DirectorySearch.h	2010-09-26 19:39:57 UTC (rev 6669)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/DirectorySearch.h	2010-09-26 22:02:44 UTC (rev 6670)
+@@ -24,7 +24,7 @@
+ #include &lt;string.h&gt;
+ #endif
+ #include &lt;cstring&gt;
+-#include &quot;StdFile.h&quot;
++#include &quot;StdFile.h&quot;
+ 
+ // create a non file bit for unix
+ #define _A_NONFILE	0x03
+@@ -38,14 +38,14 @@
+ #define _A_SUBDIR	0x10
+ 
+ // we need to emulate the windows style directory searching
+-struct _finddata_t {
++struct _wfinddata_t {
+ 	unsigned    attrib;
+ 	time_t      time_create;    /* -1 for FAT file systems */
+ 	time_t      time_access;    /* -1 for FAT file systems */
+ 	time_t      time_write;
+ 	int64_t     size;
+ 	char        name[260];
+-	_finddata_t() : attrib(0), time_create(0), time_access(0), time_write(0), size(0) {name[0] = 0;}
++	_wfinddata_t() : attrib(0), time_create(0), time_access(0), time_write(0), size(0) {name[0] = 0;}
+ };
+ 
+ #endif
+@@ -54,11 +54,11 @@
+ class CDirectorySearch
+ {
+ public:
+-	const char * GetExtension();
++	std::string GetExtension();
+ 	bool IsExtension(const char *pExtension);
+ 	inline bool NextFile()
+ 	{// begin NextFile
+-		if(_findnext(m_hSearch,&amp;m_fdData) == -1)
++		if(_wfindnext(m_hSearch,&amp;m_fdData) == -1)
+ 			return false;
+ 		return true;
+ 	}// end NextFile
+@@ -87,14 +87,7 @@
+ 		return (bool)(m_fdData.attrib &amp; _A_NONFILE);
+ 	}// end IsNotFile
+ 	std::string GetFileDirectory();
+-	inline char * GetFileName(char *pBuffer)
+-	{// begin GetFileName
+-		return strcpy(pBuffer,m_fdData.name);
+-	}// end GetFileName
+-	inline const char * GetFileName()
+-	{// begin GetFileName
+-		return (const char *)m_fdData.name;
+-	}// end GetFileName
++	std::string GetFileName();
+ 	std::string GetFilePath();
+ 	bool Close();
+ 	CDirectorySearch();
+@@ -103,13 +96,13 @@
+ protected:
+ 	std::string GetFileDirectory(std::string sFilePath) const;
+ 	long m_hSearch;
+-	_finddata_t m_fdData;
++	_wfinddata_t m_fdData;
+ 	std::string m_sDirectory;
+ private:
+ #if defined(__unix__) || defined(__APPLE__)
+ 	// prototypes
+-	int _findfirst(const char *path,_finddata_t *pfdData);
+-	int _findnext(unsigned long int hDir,_finddata_t *pfdData);
++	int _wfindfirst(const char *path,_wfinddata_t *pfdData);
++	int _wfindnext(unsigned long int hDir,_wfinddata_t *pfdData);
+ 	int _findclose(unsigned long int hDir);
+ #endif
+ };
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003853.html">[Avidemux-svn-commit] r6669 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4
+</A></li>
+	<LI>Next message: <A HREF="003855.html">[Avidemux-svn-commit] r6671 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3854">[ date ]</a>
+              <a href="thread.html#3854">[ thread ]</a>
+              <a href="subject.html#3854">[ subject ]</a>
+              <a href="author.html#3854">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

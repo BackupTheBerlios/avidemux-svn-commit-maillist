@@ -1,0 +1,179 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3482 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_utilities ADM_videoFilter
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3482%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%0A%09ADM_libraries/ADM_utilities%20ADM_videoFilter&In-Reply-To=%3C200708061803.l76I3c8a019281%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000756.html">
+   <LINK REL="Next"  HREF="000758.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3482 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_utilities ADM_videoFilter</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3482%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%0A%09ADM_libraries/ADM_utilities%20ADM_videoFilter&In-Reply-To=%3C200708061803.l76I3c8a019281%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3482 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_utilities ADM_videoFilter">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Aug  6 20:03:38 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000756.html">[Avidemux-svn-commit] r3481 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs
+</A></li>
+        <LI>Next message: <A HREF="000758.html">[Avidemux-svn-commit] r3483 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#757">[ date ]</a>
+              <a href="thread.html#757">[ thread ]</a>
+              <a href="subject.html#757">[ subject ]</a>
+              <a href="author.html#757">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-08-06 20:03:37 +0200 (Mon, 06 Aug 2007)
+New Revision: 3482
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_imageLoader.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidLogo.cpp
+Log:
+[Filter] More on imageLoader and logo filter
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_imageLoader.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_imageLoader.cpp	2007-08-06 18:03:05 UTC (rev 3481)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_imageLoader.cpp	2007-08-06 18:03:37 UTC (rev 3482)
+@@ -1,5 +1,5 @@
+ /***************************************************************************
+-    copyright            : (C) 2003-2005 by mean
++    copyright            : (C) 2007 by mean
+     email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+  ***************************************************************************/
+ 
+@@ -29,13 +29,10 @@
+ 
+ #include &quot;ADM_codecs/ADM_codec.h&quot;
+ #include &quot;ADM_codecs/ADM_ffmp43.h&quot;
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
+ 
+ 
+-/*
+- * 	\fn 	createImageFromFile
+- *  \brief 	Create an image from a file. Only jpg supporter ATM
+- * 
+- */
++
+ static uint8_t read8(FILE *fd)
+ {
+ 	return fgetc(fd);
+@@ -49,7 +46,11 @@
+ 	return (a&lt;&lt;8)+b;
+ 		
+ }
++/*
++		\fn 	createImageFromFile
++		\brief 	Create and returns an ADMImage from a file, only YV12 jpg supported ATM
+ 
++*/
+ ADMImage *createImageFromFile(const char *filename)
+ {
+ 		int32_t nnum;
+@@ -133,8 +134,8 @@
+ 		    fread(data,_imgSize,1,fd);
+ 		    fclose(fd);
+ 		  //
+-		    ADMImage *image=new ADMImage(w,h);
+-		    ADMImage tmpImage(w,h);
++		    
++		    ADMImage tmpImage(w,h,1); // It is a reference image
+ 		    // Now unpack it ...
+ 		    decoderFFMJPEG *decoder=new decoderFFMJPEG(w,h);
+ 		    ADMCompressedImage bin;
+@@ -142,15 +143,21 @@
+ 		    bin.dataLength=_imgSize; // This is more than actually, but who cares...
+ 		    
+ 		    decoder-&gt;uncompress (&amp;bin, &amp;tmpImage);
+-		    
++		    //
++		    ADMImage *image=NULL;
++		    if(tmpImage._colorspace==ADM_COLOR_YV12)
++		    {
++		    	GUI_Error_HIG(_(&quot;Wrong Colorspace&quot;),_(&quot;Only YV12/I420 JPegs are supported&quot;));
++		    }else
++		    {		    
++		    		image=new ADMImage(w,h);
++		    		image-&gt;duplicate(&amp;tmpImage);
++		    }
++		    // Cannot destroy decoder earlier as tmpImage has pointers to its internals
+ 		    delete decoder;
+ 		    decoder=NULL;
+-		    //
+-		    image-&gt;duplicate(&amp;tmpImage);
+-		   // 
+ 		    delete [] data;
+-		    return image;
+-		
++		    return image;		
+ }
+ 
+ //EOF
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidLogo.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidLogo.cpp	2007-08-06 18:03:05 UTC (rev 3481)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidLogo.cpp	2007-08-06 18:03:37 UTC (rev 3482)
+@@ -84,9 +84,20 @@
+ 
+ uint8_t ADMVideoLogo::configure(AVDMGenericVideoStream * instream)
+ {
+- 
+-
+-     return 1;
++#define PX(x) &amp;(_param-&gt;x)
++	   diaElemFile       file(0,(char **)PX(image),_(&quot;_Logo (jpg file):&quot;));
++	   diaElemUInteger   positionX(PX(x),_(&quot;_X Position:&quot;),0,_info.width);
++	   diaElemUInteger   positionY(PX(y),_(&quot;_Y Position:&quot;),0,_info.height);
++	   diaElemUInteger   alpha(PX(alpha),_(&quot;_Alpha:&quot;),0,255);
++	    
++	   diaElem *elems[4]={&amp;file,&amp;positionX,&amp;positionY,&amp;alpha};
++	  
++	   if( diaFactoryRun(&quot;Logo&quot;,4,elems))
++	   {
++		   init();
++		   return 1;
++	   }
++	   return 0;
+ }
+ 
+ //_______________________________________________________________
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000756.html">[Avidemux-svn-commit] r3481 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs
+</A></li>
+	<LI>Next message: <A HREF="000758.html">[Avidemux-svn-commit] r3483 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#757">[ date ]</a>
+              <a href="thread.html#757">[ thread ]</a>
+              <a href="subject.html#757">[ subject ]</a>
+              <a href="author.html#757">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

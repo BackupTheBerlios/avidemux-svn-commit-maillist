@@ -1,0 +1,165 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5509 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5509%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200911160611.nAG6BwxI002236%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002719.html">
+   <LINK REL="Next"  HREF="002722.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5509 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5509%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200911160611.nAG6BwxI002236%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5509 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Nov 16 07:11:58 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002719.html">[Avidemux-svn-commit] r5508 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resize
+</A></li>
+        <LI>Next message: <A HREF="002722.html">[Avidemux-svn-commit] r5510 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2720">[ date ]</a>
+              <a href="thread.html#2720">[ thread ]</a>
+              <a href="subject.html#2720">[ subject ]</a>
+              <a href="author.html#2720">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-11-16 07:11:58 +0100 (Mon, 16 Nov 2009)
+New Revision: 5509
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp
+Log:
+[Editor] Incomplete PTS/DTS filler
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp	2009-11-16 06:11:52 UTC (rev 5508)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp	2009-11-16 06:11:58 UTC (rev 5509)
+@@ -91,5 +91,89 @@
+ */
+ bool setMpeg4PtsFromDts(vidHeader *hdr,uint64_t timeIncrementUs)
+ {
++    bool bframe=false;
++    aviInfo info;
++    uint32_t flags;
++    hdr-&gt;getVideoInfo(&amp;info);
++
++    uint64_t lastPts=ADM_NO_PTS;
++    uint64_t lastDts=ADM_NO_PTS;
++    // Scan to see if we have b-frames
++    for(int i=0;i&lt;info.nb_frames;i++)
++    {
++        hdr-&gt;getFlags(i,&amp;flags);
++        if(flags &amp; AVI_B_FRAME)
++        {
++            bframe=true;
++            break;
++        }
++    }
++    if(false==bframe)
++    {
++        ADM_info(&quot;No B frame found, settings PTS=DTS\n&quot;);
++        return setPtsEqualDts(hdr,timeIncrementUs);
++    }
++#if 0
++    for(int i=0;i&lt;info.nb_frames;i++)
++    {
++        uint64_t pts,dts;
++        if(true!=hdr-&gt;getPtsDts(i,&amp;pts,&amp;dts))
++        {
++            printf(&quot;[Editor] GetPtsDts failed for frame %&quot;LU&quot;\n&quot;,i);
++            return false;
++        }
++        int k=0;
++        if(pts==ADM_NO_PTS) k+=GOT_NO_PTS;
++        if(dts==ADM_NO_PTS) k+=GOT_NO_DTS;
++        switch(k)
++        {
++            case GOT_BOTH : // Got both
++                    lastPts=pts;
++                    lastDts=dts;
++                continue;            
++                break;
++            case GOT_NONE: // Got none
++                {
++                        if(lastDts!=ADM_NO_PTS)
++                        {
++                            lastDts+=timeIncrementUs; // Say this one = previous + timeIncrement
++                            dts=lastDts;
++                        }else
++                            continue;   // We dont have a previous skip that one
++                }
++                break;
++            case GOT_NO_DTS :  // got only pts
++                        if(lastDts!=ADM_NO_PTS)
++                        {
++                            lastDts+=timeIncrementUs; // Say this one = previous + timeIncrement
++                            dts=lastDts;
++                        }else
++                            continue;   // We dont have a previous skip that one
++                        //
++                        ADM_assert(dts&lt;=pts);
++                // Dts from PTS
++                break;
++            case GOT_NO_PTS: // got only dts
++                lastDts=dts;
++                {
++                    uint32_t flags;
++                    hdr-&gt;getFlags(i,&amp;flags);
++                    if(flags &amp; AVI_B_FRAME) pts=dts;
++                }
++                // Pts from DTS
++                break;
++            default:
++                ADM_assert(0);
++                break;
++        }
++        ADM_assert(dts&lt;=pts);
++        // update
++        if(true!=hdr-&gt;setPtsDts(i,pts,dts))
++        {
++            printf(&quot;[Editor] SetPtsDts failed for frame %&quot;LU&quot;\n&quot;,i);
++            return false;
++        }
++    }
++#endif
+     return true;
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002719.html">[Avidemux-svn-commit] r5508 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resize
+</A></li>
+	<LI>Next message: <A HREF="002722.html">[Avidemux-svn-commit] r5510 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2720">[ date ]</a>
+              <a href="thread.html#2720">[ thread ]</a>
+              <a href="subject.html#2720">[ subject ]</a>
+              <a href="author.html#2720">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

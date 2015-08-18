@@ -1,0 +1,155 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4963 -	branches/avidemux_2.6_branch_mean/avidemux/common
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4963%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common&In-Reply-To=%3C200906271535.n5RFZQdi025197%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002177.html">
+   <LINK REL="Next"  HREF="002179.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4963 -	branches/avidemux_2.6_branch_mean/avidemux/common</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4963%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common&In-Reply-To=%3C200906271535.n5RFZQdi025197%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4963 -	branches/avidemux_2.6_branch_mean/avidemux/common">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jun 27 17:35:26 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002177.html">[Avidemux-svn-commit] r4962 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_toolkit
+</A></li>
+        <LI>Next message: <A HREF="002179.html">[Avidemux-svn-commit] r4964 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_toolkit
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2178">[ date ]</a>
+              <a href="thread.html#2178">[ thread ]</a>
+              <a href="subject.html#2178">[ subject ]</a>
+              <a href="author.html#2178">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-06-27 17:35:25 +0200 (Sat, 27 Jun 2009)
+New Revision: 4963
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/gui_save.cpp
+Log:
+[image] Fix save as jpeg/save as bmp
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gui_save.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gui_save.cpp	2009-06-27 13:56:25 UTC (rev 4962)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gui_save.cpp	2009-06-27 15:35:25 UTC (rev 4963)
+@@ -30,6 +30,7 @@
+ #include &quot;ADM_vidMisc.h&quot;
+ #include &quot;DIA_fileSel.h&quot;
+ #include &quot;DIA_working.h&quot;
++#include &quot;ADM_preview.h&quot;
+ // Local prototypes
+ void A_saveAudioCopy (char *name);
+ int  A_saveJpg (char *name);
+@@ -334,7 +335,7 @@
+ 
+ }
+ 
+-#ifndef TEST_MP2
++
+ /**
+         \fn A_saveJpg
+         \brief Save a Jpg image from current display buffer
+@@ -342,36 +343,22 @@
+ int A_saveJpg (char *name)
+ {
+   uint8_t fl;
+-    ADMImage image(avifileinfo-&gt;width, avifileinfo-&gt;height);
+-    if(!GUI_getFrameContent(&amp;image, curframe))
++    ADMImage *image=admPreview::getBuffer();
++    if(!image)
+     {
+-      GUI_Error_HIG(QT_TR_NOOP(&quot;Get Frame&quot;),QT_TR_NOOP(&quot;Cannot get this frame to save&quot;));
+-      return 0;
++        printf(&quot;[SaveJpeg] No image\n&quot;);
++        return false;
++
+     }
+-    if(!image.saveAsJpg (name))
++    if(!image-&gt;saveAsJpg (name))
+     {
+         GUI_Error_HIG(QT_TR_NOOP(&quot;Jpeg&quot;),QT_TR_NOOP(&quot;Fail to save as jpeg&quot;));
+         return false;
+     }
+     return true ;
+ }
+-#else
+-/**
+-      \fn A_saveJpg
+-      \brief Save current image as jpeg 95% qual
+ 
+-*/
+-int A_saveJpg (char *name)
+-{
+-static int b=1;
+-         video_body-&gt;changeAudioStream(0,b);
+-        b^=1;
+-        return 1;
+ 
+-}
+-#endif
+-
+-
+ /**
+       \fn A_saveBunchJpg
+       \brief Save the selection  as a bunch of jpeg 95% qual
+@@ -429,12 +416,14 @@
+ */
+ void A_saveImg (const char *name)
+ {
++  ADMImage *image=admPreview::getBuffer();
++    if(!image)
++    {
++        printf(&quot;[SaveJpeg] No image\n&quot;);
++        return ;
+ 
+-  ADMImage image(avifileinfo-&gt;width,avifileinfo-&gt;height);
+-  GUI_getFrameContent(&amp;image, video_body-&gt;getCurrentFrame());
+-  if(image.saveAsBmp(name))
+-        GUI_Info_HIG (ADM_LOG_INFO,QT_TR_NOOP(&quot;Done&quot;),QT_TR_NOOP( &quot;Saved \&quot;%s\&quot;.&quot;), ADM_GetFileName(name));
+-  else
++    }
++  if(!image-&gt;saveAsBmp(name))
+         GUI_Error_HIG (QT_TR_NOOP(&quot;BMP op failed&quot;),QT_TR_NOOP( &quot;Saving %s as a BMP file failed.&quot;), ADM_GetFileName(name));
+ }
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002177.html">[Avidemux-svn-commit] r4962 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_toolkit
+</A></li>
+	<LI>Next message: <A HREF="002179.html">[Avidemux-svn-commit] r4964 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_toolkit
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2178">[ date ]</a>
+              <a href="thread.html#2178">[ thread ]</a>
+              <a href="subject.html#2178">[ subject ]</a>
+              <a href="author.html#2178">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

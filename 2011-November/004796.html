@@ -1,0 +1,154 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7652 -	branches/avidemux_2.6_branch_mean/avidemux_core/ffmpeg_package/patches
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7652%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ffmpeg_package/patches&In-Reply-To=%3C20111105094221.EFF8E48139B%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004795.html">
+   <LINK REL="Next"  HREF="004797.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7652 -	branches/avidemux_2.6_branch_mean/avidemux_core/ffmpeg_package/patches</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7652%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ffmpeg_package/patches&In-Reply-To=%3C20111105094221.EFF8E48139B%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7652 -	branches/avidemux_2.6_branch_mean/avidemux_core/ffmpeg_package/patches">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Nov  5 10:42:21 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004795.html">[Avidemux-svn-commit] r7650 - in	branches/avidemux_2.6_branch_mean/avidemux_core:	ADM_coreVideoCodec/src ffmpeg_package/patches
+</A></li>
+        <LI>Next message: <A HREF="004797.html">[Avidemux-svn-commit] r7653 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreUI/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4796">[ date ]</a>
+              <a href="thread.html#4796">[ thread ]</a>
+              <a href="subject.html#4796">[ subject ]</a>
+              <a href="author.html#4796">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-11-05 10:42:21 +0100 (Sat, 05 Nov 2011)
+New Revision: 7652
+
+Removed:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ffmpeg_package/patches/libavformat_file.c.patch
+Log:
+[ffmpeg] No more utf8&lt;&gt;ucs2 patch needed with recent ffmpeg
+
+Deleted: branches/avidemux_2.6_branch_mean/avidemux_core/ffmpeg_package/patches/libavformat_file.c.patch
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ffmpeg_package/patches/libavformat_file.c.patch	2011-11-05 09:41:05 UTC (rev 7651)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ffmpeg_package/patches/libavformat_file.c.patch	2011-11-05 09:42:21 UTC (rev 7652)
+@@ -1,78 +0,0 @@
+---- libavformat/file.c	2011-08-10 14:18:20.000000000 +0200
+-+++ libavformat/file.c	2011-09-03 08:35:49.575349178 +0200
+-@@ -31,6 +31,75 @@
+- #include &quot;os_support.h&quot;
+- #include &quot;url.h&quot;
+- 
+-+// GRUNTSTER start
+-+#ifdef __WIN32
+-+#include &lt;windows.h&gt;
+-+
+-+int utf8StringToWideChar(const char *utf8String, int utf8StringLength, wchar_t *wideCharString);
+-+int ADM_open(const char *path, int oflag, ...);
+-+
+-+int utf8StringToWideChar(const char *utf8String, int utf8StringLength, wchar_t *wideCharString)
+-+{
+-+	int wideCharStringLength = MultiByteToWideChar(CP_UTF8, 0, utf8String, utf8StringLength, NULL, 0);
+-+
+-+	if (wideCharString)
+-+		MultiByteToWideChar(CP_UTF8, 0, utf8String, utf8StringLength, wideCharString, wideCharStringLength);
+-+
+-+	return wideCharStringLength;
+-+}
+-+
+-+int ADM_open(const char *path, int oflag, ...)
+-+{
+-+	int fileNameLength = utf8StringToWideChar(path, -1, NULL);
+-+	wchar_t wcFile[fileNameLength];
+-+	int creation = 0, access = 0;
+-+	HANDLE hFile;
+-+
+-+	utf8StringToWideChar(path, -1, wcFile);
+-+
+-+	if (oflag &amp; O_WRONLY || oflag &amp; O_RDWR)
+-+	{
+-+		access = GENERIC_WRITE;
+-+
+-+		if (oflag &amp; O_RDWR)
+-+			access |= GENERIC_READ;
+-+
+-+		if (oflag &amp; O_CREAT)
+-+		{
+-+			if (oflag &amp; O_EXCL)
+-+				creation = CREATE_NEW;
+-+			else if (oflag &amp; O_TRUNC)
+-+				creation = CREATE_ALWAYS;
+-+			else
+-+				creation = OPEN_ALWAYS;
+-+		}
+-+		else if (oflag &amp; O_TRUNC)
+-+			creation = TRUNCATE_EXISTING;
+-+	}
+-+	else if (oflag &amp; O_RDONLY)
+-+		creation = OPEN_EXISTING;
+-+
+-+	if (creation &amp; GENERIC_WRITE)
+-+	{
+-+		hFile = CreateFileW(wcFile, access, 0, NULL, creation, 0, NULL);
+-+
+-+		if (hFile == INVALID_HANDLE_VALUE)
+-+			return -1;
+-+		else
+-+			CloseHandle(hFile);
+-+	}
+-+
+-+	hFile = CreateFileW(wcFile, access, FILE_SHARE_READ, NULL, creation, 0, NULL);
+-+
+-+	if (hFile == INVALID_HANDLE_VALUE)
+-+		return -1;
+-+	else
+-+		return _open_osfhandle((intptr_t)hFile, oflag);
+-+}
+-+
+-+#define open ADM_open
+-+#endif
+-+// GRUNTSTER end
+- 
+- /* standard file protocol */
+- 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004795.html">[Avidemux-svn-commit] r7650 - in	branches/avidemux_2.6_branch_mean/avidemux_core:	ADM_coreVideoCodec/src ffmpeg_package/patches
+</A></li>
+	<LI>Next message: <A HREF="004797.html">[Avidemux-svn-commit] r7653 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreUI/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4796">[ date ]</a>
+              <a href="thread.html#4796">[ thread ]</a>
+              <a href="subject.html#4796">[ subject ]</a>
+              <a href="author.html#4796">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

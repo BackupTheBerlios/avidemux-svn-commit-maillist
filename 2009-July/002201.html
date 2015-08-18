@@ -1,0 +1,198 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4986 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4986%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4&In-Reply-To=%3C200907021817.n62IHsgK015056%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002200.html">
+   <LINK REL="Next"  HREF="002202.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4986 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4986%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4&In-Reply-To=%3C200907021817.n62IHsgK015056%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4986 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jul  2 20:17:54 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002200.html">[Avidemux-svn-commit] r4985 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder:	include src
+</A></li>
+        <LI>Next message: <A HREF="002202.html">[Avidemux-svn-commit] r4987 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2201">[ date ]</a>
+              <a href="thread.html#2201">[ thread ]</a>
+              <a href="subject.html#2201">[ subject ]</a>
+              <a href="author.html#2201">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-07-02 20:17:54 +0200 (Thu, 02 Jul 2009)
+New Revision: 4986
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4/ADM_ffMpeg4.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4/ADM_ffMpeg4.h
+Log:
+[ffMpeg4] pop out delayed frame + same Qz as input
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4/ADM_ffMpeg4.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4/ADM_ffMpeg4.cpp	2009-07-02 18:17:52 UTC (rev 4985)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4/ADM_ffMpeg4.cpp	2009-07-02 18:17:54 UTC (rev 4986)
+@@ -84,6 +84,7 @@
+ {
+     switch(Settings.params.mode)
+     {
++      case COMPRESS_SAME:
+       case COMPRESS_CQ:
+             _context-&gt;flags |= CODEC_FLAG_QSCALE;
+             break;
+@@ -116,23 +117,45 @@
+ */
+ bool         ADM_ffMpeg4Encoder::encode (ADMBitstream * out)
+ {
++int sz,q;
+ again:
+-    if(false==preEncode()) return false;
++    sz=0;
++    if(false==preEncode()) // Pop - out the frames stored in the queue due to B-frames
++    {
++        if ((sz = avcodec_encode_video (_context, out-&gt;data, out-&gt;bufferSize, NULL)) &lt;= 0)
++        {
++            printf(&quot;[ffmpeg4] Error %d encoding video\n&quot;,sz);
++            return false;
++        }
++        printf(&quot;[ffmpeg4] Popping delayed bframes (%d)\n&quot;,sz);
++        goto link;
++    }
++    q=image-&gt;_Qp;
++    
++    if(!q) q=2;
+     switch(Settings.params.mode)
+     {
++      case COMPRESS_SAME:
++                // Keep same frame type &amp; same Qz as the incoming frame...
++            _frame.quality = (int) floor (FF_QP2LAMBDA * q+ 0.5);
++
++            if(image-&gt;flags &amp; AVI_KEY_FRAME)    _frame.pict_type=FF_I_TYPE;
++            else if(image-&gt;flags &amp; AVI_B_FRAME) _frame.pict_type=FF_B_TYPE;
++            else                               _frame.pict_type=FF_P_TYPE;
++
++            break;
+       case COMPRESS_CQ:
+             _frame.quality = (int) floor (FF_QP2LAMBDA * Settings.params.qz+ 0.5);
+             break;
+-            break;
+       case COMPRESS_CBR:
+             break;
+      default:
+             printf(&quot;[ffMpeg4] Unsupported encoding mode\n&quot;);
+             return false;
+     }
+-    printf(&quot;[CODEC] Flags = 0x%x, QSCALE=%x, bit_rate=%d, quality=%d qz=%d\n&quot;,_context-&gt;flags,CODEC_FLAG_QSCALE,
+-                                     _context-&gt;bit_rate,  _frame.quality, _frame.quality/ FF_QP2LAMBDA);     
+-    int sz=0;
++    printf(&quot;[CODEC] Flags = 0x%x, QSCALE=%x, bit_rate=%d, quality=%d qz=%d incoming qz=%d\n&quot;,_context-&gt;flags,CODEC_FLAG_QSCALE,
++                                     _context-&gt;bit_rate,  _frame.quality, _frame.quality/ FF_QP2LAMBDA,q);     
++    
+     _frame.reordered_opaque=image-&gt;Pts;
+     if ((sz = avcodec_encode_video (_context, out-&gt;data, out-&gt;bufferSize, &amp;_frame)) &lt; 0)
+     {
+@@ -141,6 +164,7 @@
+     }
+     if(sz==0) // no pic, probably pre filling, try again
+         goto again;
++link:
+     postEncode(out,sz);
+    
+     return true;
+@@ -169,6 +193,7 @@
+     // Update PTS/Dts
+     out-&gt;pts=_frame.reordered_opaque;
+     out-&gt;dts=-1; // FIXME
++    
+ 
+     // Update quant
+     if(!_context-&gt;coded_frame-&gt;quality)
+@@ -274,7 +299,31 @@
+   prolog();
+   return true;
+ }
++
+ /**
++    \fn isDualPass
++
++*/
++bool         ADM_ffMpeg4Encoder::isDualPass(void) 
++{
++    if(Settings.params.mode==COMPRESS_2PASS) return true;
++    return false;
++
++}
++
++/**
++    \fn isDualPass
++
++*/
++bool         ADM_ffMpeg4Encoder::startPass2(void) 
++{
++    // Redo a partial init
++    #warning TOTO
++    return true;
++
++}
++
++/**
+     \fn jpegConfigure
+     \brief UI configuration for jpeg encoder
+ */
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4/ADM_ffMpeg4.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4/ADM_ffMpeg4.h	2009-07-02 18:17:52 UTC (rev 4985)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4/ADM_ffMpeg4.h	2009-07-02 18:17:54 UTC (rev 4986)
+@@ -97,6 +97,9 @@
+ virtual        bool        setup(void); 
+ virtual        bool        encode (ADMBitstream * out);
+ virtual const  char        *getFourcc(void) {return &quot;DIVX&quot;;}
++
++virtual        bool         isDualPass(void) ;
++virtual        bool         startPass2(void) ;
+ };
+ 
+ #endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002200.html">[Avidemux-svn-commit] r4985 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder:	include src
+</A></li>
+	<LI>Next message: <A HREF="002202.html">[Avidemux-svn-commit] r4987 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2201">[ date ]</a>
+              <a href="thread.html#2201">[ thread ]</a>
+              <a href="subject.html#2201">[ subject ]</a>
+              <a href="author.html#2201">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

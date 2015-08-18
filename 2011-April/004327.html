@@ -1,0 +1,549 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7171 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7171%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C20110430191931.EB94348137F%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004326.html">
+   <LINK REL="Next"  HREF="004328.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7171 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7171%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C20110430191931.EB94348137F%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7171 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Apr 30 21:19:31 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004326.html">[Avidemux-svn-commit] r7170 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+        <LI>Next message: <A HREF="004328.html">[Avidemux-svn-commit] r7172 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/common/ADM_audioFilter/src	avidemux/common/ADM_commonUI avidemux/common/ADM_editor	avidemux/common/ADM_script2/include/scriptDialogFactory	avidemux/common/ADM_script2/js avidemux/common/ADM_toolkit	avidemux/common/ADM_videoCodec/src avidemux/qt4/ADM_UIs/src	avidemux/qt4/ADM_userInterfaces/ADM_gui	avidemux_core/ADM_coreAudioDevice/src	avidemux_core/ADM_coreImage/include avidemux_core/ADM_coreImage/src	avidemux_core/ADM_coreJson/src	avidemux_core/ADM_coreUI/include avidemux_core/ADM_coreUI/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_core/ADM_coreVideoCodec/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4327">[ date ]</a>
+              <a href="thread.html#4327">[ thread ]</a>
+              <a href="subject.html#4327">[ subject ]</a>
+              <a href="author.html#4327">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-04-30 21:19:31 +0200 (Sat, 30 Apr 2011)
+New Revision: 7171
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/pref_gen.py
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2.conf
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2_desc.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2_json.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2_pref.h
+Log:
+[pref] Switch from xml to json
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/pref_gen.py
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/pref_gen.py	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/pref_gen.py	2011-04-30 19:19:31 UTC (rev 7171)
+@@ -0,0 +1,190 @@
++#!/usr/bin/python
++# Take a .in file and generate :
++# pref.cpp which is a loader/saver file + associated structure
++# (c) Mean 2011
++#
++#  const char *name
++#  type
++#  char *current_val
++#  const char *default
++#  const char *min
++#  const char *max
++#
++import os
++import re
++import sys
++
++structName=r'prefs_list'
++allCTypes=dict()
++allATypes=dict()
++allJTypes=dict()
++
++
++allJTypes[&quot;uint32_t&quot;]=&quot;json.addUint32(&quot;
++allJTypes[&quot;int32_t&quot;]=&quot;json.addInt32(&quot;
++allJTypes[&quot;bool&quot;]=&quot;json.addBool(&quot;
++allJTypes[&quot;string&quot;]=&quot;json.addString(&quot;
++allJTypes[&quot;float&quot;]=&quot;json.addFloat(&quot;
++allJTypes[&quot;filename&quot;]=&quot;json.addString(&quot;
++
++
++allATypes[&quot;uint32_t&quot;]=&quot;ADM_param_uint32_t&quot;
++allATypes[&quot;int32_t&quot;] =&quot;ADM_param_int32_t &quot;
++allATypes[&quot;float&quot;]   =&quot;ADM_param_float   &quot;
++allATypes[&quot;bool&quot;]    =&quot;ADM_param_bool    &quot;
++allATypes[&quot;string&quot;]  =&quot;ADM_param_string  &quot;
++allATypes[&quot;filename&quot;]=&quot;ADM_param_string  &quot;
++
++fullPath=&quot;&quot;
++nested=list()
++gotName=False
++def usage():
++    print(&quot;python pref_gen.py xxxx.in&quot;)
++#########################################################
++def outputJson(st):
++    jsonFile.write(str(st)+&quot;\n&quot;)
++    #print(st)
++    pass
++def outputList(st):
++    listFile.write(str(st)+&quot;\n&quot;)
++    #print(st)
++    pass
++
++#
++
++#
++def makeStructure(varType,params):
++    if(len(params)&lt;2):
++        print &quot;Not enough parameter for line &quot;+str(varName)
++        exit(1)
++    min=0
++    max=100
++    default=20
++    #print varType
++    #print params
++    nbParam=len(params)
++    varName=params[0]
++    default=str(params[1])
++    default=re.sub(r'&quot;',r'',default)
++    default=&quot;\&quot;&quot;+str(default)+&quot;\&quot;&quot;
++    if(nbParam==2):
++        if(varType!=&quot;string&quot; and varType!=&quot;filename&quot;):
++            print (&quot;Error &quot;+str(varName)+&quot; has not the good number of parameters,type=&quot;+str(varType))
++            raise
++        min=r&quot;NULL&quot;
++        max=r'NULL'
++    elif(nbParam==4):
++        min=&quot;\&quot;&quot;+str(params[2])+str(&quot;\&quot;&quot;)
++        max=&quot;\&quot;&quot;+str(params[3])+str(&quot;\&quot;&quot;)
++    if(not varType in allATypes):
++        print(&quot;json:Unknown var type &lt;&quot;+str(varType)+str(&quot;&gt;&quot;))
++        exit(1)
++    if(len(fullPath)==0):
++        fullName=varName
++    else:
++        fullName=fullPath+&quot;_&quot;+varName
++    if(len(fullPath2)==0):
++        fullName2=varName
++    else:
++        fullName2=fullPath2+&quot;.&quot;+varName
++    out= &quot;{ &quot;+str(fullName.upper())+str(&quot;,\&quot;&quot;)+str(fullName2)+str(&quot;\&quot;&quot;)
++    if(len(out)&lt;15):
++        out=out+&quot;\t&quot;
++    if(len(out)&lt;23):
++        out=out+&quot;\t&quot;
++    out=out+&quot;,\t&quot;+str(allATypes[varType])
++    out=out+&quot;\t,&quot;+str(default)+&quot;,\t&quot;+str(min)+&quot;,\t&quot;+str(max)
++    out=out+&quot;,\tNULL},&quot;
++    outputJson(out)
++    outputList(fullName.upper())
++###################################################################################################################################
++
++def writeJsonHead():
++    outputJson(&quot;// automatically generated by pref_gen.py, do not edit!&quot;)
++    outputJson(&quot;#if 0&quot;)
++    outputJson(&quot;typedef struct&quot;)
++    outputJson(&quot;{&quot;)
++    outputJson(&quot;   const char *name;&quot;)
++    outputJson(&quot;   TYPE  type;&quot;)
++    outputJson(&quot;   const char *defaultValue;&quot;)
++    outputJson(&quot;   const char *min;&quot;)
++    outputJson(&quot;   const char *max;&quot;)
++    outputJson(&quot;   char *Value;&quot;)
++    outputJson(&quot;}optionDesc;&quot;)
++    outputJson(&quot;#endif &quot;)
++    outputJson(&quot;static optionDesc myOptions[]={&quot;)
++def writeJsonFooter():
++    outputJson(&quot;};\n&quot;)
++
++###################################################################################################################################
++# Main...
++###################################################################################################################################
++nb=len(sys.argv)
++if(nb!=2):       
++    usage()
++    exit(1)
++print(&quot;Processing &quot;+str(sys.argv[1]))
++inputFile=sys.argv[1]
++if(not os.path.isfile(inputFile)):
++    print &quot;no such file &quot;+str(inputFile)
++    exit(1)
++jsonFileName=re.sub(r'.conf',r'_pref.h',inputFile)
++listFileName=str(&quot;../include/&quot;+re.sub(r'.conf',r'_list.h',intputFile)
++print(&quot;Generating &quot;+jsonFileName)
++jsonFile=open(jsonFileName,'w')
++print(&quot;Generating &quot;+listFileName)
++listFile=open(listFileName,'w')
++#
++f=open(inputFile,'r')
++while(1):
++    line=f.readline()
++    #print line
++    if(len(line)==0):
++        print &quot;Reached end of file&quot;
++        break # eof
++    line=re.sub(r'#.*$',r'',line).strip()
++    #print(&quot;&gt;&quot;+str(line)+&quot;:&quot;+str(len(line)))
++    if(len(line)==0):
++        #print &quot;skip&quot;
++        continue # comment
++    # Remove #....
++    if(line.find(r'{')!=-1):
++        #
++        structs=re.sub(r'{.*$',r'',line).strip()
++        if(len(nested)==0 and gotName==False): # first one = struct Name
++            structName=structs
++            print(&quot;Our structure is :&quot;+str(structName))
++            writeJsonHead()
++            gotName=True
++        else:  # else we have structure inside structure
++            #outputHeader(&quot;struct &quot;+structs+&quot; {&quot;)
++            nested.append(structs)
++            fullPath=&quot;.&quot;.join(nested)
++            fullPath2=&quot;.&quot;.join(nested)
++    elif(line.find(r'}')!=-1):
++        if(len(nested)!=0):
++            last=nested.pop()
++            #outputHeader(&quot;};&quot;)
++        fullPath=&quot;.&quot;.join(nested)
++        fullPath2=&quot;.&quot;.join(nested)
++    elif(line.find(':')!=-1): # varname : type,val,min,max
++        if(gotName==False):
++            print &quot;No structure name !&quot;
++            exit(1)
++        line=re.sub(r'#.*$',r'',line)
++        line=re.sub(r'//.*$',r'',line)
++        # split by :
++        (varType,leftOver)=line.split(r':')
++        params=leftOver.split(r',')
++        for i in range(0,len(params)):
++                params[i]=params[i].strip()
++                #print &quot;\t&quot;+params[i]+&quot;\n&quot;
++        makeStructure(varType,params)
++    else:
++        print &quot;Invalid line &quot;+str(line)
++        exit(1)
++f.close()
++writeJsonFooter()
++jsonFile.close()
++listFile.close()
++print &quot;All done&quot;
+
+
+Property changes on: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/pref_gen.py
+___________________________________________________________________
+Added: svn:executable
+   + *
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2.conf
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2.conf	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2.conf	2011-04-30 19:19:31 UTC (rev 7171)
+@@ -0,0 +1,64 @@
++#
++# this file will be used as input for pref.h and pref.cpp
++#
++
++# option_name :, name without '-'; the dot is the separator used for the xml tree
++#		 '.' will be changed to '_'
++#		 all letters will be changed to there upper case equivalents
++# type        :, ( uint32_t | INT | ULONG | LONG | FLOAT | string | BOOL)
++# value       :, default value; used if no xml value available
++# minimum     :, the smallest value this option can have (ignored for string)
++# maximum     :, the largest  value this option can have (ignored for string)
++
++# option name				type	value	minimum	maximum (incl.)
++# codec metasettings for mpeg2enc based
++my_prefs_struct{
++features{
++bool:swap_if_A_greater_than_B,	       1,      0,      1
++bool:saveprefsonexit,		       1,	    0,	    1
++bool:ignoresavedmarkers,	       0,	    0,	    1
++uint32_t:use_odml,                     0,      0,      1
++uint32_t:use_systray,                  0,      0,      1
++bool:reuse_2pass_log,                  0,      0,      1
++bool:audiobar_uses_master,             0,      0,      1
++uint32_t:threading_lavc,               0,      0,      32
++uint32_t:cpu_caps,  	              4294967295,      0,      4294967295
++uint32_t:mpeg_no_limit,                0,      0,      1
++bool:alternate_mp3_tag,                1,      0,      1
++bool:vdpau,                            0,      0,      1
++}
++#
++lastfiles{
++string:lastdir_read,				&quot;&quot;
++string:lastdir_write,				&quot;&quot;
++string:file1,			        	&quot;&quot;
++string:file2,			        	&quot;&quot;
++string:file3,			        	&quot;&quot;
++string:file4,			        	&quot;&quot;
++}
++#
++uint32_t:message_level,		        2,	0,	2
++#
++audio_device{
++string:audiodevice,			ALSA
++string:alsa_device,                     &quot;dmix&quot;
++}
++uint32_t:videodevice,			0,	0,	10
++#
++priority{
++uint32_t:encoding,                      3,      0,      4
++uint32_t:indexing,                      3,      0,      4
++uint32_t:playback,                      0,      0,      4
++}
++#
++Default{
++uint32_t:postproc_type,			3,	0,	7
++uint32_t:postproc_value,		3,	0,	5
++uint32_t:downmixing,		        2,	0,	2
++
++}
++#
++uint32_t:mpegsplit_autosplit, 		790,	400,	5000
++#
++}
++#
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2.h	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2.h	2011-04-30 19:19:31 UTC (rev 7171)
+@@ -0,0 +1,45 @@
++// automatically generated by admSerialization.py do not edit
++#ifndef ADM_my_prefs_struct_CONF_H
++#define ADM_my_prefs_struct_CONF_H
++typedef struct {
++struct  {
++	bool swap_if_A_greater_than_B;
++	bool saveprefsonexit;
++	bool ignoresavedmarkers;
++	uint32_t use_odml;
++	uint32_t use_systray;
++	bool reuse_2pass_log;
++	bool audiobar_uses_master;
++	uint32_t threading_lavc;
++	uint32_t cpu_caps;
++	uint32_t mpeg_no_limit;
++	bool alternate_mp3_tag;
++	bool vdpau;
++}features;
++struct  {
++	char * lastdir_read;
++	char * lastdir_write;
++	char * file1;
++	char * file2;
++	char * file3;
++	char * file4;
++}lastfiles;
++uint32_t message_level;
++struct  {
++	char * audiodevice;
++	char * alsa_device;
++}audio_device;
++uint32_t videodevice;
++struct  {
++	uint32_t encoding;
++	uint32_t indexing;
++	uint32_t playback;
++}priority;
++struct  {
++	uint32_t postproc_type;
++	uint32_t postproc_value;
++	uint32_t downmixing;
++}Default;
++uint32_t mpegsplit_autosplit;
++}my_prefs_struct;
++#endif
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2_desc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2_desc.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2_desc.cpp	2011-04-30 19:19:31 UTC (rev 7171)
+@@ -0,0 +1,33 @@
++// automatically generated by admSerialization.py, do not edit!
++extern const ADM_paramList my_prefs_struct_param[]={
++ {&quot;features.swap_if_A_greater_than_B&quot;,offsetof(my_prefs_struct,features.swap_if_A_greater_than_B),&quot;bool&quot;,ADM_param_bool},
++ {&quot;features.saveprefsonexit&quot;,offsetof(my_prefs_struct,features.saveprefsonexit),&quot;bool&quot;,ADM_param_bool},
++ {&quot;features.ignoresavedmarkers&quot;,offsetof(my_prefs_struct,features.ignoresavedmarkers),&quot;bool&quot;,ADM_param_bool},
++ {&quot;features.use_odml&quot;,offsetof(my_prefs_struct,features.use_odml),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;features.use_systray&quot;,offsetof(my_prefs_struct,features.use_systray),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;features.reuse_2pass_log&quot;,offsetof(my_prefs_struct,features.reuse_2pass_log),&quot;bool&quot;,ADM_param_bool},
++ {&quot;features.audiobar_uses_master&quot;,offsetof(my_prefs_struct,features.audiobar_uses_master),&quot;bool&quot;,ADM_param_bool},
++ {&quot;features.threading_lavc&quot;,offsetof(my_prefs_struct,features.threading_lavc),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;features.cpu_caps&quot;,offsetof(my_prefs_struct,features.cpu_caps),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;features.mpeg_no_limit&quot;,offsetof(my_prefs_struct,features.mpeg_no_limit),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;features.alternate_mp3_tag&quot;,offsetof(my_prefs_struct,features.alternate_mp3_tag),&quot;bool&quot;,ADM_param_bool},
++ {&quot;features.vdpau&quot;,offsetof(my_prefs_struct,features.vdpau),&quot;bool&quot;,ADM_param_bool},
++ {&quot;lastfiles.lastdir_read&quot;,offsetof(my_prefs_struct,lastfiles.lastdir_read),&quot;char *&quot;,ADM_param_string},
++ {&quot;lastfiles.lastdir_write&quot;,offsetof(my_prefs_struct,lastfiles.lastdir_write),&quot;char *&quot;,ADM_param_string},
++ {&quot;lastfiles.file1&quot;,offsetof(my_prefs_struct,lastfiles.file1),&quot;char *&quot;,ADM_param_string},
++ {&quot;lastfiles.file2&quot;,offsetof(my_prefs_struct,lastfiles.file2),&quot;char *&quot;,ADM_param_string},
++ {&quot;lastfiles.file3&quot;,offsetof(my_prefs_struct,lastfiles.file3),&quot;char *&quot;,ADM_param_string},
++ {&quot;lastfiles.file4&quot;,offsetof(my_prefs_struct,lastfiles.file4),&quot;char *&quot;,ADM_param_string},
++ {&quot;message_level&quot;,offsetof(my_prefs_struct,message_level),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;audio_device.audiodevice&quot;,offsetof(my_prefs_struct,audio_device.audiodevice),&quot;char *&quot;,ADM_param_string},
++ {&quot;audio_device.alsa_device&quot;,offsetof(my_prefs_struct,audio_device.alsa_device),&quot;char *&quot;,ADM_param_string},
++ {&quot;videodevice&quot;,offsetof(my_prefs_struct,videodevice),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;priority.encoding&quot;,offsetof(my_prefs_struct,priority.encoding),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;priority.indexing&quot;,offsetof(my_prefs_struct,priority.indexing),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;priority.playback&quot;,offsetof(my_prefs_struct,priority.playback),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;Default.postproc_type&quot;,offsetof(my_prefs_struct,Default.postproc_type),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;Default.postproc_value&quot;,offsetof(my_prefs_struct,Default.postproc_value),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;Default.downmixing&quot;,offsetof(my_prefs_struct,Default.downmixing),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;mpegsplit_autosplit&quot;,offsetof(my_prefs_struct,mpegsplit_autosplit),&quot;uint32_t&quot;,ADM_param_uint32_t},
++{NULL,0,NULL}
++};
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2_json.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2_json.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2_json.cpp	2011-04-30 19:19:31 UTC (rev 7171)
+@@ -0,0 +1,56 @@
++// automatically generated by admSerialization.py, do not edit!
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_paramList.h&quot;
++#include &quot;ADM_coreJson/include/ADM_coreJson.h&quot;
++#include &quot;prefs2.h&quot;
++bool  my_prefs_struct_jserialize(const char *file, const my_prefs_struct *key){
++admJson json;
++json.addNode(&quot;features&quot;);
++json.addBool(&quot;swap_if_A_greater_than_B&quot;,key-&gt;features.swap_if_A_greater_than_B);
++json.addBool(&quot;saveprefsonexit&quot;,key-&gt;features.saveprefsonexit);
++json.addBool(&quot;ignoresavedmarkers&quot;,key-&gt;features.ignoresavedmarkers);
++json.addUint32(&quot;use_odml&quot;,key-&gt;features.use_odml);
++json.addUint32(&quot;use_systray&quot;,key-&gt;features.use_systray);
++json.addBool(&quot;reuse_2pass_log&quot;,key-&gt;features.reuse_2pass_log);
++json.addBool(&quot;audiobar_uses_master&quot;,key-&gt;features.audiobar_uses_master);
++json.addUint32(&quot;threading_lavc&quot;,key-&gt;features.threading_lavc);
++json.addUint32(&quot;cpu_caps&quot;,key-&gt;features.cpu_caps);
++json.addUint32(&quot;mpeg_no_limit&quot;,key-&gt;features.mpeg_no_limit);
++json.addBool(&quot;alternate_mp3_tag&quot;,key-&gt;features.alternate_mp3_tag);
++json.addBool(&quot;vdpau&quot;,key-&gt;features.vdpau);
++json.endNode();
++json.addNode(&quot;lastfiles&quot;);
++json.addString(&quot;lastdir_read&quot;,key-&gt;lastfiles.lastdir_read);
++json.addString(&quot;lastdir_write&quot;,key-&gt;lastfiles.lastdir_write);
++json.addString(&quot;file1&quot;,key-&gt;lastfiles.file1);
++json.addString(&quot;file2&quot;,key-&gt;lastfiles.file2);
++json.addString(&quot;file3&quot;,key-&gt;lastfiles.file3);
++json.addString(&quot;file4&quot;,key-&gt;lastfiles.file4);
++json.endNode();
++json.addUint32(&quot;message_level&quot;,key-&gt;message_level);
++json.addNode(&quot;audio_device&quot;);
++json.addString(&quot;audiodevice&quot;,key-&gt;audio_device.audiodevice);
++json.addString(&quot;alsa_device&quot;,key-&gt;audio_device.alsa_device);
++json.endNode();
++json.addUint32(&quot;videodevice&quot;,key-&gt;videodevice);
++json.addNode(&quot;priority&quot;);
++json.addUint32(&quot;encoding&quot;,key-&gt;priority.encoding);
++json.addUint32(&quot;indexing&quot;,key-&gt;priority.indexing);
++json.addUint32(&quot;playback&quot;,key-&gt;priority.playback);
++json.endNode();
++json.addNode(&quot;Default&quot;);
++json.addUint32(&quot;postproc_type&quot;,key-&gt;Default.postproc_type);
++json.addUint32(&quot;postproc_value&quot;,key-&gt;Default.postproc_value);
++json.addUint32(&quot;downmixing&quot;,key-&gt;Default.downmixing);
++json.endNode();
++json.addUint32(&quot;mpegsplit_autosplit&quot;,key-&gt;mpegsplit_autosplit);
++return json.dumpToFile(file);
++};
++bool  my_prefs_struct_jdeserialize(const char *file, const ADM_paramList *tmpl,my_prefs_struct *key){
++admJsonToCouple json;
++CONFcouple *c=json.readFromFile(file);
++if(!c) {ADM_error(&quot;Cannot read json file&quot;);return false;}
++bool r= ADM_paramLoadPartial(c,tmpl,key);
++delete c;
++return r;
++};
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2_pref.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2_pref.h	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs2_pref.h	2011-04-30 19:19:31 UTC (rev 7171)
+@@ -0,0 +1,44 @@
++// automatically generated by pref_gen.py, do not edit!
++#if 0
++typedef struct
++{
++   const char *name;
++   TYPE  type;
++   const char *defaultValue;
++   const char *min;
++   const char *max;
++   char *Value;
++}optionDesc;
++#endif 
++static optionDesc myOptions[]={
++{ FEATURES_SWAP_IF_A_GREATER_THAN_B,&quot;features.swap_if_A_greater_than_B&quot;,	ADM_param_bool    	,&quot;1&quot;,	&quot;0&quot;,	&quot;1&quot;,	NULL},
++{ FEATURES_SAVEPREFSONEXIT,&quot;features.saveprefsonexit&quot;,	ADM_param_bool    	,&quot;1&quot;,	&quot;0&quot;,	&quot;1&quot;,	NULL},
++{ FEATURES_IGNORESAVEDMARKERS,&quot;features.ignoresavedmarkers&quot;,	ADM_param_bool    	,&quot;0&quot;,	&quot;0&quot;,	&quot;1&quot;,	NULL},
++{ FEATURES_USE_ODML,&quot;features.use_odml&quot;,	ADM_param_uint32_t	,&quot;0&quot;,	&quot;0&quot;,	&quot;1&quot;,	NULL},
++{ FEATURES_USE_SYSTRAY,&quot;features.use_systray&quot;,	ADM_param_uint32_t	,&quot;0&quot;,	&quot;0&quot;,	&quot;1&quot;,	NULL},
++{ FEATURES_REUSE_2PASS_LOG,&quot;features.reuse_2pass_log&quot;,	ADM_param_bool    	,&quot;0&quot;,	&quot;0&quot;,	&quot;1&quot;,	NULL},
++{ FEATURES_AUDIOBAR_USES_MASTER,&quot;features.audiobar_uses_master&quot;,	ADM_param_bool    	,&quot;0&quot;,	&quot;0&quot;,	&quot;1&quot;,	NULL},
++{ FEATURES_THREADING_LAVC,&quot;features.threading_lavc&quot;,	ADM_param_uint32_t	,&quot;0&quot;,	&quot;0&quot;,	&quot;32&quot;,	NULL},
++{ FEATURES_CPU_CAPS,&quot;features.cpu_caps&quot;,	ADM_param_uint32_t	,&quot;4294967295&quot;,	&quot;0&quot;,	&quot;4294967295&quot;,	NULL},
++{ FEATURES_MPEG_NO_LIMIT,&quot;features.mpeg_no_limit&quot;,	ADM_param_uint32_t	,&quot;0&quot;,	&quot;0&quot;,	&quot;1&quot;,	NULL},
++{ FEATURES_ALTERNATE_MP3_TAG,&quot;features.alternate_mp3_tag&quot;,	ADM_param_bool    	,&quot;1&quot;,	&quot;0&quot;,	&quot;1&quot;,	NULL},
++{ FEATURES_VDPAU,&quot;features.vdpau&quot;,	ADM_param_bool    	,&quot;0&quot;,	&quot;0&quot;,	&quot;1&quot;,	NULL},
++{ LASTFILES_LASTDIR_READ,&quot;lastfiles.lastdir_read&quot;,	ADM_param_string  	,&quot;&quot;,	NULL,	NULL,	NULL},
++{ LASTFILES_LASTDIR_WRITE,&quot;lastfiles.lastdir_write&quot;,	ADM_param_string  	,&quot;&quot;,	NULL,	NULL,	NULL},
++{ LASTFILES_FILE1,&quot;lastfiles.file1&quot;,	ADM_param_string  	,&quot;&quot;,	NULL,	NULL,	NULL},
++{ LASTFILES_FILE2,&quot;lastfiles.file2&quot;,	ADM_param_string  	,&quot;&quot;,	NULL,	NULL,	NULL},
++{ LASTFILES_FILE3,&quot;lastfiles.file3&quot;,	ADM_param_string  	,&quot;&quot;,	NULL,	NULL,	NULL},
++{ LASTFILES_FILE4,&quot;lastfiles.file4&quot;,	ADM_param_string  	,&quot;&quot;,	NULL,	NULL,	NULL},
++{ MESSAGE_LEVEL,&quot;message_level&quot;,	ADM_param_uint32_t	,&quot;2&quot;,	&quot;0&quot;,	&quot;2&quot;,	NULL},
++{ AUDIO_DEVICE_AUDIODEVICE,&quot;audio_device.audiodevice&quot;,	ADM_param_string  	,&quot;ALSA&quot;,	NULL,	NULL,	NULL},
++{ AUDIO_DEVICE_ALSA_DEVICE,&quot;audio_device.alsa_device&quot;,	ADM_param_string  	,&quot;dmix&quot;,	NULL,	NULL,	NULL},
++{ VIDEODEVICE,&quot;videodevice&quot;,	ADM_param_uint32_t	,&quot;0&quot;,	&quot;0&quot;,	&quot;10&quot;,	NULL},
++{ PRIORITY_ENCODING,&quot;priority.encoding&quot;,	ADM_param_uint32_t	,&quot;3&quot;,	&quot;0&quot;,	&quot;4&quot;,	NULL},
++{ PRIORITY_INDEXING,&quot;priority.indexing&quot;,	ADM_param_uint32_t	,&quot;3&quot;,	&quot;0&quot;,	&quot;4&quot;,	NULL},
++{ PRIORITY_PLAYBACK,&quot;priority.playback&quot;,	ADM_param_uint32_t	,&quot;0&quot;,	&quot;0&quot;,	&quot;4&quot;,	NULL},
++{ DEFAULT_POSTPROC_TYPE,&quot;Default.postproc_type&quot;,	ADM_param_uint32_t	,&quot;3&quot;,	&quot;0&quot;,	&quot;7&quot;,	NULL},
++{ DEFAULT_POSTPROC_VALUE,&quot;Default.postproc_value&quot;,	ADM_param_uint32_t	,&quot;3&quot;,	&quot;0&quot;,	&quot;5&quot;,	NULL},
++{ DEFAULT_DOWNMIXING,&quot;Default.downmixing&quot;,	ADM_param_uint32_t	,&quot;2&quot;,	&quot;0&quot;,	&quot;2&quot;,	NULL},
++{ MPEGSPLIT_AUTOSPLIT,&quot;mpegsplit_autosplit&quot;,	ADM_param_uint32_t	,&quot;790&quot;,	&quot;400&quot;,	&quot;5000&quot;,	NULL},
++};
++
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004326.html">[Avidemux-svn-commit] r7170 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+	<LI>Next message: <A HREF="004328.html">[Avidemux-svn-commit] r7172 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/common/ADM_audioFilter/src	avidemux/common/ADM_commonUI avidemux/common/ADM_editor	avidemux/common/ADM_script2/include/scriptDialogFactory	avidemux/common/ADM_script2/js avidemux/common/ADM_toolkit	avidemux/common/ADM_videoCodec/src avidemux/qt4/ADM_UIs/src	avidemux/qt4/ADM_userInterfaces/ADM_gui	avidemux_core/ADM_coreAudioDevice/src	avidemux_core/ADM_coreImage/include avidemux_core/ADM_coreImage/src	avidemux_core/ADM_coreJson/src	avidemux_core/ADM_coreUI/include avidemux_core/ADM_coreUI/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_core/ADM_coreVideoCodec/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4327">[ date ]</a>
+              <a href="thread.html#4327">[ thread ]</a>
+              <a href="subject.html#4327">[ subject ]</a>
+              <a href="author.html#4327">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

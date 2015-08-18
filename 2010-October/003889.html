@@ -1,0 +1,206 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6707 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6707%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska&In-Reply-To=%3C20101017161207.548E8481067%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003888.html">
+   <LINK REL="Next"  HREF="003890.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6707 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6707%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska&In-Reply-To=%3C20101017161207.548E8481067%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6707 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Oct 17 18:12:07 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003888.html">[Avidemux-svn-commit] r6706 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="003890.html">[Avidemux-svn-commit] r6708 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3889">[ date ]</a>
+              <a href="thread.html#3889">[ thread ]</a>
+              <a href="subject.html#3889">[ subject ]</a>
+              <a href="author.html#3889">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-10-17 18:12:07 +0200 (Sun, 17 Oct 2010)
+New Revision: 6707
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv_audio.cpp
+Log:
+[Mkv] Make sure PTS&gt;=DTS when reconstucting them, especially at at the beginning
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp	2010-10-17 16:12:05 UTC (rev 6706)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp	2010-10-17 16:12:07 UTC (rev 6707)
+@@ -123,6 +123,22 @@
+             }
+             vid-&gt;index[i].Dts=lastDts;
+       }
++        // Check that we have PTS&gt;=DTS also
++        uint64_t enforePtsGreaterThanDts=0;
++        for(int i=0;i&lt;last;i++)
++        {
++                if(vid-&gt;index[i].Pts&lt;vid-&gt;index[i].Dts)
++                {
++                    uint64_t delta=vid-&gt;index[i].Dts-vid-&gt;index[i].Pts;
++                    if(delta&gt;enforePtsGreaterThanDts) enforePtsGreaterThanDts=delta;
++                }
++        }
++        if(enforePtsGreaterThanDts)
++        {
++                ADM_info(&quot;Have to delay by %&quot;LU&quot; ms so that PTS&gt;DTS\n&quot;,enforePtsGreaterThanDts);
++                for(int i=0;i&lt;_nbAudioTrack+1;i++)
++                delayTrack(i,&amp;(_tracks[i]),enforePtsGreaterThanDts);
++        }
+     }else
+     {       // No bframe, DTS=PTS
+       for(int i=0;i&lt;last;i++)
+@@ -166,12 +182,14 @@
+     \brief delay audio and video by 2 * time increment if b frames present
+                 else we may have PTS&lt;DTS
+ */
+-bool mkvHeader::delayTrack(mkvTrak *track, uint64_t value)
++bool mkvHeader::delayTrack(int index,mkvTrak *track, uint64_t value)
+ {
+     int nb=track-&gt;index.size();
+     for(int i=0;i&lt;nb;i++)
+     {
+         if(track-&gt;index[i].Pts!=ADM_NO_PTS) track-&gt;index[i].Pts+=value;
++        if(index) // Must also delay DTS for audio as we use DTS not PTS
++            if(track-&gt;index[i].Dts!=ADM_NO_PTS) track-&gt;index[i].Dts+=value;
+     }
+     return true;
+ }
+@@ -250,15 +268,24 @@
+ 
+     }
+     ADM_info(&quot;First frame pts     %&quot;LLD&quot; us\n&quot;,track-&gt;index[0].Pts);
+-    uint64_t adj;
+-    if(maxDelta&gt;track-&gt;index[0].Pts) // need to correct
++    uint64_t adj=0;
++    int limit=32;
++    if(limit&gt;nb) limit=nb;
++    // Pts must be &gt;= maxDelta for all frames, the first 32 will do
++    for(int i=0;i&lt;limit;i++)
+     {
+-        
+-        adj=maxDelta-track-&gt;index[0].Pts;
++        if(maxDelta&gt;track-&gt;index[i].Pts) 
++        {
++            uint64_t newAdj=maxDelta-track-&gt;index[i].Pts;
++            if(newAdj&gt;adj) adj=newAdj;
++        }
++    }
++    if(adj) // need to correct
++    {
+         ADM_info(&quot;Delaying video by %&quot;LLU&quot; us\n&quot;,adj);
+         ADM_info(&quot;[mkv] Delaying audio by %&quot;LLU&quot; us\n&quot;,adj);
+         for(int i=0;i&lt;_nbAudioTrack+1;i++)
+-            delayTrack(&amp;(_tracks[i]),adj);
++            delayTrack(i,&amp;(_tracks[i]),adj);
+     }
+     *maxDeltaX=maxDelta;
+     *minDeltaX=minDelta;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h	2010-10-17 16:12:05 UTC (rev 6706)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h	2010-10-17 16:12:07 UTC (rev 6707)
+@@ -159,7 +159,7 @@
+ 
+     uint8_t                 rescaleTrack(mkvTrak *track,uint32_t durationMs);
+ 
+-    bool                    delayTrack(mkvTrak *track, uint64_t value);
++    bool                    delayTrack(int index,mkvTrak *track, uint64_t value);
+     
+     bool                    ComputeDeltaAndCheckBFrames(uint32_t *minDeltaX, uint32_t *maxDeltaX, bool *bFramePresent);
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv_audio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv_audio.cpp	2010-10-17 16:12:05 UTC (rev 6706)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv_audio.cpp	2010-10-17 16:12:07 UTC (rev 6707)
+@@ -19,6 +19,7 @@
+ #include &quot;ADM_a52info.h&quot;
+ #include &quot;ADM_dcainfo.h&quot;
+ 
++#include &quot;ADM_vidMisc.h&quot;
+ #if 0
+ #define vprintf printf
+ #else
+@@ -144,20 +145,24 @@
+             {
+                 clus=0;
+             }else
+-            for(int i=0;i&lt;limit-1;i++)
+             {
+-              if(targetUs&gt;=(*dex)[i].Dts &amp;&amp; targetUs&lt;(*dex)[i+1].Dts)
+-              {
+-                clus=i;
+-                break;
+-              }
++                for(int i=0;i&lt;limit-1;i++)
++                {
++                  if(targetUs&gt;=(*dex)[i].Dts &amp;&amp; targetUs&lt;(*dex)[i+1].Dts)
++                  {
++                    clus=i;
++                    break;
++                  }
++                }
+             }
+             if(clus==-1) clus=limit-1; // Hopefully in the last one
+-
++            ADM_info(&quot;[MKVAUDIO] Asked for %s , go to block %d\n&quot;,ADM_us2plain(timeUs),clus);
++            ADM_info(&quot;[MKVAUDIO] This block starts at %s\n&quot;,ADM_us2plain((*dex)[clus].Dts));
+             targetUs-=(*dex)[clus].Dts; // now the time is relative
++            ADM_info(&quot;[MKVAUDIO] Offset=%&quot;LLU&quot; us\n&quot;,targetUs);
+             goToBlock(clus);
+ 
+-            printf(&quot;[MKVAUDIO] Asked for %&quot;LLU&quot; us, go to block %d, which starts at %&quot;LLU&quot; ms\n&quot;,timeUs,clus,targetUs);
++            
+             // Now seek more finely
+             // will be off by one frame
+ #if 0
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003888.html">[Avidemux-svn-commit] r6706 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="003890.html">[Avidemux-svn-commit] r6708 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3889">[ date ]</a>
+              <a href="thread.html#3889">[ thread ]</a>
+              <a href="subject.html#3889">[ subject ]</a>
+              <a href="author.html#3889">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

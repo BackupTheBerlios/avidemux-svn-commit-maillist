@@ -1,0 +1,513 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5681 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5681%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter%3A%0A%09include%20src&In-Reply-To=%3C200912211331.nBLDVKV0028060%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002887.html">
+   <LINK REL="Next"  HREF="002889.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5681 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter:	include src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5681%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter%3A%0A%09include%20src&In-Reply-To=%3C200912211331.nBLDVKV0028060%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5681 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Dec 21 14:31:20 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002887.html">[Avidemux-svn-commit] r5680 -	branches/avidemux_2.5_branch_gruntster/platforms/windows/build_scripts/avidemux
+</A></li>
+        <LI>Next message: <A HREF="002889.html">[Avidemux-svn-commit] r5682 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2888">[ date ]</a>
+              <a href="thread.html#2888">[ thread ]</a>
+              <a href="subject.html#2888">[ subject ]</a>
+              <a href="author.html#2888">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-12-21 14:31:18 +0100 (Mon, 21 Dec 2009)
+New Revision: 5681
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/include/DIA_flyDialog.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/src/DIA_flyDialog.cpp
+Log:
+[fly] Move flyDialog to coreFilter
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/include/DIA_flyDialog.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/include/DIA_flyDialog.h	2009-12-20 20:04:26 UTC (rev 5680)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/include/DIA_flyDialog.h	2009-12-21 13:31:18 UTC (rev 5681)
+@@ -0,0 +1,156 @@
++/****************************************************************************
++ copyright            : (C) 2007 by mean
++ email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ 
++ Simple class to do filter that have a configuration that have real time effect
++ 
++ Case 1: The filter process YUV
++ 
++ YUV-&gt; Process-&gt;YUVOUT-&gt;YUV2RGB-&gt;RGBUFFEROUT
++ 
++ Case 2: The filter process RGV
++ 
++ YUV-&gt; YUV2RGB-&gt;RGB-&gt;Process-&gt;RGBUFFEROUT
++ 
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#ifndef ADM_FLY_DIALOG_H
++#define ADM_FLY_DIALOG_H
++
++#if !defined(ADM_FLY_INTERNAL)
++#if !defined(ADM_UI_TYPE_BUILD)
++#error No ADM_UI_TYPE_BUILD defined
++#endif
++#include &quot;DIA_uiTypes.h&quot;
++
++#if ADM_UI_TYPE_BUILD == ADM_UI_QT4
++        #include &lt;QtGui/QWidget&gt;
++        #include &lt;QtGui/QDialog&gt;
++#endif //UI_BUILD_TYPE
++#endif //ADM_FLY_INTERNAL 
++
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_colorspace.h&quot;
++#include &quot;ADM_coreVideoFilter.h&quot;
++enum ResizeMethod {
++    RESIZE_NONE = 0,	// No automatic resize
++	RESIZE_AUTO = 1,	// Resize image when convenient (YUV: after filter, RGB: before applying filter)
++	RESIZE_LAST = 2		// Resize image after filter has been applied (slower for RGB)
++};
++
++class diaMenuEntry;  // defined in DIA_factory.h; only need pointer here
++
++struct MenuMapping
++{
++    const char * widgetName; // name of the combo box widget or equivalent
++    uint32_t paramOffset;   // offsetof(FOO_PARAM, menu_option_member)
++    uint32_t count;
++    const diaMenuEntry * menu;
++};
++
++typedef float gfloat;
++
++class ADM_flyDialog
++{
++  protected:
++          uint32_t      _w, _h, _zoomW, _zoomH;
++          float         _zoom;
++          uint32_t      _zoomChangeCount;
++          ADM_coreVideoFilter *_in;
++      
++          ADMImage      *_yuvBuffer;
++          ADMImage      *_yuvBufferOut;
++          uint8_t       *_rgbBuffer;
++          uint8_t       *_rgbBufferOut;
++          uint8_t       *_rgbBufferDisplay;
++          uint8_t       _isYuvProcessing;
++          ResizeMethod  _resizeMethod;
++          ADMImageResizer *_resizer;
++
++  
++          void EndConstructor(void);
++          void copyYuvFinalToRgb(void);
++          void copyYuvScratchToRgb(void);
++          void copyRgbFinalToDisplay(void);
++          
++  public:
++          void recomputeSize(void);
++         
++  public:
++          void    *_cookie; // whatever
++          void    *_slider; // widget
++          void    *_canvas; // Drawing zone
++          ColYuvRgb *_rgb;
++
++          /* Filter dependant */
++  virtual uint8_t    process(void)=0;
++  virtual uint8_t    download(void)=0;
++  virtual uint8_t    upload(void)=0;
++          /* /filter dependant */
++  
++        /* This is GTK/QT/whatever dependant */
++          
++  
++          
++          
++  
++  virtual uint8_t  update(void) {};
++            uint8_t  cleanup(void);
++  
++
++#ifdef USE_JOG
++  static void jogDial (void * my_data, signed short offset);
++  static void jogRing (void * my_data, gfloat angle);
++#endif
++
++          ADM_flyDialog(uint32_t width, uint32_t height, ADM_coreVideoFilter *in,
++                             void *canvas, void *slider, int yuv, ResizeMethod resizeMethod);
++  virtual ~ADM_flyDialog(void);
++// UI dependant part
++// They are not defined as pure to avoid unresolved problem, especially on win32.
++// You should never use flyDialog as is, but using the macro to pull flyDialogGtk/flyDialogQt4/... 
++  
++  virtual uint8_t  isRgbInverted(void)=0;
++  virtual uint8_t  display(void)=0;
++  virtual float   calcZoomFactor(void)=0;
++  virtual uint32_t sliderGet(void)=0;
++  virtual uint8_t  sliderSet(uint32_t value) =0;
++  virtual void    postInit(uint8_t reInit)=0;
++  virtual uint8_t sliderChanged(void);
++};
++#if !defined(ADM_FLY_INTERNAL)
++
++#ifdef ADM_UI_TYPE_BUILD
++#if ADM_UI_TYPE_BUILD == ADM_UI_QT4
++  #include &quot;DIA_flyDialogQt4.h&quot;
++  #define FLY_DIALOG_TYPE ADM_flyDialogQt4
++#else 
++  #if ADM_UI_TYPE_BUILD == ADM_UI_GTK
++    #include &quot;DIA_flyDialogGtk.h&quot;
++    #define FLY_DIALOG_TYPE ADM_flyDialogGtk
++  #else 
++    #if ADM_UI_TYPE_BUILD == ADM_UI_CLI
++      #include &quot;DIA_flyDialogCli.h&quot;
++      #define FLY_DIALOG_TYPE ADM_flyDialogCli
++    #else
++        #if ADM_UI_TYPE_BUILD != ADM_UI_NONE
++#error unknown UI type
++        #endif
++    #endif //CLI
++  #endif //GTK
++#endif // QT
++#else
++  #define FLY_DIALOG_TYPE ADM_UI_TYPE_BUILD_IS_NOT_DEFINED
++#endif
++ 
++#endif //  ADM_FLY_INTERNAL
++
++#endif
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/src/DIA_flyDialog.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/src/DIA_flyDialog.cpp	2009-12-20 20:04:26 UTC (rev 5680)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/src/DIA_flyDialog.cpp	2009-12-21 13:31:18 UTC (rev 5681)
+@@ -0,0 +1,274 @@
++/***************************************************************************
++    copyright            : (C) 2006 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++***************************************************************************/
++
++/***************************************************************************
++*                                                                         *
++*   This program is free software; you can redistribute it and/or modify  *
++*   it under the terms of the GNU General Public License as published by  *
++*   the Free Software Foundation; either version 2 of the License, or     *
++*   (at your option) any later version.                                   *
++*                                                                         *
++***************************************************************************///
++
++#include &quot;ADM_default.h&quot;
++
++#include &quot;ADM_coreVideoFilter.h&quot;
++#define ADM_FLY_INTERNAL
++#include &quot;DIA_flyDialog.h&quot;
++#include &quot;ADM_assert.h&quot;
++
++extern &quot;C&quot; {
++#include &quot;ADM_ffmpeg/libavcodec/avcodec.h&quot;
++}
++
++ADM_flyDialog::ADM_flyDialog(uint32_t width,uint32_t height,ADM_coreVideoFilter *in,
++                                void *canvas, void *slider,int yuv, ResizeMethod resizeMethod)
++{
++	ADM_assert(canvas);
++
++	if (slider)
++		ADM_assert(in);
++
++	_w = width;
++	_h = height;
++	_isYuvProcessing = yuv;
++	_in = in;
++	_slider = slider;
++	_canvas = canvas;
++	_cookie = NULL;
++	_resizeMethod = resizeMethod;
++        _zoomChangeCount = 0;
++        _resizer=NULL;
++        _rgbBufferDisplay=NULL;
++
++	_rgb=NULL;
++
++	_yuvBuffer=new ADMImage(_w,_h);
++
++	if(_isYuvProcessing)
++	{
++		_yuvBufferOut=new ADMImage(_w,_h);
++		_rgbBuffer=NULL;
++	}
++	else
++	{
++		_rgbBuffer =new uint8_t [_w*_h*4];
++		_yuvBufferOut=NULL;
++	}
++
++	_rgbBufferOut =new uint8_t [_w*_h*4];
++
++	
++
++	
++}
++/**
++ *      \fn Endconstructor
++ *      \brief We call some virtual functions in the constructor; it does not work, so we do the 2nd part of the constructor here
++ */
++void ADM_flyDialog::EndConstructor(void)
++  {
++    if (isRgbInverted())
++                _rgb=new ColYuvRgb(_w,_h,1);
++        else
++                _rgb=new ColYuvRgb(_w,_h);
++
++        _rgb-&gt;reset(_w,_h);
++        if (_resizeMethod == RESIZE_AUTO || _resizeMethod == RESIZE_LAST)
++                {
++                        _zoom = calcZoomFactor();
++
++                        if (_zoom == 1)
++                                _resizeMethod = RESIZE_NONE;
++                        else
++                        {
++                                _zoomW = uint32_t (_w * _zoom);
++                                _zoomH = uint32_t (_h * _zoom);
++                        }
++                }
++                else
++                        _zoom = 1;
++
++                if (_resizeMethod == RESIZE_AUTO || _resizeMethod == RESIZE_LAST)
++                {
++                        PixelFormat sourceColour;
++
++                        if (_resizeMethod == RESIZE_AUTO || _isYuvProcessing)
++                                sourceColour = PIX_FMT_YUV420P;
++                        else
++                                sourceColour = PIX_FMT_RGB32;
++
++                        _resizer = new ADMImageResizer(_w, _h, _zoomW, _zoomH, sourceColour, PIX_FMT_RGB32);
++                        _rgbBufferDisplay = new uint8_t[_w * _h * 4];
++                }
++                else
++                {
++                        _zoomW = _w;
++                        _zoomH = _h;
++
++                        _resizer = NULL;
++                        _rgbBufferDisplay = NULL;
++                }
++                postInit (false);
++  }
++void ADM_flyDialog::recomputeSize(void)
++{
++    float new_zoom = calcZoomFactor();
++
++    ResizeMethod new_resizeMethod;
++    uint32_t new_zoomW;
++    uint32_t new_zoomH;
++
++    if (new_zoom == 1)
++    {
++        new_resizeMethod = RESIZE_NONE;
++        new_zoomW = _w;
++        new_zoomH = _h;
++    }
++    else
++    {
++        new_resizeMethod = RESIZE_AUTO;
++        new_zoomW = uint32_t (_w * new_zoom);
++        new_zoomH = uint32_t (_h * new_zoom);
++    }
++
++    if (new_resizeMethod == _resizeMethod &amp;&amp; new_zoom == _zoom
++        &amp;&amp; new_zoomW == _zoomW &amp;&amp; new_zoomH == _zoomH)
++        return;
++
++    if (++_zoomChangeCount &gt; 3 || new_zoomH &lt; 30 || new_zoomW &lt; 30)
++    {
++        printf (&quot;Resisting zoom size change from %dx%d (zoom %.5f) to %dx%d (zoom %.5f)\n&quot;,
++                _zoomW, _zoomH, _zoom, new_zoomW, new_zoomH, new_zoom);
++        return;
++    }
++
++    printf (&quot;Fixing zoom size from %dx%d (zoom %.5f) to correct %dx%d (zoom %.5f)\n&quot;,
++            _zoomW, _zoomH, _zoom, new_zoomW, new_zoomH, new_zoom);
++
++    _resizeMethod = new_resizeMethod;
++    _zoom = new_zoom;
++    _zoomW = new_zoomW;
++    _zoomH = new_zoomH;
++
++    delete _resizer;
++    if (_resizeMethod == RESIZE_AUTO || _resizeMethod == RESIZE_LAST)
++    {
++        PixelFormat sourceColour;
++
++        if (_resizeMethod == RESIZE_AUTO || _isYuvProcessing)
++            sourceColour = PIX_FMT_YUV420P;
++        else
++            sourceColour = PIX_FMT_RGB32;
++
++        _resizer = new ADMImageResizer(_w, _h, _zoomW, _zoomH, sourceColour, PIX_FMT_RGB32);
++        if (!_rgbBufferDisplay)
++            _rgbBufferDisplay = new uint8_t[_w * _h * 4];
++    }
++    else
++    {
++        _resizer = NULL;
++        delete _rgbBufferDisplay;
++        _rgbBufferDisplay = NULL;
++    }
++
++    postInit (true);
++    sliderChanged();
++}
++
++/**
++    \fn cleanup
++    \brief deallocate
++*/
++uint8_t ADM_flyDialog::cleanup(void)
++{
++#define DEL1(x)    if(x) {delete [] x;x=NULL;}
++#define DEL2(x)    if(x) {delete  x;x=NULL;}
++  
++	DEL2(_yuvBufferOut);
++	DEL2(_yuvBuffer);
++	DEL1(_rgbBuffer);
++	DEL1(_rgbBufferOut);
++	DEL1(_rgbBufferDisplay);
++	DEL2(_rgb);
++	DEL2(_resizer);
++}
++/**
++    \fn ~ADM_flyDialog
++    \brief destructor
++*/
++ADM_flyDialog::~ADM_flyDialog(void)
++{
++  
++  // FIXME cleanup2();
++  cleanup(); 
++}
++
++/**
++      \fn sliderChanged
++      \brief callback to handle image changes
++*/
++uint8_t    ADM_flyDialog::sliderChanged(void)
++{
++  uint32_t fn= sliderGet();
++  uint32_t len,flags;
++  
++    ADM_assert(_yuvBuffer);
++    ADM_assert(_rgbBufferOut);
++    ADM_assert(_in);
++    
++    //if(!_in-&gt;getFrameNumberNoAlloc(fn,&amp;len,_yuvBuffer,&amp;flags))
++    {
++      printf(&quot;[FlyDialog] Cannot get frame %u\n&quot;,fn); 
++      return 0;
++    }
++
++    // Process...    
++    if(_isYuvProcessing)
++    {
++        process();
++		copyYuvFinalToRgb();
++    }
++	else // RGB Processing      
++    {
++        ADM_assert(_rgbBuffer);
++		copyYuvScratchToRgb();
++        process();
++    }
++
++    return display();
++}
++
++void ADM_flyDialog::copyYuvFinalToRgb(void)
++{
++	if (_resizeMethod == RESIZE_AUTO || _resizeMethod == RESIZE_LAST)
++		_resizer-&gt;resize(_yuvBufferOut-&gt;data, _rgbBufferOut);
++	else
++		_rgb-&gt;scale(_yuvBufferOut-&gt;data, _rgbBufferOut);
++}
++
++void ADM_flyDialog::copyYuvScratchToRgb(void)
++{
++	if (_resizeMethod == RESIZE_AUTO)
++		_resizer-&gt;resize(_yuvBuffer-&gt;data,_rgbBuffer);
++	else
++		_rgb-&gt;scale(_yuvBuffer-&gt;data,_rgbBuffer);
++}
++
++void ADM_flyDialog::copyRgbFinalToDisplay(void)
++{
++	if (_resizeMethod == RESIZE_LAST)
++	{
++		_resizer-&gt;resize(_rgbBufferOut, _rgbBufferDisplay);
++
++		uint8_t* tempRgb = _rgbBufferDisplay;
++
++		_rgbBufferDisplay = _rgbBufferOut;
++		_rgbBufferOut = tempRgb;
++	}
++}
++
++//EOF
++
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002887.html">[Avidemux-svn-commit] r5680 -	branches/avidemux_2.5_branch_gruntster/platforms/windows/build_scripts/avidemux
+</A></li>
+	<LI>Next message: <A HREF="002889.html">[Avidemux-svn-commit] r5682 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2888">[ date ]</a>
+              <a href="thread.html#2888">[ thread ]</a>
+              <a href="subject.html#2888">[ subject ]</a>
+              <a href="author.html#2888">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

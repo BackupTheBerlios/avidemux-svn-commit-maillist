@@ -1,0 +1,1206 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2932 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2932%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_videoFilter&In-Reply-To=%3C200704131538.l3DFcgd8017091%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000249.html">
+   <LINK REL="Next"  HREF="000251.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2932 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2932%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_videoFilter&In-Reply-To=%3C200704131538.l3DFcgd8017091%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2932 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Apr 13 17:38:42 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000249.html">[Avidemux-svn-commit] r2931 - in	branches/avidemux_2.4_branch/avidemux: ADM_filter ADM_videoFilter
+</A></li>
+        <LI>Next message: <A HREF="000251.html">[Avidemux-svn-commit] r2933 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#250">[ date ]</a>
+              <a href="thread.html#250">[ thread ]</a>
+              <a href="subject.html#250">[ subject ]</a>
+              <a href="author.html#250">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-04-13 17:38:41 +0200 (Fri, 13 Apr 2007)
+New Revision: 2932
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidYadif_asm.c
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidYadif.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/Makefile.am
+Log:
+yadif, ported from Fizick avisynth port, original from michael Niedermeyer
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidYadif.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidYadif.cpp	2007-04-13 12:12:24 UTC (rev 2931)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidYadif.cpp	2007-04-13 15:38:41 UTC (rev 2932)
+@@ -1,19 +1,25 @@
+ /*
+-    Copyright (C) 2006 Michael Niedermayer &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">michaelni at gmx.at</A>&gt;
++	Yadif C-plugin for Avisynth 2.5 - Yet Another DeInterlacing Filter
++	Copyright (C)2007 Alexander G. Balakhnin aka Fizick  <A HREF="http://avisynth.org.ru">http://avisynth.org.ru</A>
++    Port of YADIF filter from MPlayer
++	Copyright (C) 2006 Michael Niedermayer &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">michaelni at gmx.at</A>&gt;
+ 
+     This program is free software; you can redistribute it and/or modify
+-    it under the terms of the GNU General Public License as published by
+-    the Free Software Foundation; either version 2 of the License, or
+-    (at your option) any later version.
++	it under the terms of the GNU General Public License as published by
++	the Free Software Foundation.
+ 
+-    This program is distributed in the hope that it will be useful,
+-    but WITHOUT ANY WARRANTY; without even the implied warranty of
+-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-    GNU General Public License for more details.
++	This program is distributed in the hope that it will be useful,
++	but WITHOUT ANY WARRANTY; without even the implied warranty of
++	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++	GNU General Public License for more details.
+ 
+-    You should have received a copy of the GNU General Public License
+-    along with this program; if not, write to the Free Software
+-    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
++	You should have received a copy of the GNU General Public License
++	along with this program; if not, write to the Free Software
++	Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++
++    Avisynth_C plugin
++	Assembler optimized for GNU C compiler
++
+ */
+ /*
+   Ported to avidemux by mean
+@@ -49,33 +55,28 @@
+ #define MAX3(a,b,c) MAX(MAX(a,b),c)
+ 
+ //===========================================================================//
+-
+-struct vf_priv_s {
+-    int mode;
+-    int parity;
+-    int buffered_i;
+-    int buffered_tff;
+-    double buffered_pts;
+-    ADMImage *buffered_mpi;
+-    int stride[3];
+-    uint8_t *ref[4][3];
+-    int do_deinterlace;
+-};
+-
++#if (defined( ARCH_X86)  || defined(ARCH_X86_64))
++extern &quot;C&quot;
++{
++void filter_line_mmx2(int mode, uint8_t *dst, const uint8_t *prev, const uint8_t *cur, const uint8_t *next, int w, int refs, int parity);
++}
++#endif
+ //
+ typedef struct YADIF_PARAM
+ {
+     uint32_t mode;
++    uint32_t order;
+ }YADIF_PARAM;
+ 
+ class  ADMVideoYadif:public AVDMGenericVideoStream
+ {
+ 
+  protected:
+-  virtual char                  *printConf(void);
++  virtual char                 *printConf(void);
+   YADIF_PARAM                  *_param;
+-  ADMImage                     *_images[4];
+-  vf_priv_s                    priv;
++   VideoCache                  *vidCache;
++  void                         updateInfo(void);
++
+  public:
+                   ADMVideoYadif(AVDMGenericVideoStream *in, CONFcouple *setup);
+   virtual         ~ADMVideoYadif();
+@@ -84,348 +85,26 @@
+   virtual uint8_t	getCoupledConf( CONFcouple **couples)				;
+  }     ;
+ 
+-static FILTER_PARAM yadifParam={1,{&quot;mode&quot;,&quot;height&quot;,&quot;angle&quot;}};
++static FILTER_PARAM yadifParam={2,{&quot;mode&quot;,&quot;order&quot;}};
+ 
+ 
+ SCRIPT_CREATE(yadif_script,ADMVideoYadif,yadifParam);
+ BUILD_CREATE(yadif_create,ADMVideoYadif);
+ //
++static void filter_plane(int mode, uint8_t *dst, int dst_stride, const uint8_t *prev0, const uint8_t *cur0, const uint8_t *next0, int refs, int w, int h, int parity, int tff, int mmx);
+ 
+ 
+-
+ //
+-static void (*filter_line)(struct vf_priv_s *p, uint8_t *dst, uint8_t *prev, uint8_t *cur, uint8_t *next, int w, int refs, int parity);
+ 
+ 
+-void memcpy_pic(uint8_t *tgt,uint8_t *src, uint32_t w,uint32_t h, uint32_t d_stride,uint32_t s_stride)
+-{
+-    for(int y=0;y&lt;h;y++)
+-    {
+-      memcpy(tgt,src,w);
+-      tgt+=d_stride;
+-      src+=s_stride; 
+-    }
+-}
+ 
+-static void store_ref(struct vf_priv_s *p, uint8_t *src[3], int src_stride[3], int width, int height){
+-    int i;
+-
+-    memcpy (p-&gt;ref[3], p-&gt;ref[0], sizeof(uint8_t *)*3);
+-    memmove(p-&gt;ref[0], p-&gt;ref[1], sizeof(uint8_t *)*3*3);
+-
+-    for(i=0; i&lt;3; i++){
+-        int is_chroma= !!i;
+-
+-        memcpy_pic(p-&gt;ref[2][i], src[i], width&gt;&gt;is_chroma, height&gt;&gt;is_chroma, p-&gt;stride[i], src_stride[i]);
+-    }
+-}
+-
+-#if defined(HAVE_MMX) &amp;&amp; defined(NAMED_ASM_ARGS)
+-
+-#define LOAD4(mem,dst) \
+-            &quot;movd      &quot;mem&quot;, &quot;#dst&quot; \n\t&quot;\
+-            &quot;punpcklbw %%mm7, &quot;#dst&quot; \n\t&quot;
+-
+-#define PABS(tmp,dst) \
+-            &quot;pxor     &quot;#tmp&quot;, &quot;#tmp&quot; \n\t&quot;\
+-            &quot;psubw    &quot;#dst&quot;, &quot;#tmp&quot; \n\t&quot;\
+-            &quot;pmaxsw   &quot;#tmp&quot;, &quot;#dst&quot; \n\t&quot;
+-
+-#define CHECK(pj,mj) \
+-            &quot;movq &quot;#pj&quot;(%[cur],%[mrefs]), %%mm2 \n\t&quot; /* cur[x-refs-1+j] */\
+-            &quot;movq &quot;#mj&quot;(%[cur],%[prefs]), %%mm3 \n\t&quot; /* cur[x+refs-1-j] */\
+-            &quot;movq      %%mm2, %%mm4 \n\t&quot;\
+-            &quot;movq      %%mm2, %%mm5 \n\t&quot;\
+-            &quot;pxor      %%mm3, %%mm4 \n\t&quot;\
+-            &quot;pavgb     %%mm3, %%mm5 \n\t&quot;\
+-            &quot;pand     %[pb1], %%mm4 \n\t&quot;\
+-            &quot;psubusb   %%mm4, %%mm5 \n\t&quot;\
+-            &quot;psrlq     $8,    %%mm5 \n\t&quot;\
+-            &quot;punpcklbw %%mm7, %%mm5 \n\t&quot; /* (cur[x-refs+j] + cur[x+refs-j])&gt;&gt;1 */\
+-            &quot;movq      %%mm2, %%mm4 \n\t&quot;\
+-            &quot;psubusb   %%mm3, %%mm2 \n\t&quot;\
+-            &quot;psubusb   %%mm4, %%mm3 \n\t&quot;\
+-            &quot;pmaxub    %%mm3, %%mm2 \n\t&quot;\
+-            &quot;movq      %%mm2, %%mm3 \n\t&quot;\
+-            &quot;movq      %%mm2, %%mm4 \n\t&quot; /* ABS(cur[x-refs-1+j] - cur[x+refs-1-j]) */\
+-            &quot;psrlq      $8,   %%mm3 \n\t&quot; /* ABS(cur[x-refs  +j] - cur[x+refs  -j]) */\
+-            &quot;psrlq     $16,   %%mm4 \n\t&quot; /* ABS(cur[x-refs+1+j] - cur[x+refs+1-j]) */\
+-            &quot;punpcklbw %%mm7, %%mm2 \n\t&quot;\
+-            &quot;punpcklbw %%mm7, %%mm3 \n\t&quot;\
+-            &quot;punpcklbw %%mm7, %%mm4 \n\t&quot;\
+-            &quot;paddw     %%mm3, %%mm2 \n\t&quot;\
+-            &quot;paddw     %%mm4, %%mm2 \n\t&quot; /* score */
+-
+-#define CHECK1 \
+-            &quot;movq      %%mm0, %%mm3 \n\t&quot;\
+-            &quot;pcmpgtw   %%mm2, %%mm3 \n\t&quot; /* if(score &lt; spatial_score) */\
+-            &quot;pminsw    %%mm2, %%mm0 \n\t&quot; /* spatial_score= score; */\
+-            &quot;movq      %%mm3, %%mm6 \n\t&quot;\
+-            &quot;pand      %%mm3, %%mm5 \n\t&quot;\
+-            &quot;pandn     %%mm1, %%mm3 \n\t&quot;\
+-            &quot;por       %%mm5, %%mm3 \n\t&quot;\
+-            &quot;movq      %%mm3, %%mm1 \n\t&quot; /* spatial_pred= (cur[x-refs+j] + cur[x+refs-j])&gt;&gt;1; */
+-
+-#define CHECK2 /* pretend not to have checked dir=2 if dir=1 was bad.\
+-                  hurts both quality and speed, but matches the C version. */\
+-            &quot;paddw    %[pw1], %%mm6 \n\t&quot;\
+-            &quot;psllw     $14,   %%mm6 \n\t&quot;\
+-            &quot;paddsw    %%mm6, %%mm2 \n\t&quot;\
+-            &quot;movq      %%mm0, %%mm3 \n\t&quot;\
+-            &quot;pcmpgtw   %%mm2, %%mm3 \n\t&quot;\
+-            &quot;pminsw    %%mm2, %%mm0 \n\t&quot;\
+-            &quot;pand      %%mm3, %%mm5 \n\t&quot;\
+-            &quot;pandn     %%mm1, %%mm3 \n\t&quot;\
+-            &quot;por       %%mm5, %%mm3 \n\t&quot;\
+-            &quot;movq      %%mm3, %%mm1 \n\t&quot;
+-
+-static void filter_line_mmx2(struct vf_priv_s *p, uint8_t *dst, uint8_t *prev, uint8_t *cur, uint8_t *next, int w, int refs, int parity){
+-    static const uint64_t pw_1 = 0x0001000100010001ULL;
+-    static const uint64_t pb_1 = 0x0101010101010101ULL;
+-    const int mode = p-&gt;mode;
+-    uint64_t tmp0, tmp1, tmp2, tmp3;
+-    int x;
+-
+-#define FILTER\
+-    for(x=0; x&lt;w; x+=4){\
+-        asm volatile(\
+-            &quot;pxor      %%mm7, %%mm7 \n\t&quot;\
+-            LOAD4(&quot;(%[cur],%[mrefs])&quot;, %%mm0) /* c = cur[x-refs] */\
+-            LOAD4(&quot;(%[cur],%[prefs])&quot;, %%mm1) /* e = cur[x+refs] */\
+-            LOAD4(&quot;(%[&quot;prev2&quot;])&quot;, %%mm2) /* prev2[x] */\
+-            LOAD4(&quot;(%[&quot;next2&quot;])&quot;, %%mm3) /* next2[x] */\
+-            &quot;movq      %%mm3, %%mm4 \n\t&quot;\
+-            &quot;paddw     %%mm2, %%mm3 \n\t&quot;\
+-            &quot;psraw     $1,    %%mm3 \n\t&quot; /* d = (prev2[x] + next2[x])&gt;&gt;1 */\
+-            &quot;movq      %%mm0, %[tmp0] \n\t&quot; /* c */\
+-            &quot;movq      %%mm3, %[tmp1] \n\t&quot; /* d */\
+-            &quot;movq      %%mm1, %[tmp2] \n\t&quot; /* e */\
+-            &quot;psubw     %%mm4, %%mm2 \n\t&quot;\
+-            PABS(      %%mm4, %%mm2) /* temporal_diff0 */\
+-            LOAD4(&quot;(%[prev],%[mrefs])&quot;, %%mm3) /* prev[x-refs] */\
+-            LOAD4(&quot;(%[prev],%[prefs])&quot;, %%mm4) /* prev[x+refs] */\
+-            &quot;psubw     %%mm0, %%mm3 \n\t&quot;\
+-            &quot;psubw     %%mm1, %%mm4 \n\t&quot;\
+-            PABS(      %%mm5, %%mm3)\
+-            PABS(      %%mm5, %%mm4)\
+-            &quot;paddw     %%mm4, %%mm3 \n\t&quot; /* temporal_diff1 */\
+-            &quot;psrlw     $1,    %%mm2 \n\t&quot;\
+-            &quot;psrlw     $1,    %%mm3 \n\t&quot;\
+-            &quot;pmaxsw    %%mm3, %%mm2 \n\t&quot;\
+-            LOAD4(&quot;(%[next],%[mrefs])&quot;, %%mm3) /* next[x-refs] */\
+-            LOAD4(&quot;(%[next],%[prefs])&quot;, %%mm4) /* next[x+refs] */\
+-            &quot;psubw     %%mm0, %%mm3 \n\t&quot;\
+-            &quot;psubw     %%mm1, %%mm4 \n\t&quot;\
+-            PABS(      %%mm5, %%mm3)\
+-            PABS(      %%mm5, %%mm4)\
+-            &quot;paddw     %%mm4, %%mm3 \n\t&quot; /* temporal_diff2 */\
+-            &quot;psrlw     $1,    %%mm3 \n\t&quot;\
+-            &quot;pmaxsw    %%mm3, %%mm2 \n\t&quot;\
+-            &quot;movq      %%mm2, %[tmp3] \n\t&quot; /* diff */\
+-\
+-            &quot;paddw     %%mm0, %%mm1 \n\t&quot;\
+-            &quot;paddw     %%mm0, %%mm0 \n\t&quot;\
+-            &quot;psubw     %%mm1, %%mm0 \n\t&quot;\
+-            &quot;psrlw     $1,    %%mm1 \n\t&quot; /* spatial_pred */\
+-            PABS(      %%mm2, %%mm0)      /* ABS(c-e) */\
+-\
+-            &quot;movq -1(%[cur],%[mrefs]), %%mm2 \n\t&quot; /* cur[x-refs-1] */\
+-            &quot;movq -1(%[cur],%[prefs]), %%mm3 \n\t&quot; /* cur[x+refs-1] */\
+-            &quot;movq      %%mm2, %%mm4 \n\t&quot;\
+-            &quot;psubusb   %%mm3, %%mm2 \n\t&quot;\
+-            &quot;psubusb   %%mm4, %%mm3 \n\t&quot;\
+-            &quot;pmaxub    %%mm3, %%mm2 \n\t&quot;\
+-            &quot;pshufw $9,%%mm2, %%mm3 \n\t&quot;\
+-            &quot;punpcklbw %%mm7, %%mm2 \n\t&quot; /* ABS(cur[x-refs-1] - cur[x+refs-1]) */\
+-            &quot;punpcklbw %%mm7, %%mm3 \n\t&quot; /* ABS(cur[x-refs+1] - cur[x+refs+1]) */\
+-            &quot;paddw     %%mm2, %%mm0 \n\t&quot;\
+-            &quot;paddw     %%mm3, %%mm0 \n\t&quot;\
+-            &quot;psubw    %[pw1], %%mm0 \n\t&quot; /* spatial_score */\
+-\
+-            CHECK(-2,0)\
+-            CHECK1\
+-            CHECK(-3,1)\
+-            CHECK2\
+-            CHECK(0,-2)\
+-            CHECK1\
+-            CHECK(1,-3)\
+-            CHECK2\
+-\
+-            /* if(p-&gt;mode&lt;2) ... */\
+-            &quot;movq    %[tmp3], %%mm6 \n\t&quot; /* diff */\
+-            &quot;cmp       $2, %[mode] \n\t&quot;\
+-            &quot;jge       1f \n\t&quot;\
+-            LOAD4(&quot;(%[&quot;prev2&quot;],%[mrefs],2)&quot;, %%mm2) /* prev2[x-2*refs] */\
+-            LOAD4(&quot;(%[&quot;next2&quot;],%[mrefs],2)&quot;, %%mm4) /* next2[x-2*refs] */\
+-            LOAD4(&quot;(%[&quot;prev2&quot;],%[prefs],2)&quot;, %%mm3) /* prev2[x+2*refs] */\
+-            LOAD4(&quot;(%[&quot;next2&quot;],%[prefs],2)&quot;, %%mm5) /* next2[x+2*refs] */\
+-            &quot;paddw     %%mm4, %%mm2 \n\t&quot;\
+-            &quot;paddw     %%mm5, %%mm3 \n\t&quot;\
+-            &quot;psrlw     $1,    %%mm2 \n\t&quot; /* b */\
+-            &quot;psrlw     $1,    %%mm3 \n\t&quot; /* f */\
+-            &quot;movq    %[tmp0], %%mm4 \n\t&quot; /* c */\
+-            &quot;movq    %[tmp1], %%mm5 \n\t&quot; /* d */\
+-            &quot;movq    %[tmp2], %%mm7 \n\t&quot; /* e */\
+-            &quot;psubw     %%mm4, %%mm2 \n\t&quot; /* b-c */\
+-            &quot;psubw     %%mm7, %%mm3 \n\t&quot; /* f-e */\
+-            &quot;movq      %%mm5, %%mm0 \n\t&quot;\
+-            &quot;psubw     %%mm4, %%mm5 \n\t&quot; /* d-c */\
+-            &quot;psubw     %%mm7, %%mm0 \n\t&quot; /* d-e */\
+-            &quot;movq      %%mm2, %%mm4 \n\t&quot;\
+-            &quot;pminsw    %%mm3, %%mm2 \n\t&quot;\
+-            &quot;pmaxsw    %%mm4, %%mm3 \n\t&quot;\
+-            &quot;pmaxsw    %%mm5, %%mm2 \n\t&quot;\
+-            &quot;pminsw    %%mm5, %%mm3 \n\t&quot;\
+-            &quot;pmaxsw    %%mm0, %%mm2 \n\t&quot; /* max */\
+-            &quot;pminsw    %%mm0, %%mm3 \n\t&quot; /* min */\
+-            &quot;pxor      %%mm4, %%mm4 \n\t&quot;\
+-            &quot;pmaxsw    %%mm3, %%mm6 \n\t&quot;\
+-            &quot;psubw     %%mm2, %%mm4 \n\t&quot; /* -max */\
+-            &quot;pmaxsw    %%mm4, %%mm6 \n\t&quot; /* diff= MAX3(diff, min, -max); */\
+-            &quot;1: \n\t&quot;\
+-\
+-            &quot;movq    %[tmp1], %%mm2 \n\t&quot; /* d */\
+-            &quot;movq      %%mm2, %%mm3 \n\t&quot;\
+-            &quot;psubw     %%mm6, %%mm2 \n\t&quot; /* d-diff */\
+-            &quot;paddw     %%mm6, %%mm3 \n\t&quot; /* d+diff */\
+-            &quot;pmaxsw    %%mm2, %%mm1 \n\t&quot;\
+-            &quot;pminsw    %%mm3, %%mm1 \n\t&quot; /* d = clip(spatial_pred, d-diff, d+diff); */\
+-            &quot;packuswb  %%mm1, %%mm1 \n\t&quot;\
+-\
+-            :[tmp0]&quot;=m&quot;(tmp0),\
+-             [tmp1]&quot;=m&quot;(tmp1),\
+-             [tmp2]&quot;=m&quot;(tmp2),\
+-             [tmp3]&quot;=m&quot;(tmp3)\
+-            :[prev] &quot;r&quot;(prev),\
+-             [cur]  &quot;r&quot;(cur),\
+-             [next] &quot;r&quot;(next),\
+-             [prefs]&quot;r&quot;((long)refs),\
+-             [mrefs]&quot;r&quot;((long)-refs),\
+-             [pw1]  &quot;m&quot;(pw_1),\
+-             [pb1]  &quot;m&quot;(pb_1),\
+-             [mode] &quot;g&quot;(mode)\
+-        );\
+-        asm volatile(&quot;movd %%mm1, %0&quot; :&quot;=m&quot;(*dst));\
+-        dst += 4;\
+-        prev+= 4;\
+-        cur += 4;\
+-        next+= 4;\
+-    }
+-
+-    if(parity){
+-#define prev2 &quot;prev&quot;
+-#define next2 &quot;cur&quot;
+-        FILTER
+-#undef prev2
+-#undef next2
+-    }else{
+-#define prev2 &quot;cur&quot;
+-#define next2 &quot;next&quot;
+-        FILTER
+-#undef prev2
+-#undef next2
+-    }
+-}
+-#undef LOAD4
+-#undef PABS
+-#undef CHECK
+-#undef CHECK1
+-#undef CHECK2
+-#undef FILTER
+-
+-#endif /* defined(HAVE_MMX) &amp;&amp; defined(NAMED_ASM_ARGS) */
+-
+-static void filter_line_c(struct vf_priv_s *p, uint8_t *dst, uint8_t *prev, uint8_t *cur, uint8_t *next, int w, int refs, int parity){
+-    int x;
+-    uint8_t *prev2= parity ? prev : cur ;
+-    uint8_t *next2= parity ? cur  : next;
+-    for(x=0; x&lt;w; x++){
+-        int c= cur[-refs];
+-        int d= (prev2[0] + next2[0])&gt;&gt;1;
+-        int e= cur[+refs];
+-        int temporal_diff0= ABS(prev2[0] - next2[0]);
+-        int temporal_diff1=( ABS(prev[-refs] - c) + ABS(prev[+refs] - e) )&gt;&gt;1;
+-        int temporal_diff2=( ABS(next[-refs] - c) + ABS(next[+refs] - e) )&gt;&gt;1;
+-        int diff= MAX3(temporal_diff0&gt;&gt;1, temporal_diff1, temporal_diff2);
+-        int spatial_pred= (c+e)&gt;&gt;1;
+-        int spatial_score= ABS(cur[-refs-1] - cur[+refs-1]) + ABS(c-e)
+-                         + ABS(cur[-refs+1] - cur[+refs+1]) - 1;
+-
+-#define CHECK(j)\
+-    {   int score= ABS(cur[-refs-1+j] - cur[+refs-1-j])\
+-                 + ABS(cur[-refs  +j] - cur[+refs  -j])\
+-                 + ABS(cur[-refs+1+j] - cur[+refs+1-j]);\
+-        if(score &lt; spatial_score){\
+-            spatial_score= score;\
+-            spatial_pred= (cur[-refs  +j] + cur[+refs  -j])&gt;&gt;1;\
+-
+-        CHECK(-1) CHECK(-2) }} }}
+-        CHECK( 1) CHECK( 2) }} }}
+-
+-        if(p-&gt;mode&lt;2){
+-            int b= (prev2[-2*refs] + next2[-2*refs])&gt;&gt;1;
+-            int f= (prev2[+2*refs] + next2[+2*refs])&gt;&gt;1;
+-#if 0
+-            int a= cur[-3*refs];
+-            int g= cur[+3*refs];
+-            int max= MAX3(d-e, d-c, MIN3(MAX(b-c,f-e),MAX(b-c,b-a),MAX(f-g,f-e)) );
+-            int min= MIN3(d-e, d-c, MAX3(MIN(b-c,f-e),MIN(b-c,b-a),MIN(f-g,f-e)) );
+-#else
+-            int max= MAX3(d-e, d-c, MIN(b-c, f-e));
+-            int min= MIN3(d-e, d-c, MAX(b-c, f-e));
+-#endif
+-
+-            diff= MAX3(diff, min, -max);
+-        }
+-
+-        if(spatial_pred &gt; d + diff)
+-           spatial_pred = d + diff;
+-        else if(spatial_pred &lt; d - diff)
+-           spatial_pred = d - diff;
+-
+-        dst[0] = spatial_pred;
+-
+-        dst++;
+-        cur++;
+-        prev++;
+-        next++;
+-        prev2++;
+-        next2++;
+-    }
+-}
+-
+-static void filter(struct vf_priv_s *p, uint8_t *dst[3], int dst_stride[3], int width, int height, int parity, int tff){
+-    int x, y, i;
+-
+-    for(i=0; i&lt;3; i++){
+-        int is_chroma= !!i;
+-        int w= width &gt;&gt;is_chroma;
+-        int h= height&gt;&gt;is_chroma;
+-        int refs= p-&gt;stride[i];
+-
+-        for(y=0; y&lt;h; y++){
+-            if((y ^ parity) &amp; 1){
+-                uint8_t *prev= &amp;p-&gt;ref[0][i][y*refs];
+-                uint8_t *cur = &amp;p-&gt;ref[1][i][y*refs];
+-                uint8_t *next= &amp;p-&gt;ref[2][i][y*refs];
+-                uint8_t *dst2= &amp;dst[i][y*dst_stride[i]];
+-                filter_line(p, dst2, prev, cur, next, w, refs, parity ^ tff);
+-            }else{
+-                memcpy(&amp;dst[i][y*dst_stride[i]], &amp;p-&gt;ref[1][i][y*refs], w);
+-            }
+-        }
+-    }
+-#if defined(HAVE_MMX) &amp;&amp; defined(NAMED_ASM_ARGS)
+-    if(CpuCaps::hasMMXEXT()) asm volatile(&quot;emms \n\t&quot; : : : &quot;memory&quot;);
+-#endif
+-}
+ //***************************************************
+ //***************************************************
+ char *ADMVideoYadif::printConf( void )
+ {
+   static char buf[50];
+  	
+-  sprintf((char *)buf,&quot; Yadif&quot;);
++  sprintf((char *)buf,&quot; Yadif : mode %u order %d&quot;,_param-&gt;mode, _param-&gt;order);
+   return buf;
+ }
+ 
+@@ -443,37 +122,55 @@
+   {
+    	 _param=NEW(YADIF_PARAM);
+ 	GET(mode);
++        GET(order);
+   }
+   else
+   {
+     _param = NEW( YADIF_PARAM);
+     _param-&gt;mode=0;
++    _param-&gt;order=1;
+   }
+- _uncompressed=new ADMImage(_in-&gt;getInfo()-&gt;width,_in-&gt;getInfo()-&gt;height);
++  _uncompressed=new ADMImage(_in-&gt;getInfo()-&gt;width,_in-&gt;getInfo()-&gt;height);
+   ADM_assert(_uncompressed);    	  	
++  vidCache = new VideoCache (10, in);
++  updateInfo();
++}
+ 
+-  // Allocate
+-  uint32_t w=(_info.width+31)&amp;(~31);
+-  uint32_t h=(_info.height+6+31)&amp;(~31);
+-  for(int i=0;i&lt;3;i++)
++void ADMVideoYadif::updateInfo(void)
++{
++   memcpy(&amp;_info,_in-&gt;getInfo(),sizeof(_info)); 
++  if(_param-&gt;mode &amp;1 ) // Bob
+   {
+-    _images[i]=new ADMImage(w,h); 
++    _info.nb_frames*=2;
++    _info.fps1000*=2;
+   }
+-  memset(&amp;priv,0,sizeof(priv));
+-  for(int i=0;i&lt;3;i++)
+-  {
+-    priv.ref[i][0]=YPLANE(_images[i]);
+-    priv.ref[i][1]=UPLANE(_images[i]);
+-    priv.ref[i][2]=VPLANE(_images[i]);
+-  }
+-  
+-  
+ }
+ 
+ uint8_t ADMVideoYadif::configure( AVDMGenericVideoStream *instream) 
+ {
+   _in= instream;
+-  return 1;
++     diaMenuEntry tMode[]={
++                             {0,      _(&quot;Temporal &amp; Spatial check&quot;),NULL},
++                             {1,   _(&quot;Bob, T+S check&quot;),NULL},
++                             {2,      _(&quot;Skip spatial temporal check&quot;),NULL},
++                             {3,  _(&quot;Bob, Skip spatial temporal check&quot;),NULL}
++          };
++     diaMenuEntry tOrder[]={
++                             {0,      _(&quot;Bottom Field first&quot;),NULL},
++                             {1,   _(&quot;Top Field First&quot;),NULL}
++          };
++  
++     diaElemMenu mMode(&amp;(_param-&gt;mode),   _(&quot;Mode&quot;), 4,tMode);
++     diaElemMenu morder(&amp;(_param-&gt;order),   _(&quot;Order&quot;), 2,tOrder);
++     
++     diaElem *elems[]={&amp;mMode,&amp;morder};
++     
++     if(diaFactoryRun(&quot;Blend Removal&quot;,sizeof(elems)/sizeof(diaElem *),elems))
++     {
++        updateInfo();
++        return 1;
++     }
++     return 0;
+ }
+ 
+ uint8_t	ADMVideoYadif::getCoupledConf( CONFcouple **couples)
+@@ -481,9 +178,10 @@
+ #define CSET(x)  (*couples)-&gt;setCouple((char *)#x,(_param-&gt;x))
+ 
+           ADM_assert(_param);
+-          *couples=new CONFcouple(1);
++          *couples=new CONFcouple(2);
+ 
+           CSET(mode);
++          CSET(order);
+           return 1;
+ 
+ }
+@@ -493,175 +191,222 @@
+ {
+         delete  _uncompressed;
+         _uncompressed=NULL;
+-        DELETE(_param);
+-        for(int i=0;i&lt;3;i++)
+-            delete _images[i];
++       
++        delete vidCache;
++        vidCache = NULL;
++        
++        delete _param;
++        _param=NULL;
+ }
++
+ uint8_t ADMVideoYadif::getFrameNumberNoAlloc(uint32_t frame,
+                                               uint32_t *len,
+                                               ADMImage *data,
+                                               uint32_t *flags)
+ {
+-  ADM_assert(frame&lt;_info.nb_frames);
+-                                                                
+-  // read uncompressed frame
+-  if(!_in-&gt;getFrameNumberNoAlloc(frame, len, _uncompressed, flags)) return 0;
+-  
+-  
+-  
+-  *len= (_info.width * _info.height*3) &gt;&gt;1;
+-  return 1;
+-}
++        int mode;
++        int parity;
++        int tff;
++        int iplane;
++        int cpu;
++        int n;
++        ADMImage *src, *dst, * prev, *next;
+ 
+-//***************************************************
+-//***************************************************
+-#if OPOPOP
+-static int config(struct vf_instance_s* vf,
+-        int width, int height, int d_width, int d_height,
+-	unsigned int flags, unsigned int outfmt){
+-        int i, j;
++    
++        mode = _param-&gt;mode;
+ 
+-        for(i=0; i&lt;3; i++){
+-            int is_chroma= !!i;
+-            int w= ((width   + 31) &amp; (~31))&gt;&gt;is_chroma;
+-            int h= ((height+6+ 31) &amp; (~31))&gt;&gt;is_chroma;
++        if (mode &amp; 1) 
++                n = (frame&gt;&gt;1); // bob
++        else
++                n = frame;
+ 
+-            vf-&gt;priv-&gt;stride[i]= w;
+-            for(j=0; j&lt;3; j++)
+-                vf-&gt;priv-&gt;ref[j][i]= malloc(w*h*sizeof(uint8_t))+3*w;
++        src = vidCache-&gt;getImage(n);
++  // Request frame 'n' from the child (source) clip.
++
++        if (n&gt;0)
++                prev =  vidCache-&gt;getImage( n-1); // get previous frame
++        else
++                prev= vidCache-&gt;getImage(0); // get very first frame
++
++        if (n&lt; _in-&gt;getInfo()-&gt;nb_frames)
++                next = vidCache-&gt;getImage( n+1); // get next frame
++        else
++                next = vidCache-&gt;getImage( _in-&gt;getInfo()-&gt;nb_frames-1); // get last frame
++
++        dst = data;
++        
++        if(!prev || !src || !next)
++        {
++            printf(&quot;Failed to read frame for frame %u\n&quot;,frame);
++            vidCache-&gt;unlockAll();
++            return 0;
+         }
++        
++  // Construct a frame based on the information of the current frame
++  // contained in the &quot;vi&quot; struct.
++#if 0 //MEANX
++        if (_params-&gt;order == -1)
++//		tff = avs_is_tff(&amp;p-&gt;vi) == 0 ? 0 : 1; // 0 or 1
++                tff = avs_get_parity(p-&gt;child, n) ? 1 : 0; // 0 or 1
++        else
++#endif
++                tff = _param-&gt;order;	
++        
++        parity = (mode &amp; 1) ? (frame &amp; 1) ^ (1^tff) : (tff ^ 1);  // 0 or 1
+ 
+-	return vf_next_config(vf,width,height,d_width,d_height,flags,outfmt);
+-}
++      //MEANX  cpu = avs_get_cpu_flags(p-&gt;env);
+ 
+-static int continue_buffered_image(struct vf_instance_s *vf);
+-extern int correct_pts;
++        for (iplane = 0; iplane&lt;3; iplane++)
++        {
++                ADM_PLANE plane = (iplane==0) ? PLANAR_Y : (iplane==1) ? PLANAR_U : PLANAR_V;
+ 
+-static int put_image(struct vf_instance_s* vf, mp_image_t *mpi, double pts){
+-    int tff;
++                const unsigned char* srcp = src-&gt;GetWritePtr(plane);
++          // Request a Read pointer from the current source frame
+ 
+-    if(vf-&gt;priv-&gt;parity &lt; 0) {
+-        if (mpi-&gt;fields &amp; MP_IMGFIELD_ORDERED)
+-            tff = !!(mpi-&gt;fields &amp; MP_IMGFIELD_TOP_FIRST);
+-        else
+-            tff = 1;
+-    }
+-    else tff = (vf-&gt;priv-&gt;parity&amp;1)^1;
++                const unsigned char* prevp0 = prev-&gt;GetWritePtr( plane);
++                unsigned char* prevp = (unsigned char*) prevp0; // with same pitch
++          // Request a Read pointer from the prev source frame.
+ 
+-    store_ref(vf-&gt;priv, mpi-&gt;planes, mpi-&gt;stride, mpi-&gt;w, mpi-&gt;h);
++                const unsigned char* nextp0 = next-&gt;GetWritePtr( plane);
++                unsigned char* nextp = (unsigned char*) nextp0; // with same pitch
++          // Request a Read pointer from the next source frame.
+ 
+-    vf-&gt;priv-&gt;buffered_mpi = mpi;
+-    vf-&gt;priv-&gt;buffered_tff = tff;
+-    vf-&gt;priv-&gt;buffered_i = 0;
+-    vf-&gt;priv-&gt;buffered_pts = pts;
++                unsigned char* dstp = dst-&gt;GetWritePtr( plane);
++                // Request a Write pointer from the newly created destination image.
++          // You can request a writepointer to images that have just been
+ 
+-    if(vf-&gt;priv-&gt;do_deinterlace == 0)
+-        return vf_next_put_image(vf, mpi, pts);
+-    else if(vf-&gt;priv-&gt;do_deinterlace == 1){
+-        vf-&gt;priv-&gt;do_deinterlace= 2;
+-        return 0;
+-    }else
+-        return continue_buffered_image(vf);
+-}
++                const int dst_pitch = dst-&gt;GetPitch( plane);
++          // Requests pitch (length of a line) of the destination image.
++          // For more information on pitch see: <A HREF="http://www.avisynth.org/index.php?page=WorkingWithImages">http://www.avisynth.org/index.php?page=WorkingWithImages</A>
++                // (short version - pitch is always equal to or greater than width to allow for seriously fast assembly code)
+ 
+-static int continue_buffered_image(struct vf_instance_s *vf)
+-{
+-    mp_image_t *mpi = vf-&gt;priv-&gt;buffered_mpi;
+-    int tff = vf-&gt;priv-&gt;buffered_tff;
+-    double pts = vf-&gt;priv-&gt;buffered_pts;
+-    int i;
+-    int ret=0;
+-    mp_image_t *dmpi;
++                const int width =dst-&gt;GetPitch( plane);
++          // Requests rowsize (number of used bytes in a line.
++          // See the link above for more information.
+ 
+-    pts += vf-&gt;priv-&gt;buffered_i * .02; // XXX not right
++                const int height = dst-&gt;GetHeight( plane);
++          // Requests the height of the destination image.
+ 
+-    for(i = vf-&gt;priv-&gt;buffered_i; i&lt;=(vf-&gt;priv-&gt;mode&amp;1); i++){
+-        dmpi=vf_get_image(vf-&gt;next,mpi-&gt;imgfmt,
+-            MP_IMGTYPE_TEMP,
+-            MP_IMGFLAG_ACCEPT_STRIDE|MP_IMGFLAG_PREFER_ALIGNED_STRIDE,
+-            mpi-&gt;width,mpi-&gt;height);
+-        vf_clone_mpi_attributes(dmpi, mpi);
+-        filter(vf-&gt;priv, dmpi-&gt;planes, dmpi-&gt;stride, mpi-&gt;w, mpi-&gt;h, i ^ tff ^ 1, tff);
+-        if (correct_pts &amp;&amp; i &lt; (vf-&gt;priv-&gt;mode &amp; 1))
+-            vf_queue_frame(vf, continue_buffered_image);
+-        ret |= vf_next_put_image(vf, dmpi, pts /*FIXME*/);
+-        if (correct_pts)
+-            break;
+-        if(i&lt;(vf-&gt;priv-&gt;mode&amp;1))
+-            vf_next_control(vf, VFCTRL_FLIP_PAGE, NULL);
+-    }
+-    vf-&gt;priv-&gt;buffered_i = 1;
+-    return ret;
++                const int src_pitch = src-&gt;GetPitch(plane);
++                const int prev_pitch = prev-&gt;GetPitch(plane);
++                const int next_pitch = next-&gt;GetPitch(plane);
++
++                // in v.0.1-0.3  all source pitches are  assumed equal (for simplicity)
++                                // consider other (rare) case
++                if (prev_pitch != src_pitch)
++                {
++                    prevp = (unsigned char *)ADM_alloc(height*src_pitch);
++                    int h;
++                    for (h=0; h&lt;0; h++)
++                      memcpy(prevp+h*src_pitch, prevp0+h*prev_pitch, width);
++                }
++                    
++                if (next_pitch != src_pitch)
++                {
++                    nextp = (unsigned char *)ADM_alloc(height*src_pitch);
++                    int h;
++                    for (h=0; h&lt;0; h++)
++                      memcpy(nextp+h*src_pitch, nextp0+h*next_pitch, width);
++                }
++                    
++                filter_plane(mode, dstp, dst_pitch, prevp, srcp, nextp, src_pitch, width, height, parity, tff, 0);
++                if (prev_pitch != src_pitch)
++                        ADM_dealloc(prevp);
++                if (next_pitch != src_pitch)
++                        ADM_dealloc(nextp);
++        }
++       vidCache-&gt;unlockAll();
++      return 1;
+ }
++//****************
+ 
+-static void uninit(struct vf_instance_s* vf){
+-    int i;
+-    if(!vf-&gt;priv) return;
++static void filter_line_c(int mode, uint8_t *dst, const uint8_t *prev, const uint8_t *cur, const uint8_t *next, int w, int refs, int parity){
++    int x;
++    const uint8_t *prev2= parity ? prev : cur ;
++    const uint8_t *next2= parity ? cur  : next;
++    for(x=0; x&lt;w; x++){
++        int c= cur[-refs];
++        int d= (prev2[0] + next2[0])&gt;&gt;1;
++        int e= cur[+refs];
++        int temporal_diff0= ABS(prev2[0] - next2[0]);
++        int temporal_diff1=( ABS(prev[-refs] - c) + ABS(prev[+refs] - e) )&gt;&gt;1;
++        int temporal_diff2=( ABS(next[-refs] - c) + ABS(next[+refs] - e) )&gt;&gt;1;
++        int diff= MAX3(temporal_diff0&gt;&gt;1, temporal_diff1, temporal_diff2);
++        int spatial_pred= (c+e)&gt;&gt;1;
++        int spatial_score= ABS(cur[-refs-1] - cur[+refs-1]) + ABS(c-e)
++                         + ABS(cur[-refs+1] - cur[+refs+1]) - 1;
+ 
+-    for(i=0; i&lt;3*3; i++){
+-        uint8_t **p= &amp;vf-&gt;priv-&gt;ref[i%3][i/3];
+-        if(*p) free(*p - 3*vf-&gt;priv-&gt;stride[i/3]);
+-        *p= NULL;
+-    }
+-    free(vf-&gt;priv);
+-    vf-&gt;priv=NULL;
+-}
++#define CHECK(j)\
++    {   int score= ABS(cur[-refs-1+ j] - cur[+refs-1- j])\
++                 + ABS(cur[-refs  + j] - cur[+refs  - j])\
++                 + ABS(cur[-refs+1+ j] - cur[+refs+1- j]);\
++        if(score &lt; spatial_score){\
++            spatial_score= score;\
++            spatial_pred= (cur[-refs  + j] + cur[+refs  - j])&gt;&gt;1;\
+ 
+-//===========================================================================//
+-static int query_format(struct vf_instance_s* vf, unsigned int fmt){
+-    switch(fmt){
+-	case IMGFMT_YV12:
+-	case IMGFMT_I420:
+-	case IMGFMT_IYUV:
+-	case IMGFMT_Y800:
+-	case IMGFMT_Y8:
+-	    return vf_next_query_format(vf,fmt);
+-    }
+-    return 0;
+-}
++        CHECK(-1) CHECK(-2) }} }}
++        CHECK( 1) CHECK( 2) }} }}
+ 
+-static int control(struct vf_instance_s* vf, int request, void* data){
+-    switch (request){
+-      case VFCTRL_GET_DEINTERLACE:
+-        *(int*)data = vf-&gt;priv-&gt;do_deinterlace;
+-        return CONTROL_OK;
+-      case VFCTRL_SET_DEINTERLACE:
+-        vf-&gt;priv-&gt;do_deinterlace = 2*!!*(int*)data;
+-        return CONTROL_OK;
+-    }
+-    return vf_next_control (vf, request, data);
+-}
++        if(mode&lt;2){
++            int b= (prev2[-2*refs] + next2[-2*refs])&gt;&gt;1;
++            int f= (prev2[+2*refs] + next2[+2*refs])&gt;&gt;1;
++#if 0
++            int a= cur[-3*refs];
++            int g= cur[+3*refs];
++            int max= MAX3(d-e, d-c, MIN3(MAX(b-c,f-e),MAX(b-c,b-a),MAX(f-g,f-e)) );
++            int min= MIN3(d-e, d-c, MAX3(MIN(b-c,f-e),MIN(b-c,b-a),MIN(f-g,f-e)) );
++#else
++            int max= MAX3(d-e, d-c, MIN(b-c, f-e));
++            int min= MIN3(d-e, d-c, MAX(b-c, f-e));
++#endif
+ 
+-static int open(vf_instance_t *vf, char* args){
++            diff= MAX3(diff, min, -max);
++        }
+ 
+-    vf-&gt;config=config;
+-    vf-&gt;put_image=put_image;
+-    vf-&gt;query_format=query_format;
+-    vf-&gt;uninit=uninit;
+-    vf-&gt;priv=malloc(sizeof(struct vf_priv_s));
+-    vf-&gt;control=control;
+-    memset(vf-&gt;priv, 0, sizeof(struct vf_priv_s));
++        if(spatial_pred &gt; d + diff)
++           spatial_pred = d + diff;
++        else if(spatial_pred &lt; d - diff)
++           spatial_pred = d - diff;
+ 
+-    vf-&gt;priv-&gt;mode=0;
+-    vf-&gt;priv-&gt;parity= -1;
+-    vf-&gt;priv-&gt;do_deinterlace=1;
++        dst[0] = spatial_pred;
+ 
+-    if (args) sscanf(args, &quot;%d:%d&quot;, &amp;vf-&gt;priv-&gt;mode, &amp;vf-&gt;priv-&gt;parity);
++        dst++;
++        cur++;
++        prev++;
++        next++;
++        prev2++;
++        next2++;
++    }
++}
+ 
+-    filter_line = filter_line_c;
+-#if defined(HAVE_MMX) &amp;&amp; defined(NAMED_ASM_ARGS)
+-    if(gCpuCaps.hasMMX2) filter_line = filter_line_mmx2;
++void filter_plane(int mode, uint8_t *dst, int dst_stride, const uint8_t *prev0, const uint8_t *cur0, const uint8_t *next0, int refs, int w, int h, int parity, int tff, int mmx)
++{
++void (*filter_line)(int mode, uint8_t *dst, const uint8_t *prev, const uint8_t *cur, const uint8_t *next, int w, int refs, int parity);
++	int y;
++	filter_line = filter_line_c;
++#if (defined( ARCH_X86)  || defined(ARCH_X86_64))
++	if (CpuCaps::hasMMXEXT()) 
++		filter_line = filter_line_mmx2;
+ #endif
+ 
+-    return 1;
+-}
++        memcpy(dst, cur0, w);
++        memcpy(dst + dst_stride, cur0 + refs, w);
++        for(y=2; y&lt;h-1; y++){
++            if(((y ^ parity) &amp; 1)){
++                const uint8_t *prev= prev0 + y*refs;
++                const uint8_t *cur = cur0 + y*refs;
++                const uint8_t *next= next0 + y*refs;
++                uint8_t *dst2= dst + y*dst_stride;
++                filter_line(mode, dst2, prev, cur, next, w, refs, (parity ^ tff));
++            }else{
++                memcpy(dst + y*dst_stride, cur0 + y*refs, w);
++            }
++        }
++        memcpy(dst + (h-1)*dst_stride, cur0 + (h-1)*refs, w);
+ 
+-vf_info_t vf_info_yadif = {
+-    &quot;Yet Another DeInterlacing Filter&quot;,
+-    &quot;yadif&quot;,
+-    &quot;Michael Niedermayer&quot;,
+-    &quot;&quot;,
+-    open,
+-    NULL
+-};
++#ifdef __GNUC__
++	if (mmx) 
++		;//asm volatile(&quot;emms&quot;);
+ #endif
++}
++
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidYadif_asm.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidYadif_asm.c	2007-04-13 12:12:24 UTC (rev 2931)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidYadif_asm.c	2007-04-13 15:38:41 UTC (rev 2932)
+@@ -0,0 +1,228 @@
++#include &quot;config.h&quot;
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++#include &lt;string.h&gt;
++#include &lt;inttypes.h&gt;
++#include &lt;math.h&gt;
++
++#include &quot;default.h&quot;
++#include &quot;admmangle.h&quot;
++
++#if (defined( ARCH_X86)  || defined(ARCH_X86_64))
++
++
++#define LOAD4(mem,dst) \
++            &quot;movd      &quot;mem&quot;, &quot;#dst&quot; \n\t&quot;\
++            &quot;punpcklbw %%mm7, &quot;#dst&quot; \n\t&quot;
++
++#define PABS(tmp,dst) \
++            &quot;pxor     &quot;#tmp&quot;, &quot;#tmp&quot; \n\t&quot;\
++            &quot;psubw    &quot;#dst&quot;, &quot;#tmp&quot; \n\t&quot;\
++            &quot;pmaxsw   &quot;#tmp&quot;, &quot;#dst&quot; \n\t&quot;
++
++#define CHECK(pj,mj) \
++            &quot;movq &quot;#pj&quot;(%[cur],%[mrefs]), %%mm2 \n\t&quot; /* cur[x-refs-1+j] */\
++            &quot;movq &quot;#mj&quot;(%[cur],%[prefs]), %%mm3 \n\t&quot; /* cur[x+refs-1-j] */\
++            &quot;movq      %%mm2, %%mm4 \n\t&quot;\
++            &quot;movq      %%mm2, %%mm5 \n\t&quot;\
++            &quot;pxor      %%mm3, %%mm4 \n\t&quot;\
++            &quot;pavgb     %%mm3, %%mm5 \n\t&quot;\
++            &quot;pand     %[pb1], %%mm4 \n\t&quot;\
++            &quot;psubusb   %%mm4, %%mm5 \n\t&quot;\
++            &quot;psrlq     $8,    %%mm5 \n\t&quot;\
++            &quot;punpcklbw %%mm7, %%mm5 \n\t&quot; /* (cur[x-refs+j] + cur[x+refs-j])&gt;&gt;1 */\
++            &quot;movq      %%mm2, %%mm4 \n\t&quot;\
++            &quot;psubusb   %%mm3, %%mm2 \n\t&quot;\
++            &quot;psubusb   %%mm4, %%mm3 \n\t&quot;\
++            &quot;pmaxub    %%mm3, %%mm2 \n\t&quot;\
++            &quot;movq      %%mm2, %%mm3 \n\t&quot;\
++            &quot;movq      %%mm2, %%mm4 \n\t&quot; /* ABS(cur[x-refs-1+j] - cur[x+refs-1-j]) */\
++            &quot;psrlq      $8,   %%mm3 \n\t&quot; /* ABS(cur[x-refs  +j] - cur[x+refs  -j]) */\
++            &quot;psrlq     $16,   %%mm4 \n\t&quot; /* ABS(cur[x-refs+1+j] - cur[x+refs+1-j]) */\
++            &quot;punpcklbw %%mm7, %%mm2 \n\t&quot;\
++            &quot;punpcklbw %%mm7, %%mm3 \n\t&quot;\
++            &quot;punpcklbw %%mm7, %%mm4 \n\t&quot;\
++            &quot;paddw     %%mm3, %%mm2 \n\t&quot;\
++            &quot;paddw     %%mm4, %%mm2 \n\t&quot; /* score */
++
++#define CHECK1 \
++            &quot;movq      %%mm0, %%mm3 \n\t&quot;\
++            &quot;pcmpgtw   %%mm2, %%mm3 \n\t&quot; /* if(score &lt; spatial_score) */\
++            &quot;pminsw    %%mm2, %%mm0 \n\t&quot; /* spatial_score= score; */\
++            &quot;movq      %%mm3, %%mm6 \n\t&quot;\
++            &quot;pand      %%mm3, %%mm5 \n\t&quot;\
++            &quot;pandn     %%mm1, %%mm3 \n\t&quot;\
++            &quot;por       %%mm5, %%mm3 \n\t&quot;\
++            &quot;movq      %%mm3, %%mm1 \n\t&quot; /* spatial_pred= (cur[x-refs+j] + cur[x+refs-j])&gt;&gt;1; */
++
++#define CHECK2 /* pretend not to have checked dir=2 if dir=1 was bad.\
++                  hurts both quality and speed, but matches the C version. */\
++            &quot;paddw    %[pw1], %%mm6 \n\t&quot;\
++            &quot;psllw     $14,   %%mm6 \n\t&quot;\
++            &quot;paddsw    %%mm6, %%mm2 \n\t&quot;\
++            &quot;movq      %%mm0, %%mm3 \n\t&quot;\
++            &quot;pcmpgtw   %%mm2, %%mm3 \n\t&quot;\
++            &quot;pminsw    %%mm2, %%mm0 \n\t&quot;\
++            &quot;pand      %%mm3, %%mm5 \n\t&quot;\
++            &quot;pandn     %%mm1, %%mm3 \n\t&quot;\
++            &quot;por       %%mm5, %%mm3 \n\t&quot;\
++            &quot;movq      %%mm3, %%mm1 \n\t&quot;
++
++void filter_line_mmx2(int mode, uint8_t *dst, const uint8_t *prev, const uint8_t *cur, const uint8_t *next, int w, int refs, int parity){
++    static const uint64_t pw_1 = 0x0001000100010001ULL;
++    static const uint64_t pb_1 = 0x0101010101010101ULL;
++//    const int mode = p-&gt;mode;
++    uint64_t tmp0, tmp1, tmp2, tmp3;
++    int x;
++
++#define FILTER\
++    for(x=0; x&lt;w; x+=4){\
++        asm volatile(\
++            &quot;pxor      %%mm7, %%mm7 \n\t&quot;\
++            LOAD4(&quot;(%[cur],%[mrefs])&quot;, %%mm0) /* c = cur[x-refs] */\
++            LOAD4(&quot;(%[cur],%[prefs])&quot;, %%mm1) /* e = cur[x+refs] */\
++            LOAD4(&quot;(%[&quot;prev2&quot;])&quot;, %%mm2) /* prev2[x] */\
++            LOAD4(&quot;(%[&quot;next2&quot;])&quot;, %%mm3) /* next2[x] */\
++            &quot;movq      %%mm3, %%mm4 \n\t&quot;\
++            &quot;paddw     %%mm2, %%mm3 \n\t&quot;\
++            &quot;psraw     $1,    %%mm3 \n\t&quot; /* d = (prev2[x] + next2[x])&gt;&gt;1 */\
++            &quot;movq      %%mm0, %[tmp0] \n\t&quot; /* c */\
++            &quot;movq      %%mm3, %[tmp1] \n\t&quot; /* d */\
++            &quot;movq      %%mm1, %[tmp2] \n\t&quot; /* e */\
++            &quot;psubw     %%mm4, %%mm2 \n\t&quot;\
++            PABS(      %%mm4, %%mm2) /* temporal_diff0 */\
++            LOAD4(&quot;(%[prev],%[mrefs])&quot;, %%mm3) /* prev[x-refs] */\
++            LOAD4(&quot;(%[prev],%[prefs])&quot;, %%mm4) /* prev[x+refs] */\
++            &quot;psubw     %%mm0, %%mm3 \n\t&quot;\
++            &quot;psubw     %%mm1, %%mm4 \n\t&quot;\
++            PABS(      %%mm5, %%mm3)\
++            PABS(      %%mm5, %%mm4)\
++            &quot;paddw     %%mm4, %%mm3 \n\t&quot; /* temporal_diff1 */\
++            &quot;psrlw     $1,    %%mm2 \n\t&quot;\
++            &quot;psrlw     $1,    %%mm3 \n\t&quot;\
++            &quot;pmaxsw    %%mm3, %%mm2 \n\t&quot;\
++            LOAD4(&quot;(%[next],%[mrefs])&quot;, %%mm3) /* next[x-refs] */\
++            LOAD4(&quot;(%[next],%[prefs])&quot;, %%mm4) /* next[x+refs] */\
++            &quot;psubw     %%mm0, %%mm3 \n\t&quot;\
++            &quot;psubw     %%mm1, %%mm4 \n\t&quot;\
++            PABS(      %%mm5, %%mm3)\
++            PABS(      %%mm5, %%mm4)\
++            &quot;paddw     %%mm4, %%mm3 \n\t&quot; /* temporal_diff2 */\
++            &quot;psrlw     $1,    %%mm3 \n\t&quot;\
++            &quot;pmaxsw    %%mm3, %%mm2 \n\t&quot;\
++            &quot;movq      %%mm2, %[tmp3] \n\t&quot; /* diff */\
++\
++            &quot;paddw     %%mm0, %%mm1 \n\t&quot;\
++            &quot;paddw     %%mm0, %%mm0 \n\t&quot;\
++            &quot;psubw     %%mm1, %%mm0 \n\t&quot;\
++            &quot;psrlw     $1,    %%mm1 \n\t&quot; /* spatial_pred */\
++            PABS(      %%mm2, %%mm0)      /* ABS(c-e) */\
++\
++            &quot;movq -1(%[cur],%[mrefs]), %%mm2 \n\t&quot; /* cur[x-refs-1] */\
++            &quot;movq -1(%[cur],%[prefs]), %%mm3 \n\t&quot; /* cur[x+refs-1] */\
++            &quot;movq      %%mm2, %%mm4 \n\t&quot;\
++            &quot;psubusb   %%mm3, %%mm2 \n\t&quot;\
++            &quot;psubusb   %%mm4, %%mm3 \n\t&quot;\
++            &quot;pmaxub    %%mm3, %%mm2 \n\t&quot;\
++            &quot;pshufw $9,%%mm2, %%mm3 \n\t&quot;\
++            &quot;punpcklbw %%mm7, %%mm2 \n\t&quot; /* ABS(cur[x-refs-1] - cur[x+refs-1]) */\
++            &quot;punpcklbw %%mm7, %%mm3 \n\t&quot; /* ABS(cur[x-refs+1] - cur[x+refs+1]) */\
++            &quot;paddw     %%mm2, %%mm0 \n\t&quot;\
++            &quot;paddw     %%mm3, %%mm0 \n\t&quot;\
++            &quot;psubw    %[pw1], %%mm0 \n\t&quot; /* spatial_score */\
++\
++            CHECK(-2,0)\
++            CHECK1\
++            CHECK(-3,1)\
++            CHECK2\
++            CHECK(0,-2)\
++            CHECK1\
++            CHECK(1,-3)\
++            CHECK2\
++\
++            /* if(p-&gt;mode&lt;2) ... */\
++            &quot;movq    %[tmp3], %%mm6 \n\t&quot; /* diff */\
++            &quot;cmp       $2, %[mode] \n\t&quot;\
++            &quot;jge       1f \n\t&quot;\
++            LOAD4(&quot;(%[&quot;prev2&quot;],%[mrefs],2)&quot;, %%mm2) /* prev2[x-2*refs] */\
++            LOAD4(&quot;(%[&quot;next2&quot;],%[mrefs],2)&quot;, %%mm4) /* next2[x-2*refs] */\
++            LOAD4(&quot;(%[&quot;prev2&quot;],%[prefs],2)&quot;, %%mm3) /* prev2[x+2*refs] */\
++            LOAD4(&quot;(%[&quot;next2&quot;],%[prefs],2)&quot;, %%mm5) /* next2[x+2*refs] */\
++            &quot;paddw     %%mm4, %%mm2 \n\t&quot;\
++            &quot;paddw     %%mm5, %%mm3 \n\t&quot;\
++            &quot;psrlw     $1,    %%mm2 \n\t&quot; /* b */\
++            &quot;psrlw     $1,    %%mm3 \n\t&quot; /* f */\
++            &quot;movq    %[tmp0], %%mm4 \n\t&quot; /* c */\
++            &quot;movq    %[tmp1], %%mm5 \n\t&quot; /* d */\
++            &quot;movq    %[tmp2], %%mm7 \n\t&quot; /* e */\
++            &quot;psubw     %%mm4, %%mm2 \n\t&quot; /* b-c */\
++            &quot;psubw     %%mm7, %%mm3 \n\t&quot; /* f-e */\
++            &quot;movq      %%mm5, %%mm0 \n\t&quot;\
++            &quot;psubw     %%mm4, %%mm5 \n\t&quot; /* d-c */\
++            &quot;psubw     %%mm7, %%mm0 \n\t&quot; /* d-e */\
++            &quot;movq      %%mm2, %%mm4 \n\t&quot;\
++            &quot;pminsw    %%mm3, %%mm2 \n\t&quot;\
++            &quot;pmaxsw    %%mm4, %%mm3 \n\t&quot;\
++            &quot;pmaxsw    %%mm5, %%mm2 \n\t&quot;\
++            &quot;pminsw    %%mm5, %%mm3 \n\t&quot;\
++            &quot;pmaxsw    %%mm0, %%mm2 \n\t&quot; /* max */\
++            &quot;pminsw    %%mm0, %%mm3 \n\t&quot; /* min */\
++            &quot;pxor      %%mm4, %%mm4 \n\t&quot;\
++            &quot;pmaxsw    %%mm3, %%mm6 \n\t&quot;\
++            &quot;psubw     %%mm2, %%mm4 \n\t&quot; /* -max */\
++            &quot;pmaxsw    %%mm4, %%mm6 \n\t&quot; /* diff= MAX3(diff, min, -max); */\
++            &quot;1: \n\t&quot;\
++\
++            &quot;movq    %[tmp1], %%mm2 \n\t&quot; /* d */\
++            &quot;movq      %%mm2, %%mm3 \n\t&quot;\
++            &quot;psubw     %%mm6, %%mm2 \n\t&quot; /* d-diff */\
++            &quot;paddw     %%mm6, %%mm3 \n\t&quot; /* d+diff */\
++            &quot;pmaxsw    %%mm2, %%mm1 \n\t&quot;\
++            &quot;pminsw    %%mm3, %%mm1 \n\t&quot; /* d = clip(spatial_pred, d-diff, d+diff); */\
++            &quot;packuswb  %%mm1, %%mm1 \n\t&quot;\
++\
++            :[tmp0]&quot;=m&quot;(tmp0),\
++             [tmp1]&quot;=m&quot;(tmp1),\
++             [tmp2]&quot;=m&quot;(tmp2),\
++             [tmp3]&quot;=m&quot;(tmp3)\
++            :[prev] &quot;r&quot;(prev),\
++             [cur]  &quot;r&quot;(cur),\
++             [next] &quot;r&quot;(next),\
++             [prefs]&quot;r&quot;((long)refs),\
++             [mrefs]&quot;r&quot;((long)-refs),\
++             [pw1]  &quot;m&quot;(pw_1),\
++             [pb1]  &quot;m&quot;(pb_1),\
++             [mode] &quot;g&quot;(mode)\
++        );\
++        asm volatile(&quot;movd %%mm1, %0&quot; :&quot;=m&quot;(*dst));\
++        dst += 4;\
++        prev+= 4;\
++        cur += 4;\
++        next+= 4;\
++    }
++
++    if(parity){
++#define prev2 &quot;prev&quot;
++#define next2 &quot;cur&quot;
++        FILTER
++#undef prev2
++#undef next2
++    }else{
++#define prev2 &quot;cur&quot;
++#define next2 &quot;next&quot;
++        FILTER
++#undef prev2
++#undef next2
++    }
++}
++#undef LOAD4
++#undef PABS
++#undef CHECK
++#undef CHECK1
++#undef CHECK2
++#undef FILTER
++#endif
++
++
++
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/Makefile.am
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/Makefile.am	2007-04-13 12:12:24 UTC (rev 2931)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/Makefile.am	2007-04-13 15:38:41 UTC (rev 2932)
+@@ -51,7 +51,8 @@
+  ADM_vidMsmooth.cpp \
+  ADM_vidFastConvolution.cpp  \
+  ADM_vidRotate.cpp \
+- ADM_vidYadif.cpp
++ ADM_vidYadif.cpp \
++ ADM_vidYadif_asm.c
+ 			
+ 
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000249.html">[Avidemux-svn-commit] r2931 - in	branches/avidemux_2.4_branch/avidemux: ADM_filter ADM_videoFilter
+</A></li>
+	<LI>Next message: <A HREF="000251.html">[Avidemux-svn-commit] r2933 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#250">[ date ]</a>
+              <a href="thread.html#250">[ thread ]</a>
+              <a href="subject.html#250">[ subject ]</a>
+              <a href="author.html#250">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,225 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6408 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6408%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C201006241754.o5OHs8Dr013825%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003596.html">
+   <LINK REL="Next"  HREF="003598.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6408 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6408%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C201006241754.o5OHs8Dr013825%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6408 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jun 24 19:54:08 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003596.html">[Avidemux-svn-commit] r6407 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src
+</A></li>
+        <LI>Next message: <A HREF="003598.html">[Avidemux-svn-commit] r6409 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3597">[ date ]</a>
+              <a href="thread.html#3597">[ thread ]</a>
+              <a href="subject.html#3597">[ subject ]</a>
+              <a href="author.html#3597">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-06-24 19:54:08 +0200 (Thu, 24 Jun 2010)
+New Revision: 6408
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsGetBits.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsGetBits.h
+Log:
+[Ts] Simplet getbits, might be useful later
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsGetBits.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsGetBits.cpp	2010-06-24 17:54:07 UTC (rev 6407)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsGetBits.cpp	2010-06-24 17:54:08 UTC (rev 6408)
+@@ -0,0 +1,100 @@
++/***************************************************************************
++    \file ADM_tsGetBits
++    \brief Simple getbits dedicated to TS packet. should be made more generic.
++    \author mean (C) 2010 <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++
++    This is slow, but we dont care as it is not used much.
++    The aim is to consume exactly what we need from the pkt.
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_tsGetBits.h&quot;
++/**
++    \fn ctor
++*/
++tsGetBits::tsGetBits(tsPacketLinear *p)
++{
++    pkt=p;
++    consumed=0;
++    accumulator=0;
++    stored=0;
++}
++/**
++    \fn dtor
++*/
++tsGetBits::~tsGetBits()
++{
++
++
++}
++bool tsGetBits::refill(void)
++{
++    uint32_t nw;
++    int shift=32-stored;
++    accumulator&gt;&gt;=shift;
++    accumulator&lt;&lt;=shift;
++    
++    nw=pkt-&gt;readi8();
++    ADM_assert(consumed&lt;MAX_GETBITS_BUFFER);
++    data[consumed]=nw;
++    nw&lt;&lt;=24-stored;
++    accumulator+=nw;
++
++    consumed++;
++    stored+=8;
++    return true;
++}
++/**
++    \fn getBits
++*/
++uint32_t tsGetBits::getBits(int n)
++{
++    ADM_assert(n);
++    if(n&gt;23) ADM_assert(0);
++again:
++    if(n&lt;=stored)
++    {
++        uint32_t out=accumulator;
++        int shift=32-n;
++        out&gt;&gt;=shift;
++        accumulator&lt;&lt;=n;
++        stored-=n;
++        out&amp;=(1&lt;&lt;n)-1;
++        return out;
++    }
++    // make room
++    refill();
++    goto again;
++}
++
++/**
++    \fn getBits
++*/
++uint32_t tsGetBits::peekBits(int n)
++{
++    ADM_assert(n);
++    if(n&gt;31) ADM_assert(0);
++again:
++    if(n&lt;=stored)
++    {
++        uint32_t out=accumulator;
++        int shift=32-n;
++        out&gt;&gt;=shift;
++        out&amp;=(1&lt;&lt;n)-1;
++        return out;
++    }
++    // make room
++    refill();
++    goto again;
++}
++//EOF
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsGetBits.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsGetBits.h	2010-06-24 17:54:07 UTC (rev 6407)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsGetBits.h	2010-06-24 17:54:08 UTC (rev 6408)
+@@ -0,0 +1,41 @@
++/***************************************************************************
++    \file ADM_tsGetBits
++    \brief Simple getbits dedicated to TS packet. should be made more generic.
++    \author mean (C) 2010 <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#ifndef ADM_TS_GETBITS
++#define ADM_TS_GETBITS
++#include &quot;dmxTSPacket.h&quot;
++#define MAX_GETBITS_BUFFER 64
++/**
++    \class tsGetBits
++    
++*/
++class tsGetBits
++{
++protected:
++    bool           refill(void);
++    tsPacketLinear *pkt;
++    int            consumed;
++    int            stored; /// Nb bits stored in accumulator
++    int            accumulator; /// bits storage 31 max!
++public:
++    uint8_t  data[MAX_GETBITS_BUFFER];
++             tsGetBits(tsPacketLinear *p);
++             ~tsGetBits();
++    int      getConsumed(void) {return consumed;}
++    uint32_t getBits(int n);
++    uint32_t peekBits(int n);
++};
++
++#endif
+\ No newline at end of file
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003596.html">[Avidemux-svn-commit] r6407 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src
+</A></li>
+	<LI>Next message: <A HREF="003598.html">[Avidemux-svn-commit] r6409 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3597">[ date ]</a>
+              <a href="thread.html#3597">[ thread ]</a>
+              <a href="subject.html#3597">[ subject ]</a>
+              <a href="author.html#3597">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

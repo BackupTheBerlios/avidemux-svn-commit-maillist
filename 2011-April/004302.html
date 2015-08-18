@@ -1,0 +1,154 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7143 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src/patches
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7143%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src/patches&In-Reply-To=%3C20110414162906.F03FB481369%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004301.html">
+   <LINK REL="Next"  HREF="004303.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7143 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src/patches</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7143%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src/patches&In-Reply-To=%3C20110414162906.F03FB481369%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7143 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src/patches">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Apr 14 18:29:06 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004301.html">[Avidemux-svn-commit] r7142 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src:	. patches
+</A></li>
+        <LI>Next message: <A HREF="004303.html">[Avidemux-svn-commit] r7144 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4302">[ date ]</a>
+              <a href="thread.html#4302">[ thread ]</a>
+              <a href="subject.html#4302">[ subject ]</a>
+              <a href="author.html#4302">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-04-14 18:29:06 +0200 (Thu, 14 Apr 2011)
+New Revision: 7143
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src/patches/99_fix_cpp_compile.diff
+Log:
+[tinypy] Patch to avoid using stat
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src/patches/99_fix_cpp_compile.diff
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src/patches/99_fix_cpp_compile.diff	2011-04-14 06:07:48 UTC (rev 7142)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src/patches/99_fix_cpp_compile.diff	2011-04-14 16:29:06 UTC (rev 7143)
+@@ -1,6 +1,6 @@
+ --- tinypy.cpp.orig	2011-03-05 19:01:34.305179001 +0100
+-+++ tinypy.cpp	2011-04-12 07:57:36.557517002 +0200
+-@@ -120,6 +120,15 @@
+++++ tinypy.cpp	2011-04-14 08:06:25.799269001 +0200
++@@ -120,6 +120,19 @@
+  #ifndef tp_inline
+  #error &quot;Unsuported compiler&quot;
+  #endif
+@@ -8,15 +8,19 @@
+ +bool pyPrintf(const char *fmt,...);
+ +#define printf pyPrintf
+ +// MEANX : Need to use ADM_fopen for WIN32 support
+++#define uint8_t unsigned char
+++#define int64_t long long int
+ +extern &quot;C&quot;
+ +{
+ +        FILE *ADM_fopen(const char *filename,const char *access);
+++        uint8_t ADM_fileExist(const char *file);
+++        int64_t ADM_fileSize(const char *file);
+ +}
+ +#define fopen ADM_fopen
+  
+  /*  #define tp_malloc(x) calloc((x),1)
+      #define tp_realloc(x,y) realloc(x,y)
+-@@ -463,7 +472,8 @@
++@@ -463,7 +476,8 @@
+  
+  tp_inline static void tp_echo(TP,tp_obj e) {
+      e = tp_str(tp,e);
+@@ -26,7 +30,38 @@
+  }
+  
+  /* Function: tp_string_n
+-@@ -2219,6 +2229,9 @@
++@@ -1433,9 +1447,10 @@
++     tp_obj r;
++     char *s;
++     char fname[256]; tp_cstr(tp,TP_STR(),fname,256);
++-    struct stat stbuf;
++-    stat(fname, &amp;stbuf);
++-    l = stbuf.st_size;
+++    int64_t size=ADM_fileSize(fname);
+++    if(size==-1)
+++        tp_raise(tp_None,tp_string(&quot;(tp_load) cant get filesize&quot;));
+++    l = (int)size;
++     f = fopen(fname,&quot;rb&quot;);
++     if (!f) {
++         tp_raise(tp_None,tp_string(&quot;(tp_load) IOError: ?&quot;));
++@@ -1473,11 +1488,14 @@
++ 
++ tp_obj tp_exists(TP) {
++     char fname[TP_CSTR_LEN]; tp_cstr(tp,TP_STR(),fname,TP_CSTR_LEN);
++-    struct stat stbuf;
++-    return tp_number(!stat(fname,&amp;stbuf));
+++    uint8_t e=ADM_fileExist(fname);
+++    //struct stat stbuf;
+++    //return tp_number(!stat(fname,&amp;stbuf));
+++    return tp_number(e);
++ }
++ tp_obj tp_mtime(TP) {
++     char fname[TP_CSTR_LEN]; tp_cstr(tp,TP_STR(),fname,TP_CSTR_LEN);
+++    #warning fixme
++     struct stat stbuf;
++     if (!stat(fname,&amp;stbuf)) { return tp_number(stbuf.st_mtime); }
++     tp_raise(tp_None,tp_string(&quot;(tp_mtime) IOError: ?&quot;));
++@@ -2219,6 +2237,9 @@
+          exit(-1);
+  #else
+          tp-&gt;ex = e;
+@@ -36,7 +71,7 @@
+          longjmp(tp-&gt;nextexpr,1);
+  #endif
+      }
+-@@ -2255,6 +2268,9 @@
++@@ -2255,6 +2276,9 @@
+      tp_print_stack(tp);
+      exit(-1);
+  #else
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004301.html">[Avidemux-svn-commit] r7142 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src:	. patches
+</A></li>
+	<LI>Next message: <A HREF="004303.html">[Avidemux-svn-commit] r7144 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4302">[ date ]</a>
+              <a href="thread.html#4302">[ thread ]</a>
+              <a href="subject.html#4302">[ subject ]</a>
+              <a href="author.html#4302">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

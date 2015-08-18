@@ -1,0 +1,208 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7534 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7534%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20110914074624.9B5FC481287%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004681.html">
+   <LINK REL="Next"  HREF="004683.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7534 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7534%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20110914074624.9B5FC481287%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7534 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Sep 14 09:46:24 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004681.html">[Avidemux-svn-commit] r7533 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+</A></li>
+        <LI>Next message: <A HREF="004683.html">[Avidemux-svn-commit] r7535 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4682">[ date ]</a>
+              <a href="thread.html#4682">[ thread ]</a>
+              <a href="subject.html#4682">[ subject ]</a>
+              <a href="author.html#4682">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-09-14 09:46:24 +0200 (Wed, 14 Sep 2011)
+New Revision: 7534
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp
+Log:
+[ts/Demux] Brute force : be more permissive
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp	2011-09-14 07:46:23 UTC (rev 7533)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp	2011-09-14 07:46:24 UTC (rev 7534)
+@@ -130,62 +130,97 @@
+     return false;
+ }
+ /**
++    \fn idContentE0
++    \brief try to identify video content, with pes-id=0xe0
++    We read 5 startcode and if 4 or 5 looks like mpeg2/h264 ones we mark the stream as mpeg2/h264
++*/
++static bool idContentE0(int pid,tsPacket *ts,ADM_TS_TRACK_TYPE &amp; trackType)
++{
++    int nbTry=5;
++    int threshold=3;
++    int nbSuccessMpeg2=0;
++    int nbSuccessH264=0;
++    for(int i=0;i&lt;nbTry;i++)
++    {
++        TS_PESpacket pes(pid);
++        if(false==ts-&gt;getNextPES( &amp;pes)) 
++        {
++            ADM_warning(&quot;\tCannot get PES\n&quot;);
++            return false;
++        }
++        uint8_t *ptr=pes.payload;
++        uint32_t len=pes.payloadSize,syncoff;
++        uint8_t  scode;
++        if(ADM_findMpegStartCode(ptr+4,ptr+len,&amp;scode,&amp;syncoff))
++        {
++            ADM_warning(&quot;Found startcode1 =%x\n&quot;,scode);
++        }else continue;
++        if(scode==9) // AU delimiter =&gt; H264
++        {
++            nbSuccessH264++;
++            continue;
++        }
++        if(mpeg2StartCode(scode))
++        {
++            nbSuccessMpeg2++;
++            continue;
++        }
++    }
++    if(nbSuccessH264&gt;threshold)
++    {
++        trackType=ADM_TS_H264;
++        ADM_warning(&quot;Probably H264\n&quot;);
++        return true;
++    }
++    if(nbSuccessMpeg2&gt;threshold)
++    {
++        trackType=ADM_TS_MPEG2;
++        ADM_warning(&quot;Probably Mpeg2\n&quot;);
++        return true;
++    }
++    ADM_warning(&quot;dont know what it is...\n&quot;);
++    return false;
++}
++/**
+     \fn idContent
+ */
+ bool idContent(int pid,tsPacket *ts,ADM_TS_TRACK_TYPE &amp; trackType)
+ {
+ TS_PESpacket pes(pid);
+ TS_PESpacket pes2(pid);
++
+         ts-&gt;setPos(0);
+         if(false==ts-&gt;getNextPES( &amp;pes)) 
+         {
+             ADM_warning(&quot;\tCannot get PES\n&quot;);
+             return false;
+         }
++        uint8_t *ptr=pes.payload;
++        uint32_t len=pes.payloadSize;
++
++
++        // 
++       
++
++        if(!ptr[0] &amp;&amp; !ptr[1] &amp;&amp; ptr[2]==1 &amp;&amp; ptr[3]==0xe0) // probably video
++        {
++          return idContentE0(pid,ts,trackType);
++        }
++
++        // Read a 2nd packet for confirmation
++
+         if(false==ts-&gt;getNextPES( &amp;pes2)) 
+         {
+             ADM_warning(&quot;\tCannot get PES2\n&quot;);
+             return false;
+         }
++        uint8_t *ptr2=pes2.payload;
++        uint32_t len2=pes2.payloadSize;
+         
+-        printf(&quot;\t Read %d bytes\n&quot;,(int)pes.payloadSize);
+-        // 
++        printf(&quot;\t Read %d bytes\n&quot;,(int)pes.payloadSize);  
+         uint32_t fq,br,chan,syncoff;
+         uint32_t fq2,br2,chan2,syncoff2;
+-        uint8_t *ptr=pes.payload;
+-        uint32_t len=pes.payloadSize;
+-        uint8_t *ptr2=pes2.payload;
+-        uint32_t len2=pes2.payloadSize;
+ 
+-        if(!ptr[0] &amp;&amp; !ptr[1] &amp;&amp; ptr[2]==1 &amp;&amp; ptr[3]==0xe0) // probably video
+-        {
+-            // Only supports Mpeg2 video and H264
+-            // For mpeg2 we scan for slice i.e. 00 00 01 00 etc...
+-            // we need 2 consecutive slice
+-            uint8_t scode,scode2;
+-            if(ADM_findMpegStartCode(ptr+4,ptr+len,&amp;scode,&amp;syncoff))
+-            {
+-                ADM_warning(&quot;Found startcode1 =%x\n&quot;,scode);
+-            }
+-            if(ADM_findMpegStartCode(ptr2+4,ptr2+len2,&amp;scode2,&amp;syncoff))
+-            {
+-                ADM_warning(&quot;Found startcode2 =%x\n&quot;,scode2);
+-            }
+-            if(scode==9 &amp;&amp; scode2==9) // AU delimiter =&gt; H264
+-            {
+-                trackType=ADM_TS_H264;
+-                ADM_warning(&quot;Probably H264\n&quot;);
+-                return true;
+-            }
+-            if(mpeg2StartCode(scode) &amp;&amp; mpeg2StartCode(scode2)) // Maybe Mpeg2 ?
+-            {
+-                trackType=ADM_TS_MPEG2;
+-                ADM_warning(&quot;Probably Mpeg2\n&quot;);
+-                return true;
+-            }
+-            ADM_warning(&quot;dont know what it is...\n&quot;);
+-            return false;
+-        }
+         // Is it AC3 ??
+         if( ADM_AC3GetInfo(ptr,len, &amp;fq, &amp;br, &amp;chan,&amp;syncoff))
+         {
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004681.html">[Avidemux-svn-commit] r7533 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+</A></li>
+	<LI>Next message: <A HREF="004683.html">[Avidemux-svn-commit] r7535 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4682">[ date ]</a>
+              <a href="thread.html#4682">[ thread ]</a>
+              <a href="subject.html#4682">[ subject ]</a>
+              <a href="author.html#4682">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

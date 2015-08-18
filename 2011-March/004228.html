@@ -1,0 +1,162 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7062 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7062%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src&In-Reply-To=%3C20110312083726.90396481366%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004227.html">
+   <LINK REL="Next"  HREF="004229.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7062 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7062%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src&In-Reply-To=%3C20110312083726.90396481366%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7062 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Mar 12 09:37:26 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004227.html">[Avidemux-svn-commit] r7061 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxer/include
+</A></li>
+        <LI>Next message: <A HREF="004229.html">[Avidemux-svn-commit] r7063 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4228">[ date ]</a>
+              <a href="thread.html#4228">[ thread ]</a>
+              <a href="subject.html#4228">[ subject ]</a>
+              <a href="author.html#4228">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-03-12 09:37:26 +0100 (Sat, 12 Mar 2011)
+New Revision: 7062
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src/ADM_audioStreamMP3.cpp
+Log:
+[MP3] When building time map, take 1 every 3 blocks + refresh UI every 1.5 seconds to speed things up
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src/ADM_audioStreamMP3.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src/ADM_audioStreamMP3.cpp	2011-03-11 18:30:21 UTC (rev 7061)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src/ADM_audioStreamMP3.cpp	2011-03-12 08:37:26 UTC (rev 7062)
+@@ -9,6 +9,7 @@
+ #include &quot;ADM_audioStreamMP3.h&quot;
+ #include &quot;ADM_mp3info.h&quot;
+ #include &quot;DIA_working.h&quot;
++#include &quot;ADM_clock.h&quot;
+ /**
+     \fn ADM_audioStreamMP3
+     \brief constructor
+@@ -140,6 +141,8 @@
+             We may have up to one packet error
+   
+   */
++#define TIME_BETWEEN_UPDATE 1500
++#define SAVE_EVERY_N_BLOCKS 3    // One seek point every ~ 60 ms
+ bool ADM_audioStreamMP3::buildTimeMap(void)
+ {
+ uint32_t size;
+@@ -150,20 +153,29 @@
+     access-&gt;setPos(0);
+     printf(&quot;[audioStreamMP3] Starting time map\n&quot;);
+     rewind();
++    Clock *clk=new Clock();
++    clk-&gt;reset();
++    uint32_t nextUpdate=clk-&gt;getElapsedMS()+TIME_BETWEEN_UPDATE;
++    int markCounter=SAVE_EVERY_N_BLOCKS;
+     while(1)
+     {
+-        // Push
+-        MP3_seekPoint *seek=new MP3_seekPoint;
+-        seek-&gt;offset=access-&gt;getPos();
+-        seek-&gt;timeStamp=lastDts;
++        // Push where we are...
++        markCounter++;
++        if(markCounter&gt;SAVE_EVERY_N_BLOCKS)
++        {
++            MP3_seekPoint *seek=new MP3_seekPoint;
++            seek-&gt;offset=access-&gt;getPos();
++            seek-&gt;timeStamp=lastDts;
++            // Mark this point
++            seekPoints.push_back(seek);
++            markCounter=0;
++        }
++
+         if(false==access-&gt;getPacket(buffer+limit, &amp;size, 2*ADM_AUDIOSTREAM_BUFFER_SIZE-limit,&amp;newDts))
+         {
+-            delete seek;
+             break;
+         }
+         limit+=size;
+-        // Mark this point
+-        seekPoints.push_back(seek);
+         // Shrink ?
+         if(limit&gt;ADM_AUDIOSTREAM_BUFFER_SIZE &amp;&amp; start&gt; 10*1024)
+         {
+@@ -173,13 +185,20 @@
+         }
+         // Start at...
+         pos=access-&gt;getPos();
+-        work-&gt;update(pos,access-&gt;getLength());
+-        // consume all packets
++        uint32_t now=clk-&gt;getElapsedMS();
++        if(now&gt;nextUpdate)
++        {
++            work-&gt;update(pos,access-&gt;getLength());
++            nextUpdate=now+TIME_BETWEEN_UPDATE;
++        }
++        
++        // consume all packets in the buffer we just got
++        MpegAudioInfo info;
++        uint32_t offset;
++
+         while(1)
+         {
+             if(limit-start&lt;ADM_LOOK_AHEAD) break;
+-            MpegAudioInfo info;
+-            uint32_t offset;
+             if(!getMpegFrameInfo(buffer+start,ADM_LOOK_AHEAD, &amp;info,NULL,&amp;offset))
+             {
+                 start++;
+@@ -198,6 +217,7 @@
+     }
+     rewind();
+     delete work;
++    delete clk;
+     access-&gt;setPos(0);
+     printf(&quot;[audioStreamMP3] Ending time map\n&quot;);
+     return true;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004227.html">[Avidemux-svn-commit] r7061 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxer/include
+</A></li>
+	<LI>Next message: <A HREF="004229.html">[Avidemux-svn-commit] r7063 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4228">[ date ]</a>
+              <a href="thread.html#4228">[ thread ]</a>
+              <a href="subject.html#4228">[ subject ]</a>
+              <a href="author.html#4228">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

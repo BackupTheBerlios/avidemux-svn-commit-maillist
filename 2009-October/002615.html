@@ -1,0 +1,128 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5404 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5404%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200910231809.n9NI9OBc023542%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002614.html">
+   <LINK REL="Next"  HREF="002616.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5404 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5404%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200910231809.n9NI9OBc023542%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5404 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Oct 23 20:09:24 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002614.html">[Avidemux-svn-commit] r5403 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="002616.html">[Avidemux-svn-commit] r5405 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_audio	ADM_audiocodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2615">[ date ]</a>
+              <a href="thread.html#2615">[ thread ]</a>
+              <a href="subject.html#2615">[ subject ]</a>
+              <a href="author.html#2615">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-10-23 20:09:24 +0200 (Fri, 23 Oct 2009)
+New Revision: 5404
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+Log:
+[editor] Fix segment handling when cutting out
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2009-10-23 18:09:22 UTC (rev 5403)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2009-10-23 18:09:24 UTC (rev 5404)
+@@ -363,6 +363,9 @@
+ {
+     uint32_t startSeg,endSeg;
+     uint64_t startOffset,endOffset;
++    
++    ADM_info(&quot;Cutting from %&quot;LLU&quot; to %&quot;LLU&quot; ms\n&quot;,from/1000,to/1000);
++    dump();
+     if(false==convertLinearTimeToSeg( from,&amp;startSeg,&amp;startOffset))
+     {
+         ADM_warning(&quot;Cannot get starting point (%&quot;LLU&quot; ms\n&quot;,from/1000);
+@@ -373,28 +376,33 @@
+         ADM_warning(&quot;Cannot get starting point (%&quot;LLU&quot; ms\n&quot;,from/1000);
+         return false;
+     }
+-    _SEGMENT *first=getSegment(startSeg);
++
++    ADM_info(&quot;Start, seg %&quot;LU&quot; Offset :%&quot;LLU&quot; ms\n&quot;,startSeg,startOffset);
++    ADM_info(&quot;End  , seg %&quot;LU&quot; Offset :%&quot;LLU&quot; ms\n&quot;,endSeg,endOffset);
++
++    
+     if(startSeg==endSeg)
+     {
+         // Split the seg int two..
+-        segments.push_back(*first); 
++        segments.insert(segments.begin()+startSeg+1,*getSegment(startSeg)); 
+         endSeg=startSeg+1;
+-#warning FiXME! they are not necessarily the last
++
+     }
++    _SEGMENT *first=getSegment(startSeg);
+       // Span over several seg...
+     // 1- shorten the start segment..
+   
+     first-&gt;_durationUs=startOffset;
++   
++    // 3- Shorten last segment
++    _SEGMENT *last=getSegment(endSeg);
++    last-&gt;_refStartTimeUs+=endOffset;
++    last-&gt;_durationUs-=endOffset;
+     // 2- Kill the segment in between
+     for(int i=startSeg+1;i&lt;endSeg;i++)
+     {
+-        segments.erase(segments.begin()+i);
++        segments.erase(segments.begin()+startSeg+1);
+     }
+-    // 3- Shorten last segment
+-    _SEGMENT *last=getSegment(endSeg);
+-    last-&gt;_refStartTimeUs+=endOffset;
+-    last-&gt;_durationUs-=endOffset;
+-
+     updateStartTime();
+     dump();
+     return true;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002614.html">[Avidemux-svn-commit] r5403 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="002616.html">[Avidemux-svn-commit] r5405 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_audio	ADM_audiocodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2615">[ date ]</a>
+              <a href="thread.html#2615">[ thread ]</a>
+              <a href="subject.html#2615">[ subject ]</a>
+              <a href="author.html#2615">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,156 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6405 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/src avidemux_core/ADM_coreUtils/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6405%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_videoCodec/src%20avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C201006241754.o5OHs47s013781%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003593.html">
+   <LINK REL="Next"  HREF="003595.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6405 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/src avidemux_core/ADM_coreUtils/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6405%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_videoCodec/src%20avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C201006241754.o5OHs47s013781%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6405 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/src avidemux_core/ADM_coreUtils/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jun 24 19:54:05 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003593.html">[Avidemux-svn-commit] r6404 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="003595.html">[Avidemux-svn-commit] r6406 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3594">[ date ]</a>
+              <a href="thread.html#3594">[ thread ]</a>
+              <a href="subject.html#3594">[ subject ]</a>
+              <a href="author.html#3594">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-06-24 19:54:04 +0200 (Thu, 24 Jun 2010)
+New Revision: 6405
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_videoCodec.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_codecType.cpp
+Log:
+[VDPAU] Add vc1 as a possible target (disabled)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2010-06-24 17:54:03 UTC (rev 6404)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2010-06-24 17:54:04 UTC (rev 6405)
+@@ -233,10 +233,17 @@
+         }else if(isMpeg12Compatible(fcc))
+         {
+             vdpauType=ADM_VDPAU_MPEG2;
++        }else if(isVC1Compatible(fcc))
++        {
++            vdpauType=ADM_VDPAU_VC1;
+         }else ADM_assert(0);
+         int vdpDecoder;
+         switch(vdpauType)
+         {
++            case ADM_VDPAU_VC1  : vdpDecoder=VDP_DECODER_PROFILE_VC1_ADVANCED;
++                                  WRAP_OpenByName(vc1_vdpau,CODEC_ID_VC1);
++                                  break;
++
+             case ADM_VDPAU_H264 : vdpDecoder=VDP_DECODER_PROFILE_H264_HIGH;
+                                   WRAP_OpenByName(h264_vdpau,CODEC_ID_H264);
+                                   break;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_videoCodec.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_videoCodec.cpp	2010-06-24 17:54:03 UTC (rev 6404)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_videoCodec.cpp	2010-06-24 17:54:04 UTC (rev 6405)
+@@ -43,14 +43,15 @@
+ decoders *ADM_getDecoder (uint32_t fcc, uint32_t w, uint32_t h, uint32_t extraLen, 
+             uint8_t * extraData,uint32_t bpp)
+ {
++  ADM_info(&quot;\nSearching decoder in plugins\n&quot;);
+   decoders *fromPlugin=tryCreatingVideoDecoder(w,h,fcc,extraLen,extraData,bpp);
+   if(fromPlugin) return fromPlugin;
+-
+-  ADM_info(&quot;Searching decoder in coreVideoCodec(%d x %d, extradataSize:%d)...\n&quot;,w,h,extraLen);
+-  if (isH264Compatible (fcc) || isMpeg12Compatible(fcc))
++#if defined(USE_VDPAU) 
++  ADM_info(&quot;Searching decoder in vdpau (%d x %d, extradataSize:%d)...\n&quot;,w,h,extraLen);
++  if (isH264Compatible (fcc) || isMpeg12Compatible(fcc) || 0*isVC1Compatible(fcc))
+     {
+-#if defined(USE_VDPAU) 
+-        if(vdpauUsable()==true)
++        ADM_info(&quot;This is vdpau compatible\n&quot;);
++        if(true==vdpauUsable())
+         {
+             decoderFFVDPAU *dec=new decoderFFVDPAU (w,h,fcc,extraLen,extraData,bpp);
+             if(dec-&gt;initializedOk()==true)
+@@ -60,10 +61,10 @@
+                 GUI_Error_HIG(&quot;VDPAU&quot;,&quot;Cannot initialize VDPAU, make sure it is not already used by another application.\nSwitching to default decoder.&quot;);
+                 delete dec;
+             }
+-        }
+-        
++        }else ADM_info(&quot;Vdpau is not active\n&quot;);
++    }        
+ #endif // VDPAU
+-    }
++
+ // VPX
+ #if defined(USE_VPX)
+     if(fourCC::check(fcc,(const uint8_t *)&quot;VP8 &quot;))
+@@ -75,6 +76,7 @@
+         delete dec;
+     }
+ #endif // VPX
++    ADM_info(&quot;Searching decoder in coreVideoCodec(%d x %d, extradataSize:%d)...\n&quot;,w,h,extraLen);
+     return ADM_coreCodecGetDecoder(fcc,w,h,extraLen,extraData,bpp);
+ }
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_codecType.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_codecType.cpp	2010-06-24 17:54:03 UTC (rev 6404)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_codecType.cpp	2010-06-24 17:54:04 UTC (rev 6405)
+@@ -124,6 +124,7 @@
+   uint8_t divx3 = 0;
+ 
+   CHECK (&quot;VC1 &quot;);
++  CHECK (&quot;WVC1&quot;);
+   return divx3;
+ 
+ #undef CHECK
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003593.html">[Avidemux-svn-commit] r6404 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="003595.html">[Avidemux-svn-commit] r6406 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3594">[ date ]</a>
+              <a href="thread.html#3594">[ thread ]</a>
+              <a href="subject.html#3594">[ subject ]</a>
+              <a href="author.html#3594">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

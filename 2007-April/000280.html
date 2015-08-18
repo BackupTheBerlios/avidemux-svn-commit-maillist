@@ -1,0 +1,482 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2962 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2962%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200704241855.l3OIteIa010909%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000279.html">
+   <LINK REL="Next"  HREF="000281.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2962 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2962%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200704241855.l3OIteIa010909%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2962 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Apr 24 20:55:40 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000279.html">[Avidemux-svn-commit] r2961 - branches/avidemux_2.4_branch/po
+</A></li>
+        <LI>Next message: <A HREF="000281.html">[Avidemux-svn-commit] r2964 - in branches/avidemux_2.4_branch: .	avidemux/ADM_libraries/ADM_libmpeg2enc	avidemux/ADM_userInterfaces/ADM_QT4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#280">[ date ]</a>
+              <a href="thread.html#280">[ thread ]</a>
+              <a href="subject.html#280">[ subject ]</a>
+              <a href="author.html#280">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-04-24 20:55:38 +0200 (Tue, 24 Apr 2007)
+New Revision: 2962
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+Log:
+some audio, better indexing, still very incomplete
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2007-04-24 05:59:45 UTC (rev 2961)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2007-04-24 18:55:38 UTC (rev 2962)
+@@ -43,6 +43,7 @@
+   ADM_MKV_TYPE type;
+   const char *ss;
+   
++  
+   _isvideopresent=0;
+   if(!ebml.open(name)) 
+   {
+@@ -88,6 +89,7 @@
+   printf(&quot;Matroska successfully read\n&quot;);
+   _parser=new ADM_ebml_file();
+   ADM_assert(_parser-&gt;open(name));
++  _filename=ADM_strdup(name);
+   return 1;
+ }
+ /**
+@@ -191,7 +193,10 @@
+ */
+ WAVHeader *mkvHeader::getAudioInfo(void )
+ {
+-
++  if(_nbAudioTrack)
++  {
++    return &amp;(_tracks[1].wavHeader); 
++  }
+   return NULL;
+ }
+ /*
+@@ -200,6 +205,11 @@
+ 
+ uint8_t mkvHeader::getAudioStream(AVDMGenericAudioStream **audio)
+ {
++  if(_nbAudioTrack)
++  {
++      *audio=new mkvAudio(_filename,&amp;(_tracks[1]));
++      return 1;
++  }
+   *audio=NULL;
+   return 0; 
+ }
+@@ -228,7 +238,32 @@
+   // CLEANUP!!
+   if(_parser) delete _parser;
+   _parser=NULL;
+-  // FIXME Cleanup index!
++  
++  
++#define FREEIF(i) { if(_tracks[i].extraData) delete [] _tracks[i].extraData; _tracks[i].extraData=0;}
++  if(_isvideopresent)
++  {
++      FREEIF(0); 
++  }
++  for(int i=0;i&lt;_nbAudioTrack;i++)
++  {
++    FREEIF(1+i); 
++  }
++  // Delete index
++  if(_isvideopresent &amp;&amp; _tracks[0]._index)
++  {
++    delete []  _tracks[0]._index;
++    _tracks[0]._index=NULL;
++  }
++  for(int i=0;i&lt;_nbAudioTrack;i++)
++  {
++    mkvIndex **dx=&amp;(_tracks[1+1]._index);
++    if(*dx)
++    {
++        delete []  *dx;
++        *dx=NULL;
++    }
++  }
+ }
+ /*
+     __________________________________________________________
+@@ -246,6 +281,7 @@
+ { 
+   _parser=NULL;
+   _nbAudioTrack=0;
++  _filename=NULL;
+   memset(_tracks,0,sizeof(_tracks));
+ }
+ /*
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h	2007-04-24 05:59:45 UTC (rev 2961)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h	2007-04-24 18:55:38 UTC (rev 2962)
+@@ -49,7 +49,24 @@
+   uint32_t  _nbIndex;  // current size of the index
+   uint32_t  _indexMax; // Max size of the index
+ };
++class mkvAudio : public AVDMGenericAudioStream
++{
++  protected:
++    mkvTrak                     *_track;
++    ADM_ebml_file               *_parser;
++    uint32_t                    _index;
++    uint32_t                    _offset;
++  public:
++                                mkvAudio(const char *name,mkvTrak *track);
++    virtual                     ~mkvAudio();
++    virtual uint32_t            read(uint32_t len,uint8_t *buffer);
++    virtual uint8_t             goTo(uint32_t newoffset);
++    virtual uint8_t             getPacket(uint8_t *dest, uint32_t *len, uint32_t *samples);
++  //  virtual uint8_t             goToTime(uint32_t mstime);
++    virtual uint8_t             extraData(uint32_t *l,uint8_t **d);
++};
+ 
++
+ #define ADM_MKV_MAX_TRACKS 20
+ 
+ class mkvHeader         :public vidHeader
+@@ -57,6 +74,7 @@
+   protected:
+                                 
+     ADM_ebml_file           *_parser;
++    char                    *_filename;
+     mkvTrak                 _tracks[ADM_MKV_MAX_TRACKS+1];
+ 
+     
+@@ -67,9 +85,11 @@
+     uint8_t                 analyzeTracks(void *head,uint32_t headlen);
+     uint8_t                 analyzeOneTrack(void *head,uint32_t headlen);
+     uint8_t                 walk(void *seed);
++    int                     searchTrackFromTid(uint32_t tid);
+     
+     // Indexers
+     uint8_t                 addVideoEntry(uint64_t where, uint32_t size);
++    uint8_t                 addVideoEntry(uint32_t track,uint64_t where, uint32_t size);
+     uint8_t                 videoIndexer(ADM_ebml_file *parser);
+   public:
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp	2007-04-24 05:59:45 UTC (rev 2961)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp	2007-04-24 18:55:38 UTC (rev 2962)
+@@ -93,6 +93,9 @@
+ 
+ entryDesc entry;
+       memset(&amp;entry,0,sizeof(entry));
++      /* Set some defaults value */
++
++      entry.chan=2;
+       
+       entryWalk(  (ADM_ebml_file *)head,headlen,&amp;entry);
+       entry.dump();
+@@ -124,6 +127,7 @@
+          t-&gt;wavHeader.channels=entry.chan;
+          t-&gt;wavHeader.frequency=entry.fq;
+          t-&gt;wavHeader.bitspersample=16;
++         t-&gt;wavHeader.byterate=(128000)&gt;&gt;3; //FIXME
+          t-&gt;streamIndex=entry.trackNo;
+          t-&gt;extraData=entry.extraData;
+          t-&gt;extraDataLen=entry.extraDataLen;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-04-24 05:59:45 UTC (rev 2961)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-04-24 18:55:38 UTC (rev 2962)
+@@ -46,8 +46,11 @@
+    parser-&gt;seek(0);
+    
+    // Start with a small index, it will grow automatically afterward
+-    VIDEO._indexMax=1000;
+-    VIDEO._index=new mkvIndex[VIDEO._indexMax];
++   for(int i=0;i&lt;_nbAudioTrack+1;i++)
++   {
++    _tracks[i]._indexMax=1000;
++    _tracks[i]._index=new mkvIndex[_tracks[i]._indexMax];
++   }
+     //************
+    
+    if(!parser-&gt;find(ADM_MKV_PRIMARY,MKV_SEGMENT,MKV_CLUSTER,&amp;vlen))
+@@ -86,6 +89,7 @@
+                 {
+                         //printf(&quot;Block Group\n&quot;);
+                         ADM_ebml_file blockGroup(parser,len);
++                        uint32_t lacing,nbLaces;
+                         while(!blockGroup.finished())
+                         {
+                                 blockGroup.readElemId(&amp;id,&amp;len);
+@@ -104,16 +108,37 @@
+                                   {
+                                     // Read Track id 
+                                       uint32_t tid=blockGroup.readEBMCode();
++                                      int track=searchTrackFromTid(tid);
+                                       //printf(&quot;Wanted %u got %u\n&quot;,_tracks[0].streamIndex,tid);
+-                                      if(_tracks[0].streamIndex!=tid)
++                                      if(track==-1)
+                                       {
+                                         blockGroup.skip(blockGroup.remaining());
+                                         break;  // Not our track
+                                       }
+                                       // Skip timecode
+-                                      blockGroup.skip(3);
+-                                      addVideoEntry(blockGroup.tell(),blockGroup.remaining());
+-                                      blockGroup.skip(blockGroup.remaining());
++                                      blockGroup.skip(2); // Timecode
++                                      uint8_t flags=blockGroup.readu8();
++                                      uint32_t remaining=blockGroup.remaining();
++                                      lacing=((flags&gt;&gt;1)&amp;3);
++                                      switch(lacing)
++                                      {
++                                        case 0: // No lacing
++                                              addVideoEntry(track,blockGroup.tell(),remaining);
++                                              break;
++                                        case 2 : // Constant size lacing
++                                            {
++                                                    nbLaces=blockGroup.readu8()+1;
++                                                    remaining--;
++                                                    // Only mp3/Ac3 supported, ignore lacing FIXME : Vorbis or AAC will not work
++                                                    addVideoEntry(track,blockGroup.tell(),remaining);
++                                                    //printf(&quot;tid:%u track %u Remaining : %llu laces %u blksize %d er%d\n&quot;,tid,track,remaining,nbLaces,remaining/nbLaces,remaining-(remaining/nbLaces)*nbLaces);
++                                            } 
++                                        break;
++                                        default: 
++                                            printf(&quot;unsupported lacing\n&quot;);
++                                            break;
++                                      }
++                                      blockGroup.skip(remaining);
+                                       break;
+                                   }
+                                 }
+@@ -131,26 +156,45 @@
+     \fn addVideoEntry
+     \brief add an entry to the video index
+ */
+-uint8_t mkvHeader::addVideoEntry(uint64_t where, uint32_t size)
++uint8_t mkvHeader::addVideoEntry(uint32_t track,uint64_t where, uint32_t size)
+ {
++  //
++  mkvTrak *Track=&amp;(_tracks[track]);
++  
++  
+   // Need to grow index ?
+-  if(VIDEO._nbIndex==VIDEO._indexMax-1)
++  if(Track-&gt;_nbIndex==Track-&gt;_indexMax-1)
+   {
+     // Realloc 
+-    mkvIndex *dx=new mkvIndex[VIDEO._indexMax*2];
+-    memcpy(dx, _tracks[0]._index,sizeof(mkvIndex)*VIDEO._nbIndex);
+-    VIDEO._indexMax*=2;
+-    delete [] _tracks[0]._index;
+-    _tracks[0]._index=dx;
++    mkvIndex *dx=new mkvIndex[Track-&gt;_indexMax*2];
++    memcpy(dx, Track-&gt;_index,sizeof(mkvIndex)*Track-&gt;_nbIndex);
++    Track-&gt;_indexMax*=2;
++    delete [] Track-&gt;_index;
++    Track-&gt;_index=dx;
+   }
+   
+-  mkvIndex *index=_tracks[0]._index;
+-  int x=VIDEO._nbIndex;
++  mkvIndex *index=Track-&gt;_index;
++  int x=Track-&gt;_nbIndex;
+   index[x].pos=where;
+   index[x].size=size;
+   index[x].flags=0;
+   index[x].timeCode=0;
+-  VIDEO._nbIndex++;
++  Track-&gt;_nbIndex++;
+  // printf(&quot;++\n&quot;);
+   return 1;
+-}
+\ No newline at end of file
++}
++
++/**
++  \fn searchTrackFromTid
++  \brief Returns our track number for the stream track number. -1 if the stream is not handled.
++
++*/
++int mkvHeader::searchTrackFromTid(uint32_t tid)
++{
++  for(int i=0;i&lt;1+_nbAudioTrack;i++)
++  {
++    if(tid==_tracks[i].streamIndex) return i;
++  }
++  return -1;
++}
++//EOF
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2007-04-24 05:59:45 UTC (rev 2961)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2007-04-24 18:55:38 UTC (rev 2962)
+@@ -28,5 +28,115 @@
+ #include &quot;ADM_toolkit/toolkit.hxx&quot;
+ 
+ 
++#include &quot;ADM_mkv.h&quot;
++#if 0
++class mkvAudio : public AVDMGenericAudioStream
++{
++  protected:
++    mkvTrak                     *_track;
++    
++  public:
++                                mkvAudio(mkvTrak *track);
++    virtual                     ~mkvAudio();
++    virtual uint32_t            read(uint32_t len,uint8_t *buffer);
++    virtual uint8_t             goTo(uint32_t newoffset);
++    virtual uint8_t             getPacket(uint8_t *dest, uint32_t *len, uint32_t *samples);
++    virtual uint8_t             goToTime(uint32_t mstime);
++    virtual uint8_t             extraData(uint32_t *l,uint8_t **d);
++};
++#endif
+ 
++/**
++    \fn ~mkvAudio
++    
++*/
++ mkvAudio ::~mkvAudio()
++{
++  if(_parser) delete _parser;
++  _parser=NULL; 
++  _offset=0;
++  _index=0;
++}
++
++uint32_t    mkvAudio::read(uint32_t len,uint8_t *buffer)
++{
++  uint32_t red=0;
++  while(1)
++  {
++    //********************************************
++    if(_index&gt;=_track-&gt;_nbIndex)
++    {
++      return 0; 
++    }
++    //********************************************
++    if(len+_offset &lt;=_track-&gt;_index[_index].size)
++    {
++      _parser-&gt;readBin(buffer,len);
++      _offset+=len;
++      return len; 
++    }
++    // empty...
++    //********************************************
++    int32_t remaining=_track-&gt;_index[_index].size-_offset;
++    ADM_assert(remaining&gt;=0);
++    
++    _parser-&gt;readBin(buffer,remaining);
++    red+=remaining;
++    len-=remaining;
++    buffer+=remaining;
++    _index++;
++    if(_index&gt;=_track-&gt;_nbIndex)
++    {
++      return red; 
++    }
++    _parser-&gt;seek(_track-&gt;_index[_index].pos);
++    _offset=0;
++  }
++}
++/**
++      \fn goTo
++*/
++uint8_t             mkvAudio::goTo(uint32_t newoffset)
++{
++  _parser-&gt;seek(_track-&gt;_index[0].pos);
++    _offset=0;
++    _index=0;
++}
++/**
++      \fn extraData
++*/
++uint8_t             mkvAudio::extraData(uint32_t *l,uint8_t **d)
++{
++  *l=_track-&gt;extraDataLen;
++  *d=_track-&gt;extraData; 
++}
++/**
++    \fn getPacket
++*/
++uint8_t             mkvAudio::getPacket(uint8_t *dest, uint32_t *len, uint32_t *samples)
++{
++    *samples=1152;
++    *len=read(384,dest);
++    if(*len) return 1;
++    return 0;
++}
++/**
++      \fn mkvAudio
++*/
++ mkvAudio::mkvAudio(const char *name,mkvTrak *track) : AVDMGenericAudioStream()
++{
++   _parser=new ADM_ebml_file();
++   ADM_assert(_parser-&gt;open(name));
++  _track=track; 
++  
++  // Compute total length in byte
++  _length=0;
++  for(int i=0;i&lt;track-&gt;_nbIndex;i++)
++  {
++    _length+=track-&gt;_index[i].size; 
++  }
++  _wavheader=new WAVHeader;
++  memcpy(_wavheader,&amp;(_track-&gt;wavHeader),sizeof(WAVHeader));
++  printf(&quot;[MKVAUDIO] found %lu bytes\n&quot;,_length);
++}
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000279.html">[Avidemux-svn-commit] r2961 - branches/avidemux_2.4_branch/po
+</A></li>
+	<LI>Next message: <A HREF="000281.html">[Avidemux-svn-commit] r2964 - in branches/avidemux_2.4_branch: .	avidemux/ADM_libraries/ADM_libmpeg2enc	avidemux/ADM_userInterfaces/ADM_QT4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#280">[ date ]</a>
+              <a href="thread.html#280">[ thread ]</a>
+              <a href="subject.html#280">[ subject ]</a>
+              <a href="author.html#280">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,122 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4614 - in	branches/avidemux_2.5_branch_gruntster:	platforms/windows/build_scripts/x264	plugins/ADM_videoEncoder/ADM_vidEnc_x264
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4614%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%0A%09platforms/windows/build_scripts/x264%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_x264&In-Reply-To=%3C200902191707.n1JH7ivF002201%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001843.html">
+   <LINK REL="Next"  HREF="001845.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4614 - in	branches/avidemux_2.5_branch_gruntster:	platforms/windows/build_scripts/x264	plugins/ADM_videoEncoder/ADM_vidEnc_x264</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4614%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%0A%09platforms/windows/build_scripts/x264%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_x264&In-Reply-To=%3C200902191707.n1JH7ivF002201%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4614 - in	branches/avidemux_2.5_branch_gruntster:	platforms/windows/build_scripts/x264	plugins/ADM_videoEncoder/ADM_vidEnc_x264">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Thu Feb 19 18:07:44 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001843.html">[Avidemux-svn-commit] r4613 -	branches/avidemux_2.6_branch_mean/plugins/ADM_videoEncoder
+</A></li>
+        <LI>Next message: <A HREF="001845.html">[Avidemux-svn-commit] r4615 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1844">[ date ]</a>
+              <a href="thread.html#1844">[ thread ]</a>
+              <a href="subject.html#1844">[ subject ]</a>
+              <a href="author.html#1844">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-02-19 18:07:39 +0100 (Thu, 19 Feb 2009)
+New Revision: 4614
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/platforms/windows/build_scripts/x264/Perform Build.bat
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+Log:
+[x264] fix flushing using null frames
+
+Modified: branches/avidemux_2.5_branch_gruntster/platforms/windows/build_scripts/x264/Perform Build.bat
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/platforms/windows/build_scripts/x264/Perform Build.bat	2009-02-17 06:37:46 UTC (rev 4613)
++++ branches/avidemux_2.5_branch_gruntster/platforms/windows/build_scripts/x264/Perform Build.bat	2009-02-19 17:07:39 UTC (rev 4614)
+@@ -6,7 +6,8 @@
+ 
+ set PATH=%PATH%;%devDir%\Git\bin
+ 
+-rm &quot;%usrLocalDir%/include/x264.h&quot;
++del &quot;%usrLocalDir%\bin\libx264-*.dll&quot;
++del &quot;%usrLocalDir%\include\x264.h&quot;
+ cd &quot;%devDir%&quot;
+ 
+ rm -r -f x264
+@@ -22,6 +23,7 @@
+ make install
+ if errorlevel 1 goto end
+ 
++del &quot;%devDir%\avidemux_2.5_build\libx264-*.dll&quot;
+ copy &quot;%usrLocalDir%/bin/libx264-*.dll&quot; &quot;%devDir%\avidemux_2.5_build&quot;
+ 
+ :end
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-02-17 06:37:46 UTC (rev 4613)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-02-19 17:07:39 UTC (rev 4614)
+@@ -302,9 +302,6 @@
+ 
+ 	memset(&amp;_picture, 0, sizeof(x264_picture_t));
+ 
+-	_picture.img.i_csp = X264_CSP_I420;
+-	_picture.img.i_plane = 3;
+-
+ 	if (encodeParams-&gt;frameData)
+ 	{
+ 		_picture.img.plane[0] = encodeParams-&gt;frameData;	// Y
+@@ -315,9 +312,11 @@
+ 		_picture.img.i_stride[2] = _param.i_width &gt;&gt; 1;
+ 		_picture.i_type = X264_TYPE_AUTO;
+ 		_picture.i_pts = _currentFrame;
++		_picture.img.i_csp = X264_CSP_I420;
++		_picture.img.i_plane = 3;
+ 	}
+ 
+-	if (x264_encoder_encode(_handle, &amp;nal, &amp;nalCount, &amp;_picture, &amp;picture_out) &lt; 0)
++	if (x264_encoder_encode(_handle, &amp;nal, &amp;nalCount, encodeParams-&gt;frameData ? &amp;_picture : NULL, &amp;picture_out) &lt; 0)
+ 	{
+ 		printf(&quot;[x264] Error encoding\n&quot;);
+ 		return ADM_VIDENC_ERR_FAILED;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001843.html">[Avidemux-svn-commit] r4613 -	branches/avidemux_2.6_branch_mean/plugins/ADM_videoEncoder
+</A></li>
+	<LI>Next message: <A HREF="001845.html">[Avidemux-svn-commit] r4615 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1844">[ date ]</a>
+              <a href="thread.html#1844">[ thread ]</a>
+              <a href="subject.html#1844">[ subject ]</a>
+              <a href="author.html#1844">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

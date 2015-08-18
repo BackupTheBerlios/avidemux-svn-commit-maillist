@@ -1,0 +1,516 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3079 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces:	ADM_GTK/ADM_dialog ADM_commonUI
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3079%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces%3A%0A%09ADM_GTK/ADM_dialog%20ADM_commonUI&In-Reply-To=%3C200705131342.l4DDgIMR022198%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000379.html">
+   <LINK REL="Next"  HREF="000381.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3079 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces:	ADM_GTK/ADM_dialog ADM_commonUI</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3079%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces%3A%0A%09ADM_GTK/ADM_dialog%20ADM_commonUI&In-Reply-To=%3C200705131342.l4DDgIMR022198%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3079 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces:	ADM_GTK/ADM_dialog ADM_commonUI">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun May 13 15:42:18 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000379.html">[Avidemux-svn-commit] r3078 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces:	ADM_GTK/ADM_dialog ADM_QT4/ADM_dialog ADM_commonUI
+</A></li>
+        <LI>Next message: <A HREF="000381.html">[Avidemux-svn-commit] r3080 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#380">[ date ]</a>
+              <a href="thread.html#380">[ thread ]</a>
+              <a href="subject.html#380">[ subject ]</a>
+              <a href="author.html#380">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-05-13 15:42:17 +0200 (Sun, 13 May 2007)
+New Revision: 3079
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flyAsharp.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flyAsharp.h
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog/DIA_asharp.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flyDialog.h
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/Makefile.am
+Log:
+flyDialog for asharp
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog/DIA_asharp.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog/DIA_asharp.cpp	2007-05-13 13:00:20 UTC (rev 3078)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog/DIA_asharp.cpp	2007-05-13 13:42:17 UTC (rev 3079)
+@@ -37,65 +37,42 @@
+ #include &quot;ADM_image.h&quot;
+ #include &quot;ADM_video/ADM_genvideo.hxx&quot;
+ #include &quot;ADM_video/ADM_vidASharp_param.h&quot;
++#include &quot;DIA_flyDialog.h&quot;
++#include &quot;DIA_flyAsharp.h&quot;
+ #include &quot;ADM_assert.h&quot;
+ 
+ uint8_t DIA_getASharp(ASHARP_PARAM *param, AVDMGenericVideoStream *in);
+ 
+ static GtkWidget        *create_dialog1 (void);
+-static void             update ( void);
+ static gboolean         draw (void );
+ static void             upload(void);
+ static void             download(void);
+-static void             read ( void );
+-static void             recalc( void );
+ static void             frame_changed( void );
+ static void             hue_changed( void);
+-extern void GUI_RGBDisplay(uint8_t * dis, uint32_t w, uint32_t h, void *widg);
+ 
+-static ADMImage *imgsrc,*imgdst,*imgdisplay;
++static int lock=0;
+ static GtkWidget *dialog=NULL;
+-static uint32_t w,h;
+-static uint32_t *rgbbuffer=NULL;
+-static AVDMGenericVideoStream *incoming;
+-static ASHARP_PARAM  myHue;
+-static float      hue,sat;
+-static ColYuvRgb    *rgbConv=NULL;
++static flyASharp *myCrop=NULL;
+ //
+ //      Video is in YV12 Colorspace
+ //
+ //
+ uint8_t DIA_getASharp(ASHARP_PARAM *param, AVDMGenericVideoStream *in)
+ {
+-        int ret;
+-        uint32_t l,f;
+-        uint32_t max=in-&gt;getInfo()-&gt;nb_frames;
+-        
+-        incoming=in;
++      uint32_t width,height;
++      uint8_t ret=0;
+         // Allocate space for green-ised video
+-        w=in-&gt;getInfo()-&gt;width;
+-        h=in-&gt;getInfo()-&gt;height;
+-        rgbConv=new ColYuvRgb(w,h);
+-        rgbConv-&gt;reset(w,h);
+-        rgbbuffer=new uint32_t[w*h];
++        width=in-&gt;getInfo()-&gt;width;
++        height=in-&gt;getInfo()-&gt;height;
+ 
+-        imgdst=new ADMImage(w,h);
+-        imgsrc=new ADMImage(w,h);
+-        imgdisplay=new ADMImage(w,h);
+-
+-        if(curframe&lt;max) max=curframe;
+-        
+-        ADM_assert(in-&gt;getFrameNumberNoAlloc(max, &amp;l, imgsrc,&amp;f));
+-        // chroma is not changed by this filter
+-        
+-        memcpy(UPLANE(imgdisplay),UPLANE(imgsrc),(w*h)&gt;&gt;2);
+-        memcpy(VPLANE(imgdisplay),VPLANE(imgsrc),(w*h)&gt;&gt;2);
+-        memcpy(&amp;myHue,param,sizeof(myHue));
+         dialog=create_dialog1();
+         gtk_register_dialog(dialog);
+-
+-        gtk_widget_set_usize(WID(drawingarea1), w,h);
+-
+-        upload();
++        
++        gtk_widget_set_usize(WID(drawingarea1), width,height);
++        gtk_window_set_title (GTK_WINDOW (dialog), _(&quot;ASHARP&quot;));
++        gtk_widget_show(dialog);
++	
++        
+         gtk_signal_connect(GTK_OBJECT(WID(drawingarea1)), &quot;expose_event&quot;,
+             GTK_SIGNAL_FUNC(draw),
+             NULL);
+@@ -104,156 +81,82 @@
+         gtk_signal_connect(GTK_OBJECT(WID(spinbuttonT)), &quot;value_changed&quot;,GTK_SIGNAL_FUNC(hue_changed),   NULL);
+         gtk_signal_connect(GTK_OBJECT(WID(spinbuttonD)), &quot;value_changed&quot;,GTK_SIGNAL_FUNC(hue_changed),   NULL);
+         gtk_signal_connect(GTK_OBJECT(WID(spinbuttonB)), &quot;value_changed&quot;,GTK_SIGNAL_FUNC(hue_changed),   NULL);
+-     //   gtk_signal_connect(GTK_OBJECT(WID(checkbuttonBF)), &quot;value_changed&quot;,GTK_SIGNAL_FUNC(hue_changed),   NULL);
+         gtk_widget_show(dialog);
+ 
+-        update();
+-        draw();
++          
++        myCrop=new flyASharp( width, height,in,WID(drawingarea1),WID(hscale1));
++        memcpy(&amp;(myCrop-&gt;param),param,sizeof(ASHARP_PARAM));
++        myCrop-&gt;upload();
++        myCrop-&gt;sliderChanged();
+         ret=0;
+         int response;
+         response=gtk_dialog_run(GTK_DIALOG(dialog));
+ 
+         if(response==GTK_RESPONSE_OK)
+         {
+-            memcpy(param,&amp;myHue,sizeof(myHue));
++            myCrop-&gt;download();
++            memcpy(param,&amp;(myCrop-&gt;param),sizeof(ASHARP_PARAM));
+             ret=1;
+         }
+         gtk_unregister_dialog(dialog);
+         gtk_widget_destroy(dialog);
+-    
+-        delete imgdst;
+-        delete imgsrc;
+-        delete imgdisplay;
+-        delete [] rgbbuffer;
+-        delete rgbConv;
+-        rgbConv=NULL;
+-
+-        rgbbuffer=NULL;
+-        imgdst=NULL;
+-        imgsrc=NULL;
+-        dialog=NULL;
+-        imgdisplay=NULL;
++        delete myCrop;
+         return ret;
+ }
+ void hue_changed( void)
+ {
+-    download();
+-    update();
+-    draw();
++  if(lock) return;
++  
++   myCrop-&gt;update();
++  
+ }
+ void frame_changed( void )
+ {
+-uint32_t new_frame,max,l,f;
+-double   percent;
+-GtkWidget *wid; 
+-GtkAdjustment *adj;
+-        
+-        max=incoming-&gt;getInfo()-&gt;nb_frames;
+-        wid=WID(hscale1);
+-        adj=gtk_range_get_adjustment (GTK_RANGE(wid));
+-        new_frame=0;
+-        
+-        percent=(double)GTK_ADJUSTMENT(adj)-&gt;value;
+-        percent*=max;
+-        percent/=100.;
+-        new_frame=(uint32_t)floor(percent);
+-        
+-        if(new_frame&gt;=max) new_frame=max-1;
+-        
+-        ADM_assert(incoming-&gt;getFrameNumberNoAlloc(new_frame, &amp;l, imgsrc,&amp;f));
+-        memcpy(UPLANE(imgdisplay),UPLANE(imgsrc),(w*h)&gt;&gt;2);
+-        memcpy(VPLANE(imgdisplay),VPLANE(imgsrc),(w*h)&gt;&gt;2);
+-        update();
+-        draw();
+-
++  myCrop-&gt;sliderChanged();
+ }
+ gboolean draw (void)
+ {
+-    GtkWidget *draw;
+-        draw=WID(drawingarea1);
+-        GUI_RGBDisplay((uint8_t *)rgbbuffer, w,h, (void *)draw);
+-        return true;
++    myCrop-&gt;display();
+ }
+ //
+-#define SPIN_GET(x,y) {myHue.x= gtk_spin_button_get_value(GTK_SPIN_BUTTON(WID(y))) ;}
+-#define SPIN_SET(x,y)  {gtk_spin_button_set_value(GTK_SPIN_BUTTON(WID(y)),(gfloat)myHue.x) ;}
++#define SPIN_GET(x,y) {param.x= gtk_spin_button_get_value(GTK_SPIN_BUTTON(WID(y))) ;}
++#define SPIN_SET(x,y)  {gtk_spin_button_set_value(GTK_SPIN_BUTTON(WID(y)),(gfloat)param.x) ;}
+ 
+-#define CHECK_GET(x,y) {myHue.x=gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(WID(y)));}
+-#define CHECK_SET(x,y) {gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(WID(y)),myHue.x);}
++#define CHECK_GET(x,y) {param.x=gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(WID(y)));}
++#define CHECK_SET(x,y) {gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(WID(y)),param.x);}
+ 
+ void upload( void)
+ {
+-//
++    myCrop-&gt;upload();
++}
++void download (void)
++{
++     myCrop-&gt;download();
++}
++/**************************************/
++uint8_t flyASharp::upload(void)
++{
++    lock++;
+         SPIN_SET(t,spinbuttonT);
+         SPIN_SET(d,spinbuttonD);
+         SPIN_SET(b,spinbuttonB);
+ 
+         CHECK_SET(bf,checkbuttonBF);
++    lock--;
++        return 1;
+ }
+-void download (void)
++uint8_t flyASharp::download (void)
+ {
++    
+         SPIN_GET(t,spinbuttonT);
+         SPIN_GET(d,spinbuttonD);
+         SPIN_GET(b,spinbuttonB);
+ 
+         CHECK_GET(bf,checkbuttonBF);
++        return 1;
+ }
+-void update(void )
+-{
+-uint8_t *src,*dst;
+-uint32_t stride;
+-int32_t T,D,B,B2;   
+-ASHARP_PARAM *_param=&myHue;
+-uint32_t ww,hh;
+ 
+-                download();
+-                ww=incoming-&gt;getInfo()-&gt;width;
+-                hh=incoming-&gt;getInfo()-&gt;height;
+-                // parameters floating point to fixed point convertion
+-                T = (int)(_param-&gt;t*(4&lt;&lt;7));
+-                D = (int)(_param-&gt;d*(4&lt;&lt;7));
+-                B = (int)(256-_param-&gt;b*64);
+-                B2= (int)(256-_param-&gt;b*48);
+-
+-                // clipping (recommended for SIMD code)
+-
+-                if (T&lt;-(4&lt;&lt;7)) T = -(4&lt;&lt;7); // yes, negatives values are accepted
+-                if (D&lt;0) D = 0;
+-                if (B&lt;0) B = 0;
+-                if (B2&lt;0) B2 = 0;
+-
+-                if (T&gt;(32*(4&lt;&lt;7))) T = (32*(4&lt;&lt;7));
+-                if (D&gt;(16*(4&lt;&lt;7))) D = (16*(4&lt;&lt;7));
+-                if (B&gt;256) B = 256;
+-                if (B2&gt;256) B2 = 256;
+-
+-
+-                memcpy(YPLANE(imgdisplay),YPLANE(imgsrc),ww*hh);
+-                asharp_run_c(     imgdisplay-&gt;GetWritePtr(PLANAR_Y),
+-                        imgdisplay-&gt;GetPitch(PLANAR_Y), 
+-                        hh,
+-                        ww,
+-                        T,
+-                        D,
+-                        B,
+-                        B2,
+-                        myHue.bf);
+-    
+-    // Copy half source to display
+-    dst=imgdisplay-&gt;data;
+-    src=imgsrc-&gt;data;
+-    stride=ww;
+-    for(uint32_t y=0;y&lt;hh;y++)   // We do both u &amp; v!
+-    {
+-        memcpy(dst,src,stride&gt;&gt;1);
+-        dst+=stride;
+-        src+=stride;
+-    }
+-    //
+-    //COL_yv12rgb(  w,   h,imgdisplay-&gt;data,(uint8_t *)rgbbuffer );
+-    rgbConv-&gt;scale(imgdisplay-&gt;data,(uint8_t *)rgbbuffer);
+-}
+-
++/**************************************************/
+ GtkWidget*
+ create_dialog1 (void)
+ {
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flyAsharp.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flyAsharp.cpp	2007-05-13 13:00:20 UTC (rev 3078)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flyAsharp.cpp	2007-05-13 13:42:17 UTC (rev 3079)
+@@ -0,0 +1,101 @@
++/**/
++/***************************************************************************
++                          DIA_hue
++                             -------------------
++
++                           Ui for hue &amp; sat
++
++    begin                : 08 Apr 2005
++    copyright            : (C) 2004/5 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++
++
++#include &lt;config.h&gt;
++
++
++#include &lt;string.h&gt;
++#include &lt;stdio.h&gt;
++#include &lt;math.h&gt;
++#include &quot;default.h&quot;
++#include &quot;ADM_colorspace/ADM_rgb.h&quot;
++
++#include &quot;ADM_image.h&quot;
++#include &quot;ADM_video/ADM_genvideo.hxx&quot;
++#include &quot;ADM_video/ADM_vidASharp_param.h&quot;
++#include &quot;DIA_flyDialog.h&quot;
++#include &quot;DIA_flyAsharp.h&quot;
++#include &quot;ADM_assert.h&quot;
++
++/************* COMMON PART *********************/
++uint8_t  flyASharp::update(void)
++{
++    download();
++    process();
++    _rgb-&gt;scale(_yuvBufferOut-&gt;data,_rgbBufferOut);
++    display();
++}
++uint8_t flyASharp::process(void)
++{
++uint8_t *src,*dst;
++uint32_t stride;
++int32_t T,D,B,B2;   
++uint32_t ww,hh;
++
++
++                ww=_w;
++                hh=_h;
++                // parameters floating point to fixed point convertion
++                T = (int)(param.t*(4&lt;&lt;7));
++                D = (int)(param.d*(4&lt;&lt;7));
++                B = (int)(256-param.b*64);
++                B2= (int)(256-param.b*48);
++
++                // clipping (recommended for SIMD code)
++
++                if (T&lt;-(4&lt;&lt;7)) T = -(4&lt;&lt;7); // yes, negatives values are accepted
++                if (D&lt;0) D = 0;
++                if (B&lt;0) B = 0;
++                if (B2&lt;0) B2 = 0;
++
++                if (T&gt;(32*(4&lt;&lt;7))) T = (32*(4&lt;&lt;7));
++                if (D&gt;(16*(4&lt;&lt;7))) D = (16*(4&lt;&lt;7));
++                if (B&gt;256) B = 256;
++                if (B2&gt;256) B2 = 256;
++
++
++                memcpy(YPLANE(_yuvBufferOut),YPLANE(_yuvBuffer),ww*hh);
++                memcpy(UPLANE(_yuvBufferOut),UPLANE(_yuvBuffer),ww*hh/4);
++                memcpy(VPLANE(_yuvBufferOut),VPLANE(_yuvBuffer),ww*hh/4);
++                asharp_run_c(     _yuvBufferOut-&gt;GetWritePtr(PLANAR_Y),
++                        _yuvBufferOut-&gt;GetPitch(PLANAR_Y), 
++                        hh,
++                        ww,
++                        T,
++                        D,
++                        B,
++                        B2,
++                        param.bf);
++    
++    // Copy back half source to display
++    dst=_yuvBufferOut-&gt;data;
++    src=_yuvBuffer-&gt;data;
++    stride=ww;
++    for(uint32_t y=0;y&lt;hh;y++)   // We do both u &amp; v!
++    {
++        memcpy(dst,src,stride&gt;&gt;1);
++        dst+=stride;
++        src+=stride;
++    }
++}
++//EOF
+
+Copied: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flyAsharp.h (from rev 3073, branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flyCrop.h)
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flyCrop.h	2007-05-12 18:15:37 UTC (rev 3073)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flyAsharp.h	2007-05-13 13:42:17 UTC (rev 3079)
+@@ -0,0 +1,21 @@
++
++
++#ifndef FLY_ASHARP_H
++#define FLY_ASHARP_H
++class flyASharp : public ADM_flyDialog
++{
++  
++  public:
++   ASHARP_PARAM  param;
++  public:
++   uint8_t    process(void);
++   uint8_t    download(void);
++   uint8_t    upload(void);
++   uint8_t    update(void);
++   flyASharp (uint32_t width,uint32_t height,AVDMGenericVideoStream *in,
++                                    void *canvas, void *slider) : ADM_flyDialog(width, height,in,canvas, slider,1) 
++                    {
++                      
++                    };
++};
++#endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flyDialog.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flyDialog.h	2007-05-13 13:00:20 UTC (rev 3078)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flyDialog.h	2007-05-13 13:42:17 UTC (rev 3079)
+@@ -53,8 +53,8 @@
+           uint32_t sliderGet(void);
+           uint8_t  sliderSet(uint32_t value);
+           uint8_t  isRgbInverted(void);
+-          
+-          uint8_t     cleanup(void);
++  virtual uint8_t  update(void) {};
++          uint8_t  cleanup(void);
+          /*                               */
+                   ADM_flyDialog(uint32_t width,uint32_t height,AVDMGenericVideoStream *in,
+                                     void *canvas, void *slider,int yuv);
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/Makefile.am
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/Makefile.am	2007-05-13 13:00:20 UTC (rev 3078)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/Makefile.am	2007-05-13 13:42:17 UTC (rev 3079)
+@@ -5,7 +5,8 @@
+ DIA_audioconfig.cpp GUI_render.cpp DIA_SVCD.cpp DIA_DVDff.cpp \
+ DIA_bitrateHisto.cpp DIA_prefs.cpp DIA_gototime.cpp \
+ DIA_lavcodec.cpp DIA_mjpeg.cpp DIA_requant.cpp \
+-DIA_audioFilter.cpp DIA_flyDialog.cpp DIA_flyCrop.cpp
++DIA_audioFilter.cpp DIA_flyDialog.cpp DIA_flyCrop.cpp \
++DIA_flyAsharp.cpp
+ 
+ 
+ INCLUDES = $(all_includes) $(GTK_CFLAGS) $(XML_CFLAGS)  $(FREETYPE_CFLAGS) -DADM_SUBVERSION=@ADM_SUBVERSION@ \
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000379.html">[Avidemux-svn-commit] r3078 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces:	ADM_GTK/ADM_dialog ADM_QT4/ADM_dialog ADM_commonUI
+</A></li>
+	<LI>Next message: <A HREF="000381.html">[Avidemux-svn-commit] r3080 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#380">[ date ]</a>
+              <a href="thread.html#380">[ thread ]</a>
+              <a href="subject.html#380">[ subject ]</a>
+              <a href="author.html#380">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

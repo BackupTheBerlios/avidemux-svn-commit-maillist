@@ -1,0 +1,230 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4755 -	branches/avidemux_2.5_branch_gruntster/cmake
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4755%20-%0A%09branches/avidemux_2.5_branch_gruntster/cmake&In-Reply-To=%3C200904212011.n3LKBSXw017467%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001982.html">
+   <LINK REL="Next"  HREF="001984.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4755 -	branches/avidemux_2.5_branch_gruntster/cmake</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4755%20-%0A%09branches/avidemux_2.5_branch_gruntster/cmake&In-Reply-To=%3C200904212011.n3LKBSXw017467%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4755 -	branches/avidemux_2.5_branch_gruntster/cmake">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Apr 21 22:11:28 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001982.html">[Avidemux-svn-commit] r4754 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+        <LI>Next message: <A HREF="001984.html">[Avidemux-svn-commit] r4756 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1983">[ date ]</a>
+              <a href="thread.html#1983">[ thread ]</a>
+              <a href="subject.html#1983">[ subject ]</a>
+              <a href="author.html#1983">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-04-21 22:11:21 +0200 (Tue, 21 Apr 2009)
+New Revision: 4755
+
+Added:
+   branches/avidemux_2.5_branch_gruntster/cmake/admFFmpegPrepareSvn.cmake
+Modified:
+   branches/avidemux_2.5_branch_gruntster/cmake/admFFmpegBuild.cmake
+   branches/avidemux_2.5_branch_gruntster/cmake/admFFmpegPatch.cmake
+Log:
+[cmake] move svn retrieval of ffmpeg to separate script
+
+Modified: branches/avidemux_2.5_branch_gruntster/cmake/admFFmpegBuild.cmake
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/cmake/admFFmpegBuild.cmake	2009-04-21 19:20:33 UTC (rev 4754)
++++ branches/avidemux_2.5_branch_gruntster/cmake/admFFmpegBuild.cmake	2009-04-21 20:11:21 UTC (rev 4755)
+@@ -1,5 +1,4 @@
+ include(admFFmpegUtil)
+-find_package(Subversion)
+ 
+ set(FFMPEG_VERSION 18300)
+ set(SWSCALE_VERSION 29120)
+@@ -17,65 +16,17 @@
+ 				  --disable-parsers --disable-decoders --disable-encoders --disable-demuxers --disable-muxers --enable-postproc --enable-gpl 
+ 				  --prefix=${CMAKE_INSTALL_PREFIX})
+ 
++include(admFFmpegPrepareSvn)
++
+ if (NOT VERBOSE)
+-	set(ffmpegSvnOutput OUTPUT_VARIABLE FFMPEG_SVN_OUTPUT)
+-	set(swscaleSvnOutput OUTPUT_VARIABLE SWSCALE_SVN_OUTPUT)
+ 	set(ffmpegBuildOutput OUTPUT_VARIABLE FFMPEG_CONFIGURE_OUTPUT)
+-	set(unix2dosOutput OUTPUT_VARIABLE UNIX2DOS_OUTPUT)
+ endif (NOT VERBOSE)
+ 
+-# Checkout FFmpeg source and patch it
+-if (NOT IS_DIRECTORY &quot;${FFMPEG_SOURCE_DIR}/.svn&quot;)
+-	message(STATUS &quot;Checking out FFmpeg&quot;)
+-	execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} co <A HREF="svn://svn.ffmpeg.org/ffmpeg/trunk">svn://svn.ffmpeg.org/ffmpeg/trunk</A> -r ${FFMPEG_VERSION} --ignore-externals &quot;${FFMPEG_SOURCE_DIR}&quot;
+-					${ffmpegSvnOutput})
+-
+-	message(STATUS &quot;Checking out libswscale&quot;)
+-	execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} co <A HREF="svn://svn.ffmpeg.org/mplayer/trunk/libswscale">svn://svn.ffmpeg.org/mplayer/trunk/libswscale</A> -r ${SWSCALE_VERSION} &quot;${FFMPEG_SOURCE_DIR}/libswscale&quot;
+-					${swscaleSvnOutput})
+-
+-	message(&quot;&quot;)
+-
+-	set(FFMPEG_PERFORM_PATCH 1)
+-endif (NOT IS_DIRECTORY &quot;${FFMPEG_SOURCE_DIR}/.svn&quot;)
+-
+-# Check version
+-Subversion_WC_INFO(${FFMPEG_SOURCE_DIR} ffmpeg)
+-message(STATUS &quot;FFmpeg revision: ${ffmpeg_WC_REVISION}&quot;)
+-
+-if (NOT ${ffmpeg_WC_REVISION} EQUAL ${FFMPEG_VERSION})
+-	MESSAGE(STATUS &quot;Updating to revision ${FFMPEG_VERSION}&quot;)
+-	set(FFMPEG_PERFORM_BUILD 1)
+-	set(FFMPEG_PERFORM_PATCH 1)
+-
+-	execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} revert -R &quot;${FFMPEG_SOURCE_DIR}&quot;
+-					${ffmpegSvnOutput})
+-	execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} up -r ${FFMPEG_VERSION} --ignore-externals &quot;${FFMPEG_SOURCE_DIR}&quot;
+-					${ffmpegSvnOutput})	
+-
+-	message(&quot;&quot;)
+-endif (NOT ${ffmpeg_WC_REVISION} EQUAL ${FFMPEG_VERSION})
+-
+ message(&quot;&quot;)
+ 
+-Subversion_WC_INFO(${FFMPEG_SOURCE_DIR}/libswscale swscale)
+-message(STATUS &quot;libswscale revision: ${swscale_WC_REVISION}&quot;)
+-
+-if (NOT ${swscale_WC_REVISION} EQUAL ${SWSCALE_VERSION})
+-	message(STATUS &quot;Updating to revision ${SWSCALE_VERSION}&quot;)
+-	set(FFMPEG_PERFORM_BUILD 1)
+-	set(FFMPEG_PERFORM_PATCH 1)
+-
+-	execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} revert -R &quot;${FFMPEG_SOURCE_DIR}/libswscale&quot;
+-					${swscaleSvnOutput})
+-	execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} up -r ${SWSCALE_VERSION} &quot;${FFMPEG_SOURCE_DIR}/libswscale&quot;
+-					${swscaleSvnOutput})
+-endif (NOT ${swscale_WC_REVISION} EQUAL ${SWSCALE_VERSION})
+-
+-message(&quot;&quot;)
+-
+ if (FFMPEG_PERFORM_PATCH)
+ 	include(admFFmpegPatch)
++	message(&quot;&quot;)
+ endif (FFMPEG_PERFORM_PATCH)
+ 
+ # Configure FFmpeg, if required
+
+Modified: branches/avidemux_2.5_branch_gruntster/cmake/admFFmpegPatch.cmake
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/cmake/admFFmpegPatch.cmake	2009-04-21 19:20:33 UTC (rev 4754)
++++ branches/avidemux_2.5_branch_gruntster/cmake/admFFmpegPatch.cmake	2009-04-21 20:11:21 UTC (rev 4755)
+@@ -2,6 +2,10 @@
+ 
+ if (WIN32)
+ 	find_package(Unix2Dos)
++	
++	if (NOT VERBOSE)
++		set(unix2dosOutput OUTPUT_VARIABLE UNIX2DOS_OUTPUT)
++	endif (NOT VERBOSE)
+ endif (WIN32)
+ 
+ file(GLOB patchFiles &quot;${CMAKE_SOURCE_DIR}/cmake/patches/*.patch&quot;)
+
+Added: branches/avidemux_2.5_branch_gruntster/cmake/admFFmpegPrepareSvn.cmake
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/cmake/admFFmpegPrepareSvn.cmake	2009-04-21 19:20:33 UTC (rev 4754)
++++ branches/avidemux_2.5_branch_gruntster/cmake/admFFmpegPrepareSvn.cmake	2009-04-21 20:11:21 UTC (rev 4755)
+@@ -0,0 +1,54 @@
++find_package(Subversion)
++
++if (NOT VERBOSE)
++	set(ffmpegSvnOutput OUTPUT_VARIABLE FFMPEG_SVN_OUTPUT)
++	set(swscaleSvnOutput OUTPUT_VARIABLE SWSCALE_SVN_OUTPUT)
++endif (NOT VERBOSE)
++
++# Checkout FFmpeg source and patch it
++if (NOT IS_DIRECTORY &quot;${FFMPEG_SOURCE_DIR}/.svn&quot;)
++	message(STATUS &quot;Checking out FFmpeg&quot;)
++	execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} co <A HREF="svn://svn.ffmpeg.org/ffmpeg/trunk">svn://svn.ffmpeg.org/ffmpeg/trunk</A> -r ${FFMPEG_VERSION} --ignore-externals &quot;${FFMPEG_SOURCE_DIR}&quot;
++					${ffmpegSvnOutput})
++
++	message(STATUS &quot;Checking out libswscale&quot;)
++	execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} co <A HREF="svn://svn.ffmpeg.org/mplayer/trunk/libswscale">svn://svn.ffmpeg.org/mplayer/trunk/libswscale</A> -r ${SWSCALE_VERSION} &quot;${FFMPEG_SOURCE_DIR}/libswscale&quot;
++					${swscaleSvnOutput})
++
++	message(&quot;&quot;)
++
++	set(FFMPEG_PERFORM_PATCH 1)
++endif (NOT IS_DIRECTORY &quot;${FFMPEG_SOURCE_DIR}/.svn&quot;)
++
++# Check version
++Subversion_WC_INFO(${FFMPEG_SOURCE_DIR} ffmpeg)
++message(STATUS &quot;FFmpeg revision: ${ffmpeg_WC_REVISION}&quot;)
++
++if (NOT ${ffmpeg_WC_REVISION} EQUAL ${FFMPEG_VERSION})
++	MESSAGE(STATUS &quot;Updating to revision ${FFMPEG_VERSION}&quot;)
++	set(FFMPEG_PERFORM_BUILD 1)
++	set(FFMPEG_PERFORM_PATCH 1)
++
++	execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} revert -R &quot;${FFMPEG_SOURCE_DIR}&quot;
++					${ffmpegSvnOutput})
++	execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} up -r ${FFMPEG_VERSION} --ignore-externals &quot;${FFMPEG_SOURCE_DIR}&quot;
++					${ffmpegSvnOutput})	
++
++	message(&quot;&quot;)
++endif (NOT ${ffmpeg_WC_REVISION} EQUAL ${FFMPEG_VERSION})
++
++message(&quot;&quot;)
++
++Subversion_WC_INFO(${FFMPEG_SOURCE_DIR}/libswscale swscale)
++message(STATUS &quot;libswscale revision: ${swscale_WC_REVISION}&quot;)
++
++if (NOT ${swscale_WC_REVISION} EQUAL ${SWSCALE_VERSION})
++	message(STATUS &quot;Updating to revision ${SWSCALE_VERSION}&quot;)
++	set(FFMPEG_PERFORM_BUILD 1)
++	set(FFMPEG_PERFORM_PATCH 1)
++
++	execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} revert -R &quot;${FFMPEG_SOURCE_DIR}/libswscale&quot;
++					${swscaleSvnOutput})
++	execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} up -r ${SWSCALE_VERSION} &quot;${FFMPEG_SOURCE_DIR}/libswscale&quot;
++					${swscaleSvnOutput})
++endif (NOT ${swscale_WC_REVISION} EQUAL ${SWSCALE_VERSION})
+\ No newline at end of file
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001982.html">[Avidemux-svn-commit] r4754 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+	<LI>Next message: <A HREF="001984.html">[Avidemux-svn-commit] r4756 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1983">[ date ]</a>
+              <a href="thread.html#1983">[ thread ]</a>
+              <a href="subject.html#1983">[ subject ]</a>
+              <a href="author.html#1983">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,905 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3297 - in	branches/avidemux_2.4_branch/avidemux/ADM_inputs: . ADM_amv
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3297%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs%3A%20.%20ADM_amv&In-Reply-To=%3C200706241748.l5OHm4rS029227%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000576.html">
+   <LINK REL="Next"  HREF="000578.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3297 - in	branches/avidemux_2.4_branch/avidemux/ADM_inputs: . ADM_amv</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3297%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs%3A%20.%20ADM_amv&In-Reply-To=%3C200706241748.l5OHm4rS029227%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3297 - in	branches/avidemux_2.4_branch/avidemux/ADM_inputs: . ADM_amv">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jun 24 19:48:04 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000576.html">[Avidemux-svn-commit] r3296 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libtwolame
+</A></li>
+        <LI>Next message: <A HREF="000578.html">[Avidemux-svn-commit] r3298 - in	branches/avidemux_2.4_branch/avidemux: . ADM_editor ADM_inputs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#577">[ date ]</a>
+              <a href="thread.html#577">[ thread ]</a>
+              <a href="subject.html#577">[ subject ]</a>
+              <a href="author.html#577">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-06-24 19:48:04 +0200 (Sun, 24 Jun 2007)
+New Revision: 3297
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/ADM_amv.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/ADM_amv.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/ADM_amvAudio.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/CMakeLists.txt
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/Makefile.am
+Log:
+amv skeleton
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/ADM_amv.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/ADM_amv.cpp	2007-06-24 09:54:10 UTC (rev 3296)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/ADM_amv.cpp	2007-06-24 17:48:04 UTC (rev 3297)
+@@ -0,0 +1,464 @@
++/***************************************************************************
++    copyright            : (C) 2007 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++    
++      See lavformat/flv[dec/env].c for detail
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;config.h&quot;
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++
++#include &lt;string.h&gt;
++
++#include &quot;math.h&quot;
++
++#include &quot;default.h&quot;
++#include &quot;ADM_editor/ADM_Video.h&quot;
++#include &lt;ADM_assert.h&gt;
++
++#include &quot;fourcc.h&quot;
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
++
++#include &quot;ADM_amv.h&quot;
++
++
++uint32_t ADM_UsecFromFps1000(uint32_t fps1000);
++
++/**
++    \fn Skip
++    \brief Skip some bytes from the file
++*/
++uint8_t amvHeader::Skip(uint32_t len)
++{
++  fseeko(_fd,len,SEEK_CUR);
++  return 1; 
++}
++/**
++    \fn read
++    \brief read the given size from file
++*/
++
++uint8_t amvHeader::read(uint32_t len, uint8_t *where)
++{
++  
++    uint32_t got=fread(where,1,len,_fd);
++    if(len!=got)
++    {
++      printf(&quot;[FLV] Read error : asked %u, got %u\n&quot;,len,got); 
++      return 0;
++    }
++    return 1; 
++}
++//__________________________________________________________
++uint8_t amvHeader::read8(void)
++{
++  uint8_t r;
++    fread(&amp;r,1,1,_fd);
++    return r; 
++}
++uint32_t amvHeader::read16(void)
++{
++  uint8_t r[2];
++    fread(r,2,1,_fd);
++    return (r[1]&lt;&lt;8)+r[0]; 
++}
++uint32_t amvHeader::read24(void)
++{
++  uint8_t r[3];
++    fread(r,3,1,_fd);
++    return (r[2]&lt;&lt;16)+(r[1]&lt;&lt;8)+r[0]; 
++}
++uint32_t amvHeader::read32(void)
++{
++  uint8_t r[4];
++    fread(r,4,1,_fd);
++    return (r[3]&lt;&lt;24)+(r[2]&lt;&lt;16)+(r[1]&lt;&lt;8)+r[0]; 
++}
++
++/**
++      \fn open
++      \brief open the flv file, gather infos and build index(es).
++*/
++
++uint8_t amvHeader::open(char *name)
++{
++  uint32_t prevLen, type, size, pts,pos=0;
++  
++  _isvideopresent=0;
++  _isaudiopresent=0;
++  audioTrack=NULL;
++  videoTrack=NULL;
++  memset(&amp;_mainaviheader,0,sizeof(_mainaviheader));
++  _filename=ADM_strdup(name);
++  _fd=fopen(name,&quot;rb&quot;);
++  if(!_fd)
++  {
++    printf(&quot;[AMV] Cannot open %s\n&quot;,name);
++    return 0; 
++  }
++  // Get size
++  uint32_t fileSize=0;
++  fseeko(_fd,0,SEEK_END);
++  fileSize=ftello(_fd);
++  fseeko(_fd,0,SEEK_SET);
++  printf(&quot;[AMV] file size :%u bytes\n&quot;,fileSize);
++  // It must begin by F L V 01
++  uint32_t four=read32();
++  
++  if(four!=MKFCC('R','I','F','F'))
++  {
++    printf(&quot;[AMV] Not a riff file\n&quot;);
++    return 0; 
++  }
++  uint32_t s=read32(); // size;
++  if(s&lt;fileSize) fileSize=s;
++  
++  if(read32()!=MKFCC('A','M','V',' '))
++  {
++    // Not an AMV file
++     printf(&quot;[AMV] Not an AMV file\n&quot;);
++    return 0; 
++  }
++  int hdr,list,nbTrack=0;
++  while((list=read32())==MKFCC('L','I','S','T'))
++  {
++    printf(&quot;[AMV] List\n&quot;);
++    read32();
++    hdr=read32();
++    
++    switch(hdr)
++    {
++      case MKFCC('h','d','r','l'):
++          printf(&quot;\t[AMV] Header\n&quot;);
++          if(!readHeader()) return 0;
++          printf(&quot;\t[AMV] Header Ok\n&quot;);
++          break;
++      case MKFCC('s','t','r','l'):
++          printf(&quot;\t[AMV] Track\n&quot;);
++          if(!readTrack(nbTrack)) return 0;
++          nbTrack++;
++          printf(&quot;\t[AMV] Track Ok\n&quot;);
++          break;
++      case MKFCC('m','o','v','i'):
++            printf(&quot;\t[AMV] Indexing\n&quot;);
++            if(!index()) return 0;
++            printf(&quot;\t[AMV] Indexing Ok\n&quot;);
++            break;
++      default:
++          printf(&quot;[AMV] Last :%s&quot;,fourCC::tostring(hdr));
++          ADM_assert(0);
++    }
++  }
++  if(_videoIndex) _videoIndex[0].flags=AVI_KEY_FRAME;
++  else return 0;
++  _isvideopresent=1;
++  // Build a fake stream/bih bih
++#define ENTRY(x,y) _videostream.x=y
++  uint32_t codec=MKFCC('x','x','x','x');
++    ENTRY(	fccType,MKFCC('v','i','d','s'));
++    ENTRY(	fccHandler,codec);
++    ENTRY(	dwInitialFrames,0);
++    ENTRY(	dwScale,1000);
++    ENTRY(	dwRate,8000);		/* dwRate / dwScale == samples/second */
++  // _video_bih
++#undef ENTRY
++#define ENTRY(x,y) _video_bih.x=y
++    
++     
++    ENTRY(biWidth,_mainaviheader.dwWidth);
++    ENTRY(biHeight,_mainaviheader.dwHeight);
++    ENTRY(biCompression,codec);
++    printf(&quot;[AMV] Dimension %u * %u\n&quot;,_video_bih.biWidth,_video_bih.biHeight);
++  return 1;
++}
++/**
++    \fn    index
++    \brief read hdlr
++*/
++uint8_t amvHeader::index(void)
++{
++  printf(&quot;[AMV] Dimension %u * %u\n&quot;,_mainaviheader.dwWidth,_mainaviheader.dwHeight);
++  printf(&quot;[AMV] # pics  %u \n&quot;,_mainaviheader.dwTotalFrames);
++  uint32_t type,size,nbPics=0;
++  uint32_t org=ftello(_fd);
++  while(!feof(_fd))
++  {
++     type=read32();
++     size=read32();
++     if(feof(_fd)) break;
++     switch(type)
++        {
++        case MKFCC('0','0','d','c'):
++          nbPics++;
++          break;
++        case MKFCC('0','1','w','b'):
++          break;
++        default:
++            printf(&quot;[AMV] Unknown entry :%s\n&quot;,fourCC::tostring(type));
++        }
++     fseeko(_fd,size,SEEK_CUR);
++  }
++  printf(&quot;Found %u pics\n&quot;,nbPics);
++  _mainaviheader.dwTotalFrames=nbPics;
++  // Allocate index, now that we have the # of pics
++                  
++      _videoIndex=new amvIndex[nbPics];
++      memset(_videoIndex,0,sizeof(amvIndex)*nbPics);
++      
++  //
++  fseeko(_fd,org,SEEK_SET);
++  uint32_t idx=0;
++  while(!feof(_fd))
++  {
++     type=read32();
++     size=read32();
++     if(feof(_fd)) break;
++     switch(type)
++        {
++        case MKFCC('0','0','d','c'):
++          _videoIndex[idx].pos=ftello(_fd);
++          _videoIndex[idx].size=size;
++          idx++;
++          break;
++        case MKFCC('0','1','w','b'):
++          break;
++        default:
++            printf(&quot;[AMV] Unknown entry :%s\n&quot;,fourCC::tostring(type));
++        }
++     fseeko(_fd,size,SEEK_CUR);
++  }
++  return 1;
++}
++/**
++    \fn    readHeader
++    \brief read hdlr
++*/
++uint8_t amvHeader::readHeader(void)
++{
++  uint32_t tail,sz;
++  if(read32()!=MKFCC('a','m','v','h'))
++  {
++    printf(&quot;[AMV]Wrong header (amvh)\n&quot;); 
++    return 0;
++  }
++  sz=read32();
++  printf(&quot;\t\t[AMV] Header size : %u,sizeof :%u\n&quot;,sz,sizeof(MainAVIHeader));
++  tail=sz+ftello(_fd);
++  if(sz!=sizeof(MainAVIHeader))
++  {
++    printf(&quot;[AMV] Wrong mainheader size\n&quot;);
++    return 0; 
++  }
++  fread(&amp;_mainaviheader,sz,1,_fd);
++  fseeko(_fd,tail,SEEK_SET);
++  return 1;
++}
++/**
++    \fn    readHeader
++    \brief read one track
++*/
++uint8_t amvHeader::readTrack(int nb)
++{
++  uint32_t tail,sz;
++  AVIStreamHeader stream;
++  if(read32()!=MKFCC('s','t','r','h'))
++  {
++    printf(&quot;[AMV]Wrong header (strh)\n&quot;); 
++    return 0;
++  }
++  // First is strh
++  sz=read32();
++  printf(&quot;\t\t[AMV] strh size : %u,sizeof :%u\n&quot;,sz,sizeof(AVIStreamHeader));
++  fseeko(_fd,sz,SEEK_CUR);
++  
++  // The strf
++  if(read32()!=MKFCC('s','t','r','f'))
++  {
++    printf(&quot;[AMV]Wrong header (strf)\n&quot;); 
++    return 0;
++  }
++  sz=read32();
++  
++  printf(&quot;\t\t[AMV] strf size : %u,sizeof :%u\n&quot;,sz,sizeof(AVIStreamHeader));
++  fseeko(_fd,sz,SEEK_CUR);
++  
++  return 1;
++}
++/*
++  __________________________________________________________
++*/
++WAVHeader *amvHeader::getAudioInfo(void )
++{
++  if(_isaudiopresent)
++    return &wavHeader;
++  else
++      return NULL;
++}
++/*
++    __________________________________________________________
++*/
++
++uint8_t amvHeader::getAudioStream(AVDMGenericAudioStream **audio)
++{
++#if 0
++  if(_isaudiopresent)
++  {
++    *audio=_audioStream;
++    return 1;
++  }
++#endif
++  *audio=NULL;
++  return 0; 
++}
++/*
++    __________________________________________________________
++*/
++
++void amvHeader::Dump(void)
++{
++ 
++}
++/*
++    __________________________________________________________
++*/
++
++uint8_t amvHeader::close(void)
++{
++  if(_filename) ADM_dealloc(_filename);
++  if(videoTrack) delete videoTrack;
++  if(audioTrack) delete audioTrack;
++  if(_fd) fclose(_fd);
++//  if(_audioStream) delete _audioStream;
++  
++  _fd=NULL;
++  _filename=NULL;
++  videoTrack=NULL;
++  audioTrack=NULL;
++//  _audioStream=NULL;
++  if(_videoIndex) delete [] _videoIndex;
++  _videoIndex=NULL;
++}
++/*
++    __________________________________________________________
++*/
++
++ amvHeader::amvHeader( void ) : vidHeader()
++{ 
++    _fd=NULL;
++    _filename=NULL;
++    videoTrack=NULL;
++    audioTrack=NULL;
++//    _audioStream=NULL;
++    memset(&amp;wavHeader,0,sizeof(wavHeader));
++    _videoIndex=NULL;
++    _filename=NULL;
++}
++/*
++    __________________________________________________________
++*/
++
++ amvHeader::~amvHeader(  )
++{
++  close();
++}
++
++/*
++    __________________________________________________________
++*/
++
++/*
++    __________________________________________________________
++*/
++
++  uint8_t  amvHeader::setFlag(uint32_t frame,uint32_t flags)
++{
++ if(frame&gt;=_mainaviheader.dwTotalFrames) return 0;
++ amvIndex *idx=&amp;_videoIndex[frame];
++ idx-&gt;flags=flags;
++ return 1;
++}
++/*
++    __________________________________________________________
++*/
++
++uint32_t amvHeader::getFlags(uint32_t frame,uint32_t *flags)
++{
++ if(frame&gt;=_mainaviheader.dwTotalFrames) return 0;
++ amvIndex *idx=&amp;_videoIndex[frame];
++ *flags=idx-&gt;flags;
++ return 1;
++}
++/*
++    __________________________________________________________
++*/
++
++uint8_t  amvHeader::getFrameNoAlloc(uint32_t frame,ADMCompressedImage *img)
++{
++ if(frame&gt;=_mainaviheader.dwTotalFrames) return 0;
++ amvIndex *idx=&amp;_videoIndex[frame];
++ fseeko(_fd,idx-&gt;pos,SEEK_SET);
++ fread(img-&gt;data,idx-&gt;size,1,_fd);
++ img-&gt;dataLength=idx-&gt;size;
++ return 1;
++}
++/*
++    __________________________________________________________
++*/
++
++uint8_t  amvHeader::getExtraHeaderData(uint32_t *len, uint8_t **data)
++{
++                *len=0; //_tracks[0].extraDataLen;
++                *data=NULL; //_tracks[0].extraData;
++                return 1;            
++}
++/*
++    __________________________________________________________
++*/
++uint8_t  amvHeader::changeAudioStream(uint32_t newstream)
++{
++    return 0;
++}
++/**
++      \fn getFrameSize
++      \brief return the size of frame frame
++*/
++uint8_t amvHeader::getFrameSize (uint32_t frame, uint32_t * size)
++{
++  if(frame&gt;=_mainaviheader.dwTotalFrames) return 0;
++  *size=_videoIndex[frame].size;
++  return 1;
++}
++
++/*
++    __________________________________________________________
++*/
++uint32_t  amvHeader::getCurrentAudioStreamNumber(void)
++{
++  return 0;
++}
++/**
++    \fn getAudioStreamsInfo
++    \brief returns infos about audio streams (code,...)
++    @param nbStreams (out) nb audio streams
++    @param infos (out) pointer to streams info. It is up to the caller to free them.
++*/
++uint8_t  amvHeader::getAudioStreamsInfo(uint32_t *nbStreams, audioInfo **infos)
++{
++    if(!_isaudiopresent)
++    {}
++        *nbStreams=0;
++        *infos=NULL;
++        return 1;
++   
++}
++//EOF
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/ADM_amv.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/ADM_amv.h	2007-06-24 09:54:10 UTC (rev 3296)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/ADM_amv.h	2007-06-24 17:48:04 UTC (rev 3297)
+@@ -0,0 +1,129 @@
++/***************************************************************************
++                         ADM_AMV
++                             -------------------
++    begin                : Mon Jun 3 2002
++    copyright            : (C) 2002 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++ 
++
++
++#ifndef ADM_AMV_H
++#define ADM_AMV_H
++
++#include &quot;ADM_editor/ADM_Video.h&quot;
++#include &quot;ADM_audio/aviaudio.hxx&quot;
++
++
++typedef struct 
++{
++    uint32_t pos;
++    uint32_t size;
++    uint32_t flags;
++}amvIndex;
++//**********************************************
++#if 0
++
++class flvAudio : public AVDMGenericAudioStream
++{
++  protected:
++    FILE                        *_fd;
++    flvTrak                     *_track;
++    uint32_t                    _curTimeCode;
++    uint8_t                      goToBlock(uint32_t x);
++    uint32_t                    _curBlock;
++    uint8_t                     getPacket(uint8_t *dest, uint32_t *packlen, uint32_t *samples,uint32_t *timecode);
++  public:
++                                flvAudio(const char *name,flvTrak *track,WAVHeader *hdr);
++                                
++                                
++    virtual                     ~flvAudio();
++    virtual uint32_t            read(uint32_t len,uint8_t *buffer);
++    virtual uint8_t             goTo(uint32_t newoffset);
++            uint8_t	        goToTime(uint32_t mstime);
++    virtual uint8_t             getPacket(uint8_t *dest, uint32_t *len, uint32_t *samples);
++    
++    virtual uint8_t             extraData(uint32_t *l,uint8_t **d);
++            
++};
++#endif
++//*****************************************************
++class amvHeader         :public vidHeader
++{
++  protected:
++                                
++    FILE                    *_fd;
++    char                    *_filename;
++    amvIndex                *_videoIndex;
++    int                 *videoTrack;
++    int                 *audioTrack;
++    WAVHeader               wavHeader;
++    uint8_t                 changeAudioStream(uint32_t newstream);
++    uint32_t                getCurrentAudioStreamNumber(void);
++    uint8_t                 getAudioStreamsInfo(uint32_t *nbStreams, audioInfo **infos);
++    //flvAudio                *_audioStream;
++    /* */
++    
++    uint8_t     read(uint32_t len, uint8_t *where);
++    uint8_t     read8(void);
++    uint32_t    read16(void);
++    uint32_t    read24(void);
++    uint32_t    read32(void);
++    uint8_t     Skip(uint32_t len);
++    uint8_t     insertVideo(uint32_t pos,uint32_t size,uint32_t frameType,uint32_t pts);
++    uint8_t     insertAudio(uint32_t pos,uint32_t size,uint32_t pts);
++    uint8_t     setAudioHeader(uint32_t format,uint32_t fq,uint32_t bps,uint32_t channels);
++    uint8_t     setVideoHeader(uint8_t codec,uint32_t *remaining);
++    
++    
++    uint8_t     getFrameSize (uint32_t frame, uint32_t * size);
++    //
++    uint8_t     readHeader(void);
++    uint8_t     readTrack(int nb);
++    uint8_t     index(void);
++  public:
++
++
++    virtual   void          Dump(void);
++
++            amvHeader( void );
++   virtual  ~amvHeader(  ) ;
++// AVI io
++    virtual uint8_t  open(char *name);
++    virtual uint8_t  close(void) ;
++  //__________________________
++  //  Info
++  //__________________________
++
++  //__________________________
++  //  Audio
++  //__________________________
++
++    virtual   WAVHeader *getAudioInfo(void ) ;
++    virtual uint8_t getAudioStream(AVDMGenericAudioStream **audio);
++
++
++// Frames
++  //__________________________
++  //  video
++  //__________________________
++
++    virtual uint8_t  setFlag(uint32_t frame,uint32_t flags);
++    virtual uint32_t getFlags(uint32_t frame,uint32_t *flags);
++    virtual uint8_t  getFrameNoAlloc(uint32_t framenum,ADMCompressedImage *img);
++
++            uint8_t  getExtraHeaderData(uint32_t *len, uint8_t **data);
++
++};
++#endif
++
++
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/ADM_amvAudio.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/ADM_amvAudio.cpp	2007-06-24 09:54:10 UTC (rev 3296)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/ADM_amvAudio.cpp	2007-06-24 17:48:04 UTC (rev 3297)
+@@ -0,0 +1,188 @@
++/***************************************************************************
++    copyright            : (C) 2006 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;config.h&quot;
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++
++#include &lt;string.h&gt;
++
++#include &quot;math.h&quot;
++
++#include &quot;default.h&quot;
++#include &quot;ADM_editor/ADM_Video.h&quot;
++#include &lt;ADM_assert.h&gt;
++
++#include &quot;fourcc.h&quot;
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
++
++#include &quot;ADM_amv.h&quot;
++
++#define vprintf(...) {}
++#if 0
++/**
++    \fn ~flvAudio
++    
++*/
++ flvAudio ::~flvAudio()
++{
++  
++  if(_fd) fclose(_fd);
++  _fd=NULL;
++}
++
++uint32_t    flvAudio::read(uint32_t len,uint8_t *buffer)
++{
++  uint32_t l,sam;
++  if(!getPacket(buffer, &amp;l, &amp;sam)) return 0;
++  return l;
++}
++/**
++      \fn goTo
++*/
++uint8_t             flvAudio::goTo(uint32_t newoffset)
++{
++  goToBlock(0);
++  return 1;
++}
++/**
++      \fn extraData
++*/
++uint8_t             flvAudio::extraData(uint32_t *l,uint8_t **d)
++{
++  *l=0;
++  *d=NULL;
++}
++/**
++    \fn getPacket
++*/
++uint8_t             flvAudio::getPacket(uint8_t *dest, uint32_t *packlen, uint32_t *samples)
++{
++  uint32_t t;
++  return  getPacket(dest, packlen,samples,&amp;t);
++}
++uint8_t             flvAudio::getPacket(uint8_t *dest, uint32_t *packlen, uint32_t *samples,uint32_t *timecode)
++{
++  flvIndex *x;
++    if(!goToBlock(_curBlock))
++    {
++      printf(&quot;[FLVAUDIO] Get packet out of bound\n&quot;);
++      return 0;
++    }
++    x=&amp;(_track-&gt;_index[_curBlock]);
++    fread(dest,x-&gt;size,1,_fd);
++    *packlen=x-&gt;size;
++    *timecode=x-&gt;timeCode;
++    int delta=0;
++    if(_curBlock&lt;_track-&gt;_nbIndex-1)
++    {
++      delta= _track-&gt;_index[_curBlock+1].timeCode-x-&gt;timeCode;
++    }
++    else
++      delta=_track-&gt;_index[1].timeCode-_track-&gt;_index[0].timeCode;
++    // convert delta in ms to delta in sample
++    // 
++    float f=delta;
++    f=f*_wavheader-&gt;frequency;
++    f/=1000;
++    *samples=(uint32_t)floor(f+0.49);
++    _curBlock++;
++    //
++    return 1;
++}
++/**
++      \fn flvAudio 
++*/
++   flvAudio::flvAudio(const char *name,flvTrak *track,WAVHeader *hdr)
++  : AVDMGenericAudioStream()
++{
++  _destroyable = 0; // Will be destroyed with master track
++  _track=track;
++    ADM_assert(_track);
++  _fd=fopen(name,&quot;rb&quot;);
++  ADM_assert(_fd);
++
++  _wavheader=new WAVHeader;
++  memcpy(_wavheader,hdr,sizeof(WAVHeader));
++  
++  // Compute total length in byte
++  _length=0;
++  // 
++  for(int i=0;i&lt;_track-&gt;_nbIndex;i++)
++    _length+=_track-&gt;_index[i].size;
++  printf(&quot;[FLVAUDIO] found %lu bytes\n&quot;,_length);
++  // Guess bitrate
++  uint32_t duration=_track-&gt;_index[_track-&gt;_nbIndex-1].timeCode;
++  printf(&quot;[FLVAUDIO] Duration %u ms\n&quot;,duration);
++  
++  if(duration)
++  {
++    float f=_length;
++    f/=duration;
++    uint32_t bitrate,byterate;
++    
++
++    
++    bitrate=(uint32_t)f*8; // kbits/s
++    byterate=(uint32_t)(f*1000);         // byte/s
++    
++    printf(&quot;[FLVAUDIO] Byterate %u / %u kbps\n&quot;,byterate,bitrate); 
++    _wavheader-&gt;byterate=byterate;
++  }
++  
++  //
++  
++  goToBlock(0);
++}
++/**
++    \fn goToCluster
++    \brief Change the cluster parser...
++*/
++uint8_t flvAudio::goToBlock(uint32_t x)
++{
++  if(x&gt;=_track-&gt;_nbIndex)
++  {
++    printf(&quot;[FLVAUDIO]Exceeding max cluster : asked: %u max :%u\n&quot;,x,_track-&gt;_nbIndex); 
++    return 0;  // FIXME
++  }
++  _curBlock=x;
++  fseeko(_fd,_track-&gt;_index[_curBlock].pos,SEEK_SET);
++  return 1;
++}
++/**
++      \fn goToTime
++      \brief seek in the current track until we meet the time give (in ms)
++*/
++ uint8_t	flvAudio::goToTime(uint32_t mstime)
++{
++uint32_t target=mstime;
++uint32_t _nbClusters=_track-&gt;_nbIndex;
++
++      // First identify the cluster...
++      int clus=-1;
++            for(int i=0;i&lt;_nbClusters-1;i++)
++            {
++              if(target&gt;=_track-&gt;_index[i].timeCode &amp;&amp; target&lt;_track-&gt;_index[i+1].timeCode)
++              {
++                clus=i;
++                i=_nbClusters; 
++              }
++            }
++            if(clus==-1) clus=_nbClusters-1; // Hopefully in the last one
++            goToBlock(clus);
++            return 1;
++}
++
++//EOF
++#endif
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/CMakeLists.txt	2007-06-24 09:54:10 UTC (rev 3296)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/CMakeLists.txt	2007-06-24 17:48:04 UTC (rev 3297)
+@@ -0,0 +1,7 @@
++
++SET(ADM_amv_SRCS 
++ADM_amv.cpp
++ADM_amvAudio.cpp
++)
++ADD_LIBRARY(ADM_amv STATIC ${ADM_amv_SRCS})
++include_directories(..)
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/Makefile.am
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/Makefile.am	2007-06-24 09:54:10 UTC (rev 3296)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv/Makefile.am	2007-06-24 17:48:04 UTC (rev 3297)
+@@ -0,0 +1,12 @@
++noinst_LIBRARIES = libADM_amv.a
++
++INCLUDES = $(all_includes)  -I../../ADM_libraries -I../../ADM_libraries/ADM_utilities   -I../../ADM_libraries/ADM_lavutil
++
++
++libADM_flv_a_SOURCES = ADM_amvAudio.cpp  ADM_amv.cpp  
++
++
++
++EXTRA_DIST= 
++
++
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000576.html">[Avidemux-svn-commit] r3296 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libtwolame
+</A></li>
+	<LI>Next message: <A HREF="000578.html">[Avidemux-svn-commit] r3298 - in	branches/avidemux_2.4_branch/avidemux: . ADM_editor ADM_inputs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#577">[ date ]</a>
+              <a href="thread.html#577">[ thread ]</a>
+              <a href="subject.html#577">[ subject ]</a>
+              <a href="author.html#577">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

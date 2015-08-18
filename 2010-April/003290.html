@@ -1,0 +1,663 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6086 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_render
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6086%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%20ADM_render&In-Reply-To=%3C201004071534.o37FYf9f029977%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003289.html">
+   <LINK REL="Next"  HREF="003291.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6086 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_render</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6086%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%20ADM_render&In-Reply-To=%3C201004071534.o37FYf9f029977%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6086 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_render">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Apr  7 17:34:41 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003289.html">[Avidemux-svn-commit] r6085 - in	branches/avidemux_2.6_branch_mean/avidemux: . common	common/ADM_render qt4/ADM_userInterfaces/ADM_gui
+</A></li>
+        <LI>Next message: <A HREF="003291.html">[Avidemux-svn-commit] r6087 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3290">[ date ]</a>
+              <a href="thread.html#3290">[ thread ]</a>
+              <a href="subject.html#3290">[ subject ]</a>
+              <a href="author.html#3290">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-04-07 17:34:41 +0200 (Wed, 07 Apr 2010)
+New Revision: 6086
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_sdlRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_sdlRender.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_xvRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_xvRender.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp
+Log:
+[SDL] Put it back, but never called
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/CMakeLists.txt	2010-04-07 15:34:38 UTC (rev 6085)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/CMakeLists.txt	2010-04-07 15:34:41 UTC (rev 6086)
+@@ -3,8 +3,8 @@
+ SET(${ADM_LIB}_SRCS
+ GUI_render.cpp
+ GUI_simpleRender.cpp
+-#GUI_sdlRender.cpp
+-#GUI_xvRender.cpp
++GUI_sdlRender.cpp
++GUI_xvRender.cpp
+ )
+ 
+ IF (APPLE)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.cpp	2010-04-07 15:34:38 UTC (rev 6085)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.cpp	2010-04-07 15:34:41 UTC (rev 6086)
+@@ -41,6 +41,7 @@
+ //_____________________________________
+ static VideoRenderBase *renderer=NULL;
+ static uint8_t         *accelSurface=NULL;
++static bool             spawnRenderer(void);
+ //_______________________________________
+ 
+ static void         *draw=NULL;
+@@ -142,14 +143,11 @@
+         if(create)
+         {
+             if(renderer) delete renderer;
+-            renderer=new simpleRender();
+-            GUI_WindowInfo xinfo;
+-            MUI_getWindowInfo(draw, &amp;xinfo);
+-
+-            renderer-&gt;init(&amp;xinfo,w,h,zoom);
+-            lastZoom=zoom;
++            renderer=NULL;
+             phyW=w;
+             phyH=h;
++            lastZoom=zoom;
++            spawnRenderer();
+         }else
+         {
+             if(lastZoom!=zoom) renderer-&gt;changeZoom(zoom);
+@@ -202,6 +200,69 @@
+     renderRefresh();
+ }
+ /**
++    \fn spawnRenderer
++    \brief Create renderer according to prefs
++*/
++bool spawnRenderer(void)
++{
++        
++        int prefRenderer=MUI_getPreferredRender();
++        bool r=false;
++
++        GUI_WindowInfo xinfo;
++        MUI_getWindowInfo(draw, &amp;xinfo);
++        switch(prefRenderer)
++        {
++#if defined(USE_XV)
++       case RENDER_XV:
++                renderer=new XvRender();
++                r=renderer-&gt;init(&amp;xinfo,phyW,phyH,lastZoom);
++                if(!r)
++                {
++                    delete renderer;
++                    renderer=NULL;
++                    ADM_warning(&quot;Xv init failed\n&quot;);
++                }
++                else
++                {
++                    ADM_info(&quot;Xv init ok\n&quot;);
++                }
++                break;
++#endif
++
++#if 0 &amp;&amp;  defined(USE_SDL)
++			case RENDER_SDL:
++#ifdef __WIN32
++			case RENDER_DIRECTX:
++#endif
++				renderer=new sdlRender();
++                r=renderer-&gt;init(&amp;xinfo,phyW,phyH,lastZoom);
++                if(!r)
++                {
++                    delete renderer;
++                    renderer=NULL;
++                    ADM_warning(&quot;SDL init failed\n&quot;);
++                }
++                else
++                {
++                    ADM_info(&quot;SDL init ok\n&quot;);
++                }
++                break;
++#endif
++        }
++        if(!renderer)
++        {
++            ADM_info(&quot;Using simple renderer\n&quot;);
++            renderer=new simpleRender();
++            GUI_WindowInfo xinfo;
++            MUI_getWindowInfo(draw, &amp;xinfo);
++
++            renderer-&gt;init(&amp;xinfo,phyW,phyH,lastZoom);
++        }
++        return true;
++}
++
++/**
+     \fn 
+ */
+ uint8_t renderStartPlaying( void )
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_sdlRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_sdlRender.cpp	2010-04-07 15:34:38 UTC (rev 6085)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_sdlRender.cpp	2010-04-07 15:34:41 UTC (rev 6086)
+@@ -11,10 +11,6 @@
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************///
+-//  The pitch stride has to be changed as there could be some padding depending on the OS
+-//
+-//
+-
+ #include &quot;config.h&quot;
+ 
+ #if defined(USE_SDL)
+@@ -32,13 +28,13 @@
+ #include &quot;SDL.h&quot;
+ #include &quot;SDL_syswm.h&quot;
+ }
+-
++#include &quot;ADM_default.h&quot;
+ #include &quot;ADM_colorspace.h&quot;
+ #include &quot;GUI_render.h&quot;
+ #include &quot;GUI_accelRender.h&quot;
+ #include &quot;GUI_sdlRender.h&quot;
+-#include &quot;ADM_assert.h&quot;
+ 
++
+ #ifdef __APPLE__
+ extern &quot;C&quot;
+ {
+@@ -55,14 +51,17 @@
+ #ifdef __WIN32
+ HWND sdlWin32;
+ #endif
+-static ADMColorScalerSimple *color=NULL;
+-
+-sdlAccelRender::sdlAccelRender( void)
++/**
++    \fn sdlRender
++*/
++sdlRender::sdlRender( void)
+ {
+-        useYV12=1;
+-        decoded=NULL;
+-}
+-uint8_t sdlAccelRender::end( void)
++        useYV12=true;
++}
++/**
++    \fn stop
++*/
++bool sdlRender::stop( void)
+ {
+         if(sdl_overlay)
+         {
+@@ -81,42 +80,35 @@
+ 				destroyCocoaView();
+ #endif
+         }
+-        if(decoded)
+-        {
+-		        delete [] decoded;
+-		        decoded=NULL;
+-        }
+         sdl_running=0;
+         sdl_overlay=NULL;
+         sdl_display=NULL;
+-        printf(&quot;[SDL] Video subsystem closed and destroyed\n&quot;);
+-}
+-uint8_t sdlAccelRender::init( GUI_WindowInfo * window, uint32_t w, uint32_t h)
++        ADM_info(&quot;[SDL] Video subsystem closed and destroyed\n&quot;);
++}
++/**
++    \fn init
++*/
++bool sdlRender::init( GUI_WindowInfo * window, uint32_t w, uint32_t h,renderZoom zoom)
+ {
+-	printf(&quot;[SDL] Initialising video subsystem\n&quot;);
++	ADM_info(&quot;[SDL] Initialising video subsystem\n&quot;);
+ 
+ #ifdef __APPLE__
+ 	if (window-&gt;width &gt; w &amp;&amp; window-&gt;height &gt; h)
+ 	{
+-		printf(&quot;[SDL] Disabling acceleration.  Zoom increase not supported on Mac\n&quot;);
++		ADM_info(&quot;[SDL] Disabling acceleration.  Zoom increase not supported on Mac\n&quot;);
+ 		return 0;
+ 	}
+ #endif
+ 
+ 	int bpp;
+ 	int flags;
+-
++    baseInit(w,h,zoom);
+     // Ask for the position of the drawing window at start
+     disp.w=w;
+     disp.h=h;
+     disp.x=0;
+     disp.y=0;
+ 
+-    if(!useYV12)
+-    {
+-		color=new ADMColorScalerSimple(720,480,ADM_COLOR_YV12,ADM_COLOR_YUV422);
+-		decoded=new uint8_t[w*h*2];
+-    }
+ 
+     // Hack to get SDL to use GTK window, ugly but works
+ #if !defined(__WIN32) &amp;&amp; !defined(__APPLE__)
+@@ -129,12 +121,12 @@
+ 
+     if (SDL_InitSubSystem(SDL_INIT_VIDEO) &lt; 0)
+     {
+-		printf(&quot;[SDL] FAILED initialising video subsystem\n&quot;);
+-		printf(&quot;[SDL] ERROR: %s\n&quot;, SDL_GetError());
++		ADM_warning(&quot;[SDL] FAILED initialising video subsystem\n&quot;);
++		ADM_warning(&quot;[SDL] ERROR: %s\n&quot;, SDL_GetError());
+ 
+         return 0;
+     }
+-
++    ADM_info(&quot;SDL subsystem init ok\n&quot;);
+     // Do it twice as the 1st time does not work
+     // Hack to get SDL to use GTK window, ugly but works
+ #if !defined(__WIN32) &amp;&amp; !defined(__APPLE__)
+@@ -142,8 +134,8 @@
+     SDL_QuitSubSystem(SDL_INIT_VIDEO);
+     if (SDL_InitSubSystem(SDL_INIT_VIDEO) &lt; 0)
+     {
+-                printf(&quot;[SDL] FAILED initialising video subsystem\n&quot;);
+-                printf(&quot;[SDL] ERROR: %s\n&quot;, SDL_GetError());
++                ADM_warning(&quot;[SDL] FAILED initialising video subsystem\n&quot;);
++                ADM_warning(&quot;[SDL] ERROR: %s\n&quot;, SDL_GetError());
+                 return 0;
+     }
+ #endif
+@@ -180,14 +172,15 @@
+ #endif
+ 
+ 	// SDL will resize our window to width and height passed to SetVideoMode.
+-	// This is fine until we use zoomed views so pass window dimensions instead.
+-	sdl_display= SDL_SetVideoMode(window-&gt;width, window-&gt;height, bpp, flags);
++	// This is fine until we use zoomed views so pass window dimensions instead.
++    ADM_info(&quot;SDL setting video mode %d,%d\n&quot;,(int)window-&gt;width,(int)window-&gt;height);
++	sdl_display= SDL_SetVideoMode(window-&gt;width,window-&gt;height, bpp, flags);
+ 
+     if (!sdl_display)
+     {
+-        end();
+-        printf(&quot;[SDL] Cannot create surface\n&quot;);
+-		printf(&quot;[SDL] ERROR: %s\n&quot;, SDL_GetError());
++        stop();
++        ADM_warning(&quot;[SDL] Cannot create surface\n&quot;);
++		ADM_warning(&quot;[SDL] ERROR: %s\n&quot;, SDL_GetError());
+         return 0;
+     }
+ 
+@@ -223,21 +216,22 @@
+ 
+         if(useYV12) cspace=SDL_YV12_OVERLAY;
+             else    cspace=SDL_YUY2_OVERLAY;
+-        //_______________________________________________________
++        //_______________________________________________________
++        ADM_info(&quot;Creating overlay\n&quot;);
+         sdl_overlay=SDL_CreateYUVOverlay((w),(h), cspace, sdl_display);
+ 
+ 		// DirectX may fail but overlay still created.
+ 		// Not a showstopper but log failure.
+ 		if (strlen(SDL_GetError()))
+ 		{
+-			printf(&quot;[SDL] ERROR: %s\n&quot;, SDL_GetError());
++			ADM_warning(&quot;[SDL] ERROR: %s\n&quot;, SDL_GetError());
+ 		}
+ 
+         if(!sdl_overlay)
+         {
+-			end();
+-			printf(&quot;[SDL] Cannot create SDL overlay\n&quot;);
+-			printf(&quot;[SDL] ERROR: %s\n&quot;, SDL_GetError());
++			stop();
++			ADM_warning(&quot;[SDL] Cannot create SDL overlay\n&quot;);
++			ADM_warning(&quot;[SDL] ERROR: %s\n&quot;, SDL_GetError());
+ 
+ 			return 0;
+         }
+@@ -247,10 +241,12 @@
+         if(!sdl_overlay-&gt;hw_overlay)
+             printf(&quot;[SDL] Hardware acceleration disabled\n&quot;);
+ 
+-        if(!useYV12) color-&gt;changeWidthHeight(w,h);
++        if(!useYV12)
++        {
++          // Create YV12-&gt;YUY2 here!
++        }
++		ADM_info(&quot;[SDL] Video subsystem initalised successfully\n&quot;);
+ 
+-		printf(&quot;[SDL] Video subsystem initalised successfully\n&quot;);
+-
+         return 1;
+ }
+ 
+@@ -262,8 +258,11 @@
+         src+=width;
+         dst+=stride;
+     }
+-}
+-uint8_t sdlAccelRender::display(uint8_t *ptr, uint32_t w, uint32_t h,renderZoom zoom)
++}
++/**
++    \fn displayImage
++*/
++bool sdlRender::displayImage(ADMImage *pic)
+ {
+ #ifdef __WIN32
+ 	// DirectX playback doesn't refresh correctly if the parent window is moved.
+@@ -285,8 +284,12 @@
+ 	}
+ #endif
+ 
+-int pitch;
+-int page=w*h;
++int pitch;
++int w=imageWidth;
++int h=imageHeight;
++int page=w*h;
++uint8_t *ptr=pic-&gt;data;
++
+         ADM_assert(sdl_overlay);
+         SDL_LockYUVOverlay(sdl_overlay);
+         pitch=sdl_overlay-&gt;pitches[0];
+@@ -310,7 +313,8 @@
+ 	        else
+ 	            interleave(sdl_overlay-&gt;pixels[2],ptr+(page*5)/4,w&gt;&gt;1,pitch,h&gt;&gt;1);
+         }else
+-        {
++        {
++#if 0
+ 	        color-&gt;changeWidthHeight(w,h);
+ 	        if(pitch==2*w)
+ 	        {
+@@ -320,21 +324,12 @@
+ 	        {
+ 	            color-&gt;convert(ptr,decoded);
+ 	            interleave(sdl_overlay-&gt;pixels[0],decoded,2*w,pitch,h);
+-	        }
++	        }
++#endif
+         }
+-        uint32_t factor=4;
+-               switch(zoom)
+-               {
+-                   case ZOOM_1_4: factor=1;break;
+-                   case ZOOM_1_2: factor=2;break;
+-                   case ZOOM_1_1: factor=4;break;
+-                   case ZOOM_2:   factor=8;break;
+-                   case ZOOM_4:   factor=16;break;
+-                   default : ADM_assert(0);
+-
+-               }
+-        disp.w=(w*factor)/4;
+-        disp.h=(h*factor)/4;
++       
++        disp.w=displayWidth;
++        disp.h=displayHeight;
+         disp.x=0;
+         disp.y=0;
+ 
+@@ -342,8 +337,21 @@
+         SDL_DisplayYUVOverlay(sdl_overlay,&amp;disp);
+ 
+         return 1;
++}
++
++/**
++    \fn changeZoom
++*/
++bool sdlRender::changeZoom(renderZoom newZoom)
++{
++        ADM_info(&quot;changing zoom, sdl render.\n&quot;);
++        calcDisplayFromZoom(newZoom);
++        currentZoom=newZoom;
++        return true;
+ }
+-
++/**
++    \fn initSdl
++*/
+ void initSdl(int videoDevice)
+ {
+ 	printf(&quot;\n&quot;);
+@@ -394,7 +402,9 @@
+ 
+ 	printf(&quot;\n&quot;);
+ }
+-
++/**
++    \fn quitSdl
++*/
+ void quitSdl(void)
+ {
+ 	if (SDL_WasInit(SDL_INIT_EVERYTHING))
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_sdlRender.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_sdlRender.h	2010-04-07 15:34:38 UTC (rev 6085)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_sdlRender.h	2010-04-07 15:34:41 UTC (rev 6086)
+@@ -24,12 +24,12 @@
+ {
+   protected:
+               bool     useYV12;
+-              uint8_t *decoded;
+   public:
+                              sdlRender( void ) ;
+               virtual	bool init( GUI_WindowInfo *  window, uint32_t w, uint32_t h,renderZoom zoom);
+               virtual	bool stop(void);				
+               virtual   bool displayImage(ADMImage *pic);
++              virtual   bool changeZoom(renderZoom newZoom);
+ };
+ 
+ void initSdl(int videoDevice);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_xvRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_xvRender.cpp	2010-04-07 15:34:38 UTC (rev 6085)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_xvRender.cpp	2010-04-07 15:34:41 UTC (rev 6086)
+@@ -46,31 +46,45 @@
+ static uint8_t 	GUI_XvList(Display * dis, uint32_t port, uint32_t * fmt);
+ static uint8_t 	GUI_XvInit(GUI_WindowInfo * window, uint32_t w, uint32_t h);
+ static void 	GUI_XvEnd( void );
+-static uint8_t 	GUI_XvDisplay(uint8_t * src, uint32_t w, uint32_t h,renderZoom zoom);
++static uint8_t GUI_XvDisplay(uint8_t * src, uint32_t w, uint32_t h,uint32_t destW,uint32_t destH);
+ static uint8_t 	GUI_XvSync(void);
+ 
+ static uint8_t getAtom(const char *string);
+ //________________Wrapper around Xv_______________
+-XvAccelRender::XvAccelRender( void )
++XvRender::XvRender( void )
+ {
+ 
+ }
+-uint8_t XvAccelRender::init( GUI_WindowInfo * window, uint32_t w, uint32_t h)
++bool XvRender::init( GUI_WindowInfo * window, uint32_t w, uint32_t h,renderZoom zoom)
+ {
+-	printf(&quot;[Xvideo]Xv start\n&quot;);
++	ADM_info(&quot;[Xvideo]Xv start\n&quot;);
++    info=*window;
++    baseInit(w,h,zoom);
+ 	return  GUI_XvInit( window,  w,  h);
+ }
+-uint8_t XvAccelRender::end(void)
++bool XvRender::stop(void)
+ {
+ 	 GUI_XvEnd( );
+ 	 printf(&quot;[Xvideo]Xv end\n&quot;);
+ 	 return 1;
+ }
+ 
+-uint8_t XvAccelRender::display(uint8_t *ptr, uint32_t w, uint32_t h,renderZoom zoom)
++bool XvRender::displayImage(ADMImage *pic)
+ {
+-	return GUI_XvDisplay(ptr, w, h,zoom);
++
++	return GUI_XvDisplay(pic-&gt;data, imageWidth, imageHeight,displayWidth,displayHeight);
+ }
++
++/**
++    \fn changeZoom
++*/
++bool XvRender::changeZoom(renderZoom newZoom)
++{
++        ADM_info(&quot;changing zoom, xv render.\n&quot;);
++        calcDisplayFromZoom(newZoom);
++        currentZoom=newZoom;
++        return true;
++}
+ //________________Wrapper around Xv_______________
+ 
+ static unsigned int xv_port;
+@@ -107,9 +121,9 @@
+ }
+ 
+ //------------------------------------
+-uint8_t GUI_XvDisplay(uint8_t * src, uint32_t w, uint32_t h,renderZoom zoom)
++uint8_t GUI_XvDisplay(uint8_t * src, uint32_t w, uint32_t h,uint32_t destW,uint32_t destH)
+ {
+-    uint32_t destW,destH;
++    
+     if (xvimage)
+       {
+ 
+@@ -117,21 +131,8 @@
+ 
+ 	  // for YV12, 4 bits for Y 4 bits for u, 4 bits for v
+ 	  // total 1.5*
+-         XLockDisplay (xv_display);
+-	  memcpy(xvimage-&gt;data, src, (w*h*3)&gt;&gt;1);
+-          uint32_t factor=4;
+-        switch(zoom)
+-        {
+-            case ZOOM_1_4: factor=1;break;
+-            case ZOOM_1_2: factor=2;break;
+-            case ZOOM_1_1: factor=4;break;
+-            case ZOOM_2:   factor=8;break;
+-            case ZOOM_4:   factor=16;break;
+-            default : ADM_assert(0);
+-
+-        }
+-	destW=(w*factor)/4;
+-        destH=(h*factor)/4;
++          XLockDisplay (xv_display);
++          memcpy(xvimage-&gt;data, src, (w*h*3)&gt;&gt;1);
+         //printf(&quot;%u x %u =&gt; %u x %u\n&quot;,w,h,destW,destH);
+         // And display it !
+ #if 1
+@@ -148,11 +149,8 @@
+ 
+ 	  XSync(xv_display, False);
+ 	  XUnlockDisplay (xv_display);
+-	  //GUI_XvExpose();
+-
+       }
+     return 1;
+-
+ }
+ uint8_t GUI_XvSync(void)
+ {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_xvRender.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_xvRender.h	2010-04-07 15:34:38 UTC (rev 6085)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_xvRender.h	2010-04-07 15:34:41 UTC (rev 6086)
+@@ -22,11 +22,15 @@
+ */
+ class XvRender: public VideoRenderBase
+ {
++      protected:
++                            GUI_WindowInfo info;
+       public:
+                              XvRender( void ) ;
++                             ~XvRender();
+               virtual	bool init( GUI_WindowInfo *  window, uint32_t w, uint32_t h,renderZoom zoom);
+               virtual	bool stop(void);				
+               virtual   bool displayImage(ADMImage *pic);
++              virtual   bool changeZoom(renderZoom newzoom);
+ };
+ #endif
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp	2010-04-07 15:34:38 UTC (rev 6085)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp	2010-04-07 15:34:41 UTC (rev 6086)
+@@ -191,7 +191,7 @@
+ 
+ 	prefs-&gt;get(DEVICE_VIDEODEVICE, &amp;videoDevice);
+ 
+-//	initSdl(videoDevice);
++	initSdl(videoDevice);
+ #endif
+ 
+ 	atexit(onexit);
+@@ -312,7 +312,7 @@
+ 	ADM_lavDestroy();
+ 
+ #ifdef USE_SDL
+-//	quitSdl();
++	quitSdl();
+ #endif
+ 
+ #ifdef HAVE_AUDIO
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003289.html">[Avidemux-svn-commit] r6085 - in	branches/avidemux_2.6_branch_mean/avidemux: . common	common/ADM_render qt4/ADM_userInterfaces/ADM_gui
+</A></li>
+	<LI>Next message: <A HREF="003291.html">[Avidemux-svn-commit] r6087 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3290">[ date ]</a>
+              <a href="thread.html#3290">[ thread ]</a>
+              <a href="subject.html#3290">[ subject ]</a>
+              <a href="author.html#3290">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

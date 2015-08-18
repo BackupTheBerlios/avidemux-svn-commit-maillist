@@ -1,0 +1,308 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5255 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_codecs	ADM_inputs/ADM_flv
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5255%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%20ADM_codecs%0A%09ADM_inputs/ADM_flv&In-Reply-To=%3C200908181810.n7IIAqwl006238%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002467.html">
+   <LINK REL="Next"  HREF="002469.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5255 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_codecs	ADM_inputs/ADM_flv</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5255%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%20ADM_codecs%0A%09ADM_inputs/ADM_flv&In-Reply-To=%3C200908181810.n7IIAqwl006238%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5255 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_codecs	ADM_inputs/ADM_flv">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Aug 18 20:10:52 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002467.html">[Avidemux-svn-commit] r5254 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+        <LI>Next message: <A HREF="002469.html">[Avidemux-svn-commit] r5256 - in	branches/avidemux_2.5_branch_gruntster: cmake	plugins/ADM_audioDecoders/ADM_ad_vorbis
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2468">[ date ]</a>
+              <a href="thread.html#2468">[ thread ]</a>
+              <a href="subject.html#2468">[ subject ]</a>
+              <a href="author.html#2468">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-08-18 20:10:51 +0200 (Tue, 18 Aug 2009)
+New Revision: 5255
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_codecs.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmp43.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmp43.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.h
+Log:
+[Flv] Backport metadata handling from 2.6, fixes #26
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_codecs.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_codecs.cpp	2009-08-17 17:50:48 UTC (rev 5254)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_codecs.cpp	2009-08-18 18:10:51 UTC (rev 5255)
+@@ -375,7 +375,11 @@
+       return (decoders *) (new decoderFFAMV (w, h,extraLen,extraData));
+     }
+ 
+-
++ if (fourCC::check (fcc, (uint8_t *) &quot;VP6A&quot;))
++    {
++      printf (&quot;\n using YUY2 codec\n&quot;);
++      return (decoders *) (new decoderFFVP6A (w, h,extraLen,extraData));
++    }
+   if (isVP6Compatible(fcc))
+     {
+       printf (&quot;\n using VP6F codec\n&quot;);
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmp43.cpp	2009-08-17 17:50:48 UTC (rev 5254)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmp43.cpp	2009-08-18 18:10:51 UTC (rev 5255)
+@@ -411,6 +411,7 @@
+ 
+     case PIX_FMT_YUV420P:
+     case PIX_FMT_YUVJ420P:
++    case PIX_FMT_YUVA420P:
+       // Default is YV12 or I420
+       // In that case depending on swap u/v
+       // we do it or not
+@@ -702,6 +703,12 @@
+ {
+   WRAP_Open (CODEC_ID_VP6F);
+ }
++//*************
++decoderFFVP6A::decoderFFVP6A (uint32_t w, uint32_t h, uint32_t l, uint8_t * d):decoderFF (w,	   h)
++{
++  WRAP_Open (CODEC_ID_VP6A);
++}
++
+ //************
+ decoderFFFLV1::decoderFFFLV1 (uint32_t w, uint32_t h, uint32_t l, uint8_t * d):decoderFF (w,	   h)
+ {
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmp43.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmp43.h	2009-08-17 17:50:48 UTC (rev 5254)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmp43.h	2009-08-18 18:10:51 UTC (rev 5255)
+@@ -340,6 +340,12 @@
+ public:
+   decoderFFVP6F (uint32_t w, uint32_t h, uint32_t l, uint8_t * d);
+ };
++class decoderFFVP6A:public decoderFF
++{
++protected:
++public:
++  decoderFFVP6A (uint32_t w, uint32_t h, uint32_t l, uint8_t * d);
++};
+ class decoderFFFLV1:public decoderFF
+ {
+ protected:
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp	2009-08-17 17:50:48 UTC (rev 5254)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp	2009-08-18 18:10:51 UTC (rev 5255)
+@@ -80,8 +80,100 @@
+     fread(r,4,1,_fd);
+     return (r[0]&lt;&lt;24)+(r[1]&lt;&lt;16)+(r[2]&lt;&lt;8)+r[3]; 
+ }
++/**
++    \fn     readFlvString
++    \brief  read pascal like string
++*/
++char *flvHeader::readFlvString(void)
++{
++static char stringz[255];
++    int size=read16();
++    read(size,(uint8_t *)stringz);
++    stringz[size]=0;
++    return stringz;
++}
+ 
++extern &quot;C&quot; {
++double av_int2dbl(int64_t v);
++}
++
+ /**
++    \fn setProperties
++    \brief get a couple key/value and use it if needed...
++*/
++void flvHeader::setProperties(const char *name,float value)
++{
++    if(!strcmp(name,&quot;framerate&quot;))
++    {
++        _videostream.dwRate=(uint32_t)(value*1000);
++        return;
++    }
++    if(!strcmp(name,&quot;width&quot;))
++    {
++        metaWidth=(uint32_t)value;
++    }
++    if(!strcmp(name,&quot;height&quot;))
++    {
++        metaHeight=(uint32_t)value;
++    }
++
++}
++/**
++    \fn parseMetaData
++    \brief
++*/
++uint8_t flvHeader::parseMetaData(uint32_t remaining)
++{
++    uint32_t endPos=ftello(_fd)+remaining;
++    {
++        // Check the first one is onMetaData...
++        uint8_t type=read8();
++
++        if(type!=AMF_DATA_TYPE_STRING) // String!
++            goto endit;
++        char *z=readFlvString();
++        printf(&quot;[FlashString] %s\n&quot;,z);
++        if(z &amp;&amp; strncmp(z,&quot;onMetaData&quot;,10)) goto endit;
++        // Normally the next one is mixed array
++        Skip(4);
++        Skip(1);
++        while(ftello(_fd)&lt;endPos-4)
++        {
++
++            char *s=readFlvString();
++            printf(&quot;[FlvType] :%d String : %s&quot;,type,s);
++            type=read8();
++            switch(type)
++            {
++                case AMF_DATA_TYPE_DATE: Skip(8+2);break;
++                case AMF_DATA_TYPE_NUMBER:
++                                        {
++                                            float val;
++                                            uint64_t hi,lo;
++                                            hi=read32();lo=read32();
++                                            hi=(hi&lt;&lt;32)+lo;
++                                            val=(float)av_int2dbl(hi);
++                                            printf(&quot;-&gt;%f\n&quot;,val);
++                                            setProperties(s,val);
++                                        }
++                                        ;break;
++                case AMF_DATA_TYPE_STRING: {int r=read16();Skip(r);}break;
++                case AMF_DATA_TYPE_BOOL: read8();break;
++                case AMF_DATA_TYPE_OBJECT: goto endit; // unsupported for the moment
++                default : printf(&quot;\n&quot;);ADM_assert(0);
++            }
++            printf(&quot;\n&quot;);
++
++        }
++
++        // Process them...
++    }
++endit:
++    fseeko(_fd,endPos,SEEK_SET);
++    return 1;
++}
++
++/**
+       \fn open
+       \brief open the flv file, gather infos and build index(es).
+ */
+@@ -182,6 +274,11 @@
+             insertAudio(pos+of,remaining,pts);
+           }
+           break;
++      case FLV_TAG_TYPE_META:
++                parseMetaData(remaining);
++                remaining=0;
++                break;
++
+       case FLV_TAG_TYPE_VIDEO:
+           {
+             int of=1+4+3+3+1+4;
+@@ -191,7 +288,7 @@
+             
+             int codec=(flags)&amp;0xf;
+             
+-            if(codec==FLV_CODECID_VP6)
++            if(codec==FLV_CODECID_VP6 || codec==FLV_CODECID_VP6A)
+             {
+               read8(); // 1 byte of extraData
+               remaining--;
+@@ -257,10 +354,19 @@
+     {
+       case FLV_CODECID_H263:            _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;FLV1&quot;);break;
+       case FLV_CODECID_VP6:             _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;VP6F&quot;);break;
++      case FLV_CODECID_VP6A:
++                        _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;VP6A&quot;);break;
++
+     //???   case FLV_CODECID_SCREEN:          _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;VP6F&quot;);break;
+       default :                         _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;XXX&quot;);break;
+       
+     }
++    if(codec==FLV_CODECID_VP6A &amp;&amp; metaWidth &amp;&amp; metaHeight )
++    {
++         _video_bih.biHeight=_mainaviheader.dwHeight=metaHeight ;
++         _video_bih.biWidth=_mainaviheader.dwWidth=metaWidth;
++    }
++
+     if(codec==FLV_CODECID_VP6)
+     {
+         read8();
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.h	2009-08-17 17:50:48 UTC (rev 5254)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.h	2009-08-18 18:10:51 UTC (rev 5255)
+@@ -88,6 +88,7 @@
+     uint8_t                 getAudioStreamsInfo(uint32_t *nbStreams, audioInfo **infos);
+     flvAudio                *_audioStream;
+     /* */
++    uint32_t                metaWidth,metaHeight,metaFps1000;
+     
+     uint8_t     read(uint32_t len, uint8_t *where);
+     uint8_t     read8(void);
+@@ -102,6 +103,11 @@
+     
+     
+     uint8_t     getFrameSize (uint32_t frame, uint32_t * size);
++    uint8_t     parseMetaData(uint32_t remaining);
++    void        setProperties(const char *name,float value);
++    char        *readFlvString(void);
++ 
++
+   public:
+ 
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002467.html">[Avidemux-svn-commit] r5254 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+	<LI>Next message: <A HREF="002469.html">[Avidemux-svn-commit] r5256 - in	branches/avidemux_2.5_branch_gruntster: cmake	plugins/ADM_audioDecoders/ADM_ad_vorbis
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2468">[ date ]</a>
+              <a href="thread.html#2468">[ thread ]</a>
+              <a href="subject.html#2468">[ subject ]</a>
+              <a href="author.html#2468">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

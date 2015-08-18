@@ -1,0 +1,311 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7622 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7622%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062858.77A0B481404%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004766.html">
+   <LINK REL="Next"  HREF="004768.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7622 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7622%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062858.77A0B481404%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7622 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Oct 28 08:28:58 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004766.html">[Avidemux-svn-commit] r7621 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+        <LI>Next message: <A HREF="004768.html">[Avidemux-svn-commit] r7623 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4767">[ date ]</a>
+              <a href="thread.html#4767">[ thread ]</a>
+              <a href="subject.html#4767">[ subject ]</a>
+              <a href="author.html#4767">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-10-28 08:28:58 +0200 (Fri, 28 Oct 2011)
+New Revision: 7622
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.h
+Log:
+[ASF] Partial handling of PTS/DTS, incomplete
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp	2011-10-28 06:28:56 UTC (rev 7621)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp	2011-10-28 06:28:58 UTC (rev 7622)
+@@ -217,7 +217,7 @@
+ uint64_t                   asfHeader::getTime(uint32_t frameNum)
+ {
+      if(frameNum&gt;=nbImage) return 0;
+-     return _index[frameNum].dts; // ??PTS??
++     return _index[frameNum].pts; // ??PTS??
+ }
+ /**
+     \fn getTime
+@@ -355,7 +355,7 @@
+   img-&gt;demuxerPts=_index[framenum].pts;
+   if(len!=_index[framenum].frameLen)
+   {
+-    printf(&quot;[ASF] Frame=%u :-&gt; Mismatch found len : %u expected %u\n&quot;,framenum,len, _index[framenum].frameLen);
++    ADM_error(&quot;[ASF] Frame=%u :-&gt; Mismatch found len : %u expected %u\n&quot;,framenum,len, _index[framenum].frameLen);
+   }
+   aprintf(&quot;&gt;&gt;Len %d seq %d\n&quot;,len,curSeq);
+   return 1; 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp	2011-10-28 06:28:56 UTC (rev 7621)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp	2011-10-28 06:28:58 UTC (rev 7622)
+@@ -147,7 +147,7 @@
+       // still same sequence ...add
+       memcpy(dest,bit-&gt;data,bit-&gt;len);
+       *len=bit-&gt;len;
+-      *dts=ADM_NO_PTS;
++      *dts=bit-&gt;dts;
+       delete[] bit-&gt;data;
+       delete bit;
+       return 1;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-28 06:28:56 UTC (rev 7621)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-28 06:28:58 UTC (rev 7622)
+@@ -421,6 +421,7 @@
+       ADM_assert(readQueue.pop((void**)&amp;bit));
+       // --
+       uint64_t dts=bit-&gt;dts;
++      uint64_t pts=bit-&gt;pts;
+       if(bit-&gt;stream==_videoStreamId)
+       {
+           aprintf(&quot;&gt;found packet of size=%d off=%d seq %d, while curseq =%d, dts=%s\n&quot;,
+@@ -446,7 +447,7 @@
+             indexEntry.packetNb=bit-&gt;packet;
+             indexEntry.flags=bit-&gt;flags;
+             indexEntry.dts=dts;
+-            indexEntry.pts=ADM_NO_PTS;
++            indexEntry.pts=pts;
+ 
+             for(int z=0;z&lt;_nbAudioTrack;z++)
+             {
+@@ -468,10 +469,8 @@
+         {
+           if(bit-&gt;stream == _allAudioTracks[i].streamIndex)
+           {
+-            
+             _allAudioTracks[i].length+=bit-&gt;len;
+             _allAudioTracks[i].lastDts=bit-&gt;dts;
+-            
+             found=1;
+           }
+         }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2011-10-28 06:28:56 UTC (rev 7621)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2011-10-28 06:28:58 UTC (rev 7622)
+@@ -93,7 +93,7 @@
+  */
+ uint8_t   asfPacket::nextPacket(uint8_t streamWanted)
+ {
+-   uint64_t sendTime;
++   uint64_t dts;
+    uint32_t aduration,nbSeg,payloadLengthType=0x80;
+    uint32_t sequenceLen,len,streamId;
+    int32_t   packetLen=0;
+@@ -143,9 +143,9 @@
+    streamNumberLenType=(propertyFlags&gt;&gt;6)&amp;3;
+    
+    // Send time
+-   sendTime=1000*read32(); // Send time (ms)
++   dts=1000*read32(); // Send time (ms)
+    aduration=read16(); // Duration (ms)
+-   aprintf(&quot;:: Time 1 %s\n&quot;,ADM_us2plain(sendTime));
++   aprintf(&quot;:: Time 1 %s\n&quot;,ADM_us2plain(dts));
+    if(!packetLen)
+    {
+      // Padding (relative) size
+@@ -172,11 +172,11 @@
+          if(r&amp;0x80) 
+          {
+             keyframe=AVI_KEY_FRAME;
+-            aprintf(&quot;KeyFrame\n&quot;);
++            aprintf(&quot;&gt;&gt;&gt;KeyFrame\n&quot;);
+          }
+          else       keyframe=0;
+          streamId=r&amp;0x7f;
+-         //printf(&quot;&gt;&gt;&gt;&gt;&gt;Stream Id : %x, duration %d ms, send time:%d ms &lt;&lt;&lt;&lt;&lt;\n&quot;,streamId,aduration,sendTime);
++         //printf(&quot;&gt;&gt;&gt;&gt;&gt;Stream Id : %x, duration %d ms, send time:%d ms &lt;&lt;&lt;&lt;&lt;\n&quot;,streamId,aduration,dts);
+          mediaObjectNumber=readVCL(mediaObjectNumberLenType,0); // Media object number
+          offset=readVCL(offsetLenType,0);
+          replica=readVCL(replicaLenType,0);
+@@ -208,7 +208,8 @@
+            // else we read &quot;payloadLen&quot; bytes and put them at offset &quot;offset&quot;
+            if(streamId==streamWanted|| streamWanted==0xff)
+            {
+-             pushPacket(keyframe,currentPacket,offset,mediaObjectNumber,payloadLen,streamId,pts);   
++             pushPacket(keyframe,currentPacket,offset,mediaObjectNumber,payloadLen,streamId,dts,pts);   
++             dts=ADM_NO_PTS;
+            }else
+             skip(payloadLen);
+         }
+@@ -216,16 +217,17 @@
+    else
+     {  // single payload
+          int r;
++         uint64_t pts=ADM_NO_PTS;
+          r=read8(); // Read stream Id
+          if(r&amp;0x80) 
+          {
+             keyframe=AVI_KEY_FRAME;
+-            aprintf(&quot;KeyFrame\n&quot;);
++            aprintf(&quot;&gt;&gt;&gt;KeyFrame\n&quot;);
+          }
+          else       
+             keyframe=0;
+          streamId=r&amp;0x7f;
+-         //printf(&quot;&gt;&gt;&gt;&gt;&gt;Stream Id : %x, duration %d ms, send time:%d ms &lt;&lt;&lt;&lt;&lt;\n&quot;,streamId,aduration,sendTime);
++         //printf(&quot;&gt;&gt;&gt;&gt;&gt;Stream Id : %x, duration %d ms, send time:%d ms &lt;&lt;&lt;&lt;&lt;\n&quot;,streamId,aduration,dts);
+          mediaObjectNumber=readVCL(mediaObjectNumberLenType,0); // Media object number
+          offset=readVCL(offsetLenType,0);
+          replica=readVCL(replicaLenType,0);
+@@ -236,7 +238,7 @@
+             int stime=read32();
+             aprintf(&quot;replica size:1=%d\n&quot;,ssize);
+             aprintf(&quot;replica pts :2=%d\n&quot;,stime);
+-            sendTime=stime; // in fact PTS
++            pts=stime; // in fact PTS
+             skip(replica-8);
+          }
+             else
+@@ -259,8 +261,8 @@
+            // else we read &quot;payloadLen&quot; bytes and put them at offset &quot;offset&quot;
+            if(streamId==streamWanted|| streamWanted==0xff)
+            {
+-             pushPacket(keyframe,currentPacket,offset,mediaObjectNumber,payloadLen,streamId,sendTime);   
+-             sendTime=ADM_NO_PTS;
++             pushPacket(keyframe,currentPacket,offset,mediaObjectNumber,payloadLen,streamId,dts,pts);   
++             dts=ADM_NO_PTS;
+            }else
+             skip(payloadLen);
+     }
+@@ -287,7 +289,8 @@
+  */
+ 
+  uint8_t asfPacket::pushPacket(uint32_t keyframe,uint32_t packetnb,
+-                uint32_t offset,uint32_t sequence,uint32_t payloadLen,uint32_t stream,uint64_t dts)
++                uint32_t offset,uint32_t sequence,uint32_t payloadLen,uint32_t stream,
++                uint64_t dts,uint64_t pts)
+  {
+    asfBit *bit=new asfBit;
+    aprintf(&quot;Pushing packet stream=%d len=%d offset=%d seq=%d packet=%d dts=%s \n&quot;,
+@@ -300,6 +303,7 @@
+    bit-&gt;packet=packetnb;
+    bit-&gt;flags=keyframe;
+    bit-&gt;dts=dts;
++   bit-&gt;pts=pts;
+    if(!read(bit-&gt;data,bit-&gt;len))
+    {
+ 		delete[] bit-&gt;data;
+@@ -310,7 +314,10 @@
+    queue-&gt;push((void *)bit);
+    return 1;
+  }
+- 
++ /**
++    \fn readVCL
++    \brief read variable lenth code, def is the default value
++*/
+  uint32_t asfPacket::readVCL(uint32_t bitwise,uint32_t def)
+  {
+    uint32_t r;
+@@ -336,6 +343,10 @@
+   
+    return 1; 
+  }
++/**
++    \fn read
++    \brief read N bytes
++*/
+  uint8_t   asfPacket::read(uint8_t *where, uint32_t how)
+  {
+  
+@@ -348,9 +359,11 @@
+    ADM_assert(_offset&lt;=pakSize);
+ 
+    return 1;
+-
+-  
+  }
++/**
++     \fn skip
++    \brief skip N bytes
++*/
+  uint8_t   asfPacket::skip( uint32_t how)
+  {
+    fseeko(_fd,how,SEEK_CUR);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.h	2011-10-28 06:28:56 UTC (rev 7621)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.h	2011-10-28 06:28:58 UTC (rev 7622)
+@@ -30,6 +30,7 @@
+   uint32_t packet;
+   uint32_t flags;
+   uint64_t dts; // in us
++  uint64_t pts; // in us
+   uint8_t  *data;
+   
+ }asfBit;
+@@ -42,7 +43,7 @@
+     uint32_t        readVCL(uint32_t bitwise,uint32_t defaultValue);
+     uint8_t         pushPacket(uint32_t flags,uint32_t packetnb,
+                                 uint32_t offset,uint32_t sequence,uint32_t payloadLen,uint32_t stream,
+-                                uint64_t dtsus);
++                                uint64_t dtsus,uint64_t ptsus);
+     uint8_t         skip( uint32_t how);
+     FILE            *_fd;
+     uint32_t        packetStart;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004766.html">[Avidemux-svn-commit] r7621 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+	<LI>Next message: <A HREF="004768.html">[Avidemux-svn-commit] r7623 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4767">[ date ]</a>
+              <a href="thread.html#4767">[ thread ]</a>
+              <a href="subject.html#4767">[ subject ]</a>
+              <a href="author.html#4767">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

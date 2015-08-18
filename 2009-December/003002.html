@@ -1,0 +1,248 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5795 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5795%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder&In-Reply-To=%3C200912311232.nBVCWqFb031060%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003001.html">
+   <LINK REL="Next"  HREF="003003.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5795 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5795%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder&In-Reply-To=%3C200912311232.nBVCWqFb031060%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5795 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Thu Dec 31 13:32:52 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003001.html">[Avidemux-svn-commit] r5794 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script2/src
+</A></li>
+        <LI>Next message: <A HREF="003003.html">[Avidemux-svn-commit] r5796 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3002">[ date ]</a>
+              <a href="thread.html#3002">[ thread ]</a>
+              <a href="subject.html#3002">[ subject ]</a>
+              <a href="author.html#3002">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-12-31 13:32:45 +0100 (Thu, 31 Dec 2009)
+New Revision: 5795
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_pluginLoad.cpp
+Log:
+[vidEnc] sort video encoder list and only include library name if codec type exists multiple times
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_pluginLoad.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_pluginLoad.cpp	2009-12-31 06:36:08 UTC (rev 5794)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_pluginLoad.cpp	2009-12-31 12:32:45 UTC (rev 5795)
+@@ -16,7 +16,7 @@
+ 
+ #include &quot;config.h&quot;
+ #include &quot;ADM_default.h&quot;
+-#include &lt;vector&gt;
++#include &lt;list&gt;
+ 
+ #include &quot;DIA_fileSel.h&quot;
+ #include &quot;ADM_pluginLoad.h&quot;
+@@ -60,7 +60,7 @@
+ 		&amp;close, &quot;vidEncClose&quot;));
+ }
+ 
+-std::vector&lt;ADM_vidEnc_plugin *&gt; ADM_videoEncoderPlugins;
++std::list&lt;ADM_vidEnc_plugin *&gt; ADM_videoEncoderPlugins;
+ /**
+     \fn ADM_ve_getNbEncoders
+     \brief get the number of encoder plugin loaded
+@@ -83,7 +83,7 @@
+ {
+ 	ADM_assert(filter &gt;= 0 &amp;&amp; filter &lt; ADM_videoEncoderPlugins.size());
+ 
+-	ADM_vidEnc_plugin *plugin = ADM_videoEncoderPlugins[filter];
++	ADM_vidEnc_plugin *plugin = getVideoEncoderPlugin(filter);
+ 	int ma, mi, pa;
+ 
+ 	plugin-&gt;getEncoderVersion(0, &amp;ma, &amp;mi, &amp;pa);
+@@ -96,7 +96,7 @@
+ 	return true;
+ }
+ 
+-static int loadVideoEncoderPlugin(int uiType, const char *file)
++static int loadVideoEncoderPlugin(std::list&lt;ADM_vidEnc_plugin*&gt;* pluginList, int uiType, const char *file)
+ {
+ 	ADM_vidEnc_plugin *plugin = new ADM_vidEnc_plugin(file);
+ 	int* encoderIds;
+@@ -127,7 +127,7 @@
+ 
+ 				printf(&quot;[ADM_vidEnc_plugin] Plugin loaded version %d.%d.%d, filename %s, desc: %s\n&quot;, major, minor, patch, plugin-&gt;fileName, plugin-&gt;getEncoderDescription(encoderId));
+ 
+-				ADM_videoEncoderPlugins.push_back(plugin);
++				pluginList-&gt;push_back(plugin);
+ 
+ 				plugin = NULL;
+ 				success = true;
+@@ -160,6 +160,35 @@
+         delete [] pluginDir;
+ }
+ 
++static bool comparePlugins(ADM_vidEnc_plugin* plugin1, ADM_vidEnc_plugin* plugin2)
++{
++	int firstLen = strlen(plugin1-&gt;getEncoderType(plugin1-&gt;encoderId)) + strlen(plugin1-&gt;getEncoderName(plugin1-&gt;encoderId));
++	int secondLen = strlen(plugin2-&gt;getEncoderType(plugin2-&gt;encoderId)) + strlen(plugin2-&gt;getEncoderName(plugin2-&gt;encoderId));
++	char first[firstLen];
++	char second[secondLen];
++	int i = 0;
++
++	strcpy(first, plugin1-&gt;getEncoderType(plugin1-&gt;encoderId));
++	strcat(first, plugin1-&gt;getEncoderName(plugin1-&gt;encoderId));
++	strcpy(second, plugin2-&gt;getEncoderType(plugin2-&gt;encoderId));
++	strcat(second, plugin2-&gt;getEncoderName(plugin2-&gt;encoderId));
++
++	while ((i &lt; firstLen) &amp;&amp; (i &lt; secondLen))
++	{
++		if (tolower(first[i]) &lt; tolower(second[i]))
++			return true;
++		else if (tolower(first[i]) &gt; tolower(second[i]))
++			return false;
++
++		i++;
++	}
++
++	if (firstLen &lt; secondLen)
++		return true;
++	else
++		return false;
++}
++
+ /**
+  * 	\fn ADM_vidEnc_loadPlugins
+  *  \brief load all audio plugins
+@@ -187,7 +216,7 @@
+ 
+ 	for (int i = 0; i &lt; nbFile; i++)
+ 	{
+-		loadVideoEncoderPlugin(uiType, files[i]);
++		loadVideoEncoderPlugin(&amp;ADM_videoEncoderPlugins, uiType, files[i]);
+ 		ADM_dealloc(files[i]);
+ 	}
+ 
+@@ -203,23 +232,56 @@
+ 		memcpy(&amp;AllVideoCodec[i], internalVideoCodec[i], sizeof(COMPRES_PARAMS));
+ 
+ 	// Add external codecs
+-	for (int i = 0; i &lt; ADM_videoEncoderPlugins.size(); i++)
++	int counter = 0;
++
++	ADM_videoEncoderPlugins.sort(comparePlugins);
++
++	for (std::list&lt;ADM_vidEnc_plugin*&gt;::iterator it = ADM_videoEncoderPlugins.begin(); it != ADM_videoEncoderPlugins.end(); it++)
+ 	{
+-		ADM_vidEnc_plugin *plugin = ADM_videoEncoderPlugins[i];
++		ADM_vidEnc_plugin *plugin = *it;
+ 		ADM_assert(plugin);
+ 
+ 		const char* codecName = plugin-&gt;getEncoderName(plugin-&gt;encoderId);
+ 		const char* codecType = plugin-&gt;getEncoderType(plugin-&gt;encoderId);
+-		char* displayName = new char[strlen(codecName) + strlen(codecType) + 4];
++		char* displayName;
++		const char *prevType, *nextType;
+ 
+-		sprintf(displayName, &quot;%s (%s)&quot;, codecType, codecName);
++		if (it == ADM_videoEncoderPlugins.begin())
++			prevType = NULL;
++		else
++		{
++			*it--;
++			prevType = (*it)-&gt;getEncoderType((*it)-&gt;encoderId);
++			*it++;
++		}
+ 
+-		COMPRES_PARAMS *param = &amp;AllVideoCodec[internalCodecCount + i];
++		*it++;
+ 
++		if (it == ADM_videoEncoderPlugins.end())
++			nextType = NULL;
++		else
++			nextType = (*it)-&gt;getEncoderType((*it)-&gt;encoderId);
++
++		*it--;
++
++		if ((prevType != NULL &amp;&amp; strcmp(prevType, codecType) == 0) ||
++			(nextType != NULL &amp;&amp; strcmp(nextType, codecType) == 0))
++		{
++			displayName = new char[strlen(codecName) + strlen(codecType) + 4];
++			sprintf(displayName, &quot;%s (%s)&quot;, codecType, codecName);
++		}
++		else
++		{
++			displayName = new char[strlen(codecType) + 1];
++			sprintf(displayName, &quot;%s&quot;, codecType);
++		}
++
++		COMPRES_PARAMS *param = &amp;AllVideoCodec[internalCodecCount + counter];
++
+ 		param-&gt;codec = CodecExternal;
+ 		param-&gt;menuName = displayName;
+ 		param-&gt;tagName = codecName;
+-		param-&gt;extra_param = i;
++		param-&gt;extra_param = counter;
+ 		param-&gt;extraSettings = NULL;
+ 		param-&gt;extraSettingsLen = 0;
+ 
+@@ -231,6 +293,7 @@
+ 		pluginOptions[length] = 0;
+ 
+ 		updateCompressionParameters(param, encodeOptions.encodeMode, encodeOptions.encodeModeParameter, pluginOptions, length);
++		counter++;
+ 	}
+ 
+ 	return 1;
+@@ -330,5 +393,10 @@
+ {
+ 	ADM_assert(index &lt; ADM_videoEncoderPlugins.size());
+ 
+-	return ADM_videoEncoderPlugins[index];
++	std::list&lt;ADM_vidEnc_plugin*&gt;::iterator it = ADM_videoEncoderPlugins.begin();
++
++	if (index &gt; 0)
++		advance(it, index);
++
++	return *it;
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003001.html">[Avidemux-svn-commit] r5794 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script2/src
+</A></li>
+	<LI>Next message: <A HREF="003003.html">[Avidemux-svn-commit] r5796 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3002">[ date ]</a>
+              <a href="thread.html#3002">[ thread ]</a>
+              <a href="subject.html#3002">[ subject ]</a>
+              <a href="author.html#3002">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

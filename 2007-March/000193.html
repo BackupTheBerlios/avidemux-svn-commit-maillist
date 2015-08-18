@@ -1,0 +1,279 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2873 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2873%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer&In-Reply-To=%3C200703091824.l29IOHQj011988%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000192.html">
+   <LINK REL="Next"  HREF="000194.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2873 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2873%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer&In-Reply-To=%3C200703091824.l29IOHQj011988%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2873 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Mar  9 19:24:17 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000192.html">[Avidemux-svn-commit] r2872 -	branches/avidemux_2.4_branch/avidemux/ADM_filter
+</A></li>
+        <LI>Next message: <A HREF="000194.html">[Avidemux-svn-commit] r2874 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#193">[ date ]</a>
+              <a href="thread.html#193">[ thread ]</a>
+              <a href="subject.html#193">[ subject ]</a>
+              <a href="author.html#193">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-03-09 19:24:17 +0100 (Fri, 09 Mar 2007)
+New Revision: 2873
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_index_h264.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer_internal.h
+Log:
+a bit better indexer
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_index_h264.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_index_h264.cpp	2007-03-09 18:21:24 UTC (rev 2872)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_index_h264.cpp	2007-03-09 18:24:17 UTC (rev 2873)
+@@ -148,20 +148,24 @@
+                       _run-&gt;demuxer-&gt;read(buffer,60);
+                       if(extractSPSInfo(buffer,60,&amp;( _run-&gt;imageW),&amp;( _run-&gt;imageH)))
+                       {
+-                          seq_found=1;
+-                           Push(1,syncAbs,syncRel);
+-                           _frames[0].abs=syncAbs;
+-                           _frames[0].rel=syncRel;
++                            seq_found=1;
++                            startFrame(1,syncAbs,syncRel);
++                           _run-&gt;demuxer-&gt;setPos(xA,xR);
+                            _run-&gt;demuxer-&gt;stamp();
+-                      }
+-                      _run-&gt;demuxer-&gt;setPos(xA,xR);
++                      }else
++                        _run-&gt;demuxer-&gt;setPos(xA,xR);
++                      
+                       grabbing=1;
+                       continue;
+               }
+               
+               // Ignore multiple chunk of the same pic
+               
+-              if((streamid==NAL_NON_IDR || streamid==NAL_IDR)&amp;&amp;pic_started) continue;
++              if((streamid==NAL_NON_IDR || streamid==NAL_IDR)&amp;&amp;pic_started) 
++              {
++                aprintf(&quot;Still capturing, ignore\n&quot;);
++                continue;
++              }
+               if(_run-&gt;work-&gt;isAborted()) return 0;
+               
+               switch(streamid)
+@@ -176,19 +180,22 @@
+                               grabbing=1;
+                               aprintf(&quot;Sps %d\n&quot;,_run-&gt;nbGop);
+                               gopDump(syncAbs,syncRel);
+-                              _run-&gt;nbPushed=1;
+                               break;
+                       case NAL_IDR: // IDR
+                               aprintf(&quot;IDR %d\n&quot;,_run-&gt;nbGop);
+                               uint32_t gop;   
+                               if(grabbing) 
+                               {
+-                                _frames[_run-&gt;nbPushed].type=1;
++                                aprintf(&quot;Grabbing, updating type\n&quot;);
++                                updateFrameType(1);
+                                 pic_started=1;
++                                grabbing=0;
+                                 continue;
+                               }
++                              aprintf(&quot;Dumping gop-\n&quot;);
+                               gopDump(syncAbs,syncRel);
+-                              _frames[0].type=1;
++                              aprintf(&quot;New Frame-\n&quot;);
++                              updateFrameType(1);
+                               if(firstPicPTS==ADM_NO_PTS &amp;&amp; pts!=ADM_NO_PTS)
+                                       firstPicPTS=pts;
+                               _run-&gt;totalFrame++;
+@@ -198,13 +205,23 @@
+                               
+                               if(grabbing) 
+                               {
+-                                _frames[_run-&gt;nbPushed].type=ftype;
++                                updateFrameType(2);
+                                 pic_started=1;
++                                grabbing=0;
++                                aprintf(&quot;Grabbing, updating type-2-\n&quot;);
+                                 continue;
+                               }
+                               _run-&gt;totalFrame++;
+-                              ftype=2; // P frame
+-                              Push(ftype,syncAbs,syncRel);
++                              if(_run-&gt;nbPushed&gt;MAX_PUSHED/2)
++                              {
++                                aprintf(&quot;Gop too big, dumping-\n&quot;);
++                                gopDump(syncAbs,syncRel);
++                                updateFrameType(2); 
++                              }else
++                              {
++                                aprintf(&quot;Staring new frame-\n&quot;);
++                                startFrame(2,syncAbs,syncRel);
++                              }
+                               pic_started=1;
+                               break;
+                       default:
+@@ -212,38 +229,35 @@
+                       }
+                 
+       }
+-    _frames[0].type=1;
++    _frames[0].type=1; /* Always starts with an infra */
+     return 1; 
+ }
+ 
+ 
+ 
+-/**** Push a frame
+-There is a +- 2 correction when we switch gop
+-as in the frame header we read 2 bytes
+-Between frames, the error is self cancelling.
+ 
+-**/
+ /**
+       \fn Push
+       \brief Add a frame to the current gop
+ 
+ */
+-uint8_t dmx_videoIndexerH264::Push(uint32_t ftype,uint64_t abs,uint64_t rel)
++uint8_t dmx_videoIndexerH264::startFrame(uint32_t ftype,uint64_t abs,uint64_t rel)
+ {
+                                             
+         _frames[_run-&gt;nbPushed].type=ftype;
+         
+-        if(_run-&gt;nbPushed)
+-        {                
++        if(_run-&gt;nbPushed) // Update previous if it exists
++        {
++                aprintf(&quot;Start frame : empty\n&quot;);
+                 _frames[_run-&gt;nbPushed-1].size=_run-&gt;demuxer-&gt;elapsed();
+-               // if(_run-&gt;nbPushed==1) _frames[_run-&gt;nbPushed-1].size-=2;
+-                _frames[_run-&gt;nbPushed].abs=abs;
+-                _frames[_run-&gt;nbPushed].rel=rel;        
+-                _run-&gt;demuxer-&gt;stamp();
+         
++        }else
++        {
++         aprintf(&quot;Start frame %u  in gop\n&quot;,_run-&gt;nbPushed); 
+         }
+-        //aprintf(&quot;\tpushed %d %&quot;LLX&quot;\n&quot;,nbPushed,abs);
++        _frames[_run-&gt;nbPushed].abs=abs;
++        _frames[_run-&gt;nbPushed].rel=rel;        
++        _run-&gt;demuxer-&gt;stamp();
+         _run-&gt;nbPushed++;
+         
+         ADM_assert(_run-&gt;nbPushed&lt;MAX_PUSHED);
+@@ -251,6 +265,17 @@
+ 
+ }
+ /**
++    \fn updateFrameType
++    \brief update the current frame type.Needed as we start from SPS if present
++*/
++uint8_t dmx_videoIndexerH264::updateFrameType(uint32_t ftype)
++{
++  ADM_assert(_run-&gt;nbPushed);
++  _frames[_run-&gt;nbPushed-1].type=ftype;
++  aprintf(&quot;updateFrameType %u for frame %u -1 in gop\n&quot;,ftype,_run-&gt;nbPushed); 
++  return 1;
++}
++/**
+     \fn dumpPts
+     \brief
+ 
+@@ -292,17 +317,17 @@
+ {
+   dmx_demuxer *demuxer=_run-&gt;demuxer;
+   
++        /* No frame */
+         if(!_run-&gt;nbPushed) return 1;
+ 
+ uint64_t stats[_run-&gt;nbTrack];
+ 
+-        _frames[_run-&gt;nbPushed-1].size=demuxer-&gt;elapsed();
++        _frames[_run-&gt;nbPushed-1].size=demuxer-&gt;elapsed();    // Update previous frame
+         qfprintf(_run-&gt;fd,&quot;V %03u %06u %02u &quot;,_run-&gt;nbGop,_run-&gt;nbImage,_run-&gt;nbPushed);
+ 
+-        // For each picture Type : abs position : relat position : size
++        /* First frame must be IDR */
++        if(!_run-&gt;nbGop) _frames[0].type=1;
+         
+-        // ???? Force 1st frame to be IDR
+-        if(!_run-&gt;nbGop) _frames[0].type=1;
+         for(uint32_t i=0;i&lt;_run-&gt;nbPushed;i++) 
+         {
+ 
+@@ -339,11 +364,7 @@
+         _run-&gt;nbGop++;
+         _run-&gt;nbImage+=_run-&gt;nbPushed;
+         _run-&gt;nbPushed=0;
+-                
+-        _frames[0].abs=abs;
+-        _frames[0].rel=rel;
+-        _frames[0].type=1;
+-        demuxer-&gt;stamp();
++        startFrame(2,abs,rel);
+         return 1;
+         
+ }
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer_internal.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer_internal.h	2007-03-09 18:21:24 UTC (rev 2872)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer_internal.h	2007-03-09 18:24:17 UTC (rev 2873)
+@@ -119,7 +119,8 @@
+           uint8_t gopDump(uint64_t abs,uint64_t rel);
+           uint8_t gopUpdate(void);
+           uint8_t dumpPts(uint64_t firstPts);
+-          uint8_t Push(uint32_t ftype,uint64_t abs,uint64_t rel);
++          uint8_t startFrame(uint32_t ftype,uint64_t abs,uint64_t rel);
++          uint8_t updateFrameType(uint32_t ftypel);
+ public:
+                   dmx_videoIndexerH264(dmx_runData *run);
+  
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000192.html">[Avidemux-svn-commit] r2872 -	branches/avidemux_2.4_branch/avidemux/ADM_filter
+</A></li>
+	<LI>Next message: <A HREF="000194.html">[Avidemux-svn-commit] r2874 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#193">[ date ]</a>
+              <a href="thread.html#193">[ thread ]</a>
+              <a href="subject.html#193">[ subject ]</a>
+              <a href="author.html#193">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

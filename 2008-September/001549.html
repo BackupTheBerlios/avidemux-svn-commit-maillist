@@ -1,0 +1,537 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4309 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4:	ADM_filters ADM_gui
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4309%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4%3A%0A%09ADM_filters%20ADM_gui&In-Reply-To=%3C200809061425.m86EPt10012476%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001548.html">
+   <LINK REL="Next"  HREF="001550.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4309 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4:	ADM_filters ADM_gui</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4309%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4%3A%0A%09ADM_filters%20ADM_gui&In-Reply-To=%3C200809061425.m86EPt10012476%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4309 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4:	ADM_filters ADM_gui">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sat Sep  6 16:25:55 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001548.html">[Avidemux-svn-commit] r4308 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+        <LI>Next message: <A HREF="001550.html">[Avidemux-svn-commit] r4310 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1549">[ date ]</a>
+              <a href="thread.html#1549">[ thread ]</a>
+              <a href="subject.html#1549">[ subject ]</a>
+              <a href="author.html#1549">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-09-06 16:25:47 +0200 (Sat, 06 Sep 2008)
+New Revision: 4309
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_seekablePreview.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_seekablePreview.h
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/seekablePreview.ui
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/CMakeLists.txt
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp
+Log:
+[Qt] filter preview window
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp	2008-09-05 17:01:07 UTC (rev 4308)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp	2008-09-06 14:25:47 UTC (rev 4309)
+@@ -69,6 +69,7 @@
+ extern const char  *filterGetNameFromTag(VF_FILTERS tag);
+ extern ADM_Composer *video_body;
+ extern AVDMGenericVideoStream *filterCreateFromTag(VF_FILTERS tag,CONFcouple *conf, AVDMGenericVideoStream *in) ;
++extern uint32_t curframe;
+ /*******************************************************/
+ class filtermainWindow : public QDialog
+ {
+@@ -102,7 +103,7 @@
+         void allDoubleClick( QListWidgetItem  *item);
+ 	void filterFamilyClick(QListWidgetItem *item);
+ 	void filterFamilyClick(int  item);
+- private slots:
++		void preview(bool b);
+  private:
+         int startFilter[NB_TREE];
+         int filterSize[NB_TREE];
+@@ -110,6 +111,24 @@
+         void displayFamily(uint32_t family);
+         void setupFilters(void);
+ };
++
++void filtermainWindow::preview(bool b)
++{
++	QListWidgetItem *item = activeList-&gt;currentItem();
++
++	if (!item)
++	{
++		printf(&quot;No selection\n&quot;);
++		return;
++	}
++
++	int itag = item-&gt;type();
++	ADM_assert(itag &gt; ACTIVE_FILTER_BASE);
++	itag -= ACTIVE_FILTER_BASE;
++
++	DIA_filterPreview(QT_TR_NOOP(&quot;Preview&quot;), videofilters[itag].filter, curframe);
++}
++
+ /**
+         \fn     void setSelected(int sel)
+         \brief  Set the sel line as selected in the active filter window
+@@ -155,8 +174,8 @@
+         videofilters[nb_active_filter].tag = tag;
+         videofilters[nb_active_filter].conf = coup;
+         nb_active_filter++;
+-        setSelected(nb_active_filter);
+-        buildActiveFilterList();
++		buildActiveFilterList();
++        setSelected(nb_active_filter - 1);
+    }
+ 
+ }
+@@ -217,6 +236,7 @@
+     call(); \
+     getFirstVideoFilter (); \
+     buildActiveFilterList ();  \
++	setSelected(nb_active_filter - 1); \
+ }
+ MAKE_BUTTON(DVD,setDVD)
+ MAKE_BUTTON(VCD,setVCD)
+@@ -252,6 +272,7 @@
+         videofilters[itag].conf = couple;
+         getFirstVideoFilter ();
+         buildActiveFilterList ();
++		setSelected(nb_active_filter - 1);
+ }
+ /**
+         \fn     up( bool b)
+@@ -426,7 +447,8 @@
+             videofilters[itag].conf = conf;
+             videofilters[itag].tag = VF_PARTIAL;
+             getFirstVideoFilter ();
+-            buildActiveFilterList ();   
++            buildActiveFilterList ();
++			setSelected(nb_active_filter - 1);
+         }
+         else delete replace;
+ }
+@@ -528,9 +550,11 @@
+     connect(ui.pushButtonVCD, SIGNAL(clicked(bool)), this, SLOT(VCD(bool)));
+     connect(ui.pushButtonSVCD, SIGNAL(clicked(bool)), this, SLOT(SVCD(bool)));
+     connect(ui.pushButtonHalfDVD, SIGNAL(clicked(bool)), this, SLOT(halfD1(bool)));
+-   
++	connect(ui.pushButtonPreview, SIGNAL(clicked(bool)), this, SLOT(preview(bool)));
++
+     displayFamily(0);
+-    buildActiveFilterList(); 
++    buildActiveFilterList();
++	setSelected(nb_active_filter - 1);
+  }
+ /*******************************************************/
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/CMakeLists.txt	2008-09-05 17:01:07 UTC (rev 4308)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/CMakeLists.txt	2008-09-06 14:25:47 UTC (rev 4309)
+@@ -8,15 +8,16 @@
+ avidemux_rsc.cpp  file_qt4.cpp  gui_none.cpp  ADM_qslider.cpp  ADM_qtray.cpp
+ )
+ 
+-
+ SET(${ADM_LIB}_T
+ tray
+ preview
+ )
+ 
+ SET(${ADM_LIB}_Q
++seekablePreview
+ gui2
+ )
++
+ Q_RCC(avidemux)
+ 
+ include(adm_qt4)
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_seekablePreview.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_seekablePreview.cpp	2008-09-05 17:01:07 UTC (rev 4308)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_seekablePreview.cpp	2008-09-06 14:25:47 UTC (rev 4309)
+@@ -0,0 +1,75 @@
++/***************************************************************************
++                           Q_seekablePreview.cpp
++                           ---------------------
++
++    begin                : Fri Sep 5 2008
++    copyright            : (C) 2008 by gruntster
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include &quot;ui_seekablePreview.h&quot;
++
++#include &quot;default.h&quot;
++#include &quot;ADM_assert.h&quot;
++#include &quot;ADM_video/ADM_genvideo.hxx&quot;
++#include &quot;DIA_flyDialog.h&quot;
++#include &quot;DIA_flyPreview.h&quot;
++#include &quot;../ADM_dialog/DIA_flyDialogQt4.h&quot;
++
++class Ui_seekablePreviewWindow : public QDialog
++{
++	Q_OBJECT
++
++public:
++	ADM_QCanvas *canvas;
++	flySeekablePreview *seekablePreview;
++	Ui_seekablePreviewDialog ui;
++	Ui_seekablePreviewWindow(AVDMGenericVideoStream *videoStream, uint32_t defaultFrame = 0);
++	~Ui_seekablePreviewWindow();
++
++public slots:
++	void closeWindow();
++	void sliderChanged(int value);
++};
++
++Ui_seekablePreviewWindow::Ui_seekablePreviewWindow(AVDMGenericVideoStream *videoStream, uint32_t defaultFrame) : QDialog()
++{
++	ui.setupUi(this);
++
++	uint32_t canvasWidth = videoStream-&gt;getInfo()-&gt;width;
++	uint32_t canvasHeight = videoStream-&gt;getInfo()-&gt;height;
++
++	canvas = new ADM_QCanvas(ui.frame, canvasWidth, canvasHeight);
++	seekablePreview = new flySeekablePreview(canvasWidth, canvasHeight, videoStream, canvas, ui.horizontalSlider);
++
++	seekablePreview-&gt;process();
++	seekablePreview-&gt;sliderSet(defaultFrame);
++	seekablePreview-&gt;sliderChanged();
++
++	connect(ui.okButton, SIGNAL(clicked(bool)), this, SLOT(closeWindow()));
++	connect(ui.horizontalSlider, SIGNAL(valueChanged(int)), this, SLOT(sliderChanged(int)));
++}
++
++Ui_seekablePreviewWindow::~Ui_seekablePreviewWindow()
++{
++	delete seekablePreview;
++	delete canvas;
++}
++
++void Ui_seekablePreviewWindow::closeWindow()
++{
++	close();
++}
++
++void Ui_seekablePreviewWindow::sliderChanged(int value)
++{
++	seekablePreview-&gt;sliderChanged();
++}
+\ No newline at end of file
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_seekablePreview.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_seekablePreview.h	2008-09-05 17:01:07 UTC (rev 4308)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_seekablePreview.h	2008-09-06 14:25:47 UTC (rev 4309)
+@@ -0,0 +1,41 @@
++/***************************************************************************
++                            Q_seekablePreview.h
++                            -------------------
++
++    begin                : Fri Sep 5 2008
++    copyright            : (C) 2008 by gruntster
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include &quot;ui_seekablePreview.h&quot;
++
++#include &quot;default.h&quot;
++#include &quot;ADM_assert.h&quot;
++#include &quot;ADM_video/ADM_genvideo.hxx&quot;
++#include &quot;DIA_flyDialog.h&quot;
++#include &quot;DIA_flyPreview.h&quot;
++#include &quot;../ADM_dialog/DIA_flyDialogQt4.h&quot;
++
++class Ui_seekablePreviewWindow : public QDialog
++{
++	Q_OBJECT
++
++public:
++	ADM_QCanvas *canvas;
++	flySeekablePreview *seekablePreview;
++	Ui_seekablePreviewDialog ui;
++	Ui_seekablePreviewWindow(AVDMGenericVideoStream *videoStream, uint32_t defaultFrame = 0);
++	~Ui_seekablePreviewWindow();
++
++public slots:
++	void closeWindow();
++	void sliderChanged(int value);
++};
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp	2008-09-05 17:01:07 UTC (rev 4308)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp	2008-09-06 14:25:47 UTC (rev 4309)
+@@ -40,16 +40,13 @@
+ #elif !defined(ADM_WIN32)
+ #include &lt;QX11Info&gt;
+ #endif
+-#include &quot;avio.hxx&quot;
+ 
+-#include &quot;ADM_colorspace/ADM_rgb.h&quot;
++#include &quot;default.h&quot;
+ #include &quot;GUI_render.h&quot;
+ #include &quot;GUI_accelRender.h&quot;
+-#include &quot;prefs.h&quot;
+-#include &quot;ADM_assert.h&quot;
+-#include &quot;ui_gui2.h&quot;
+-    
+-void UI_QT4VideoWidget(QFrame *host);
++#include &quot;ADM_video/ADM_genvideo.hxx&quot;
++#include &quot;Q_seekablePreview.h&quot;
++
+ static QFrame *hostFrame=NULL;
+ static AccelRender *accelRender=NULL;
+ static uint8_t *lastImage=NULL;
+@@ -61,8 +58,17 @@
+ uint8_t DIA_previewUpdate(uint8_t *data) {return 1;}
+ void DIA_previewEnd(void) {}
+ uint8_t DIA_previewStillAlive(void) {return 1;}
+-uint8_t	DIA_filterPreview(const char *captionText, AVDMGenericVideoStream *videoStream, uint32_t frame) {}
+ 
++uint8_t	DIA_filterPreview(const char *captionText, AVDMGenericVideoStream *videoStream, uint32_t frame)
++{
++	ADM_assert(frame &lt;= videoStream-&gt;getInfo()-&gt;nb_frames);
++
++	printf(&quot;** DIA_filterPreview %i **\n&quot;, frame);
++	Ui_seekablePreviewWindow previewDialog(videoStream, frame);
++
++	previewDialog.exec();
++}
++
+ //****************************************************************************************************
+ /*
+   Function to display
+@@ -72,6 +78,7 @@
+ */
+ static uint8_t *rgbDataBuffer=NULL;
+ static uint32_t displayW=0,displayH=0;
++
+ //****************************************************************************************************
+ /*
+   This is the class that will display the video images.
+@@ -80,43 +87,38 @@
+ */
+ class  ADM_Qvideo : public QWidget
+ {
+-     Q_OBJECT
++	Q_OBJECT
+     
+-  signals:
+-        
+-        
+-   public slots:
+-        
+-  public:
+-        ADM_Qvideo(QWidget *z) : QWidget(z) 
+-        {
+-          
+-        }
+-        ~ADM_Qvideo() {};
+-        /**
+-            \fn paintEvent( QPaintEvent *ev))
+-            \brief Repaint our &quot;video&quot; widget, ignore when accelRender is on
+-        */
+-        void paintEvent(QPaintEvent *ev)
+-        {
+-          if(!displayW || !displayH || !rgbDataBuffer || accelRender)
+-            return ;
++public:
++	ADM_Qvideo(QWidget *z) : QWidget(z) {};
++	~ADM_Qvideo() {};
+ 
+-          if(accelRender) 
+-          {
+-            if(lastImage)
+-            {
+-              accelRender-&gt;display(lastImage,displayW,displayH);
+-            }
+-          }else
+-          {
+-            QImage image(rgbDataBuffer,displayW,displayH,QImage::Format_RGB32);
+-              QPainter painter(this);
+-              painter.drawImage(QPoint(0,0),image);
+-              painter.end();
+-          }
+-        }
++	/**
++		\fn paintEvent( QPaintEvent *ev))
++		\brief Repaint our &quot;video&quot; widget, ignore when accelRender is on
++	*/
++	void paintEvent(QPaintEvent *ev)
++	{
++		if(!displayW || !displayH || !rgbDataBuffer || accelRender)
++			return ;
++
++		if(accelRender) 
++		{
++			if(lastImage)
++			{
++				accelRender-&gt;display(lastImage,displayW,displayH);
++			}
++		}
++		else
++		{
++			QImage image(rgbDataBuffer,displayW,displayH,QImage::Format_RGB32);
++			QPainter painter(this);
++			painter.drawImage(QPoint(0,0),image);
++			painter.end();
++		}
++	}
+ };
++
+ ADM_Qvideo *videoWindow=NULL;
+ //****************************************************************************************************
+ void UI_QT4VideoWidget(QFrame *host)
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/seekablePreview.ui
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/seekablePreview.ui	2008-09-05 17:01:07 UTC (rev 4308)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/seekablePreview.ui	2008-09-06 14:25:47 UTC (rev 4309)
+@@ -0,0 +1,79 @@
++&lt;ui version=&quot;4.0&quot; &gt;
++ &lt;class&gt;seekablePreviewDialog&lt;/class&gt;
++ &lt;widget class=&quot;QDialog&quot; name=&quot;seekablePreviewDialog&quot; &gt;
++  &lt;property name=&quot;geometry&quot; &gt;
++   &lt;rect&gt;
++    &lt;x&gt;0&lt;/x&gt;
++    &lt;y&gt;0&lt;/y&gt;
++    &lt;width&gt;400&lt;/width&gt;
++    &lt;height&gt;300&lt;/height&gt;
++   &lt;/rect&gt;
++  &lt;/property&gt;
++  &lt;property name=&quot;windowTitle&quot; &gt;
++   &lt;string&gt;Preview&lt;/string&gt;
++  &lt;/property&gt;
++  &lt;property name=&quot;modal&quot; &gt;
++   &lt;bool&gt;true&lt;/bool&gt;
++  &lt;/property&gt;
++  &lt;layout class=&quot;QVBoxLayout&quot; &gt;
++   &lt;property name=&quot;margin&quot; &gt;
++    &lt;number&gt;9&lt;/number&gt;
++   &lt;/property&gt;
++   &lt;property name=&quot;spacing&quot; &gt;
++    &lt;number&gt;6&lt;/number&gt;
++   &lt;/property&gt;
++   &lt;item&gt;
++    &lt;widget class=&quot;QFrame&quot; name=&quot;frame&quot; &gt;
++     &lt;property name=&quot;frameShape&quot; &gt;
++      &lt;enum&gt;QFrame::StyledPanel&lt;/enum&gt;
++     &lt;/property&gt;
++     &lt;property name=&quot;frameShadow&quot; &gt;
++      &lt;enum&gt;QFrame::Raised&lt;/enum&gt;
++     &lt;/property&gt;
++    &lt;/widget&gt;
++   &lt;/item&gt;
++   &lt;item&gt;
++    &lt;widget class=&quot;QSlider&quot; name=&quot;horizontalSlider&quot; &gt;
++     &lt;property name=&quot;orientation&quot; &gt;
++      &lt;enum&gt;Qt::Horizontal&lt;/enum&gt;
++     &lt;/property&gt;
++    &lt;/widget&gt;
++   &lt;/item&gt;
++   &lt;item&gt;
++    &lt;layout class=&quot;QHBoxLayout&quot; &gt;
++     &lt;property name=&quot;margin&quot; &gt;
++      &lt;number&gt;0&lt;/number&gt;
++     &lt;/property&gt;
++     &lt;property name=&quot;spacing&quot; &gt;
++      &lt;number&gt;6&lt;/number&gt;
++     &lt;/property&gt;
++     &lt;item&gt;
++      &lt;spacer&gt;
++       &lt;property name=&quot;orientation&quot; &gt;
++        &lt;enum&gt;Qt::Horizontal&lt;/enum&gt;
++       &lt;/property&gt;
++       &lt;property name=&quot;sizeHint&quot; &gt;
++        &lt;size&gt;
++         &lt;width&gt;40&lt;/width&gt;
++         &lt;height&gt;20&lt;/height&gt;
++        &lt;/size&gt;
++       &lt;/property&gt;
++      &lt;/spacer&gt;
++     &lt;/item&gt;
++     &lt;item&gt;
++      &lt;widget class=&quot;QPushButton&quot; name=&quot;okButton&quot; &gt;
++       &lt;property name=&quot;text&quot; &gt;
++        &lt;string&gt;OK&lt;/string&gt;
++       &lt;/property&gt;
++       &lt;property name=&quot;default&quot; &gt;
++        &lt;bool&gt;true&lt;/bool&gt;
++       &lt;/property&gt;
++      &lt;/widget&gt;
++     &lt;/item&gt;
++    &lt;/layout&gt;
++   &lt;/item&gt;
++  &lt;/layout&gt;
++ &lt;/widget&gt;
++ &lt;resources/&gt;
++ &lt;connections/&gt;
++&lt;/ui&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001548.html">[Avidemux-svn-commit] r4308 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+	<LI>Next message: <A HREF="001550.html">[Avidemux-svn-commit] r4310 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1549">[ date ]</a>
+              <a href="thread.html#1549">[ thread ]</a>
+              <a href="subject.html#1549">[ subject ]</a>
+              <a href="author.html#1549">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

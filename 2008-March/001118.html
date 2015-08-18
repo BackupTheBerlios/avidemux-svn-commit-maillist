@@ -1,0 +1,249 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3855 - in	branches/avidemux_2.5_branch_mean_merged/avidemux:	ADM_audiocodec plugins/ADM_audiodecoder/ADM_ad_ac3	plugins/ADM_audiodecoder/ADM_ad_faad	plugins/ADM_audiodecoder/ADM_ad_vorbis
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3855%20-%20in%0A%09branches/avidemux_2.5_branch_mean_merged/avidemux%3A%0A%09ADM_audiocodec%20plugins/ADM_audiodecoder/ADM_ad_ac3%0A%09plugins/ADM_audiodecoder/ADM_ad_faad%0A%09plugins/ADM_audiodecoder/ADM_ad_vorbis&In-Reply-To=%3C200803091022.m29AMbJp024502%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001117.html">
+   <LINK REL="Next"  HREF="001119.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3855 - in	branches/avidemux_2.5_branch_mean_merged/avidemux:	ADM_audiocodec plugins/ADM_audiodecoder/ADM_ad_ac3	plugins/ADM_audiodecoder/ADM_ad_faad	plugins/ADM_audiodecoder/ADM_ad_vorbis</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3855%20-%20in%0A%09branches/avidemux_2.5_branch_mean_merged/avidemux%3A%0A%09ADM_audiocodec%20plugins/ADM_audiodecoder/ADM_ad_ac3%0A%09plugins/ADM_audiodecoder/ADM_ad_faad%0A%09plugins/ADM_audiodecoder/ADM_ad_vorbis&In-Reply-To=%3C200803091022.m29AMbJp024502%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3855 - in	branches/avidemux_2.5_branch_mean_merged/avidemux:	ADM_audiocodec plugins/ADM_audiodecoder/ADM_ad_ac3	plugins/ADM_audiodecoder/ADM_ad_faad	plugins/ADM_audiodecoder/ADM_ad_vorbis">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Mar  9 11:22:37 CET 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001117.html">[Avidemux-svn-commit] r3854 - in	branches/avidemux_2.5_branch_mean_merged/avidemux: .	ADM_audiocodec plugins/ADM_audiodecoder/ADM_ad_faad	plugins/ADM_audiodecoder/ADM_ad_vorbis
+</A></li>
+        <LI>Next message: <A HREF="001119.html">[Avidemux-svn-commit] r3856 -	branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audio
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1118">[ date ]</a>
+              <a href="thread.html#1118">[ thread ]</a>
+              <a href="subject.html#1118">[ subject ]</a>
+              <a href="author.html#1118">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-03-09 11:22:37 +0100 (Sun, 09 Mar 2008)
+New Revision: 3855
+
+Modified:
+   branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_audiocodec.cpp
+   branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_audiocodec.h
+   branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_lpcm.cpp
+   branches/avidemux_2.5_branch_mean_merged/avidemux/plugins/ADM_audiodecoder/ADM_ad_ac3/ADM_ad_a52.cpp
+   branches/avidemux_2.5_branch_mean_merged/avidemux/plugins/ADM_audiodecoder/ADM_ad_faad/ADM_ad_faad.cpp
+   branches/avidemux_2.5_branch_mean_merged/avidemux/plugins/ADM_audiodecoder/ADM_ad_vorbis/ADM_ad_vorbis.cpp
+Log:
+[Audiocodec] Make them export their channel map
+
+
+Modified: branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_audiocodec.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_audiocodec.cpp	2008-03-08 14:50:49 UTC (rev 3854)
++++ branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_audiocodec.cpp	2008-03-09 10:22:37 UTC (rev 3855)
+@@ -124,15 +124,20 @@
+ 		printf(&quot;\n Unknown codec : %lu&quot;,fourcc);
+ 		out = (ADM_Audiocodec *) new ADM_AudiocodecUnknown(fourcc);
+ 	}
+-        if(info-&gt;channels==1)
+-        {
+-            ch_route.input_type[0] = CH_MONO;
+-        }else
+-        {
+-	   ch_route.input_type[0] = CH_FRONT_LEFT;
+-	   ch_route.input_type[1] = CH_FRONT_RIGHT;
+-        }
+-
++	// For channel mapping, simple case we do it here so that the decoder does not have
++	// to worry.
++	// For more complicated case (channel &gt;2) , it is up to the decoder to do it...
++	switch(info-&gt;channels)
++	{
++			case 1: out-&gt;channelMapping[0] = CH_MONO;
++					break;
++			case 2: out-&gt;channelMapping[0] = CH_FRONT_LEFT;
++					out-&gt;channelMapping[1] = CH_FRONT_RIGHT;
++					break;
++			default:break;
++	
++	
++	}
+ 	return out;
+ }
+ 
+
+Modified: branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_audiocodec.h
+===================================================================
+--- branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_audiocodec.h	2008-03-08 14:50:49 UTC (rev 3854)
++++ branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_audiocodec.h	2008-03-09 10:22:37 UTC (rev 3855)
+@@ -16,6 +16,7 @@
+  ***************************************************************************/
+ #ifndef ADMAUDIOCODEC
+ #define ADMAUDIOCODEC
++
+ #define SCRATCH_PAD_SIZE (100*1000*2)
+ extern uint8_t scratchPad[];
+ #define  ADMAC_BUFFER (48000*4)
+@@ -34,6 +35,8 @@
+ 		virtual	uint8_t run(uint8_t *inptr, uint32_t nbIn, float *outptr, uint32_t *nbOut)=0;
+ 		virtual	uint8_t isCompressed(void)=0;
+ 		virtual	uint8_t isDecompressable(void)=0;
++		// Channel mapping, only input is used by the decoders..
++		CHANNEL_TYPE channelMapping[MAX_CHANNELS];
+  };
+ 
+ ADM_Audiocodec	*getAudioCodec(uint32_t fourcc, WAVHeader *info, uint32_t extra=0, uint8_t *extraData=NULL);
+
+Modified: branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_lpcm.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_lpcm.cpp	2008-03-08 14:50:49 UTC (rev 3854)
++++ branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audiocodec/ADM_lpcm.cpp	2008-03-09 10:22:37 UTC (rev 3855)
+@@ -33,12 +33,12 @@
+ 
+ ADM_AudiocodecWavSwapped::ADM_AudiocodecWavSwapped( uint32_t fourcc ) : ADM_Audiocodec(fourcc)
+ {
+-	ch_route.input_type[0] = CH_FRONT_LEFT;
+-	ch_route.input_type[1] = CH_FRONT_RIGHT;
+-	ch_route.input_type[2] = CH_FRONT_CENTER;
+-	ch_route.input_type[3] = CH_LFE;
+-	ch_route.input_type[4] = CH_REAR_LEFT;
+-	ch_route.input_type[5] = CH_REAR_RIGHT;
++	channelMapping[0] = CH_FRONT_LEFT;
++	channelMapping[1] = CH_FRONT_RIGHT;
++	channelMapping[2] = CH_FRONT_CENTER;
++	channelMapping[3] = CH_LFE;
++	channelMapping[4] = CH_REAR_LEFT;
++	channelMapping[5] = CH_REAR_RIGHT;
+ }
+ 
+ ADM_AudiocodecWavSwapped::~ADM_AudiocodecWavSwapped()
+
+Modified: branches/avidemux_2.5_branch_mean_merged/avidemux/plugins/ADM_audiodecoder/ADM_ad_ac3/ADM_ad_a52.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_mean_merged/avidemux/plugins/ADM_audiodecoder/ADM_ad_ac3/ADM_ad_a52.cpp	2008-03-08 14:50:49 UTC (rev 3854)
++++ branches/avidemux_2.5_branch_mean_merged/avidemux/plugins/ADM_audiodecoder/ADM_ad_ac3/ADM_ad_a52.cpp	2008-03-09 10:22:37 UTC (rev 3855)
+@@ -16,7 +16,7 @@
+  ***************************************************************************/
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_ad_plugin.h&quot;
+-#include &quot;ADM_audiofilter/audiofilter_channel_route.h&quot;
++
+ #ifdef USE_AC3
+ extern &quot;C&quot; {
+ #include &quot;ADM_liba52/a52.h&quot;
+@@ -131,8 +131,8 @@
+             break;
+         }
+ 
+-	if (ch_route.mode &lt; 1) {
+-		CHANNEL_TYPE *p_ch_type = ch_route.input_type;
++
++		CHANNEL_TYPE *p_ch_type = channelMapping;
+ 		if (flags &amp; A52_LFE) {
+ 			*(p_ch_type++) = CH_LFE;
+ 		}
+@@ -177,7 +177,7 @@
+ 			default:
+ 				ADM_assert(0);
+ 		}
+-	}
++	
+ 
+         sample_t level = 1, bias = 0;
+ 
+
+Modified: branches/avidemux_2.5_branch_mean_merged/avidemux/plugins/ADM_audiodecoder/ADM_ad_faad/ADM_ad_faad.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_mean_merged/avidemux/plugins/ADM_audiodecoder/ADM_ad_faad/ADM_ad_faad.cpp	2008-03-08 14:50:49 UTC (rev 3854)
++++ branches/avidemux_2.5_branch_mean_merged/avidemux/plugins/ADM_audiodecoder/ADM_ad_faad/ADM_ad_faad.cpp	2008-03-09 10:22:37 UTC (rev 3855)
+@@ -92,12 +92,12 @@
+ 			
+ 		}
+ 
+-	ch_route.input_type[0] = CH_FRONT_CENTER;
+-	ch_route.input_type[1] = CH_FRONT_LEFT;
+-	ch_route.input_type[2] = CH_FRONT_RIGHT;
+-	ch_route.input_type[3] = CH_REAR_LEFT;
+-	ch_route.input_type[4] = CH_REAR_RIGHT;
+-	ch_route.input_type[5] = CH_LFE;
++		channelMapping[0] = CH_FRONT_CENTER;
++		channelMapping[1] = CH_FRONT_LEFT;
++		channelMapping[2] = CH_FRONT_RIGHT;
++		channelMapping[3] = CH_REAR_LEFT;
++		channelMapping[4] = CH_REAR_RIGHT;
++		channelMapping[5] = CH_LFE;
+ 
+ 		printf(&quot;[FAAD]Faad decoder created\n&quot;);
+ }
+
+Modified: branches/avidemux_2.5_branch_mean_merged/avidemux/plugins/ADM_audiodecoder/ADM_ad_vorbis/ADM_ad_vorbis.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_mean_merged/avidemux/plugins/ADM_audiodecoder/ADM_ad_vorbis/ADM_ad_vorbis.cpp	2008-03-08 14:50:49 UTC (rev 3854)
++++ branches/avidemux_2.5_branch_mean_merged/avidemux/plugins/ADM_audiodecoder/ADM_ad_vorbis/ADM_ad_vorbis.cpp	2008-03-09 10:22:37 UTC (rev 3855)
+@@ -27,8 +27,8 @@
+  ***************************************************************************/
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_ad_plugin.h&quot;
+-#include &quot;ADM_audiofilter/audiofilter_channel_route.h&quot;
+ 
++
+ #include &lt;vorbis/codec.h&gt;
+ #include &quot;ADM_ad_vorbis.h&quot;
+ 
+@@ -158,12 +158,12 @@
+ 	STRUCT-&gt;ampscale=1;
+ 	_init=1;
+ 
+-	ch_route.input_type[0] = CH_FRONT_LEFT;
+-	ch_route.input_type[1] = CH_FRONT_RIGHT;
+-	ch_route.input_type[2] = CH_REAR_LEFT;
+-	ch_route.input_type[3] = CH_REAR_RIGHT;
+-	ch_route.input_type[4] = CH_FRONT_CENTER;
+-	ch_route.input_type[5] = CH_LFE;
++	channelMapping[0] = CH_FRONT_LEFT;
++	channelMapping[1] = CH_FRONT_RIGHT;
++	channelMapping[2] = CH_REAR_LEFT;
++	channelMapping[3] = CH_REAR_RIGHT;
++	channelMapping[4] = CH_FRONT_CENTER;
++	channelMapping[5] = CH_LFE;
+  }
+  // This codec expects more or less one packet at a time !
+  
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001117.html">[Avidemux-svn-commit] r3854 - in	branches/avidemux_2.5_branch_mean_merged/avidemux: .	ADM_audiocodec plugins/ADM_audiodecoder/ADM_ad_faad	plugins/ADM_audiodecoder/ADM_ad_vorbis
+</A></li>
+	<LI>Next message: <A HREF="001119.html">[Avidemux-svn-commit] r3856 -	branches/avidemux_2.5_branch_mean_merged/avidemux/ADM_audio
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1118">[ date ]</a>
+              <a href="thread.html#1118">[ thread ]</a>
+              <a href="subject.html#1118">[ subject ]</a>
+              <a href="author.html#1118">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

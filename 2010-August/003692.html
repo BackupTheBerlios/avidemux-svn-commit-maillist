@@ -1,0 +1,232 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6505 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6505%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C20100808081623.5DECE480F13%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003691.html">
+   <LINK REL="Next"  HREF="003693.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6505 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6505%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C20100808081623.5DECE480F13%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6505 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Aug  8 10:16:23 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003691.html">[Avidemux-svn-commit] r6504 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+        <LI>Next message: <A HREF="003693.html">[Avidemux-svn-commit] r6506 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3692">[ date ]</a>
+              <a href="thread.html#3692">[ thread ]</a>
+              <a href="subject.html#3692">[ subject ]</a>
+              <a href="author.html#3692">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-08-08 10:16:23 +0200 (Sun, 08 Aug 2010)
+New Revision: 6505
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp
+Log:
+[psIndex] Save scr reset points in index file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp	2010-08-06 18:09:37 UTC (rev 6504)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp	2010-08-08 08:16:23 UTC (rev 6505)
+@@ -93,6 +93,15 @@
+     markEnd,
+     markNow
+ }markType;
++/**
++    \struct scrGap
++    \brief Map gap/reset in the scr flow to put everything back to linear / monotonic
++*/
++typedef struct
++{
++    uint64_t position;
++    uint64_t timeOffset;
++}scrGap;
+ 
+ /**
+     \class PsIndexer
+@@ -107,7 +116,9 @@
+         bool             headerDumped;
+         uint64_t         lastValidVideoDts;
+         uint64_t         timeOffset; // In 90 khz Tick
+-       
++        bool             handleScrReset(uint64_t dts);
++        vector &lt;scrGap&gt;  listOfScrReset;
++        bool             writeScrReset(void);
+ public:
+                 PsIndexer(void);
+                 ~PsIndexer();
+@@ -336,39 +347,12 @@
+                                   continue;
+                           }
+                           //
+-                          if(info.dts!=ADM_NO_PTS) info.dts+=timeOffset;
+-                          if(info.pts!=ADM_NO_PTS) info.pts+=timeOffset;
+                           if(lastValidVideoDts!=ADM_NO_PTS &amp;&amp; info.dts!=ADM_NO_PTS)
+                           {
+-                            // Handle SCR reset, that happens a lot on DVD
+-                                    if(lastValidVideoDts&gt;info.dts)
+-                                    {
+-                                            ADM_warning(&quot;DTS are going back, maybe several video appended ?\n&quot;);
+-                                            uint64_t newOffset=pkt-&gt;getLastVobuEndTime();
+-                                            uint64_t newPosition=pkt-&gt;getLastVobuPosition();
+-                                            ADM_info(&quot;Trying to correct with VOBU offset :%s\n&quot;,
+-                                                            ADM_us2plain(timeConvert(newOffset)));
+-
+-                                            uint64_t newDts=info.dts+newOffset;
+-                                            if(newDts&gt;lastValidVideoDts)
+-                                            {
+-                                                  ADM_info(&quot;SCR reset, using vobu to correct. New time offset %s, position 0x%&quot;LLX&quot;\n&quot;,
+-                                                            ADM_us2plain(timeConvert(newOffset)),newPosition);
+-                                                  ADM_warning(&quot;last Valid Dts %s\n&quot;,ADM_us2plain(timeConvert(lastValidVideoDts)));
+-                                                  info.dts=newDts;
+-                                                  if(info.pts!=ADM_NO_PTS)
+-                                                        info.pts=info.pts+newOffset;
+-                                                  timeOffset+=newOffset;
+-                                                  ADM_info(&quot;TimeOffset is now %s\n&quot;,ADM_us2plain(timeConvert(timeOffset)));
+-                                            }else
+-                                            {
+-                                                ADM_warning(&quot;last Valid Dts %s\n&quot;,ADM_us2plain(timeConvert(lastValidVideoDts)));
+-                                                ADM_warning(&quot;current    Dts %s\n&quot;,ADM_us2plain(timeConvert(info.dts)));
+-                                                goto theEnd;
+-                                            }
+-                                     }
+-                            }
+-                            if(info.dts!=ADM_NO_PTS)
++                            if(lastValidVideoDts&gt;(info.dts+timeOffset))
++                                if(false==handleScrReset(info.dts)) goto theEnd;
++                          }
++                          if(info.dts!=ADM_NO_PTS)
+                             {
+                                     lastValidVideoDts=info.dts;
+                             }
+@@ -396,9 +380,12 @@
+         qfprintf(index,&quot;\n# Found %&quot;LU&quot; images \n&quot;,data.nbPics); // Size
+         qfprintf(index,&quot;# Found %&quot;LU&quot; frame pictures\n&quot;,video.frameCount); // Size
+         qfprintf(index,&quot;# Found %&quot;LU&quot; field pictures\n&quot;,video.fieldCount); // Size
++
++       
+         // Now write the header
+         writeVideo(&amp;video);
+         writeAudio();
++        writeScrReset();
+         qfprintf(index,&quot;\n[End]\n&quot;);
+         qfclose(index);
+         index=NULL;
+@@ -489,7 +476,33 @@
+     qfprintf(index,&quot;AR=%d\n&quot;,video-&gt;ar);
+     return true;
+ }
++
+ /**
++    \fn writeScrReset
++    \brief 
++*/
++bool PsIndexer::writeScrReset(void)
++{
++ // Dump resets
++    int n=listOfScrReset.size();
++    if(!n)
++    {
++        ADM_info(&quot;No SCR reset detected\n&quot;);
++        return true;
++    }
++    qfprintf(index,&quot;[ScrResets]\n&quot;);
++    qfprintf(index,&quot;NbResets=%d\n&quot;,n);
++    for(int i=0;i&lt;n;i++)
++    {
++        char head[30];
++        sprintf(head,&quot;Reset%1d&quot;,i);
++        qfprintf(index,&quot;#%s\n&quot;,ADM_us2plain(timeConvert(listOfScrReset[i].timeOffset)));
++        qfprintf(index,&quot;%s.position=%&quot;LLD&quot;\n&quot;,head,listOfScrReset[i].position);
++        qfprintf(index,&quot;%s.timeOffset=%&quot;LLD&quot;\n&quot;,head,listOfScrReset[i].timeOffset);
++    }
++    return true;
++}
++/**
+     \fn writeSystem
+     \brief Write system part of index file
+ */
+@@ -525,6 +538,38 @@
+     }
+     return true;
+ }
++/**
++    \fn handleScrReset
++*/
++bool PsIndexer::handleScrReset(uint64_t dts)
++{
++#define PRETTY(x) ADM_us2plain(timeConvert(x))
++        ADM_warning(&quot;DTS are going back, maybe several video appended ?\n&quot;);
++        uint64_t newOffset=timeOffset+pkt-&gt;getLastVobuEndTime();
++        uint64_t newPosition=pkt-&gt;getLastVobuPosition();
++        ADM_info(&quot;Trying to correct with VOBU offset :%s\n&quot;, PRETTY(newOffset));
++
++        uint64_t newDts=dts+newOffset;
++        if(newDts&gt;lastValidVideoDts)
++        {
++              ADM_info(&quot;SCR reset, using vobu to correct. New time offset %s, position 0x%&quot;LLX&quot;\n&quot;,
++                        PRETTY(newOffset),newPosition);
++              ADM_warning(&quot;last Valid Dts %s\n&quot;,PRETTY(lastValidVideoDts));
++              timeOffset=newOffset;
++              ADM_info(&quot;TimeOffset is now %s\n&quot;,PRETTY(timeOffset));
++
++              scrGap newGap;
++              newGap.position=newPosition;
++              newGap.timeOffset=newOffset;
++              listOfScrReset.push_back(newGap);
++              return true;
++        }else
++        {
++            ADM_warning(&quot;last Valid Dts %s\n&quot;,PRETTY(lastValidVideoDts));
++            ADM_warning(&quot;current    Dts %s\n&quot;,PRETTY(dts));
++            return false;
++        }
++}
+ /********************************************************************************************/
+ /********************************************************************************************/
+ /********************************************************************************************/
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003691.html">[Avidemux-svn-commit] r6504 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+	<LI>Next message: <A HREF="003693.html">[Avidemux-svn-commit] r6506 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3692">[ date ]</a>
+              <a href="thread.html#3692">[ thread ]</a>
+              <a href="subject.html#3692">[ subject ]</a>
+              <a href="author.html#3692">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

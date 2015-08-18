@@ -1,0 +1,202 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6510 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_plugins/ADM_demuxers/MpegPS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6510%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreDemuxerMpeg/include%0A%09avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C20100808180838.B70F6480964%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003696.html">
+   <LINK REL="Next"  HREF="003698.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6510 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_plugins/ADM_demuxers/MpegPS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6510%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreDemuxerMpeg/include%0A%09avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C20100808180838.B70F6480964%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6510 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_plugins/ADM_demuxers/MpegPS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Aug  8 20:08:38 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003696.html">[Avidemux-svn-commit] r6509 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+        <LI>Next message: <A HREF="003698.html">[Avidemux-svn-commit] r6511 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3697">[ date ]</a>
+              <a href="thread.html#3697">[ thread ]</a>
+              <a href="subject.html#3697">[ subject ]</a>
+              <a href="author.html#3697">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-08-08 20:08:38 +0200 (Sun, 08 Aug 2010)
+New Revision: 6510
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/ADM_indexFile.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psReadIndex.cpp
+Log:
+[PS/Demux] Also store PTS/DTS for each frame in index file like for TS/Demux. It is not very useful as that information is often not present
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/ADM_indexFile.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/ADM_indexFile.h	2010-08-08 09:20:47 UTC (rev 6509)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/ADM_indexFile.h	2010-08-08 18:08:38 UTC (rev 6510)
+@@ -22,7 +22,7 @@
+     \class indexFile
+     \brief Read a index file easily
+ */
+-#define ADM_INDEX_FILE_VERSION 2
++#define ADM_INDEX_FILE_VERSION 3
+ #define ADM_INDEX_BUFFER (20*1024)
+ /**
+     \class dmxToken
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp	2010-08-08 09:20:47 UTC (rev 6509)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp	2010-08-08 18:08:38 UTC (rev 6510)
+@@ -85,6 +85,7 @@
+     indexerState    state;
+     psPacketLinear *pkt;
+     int32_t         nextOffset;
++    uint64_t        gopStartDts;
+ }indexerData;
+ 
+ typedef enum
+@@ -347,7 +348,9 @@
+                                   continue;
+                           }
+                           //
+-                          //  printf(&quot;Found pic of type %d at 0x%&quot;LLX&quot; dts=%s\n&quot;,type,info.startAt,ADM_us2plain(timeConvert(info.dts)));
++#if 0
++                            printf(&quot;Found pic of type %d at 0x%&quot;LLX&quot; dts=%s pts=%s\n&quot;,type,info.startAt,ADM_us2plain(timeConvert(info.dts)),ADM_us2plain(timeConvert(info.pts)));
++#endif
+                           //
+                           if(lastValidVideoDts!=ADM_NO_PTS &amp;&amp; info.dts!=ADM_NO_PTS)
+                           {
+@@ -443,10 +446,19 @@
+             }
+             // start a new line
+             qfprintf(index,&quot;\nVideo at:%08&quot;LLX&quot;:%04&quot;LX&quot; Pts:%08&quot;LLD&quot;:%08&quot;LLD&quot; &quot;,data-&gt;startAt,data-&gt;offset,info-&gt;pts,info-&gt;dts);
++            data-&gt;gopStartDts=info-&gt;dts;
+             data-&gt;nextOffset=-2;
+         }
+-    
+-        qfprintf(index,&quot;%c%c&quot;,Type[data-&gt;frameType],Structure[data-&gt;picStructure&amp;3]);
++        int64_t deltaDts,deltaPts;
++#if 0
++        printf(&quot;Dts%&quot;LLD&quot;,PTS:%&quot;LLD&quot;\n&quot;,info-&gt;dts, info-&gt;pts);
++#endif
++        if(info-&gt;dts==-1 || data-&gt;gopStartDts==-1) deltaDts=-1;
++                else deltaDts=(int64_t)info-&gt;dts-(int64_t)data-&gt;gopStartDts;
++        if(info-&gt;pts==-1 || data-&gt;gopStartDts==-1) deltaPts=-1;
++                else deltaPts=(int64_t)info-&gt;pts-(int64_t)data-&gt;gopStartDts;
++        qfprintf(index,&quot;%c%c:%&quot;LLD&quot;:%&quot;LLD,Type[data-&gt;frameType],Structure[data-&gt;picStructure&amp;3],
++                    deltaPts,deltaDts);
+     }
+     if(update==markEnd || update==markNow)
+     {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psReadIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psReadIndex.cpp	2010-08-08 09:20:47 UTC (rev 6509)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psReadIndex.cpp	2010-08-08 18:08:38 UTC (rev 6510)
+@@ -19,7 +19,8 @@
+ #include &quot;DIA_coreToolkit.h&quot;
+ #include &quot;ADM_indexFile.h&quot;
+ #include &quot;ADM_ps.h&quot;
+-
++#include &quot;ADM_cpp.h&quot;
++#include &quot;ADM_string.h&quot;
+ #include &lt;math.h&gt;
+ /**
+         \fn readIndex
+@@ -106,6 +107,7 @@
+             if(!start) return true;
+             start+=1;
+             int count=0;
++            int64_t gopDts=-1;
+             while(1)
+             {
+                 char *cur=start;
+@@ -113,6 +115,7 @@
+                 char picStruct='F';
+                 char *next;
+                 uint32_t len;
++                int64_t framePts,frameDts;
+                 type=*cur;
+                 if(type==0x0a || type==0x0d || !type) break;
+                 cur++;
+@@ -125,22 +128,32 @@
+                 }
+                 cur++;
+                 next=strstr(start,&quot; &quot;);
+-                ADM_assert(1==sscanf(cur,&quot;%&quot;LX,&amp;len));
++                *next=0;
++                {
++                    string me=string(cur); // pts:dts:length (dec/dec/hex)
++                    vector &lt;string&gt; result;
++                    ADM_splitString(&quot;:&quot;,me,result);
++                    
++                    ADM_assert(1==sscanf(result[2].c_str(),&quot;%&quot;LX,&amp;len));
++                    ADM_assert(1==sscanf(result[0].c_str(),&quot;%&quot;LLD,&amp;framePts));
++                    ADM_assert(1==sscanf(result[1].c_str(),&quot;%&quot;LLD,&amp;frameDts));
++                }
+                 
+-                
+                 dmxFrame *frame=new dmxFrame;
+-                if(!count)
++                if(!count) // First item.. PTS &amp; DTS are provided as header
+                 {
+                     frame-&gt;pts=pts;
+                     frame-&gt;dts=dts;
+-
++                    gopDts=frame-&gt;dts;
+                     frame-&gt;startAt=startAt;
+                     frame-&gt;index=offset;
+ 
+                 }else       
+                 {
+-                    frame-&gt;pts=ADM_NO_PTS;
+-                    frame-&gt;dts=ADM_NO_PTS;
++                    if(gopDts!=ADM_NO_PTS &amp;&amp; frameDts!=ADM_NO_PTS) frame-&gt;dts=frameDts+gopDts;
++                            else frame-&gt;dts=ADM_NO_PTS;
++                    if(gopDts!=ADM_NO_PTS &amp;&amp; framePts!=ADM_NO_PTS) frame-&gt;pts=framePts+gopDts;
++                            else frame-&gt;pts=ADM_NO_PTS;
+                     frame-&gt;startAt=0;
+                     frame-&gt;index=0;
+                 }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003696.html">[Avidemux-svn-commit] r6509 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+	<LI>Next message: <A HREF="003698.html">[Avidemux-svn-commit] r6511 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3697">[ date ]</a>
+              <a href="thread.html#3697">[ thread ]</a>
+              <a href="subject.html#3697">[ subject ]</a>
+              <a href="author.html#3697">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

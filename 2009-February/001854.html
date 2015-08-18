@@ -1,0 +1,1105 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4624 - in	branches/avidemux_2.6_branch_mean/avidemux: . ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4624%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20.%20ADM_editor&In-Reply-To=%3C200902221827.n1MIRdvi012969%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001853.html">
+   <LINK REL="Next"  HREF="001855.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4624 - in	branches/avidemux_2.6_branch_mean/avidemux: . ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4624%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20.%20ADM_editor&In-Reply-To=%3C200902221827.n1MIRdvi012969%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4624 - in	branches/avidemux_2.6_branch_mean/avidemux: . ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Feb 22 19:27:39 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001853.html">[Avidemux-svn-commit] r4623 -	branches/avidemux_2.6_branch_mean/avidemux
+</A></li>
+        <LI>Next message: <A HREF="001855.html">[Avidemux-svn-commit] r4625 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1854">[ date ]</a>
+              <a href="thread.html#1854">[ thread ]</a>
+              <a href="subject.html#1854">[ subject ]</a>
+              <a href="author.html#1854">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-02-22 19:27:38 +0100 (Sun, 22 Feb 2009)
+New Revision: 4624
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.hxx
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_preview.h
+   branches/avidemux_2.6_branch_mean/avidemux/gtk_gui.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/gtkgui.h
+   branches/avidemux_2.6_branch_mean/avidemux/gui_action.names
+   branches/avidemux_2.6_branch_mean/avidemux/gui_navigate.cpp
+Log:
+[UI] Split navigate related functions, re-enable go to time (need more work)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp	2009-02-22 18:27:36 UTC (rev 4623)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp	2009-02-22 18:27:38 UTC (rev 4624)
+@@ -1276,6 +1276,30 @@
+ {
+   return 1;
+ }
+-
++/**
++    \fn estimatePts
++    \brief Get or estimate PTS of given frame
++*/
++uint64_t    ADM_Composer::estimatePts(uint32_t frame)
++{
++    uint32_t flags;
++    _VIDEOS *vid=&amp;_videos[0];
++    vidHeader *demuxer=vid-&gt;_aviheader;
++    int count=0;
++    uint64_t  wantedPts;
++	while(1)
++    {
++        demuxer-&gt;getFlags(frame,&amp;flags);
++        wantedPts=vid-&gt;_aviheader-&gt;getTime(frame);
++        if((flags &amp; AVI_KEY_FRAME)&amp;&amp;(wantedPts!=ADM_NO_PTS))
++        {
++                break;
++        }
++        count++;
++        frame--;
++    }
++    wantedPts+=vid-&gt;timeIncrementInUs*count;
++    return wantedPts;
++}
+ //
+ //
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.hxx	2009-02-22 18:27:36 UTC (rev 4623)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.hxx	2009-02-22 18:27:38 UTC (rev 4624)
+@@ -218,6 +218,7 @@
+                         bool        NextPicture(ADMImage *image);
+                         bool        samePicture(ADMImage *image);
+                         bool        getCompressedPicure(uint32_t framenum,ADMCompressedImage *img);
++                        uint64_t    estimatePts(uint32_t frame);
+ /************************************ Internal ******************************/
+ public:
+                                     /// Decode frame and on until frame is popped out of decoders
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_preview.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_preview.h	2009-02-22 18:27:36 UTC (rev 4623)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_preview.h	2009-02-22 18:27:38 UTC (rev 4624)
+@@ -5,6 +5,7 @@
+ */
+ #ifndef ADM_PREVIEW_H
+ #define ADM_PREVIEW_H
++#include &quot;ADM_userInterfaces/ADM_render/GUI_render.h&quot;
+ typedef enum 
+ {
+     ADM_PREVIEW_NONE, 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gtk_gui.cpp	2009-02-22 18:27:36 UTC (rev 4623)
++++ branches/avidemux_2.6_branch_mean/avidemux/gtk_gui.cpp	2009-02-22 18:27:38 UTC (rev 4624)
+@@ -81,7 +81,7 @@
+ int A_openAvi2 (const char *name, uint8_t mode);
+ int A_appendAvi (const char *name);
+ void A_externalAudioTrack( void );
+-
++uint8_t GUI_getFrameContent(ADMImage *image, uint32_t frame);
+ void HandleAction (Action action);
+ uint8_t A_rebuildKeyFrame (void);
+ extern int GUI_handleVFilter (void);
+@@ -139,8 +139,8 @@
+ extern void videoCodecChanged(int newcodec);
+ extern void DIA_Calculator(uint32_t *sizeInMeg, uint32_t *avgBitrate );
+ extern uint8_t A_autoDrive(Action action);
+-int ignore_change;
+ 
++
+ extern uint8_t DIA_ocrGen(void);
+ extern uint8_t DIA_ocrDvb(void);
+ uint8_t A_TimeShift(void);
+@@ -156,8 +156,8 @@
+ renderZoom currentZoom=ZOOM_1_1;
+ uint8_t A_setSecondAudioTrack(const AudioSource nw,char *name);
+ extern const char * GUI_getCustomScript(uint32_t nb);
+-extern bool SliderIsShifted;
+ 
++
+ void GUI_showCurrentFrameHex(void);
+ void GUI_avsProxy(void);
+ uint8_t GUI_close(void);
+@@ -165,6 +165,7 @@
+ extern void DIA_glyphEdit(void);
+ extern uint8_t DIA_pluginsInfo(void);
+ extern bool ADM_mux_configure(int index);
++void HandleAction_Navigate(Action action);
+ //___________________________________________
+ // serialization of user event through gui
+ //
+@@ -384,7 +385,11 @@
+ 
+ //#define TEST_UNPACK
+   // we have an AVI loaded
+-  switch (action)
++  if(action&gt;ACT_NAVIGATE_BEGIN &amp;&amp; action &lt; ACT_NAVIGATE_END)
++  {
++    HandleAction_Navigate(action);
++  }
++  else switch (action)
+     {
+        case ACT_JOG:
+                 A_jog();
+@@ -454,33 +459,7 @@
+ 		UI_refreshCustomMenu();
+       }
+       break;
+-        case ACT_JumpToFrame:
+-                // read value
+-                nf=UI_readCurFrame();
+-				if(nf&lt; avifileinfo-&gt;nb_frames)
+-					GUI_GoToFrame(nf);
+-                UI_JumpDone();
+-                break;
+-	case ACT_JumpToTime:
+-		{
+-			uint16_t hh, mm, ss, ms;
+-
+-			if (UI_readCurTime(hh, mm, ss, ms))
+-				A_jumpToTime(hh, mm, ss, ms);
+-		}
+-		break;
+-    case ACT_GotoTime:
+-                {
+-#if 0
+-                        uint16_t mm,hh,ss,ms;
+-                             frame2time(curframe,avifileinfo-&gt;fps1000,&amp;hh,&amp;mm,&amp;ss,&amp;ms);
+-                             if(DIA_gotoTime(&amp;hh,&amp;mm,&amp;ss))
+-                                {
+-                                        A_jumpToTime(hh,mm,ss, 0);
+-                                }
+-#endif
+-                }
+-                break;
++      
+     case ACT_SaveRaw:
+       GUI_FileSelWrite (QT_TR_NOOP(&quot;Select Raw File to Save&quot;), (SELFILE_CB *)ADM_saveRaw);
+       break;
+@@ -511,21 +490,13 @@
+     case ACT_AviInfo:
+       DIA_properties ();
+       break;
+-    case ACT_Begin:
+-      GUI_GoToKFrame (0);
+-
+-      break;
++  
+ 	case ACT_BitRate:
+ 		 GUI_displayBitrate(  );
+ 	break;
+ 
+-    case ACT_End:
++ 
+ 
+-      nf = avifileinfo-&gt;nb_frames;
+-      GUI_GoToFrame (nf - 1);
+-
+-      break;
+-
+     case ACT_PlayAvi:
+       GUI_PlayAvi ();
+       break;
+@@ -547,18 +518,7 @@
+       	//GUI_FileSelWrite (&quot;Select Jpg to save &quot;, A_saveJpg);
+       	break;
+ 
+-    case ACT_Scale:
+-      if (!ignore_change)
+-	{
+-	  ignore_change++;
+-	  nf = GUI_GetScale ();
+-	  if (!SliderIsShifted) GUI_GoToKFrame (nf);
+-	  else GUI_GoToFrame (nf);
+-	  ignore_change--;
+-
+-	}
+-//        printf(&quot;\n new frame : %lu&quot;,nf);
+-      break;
++  
+ #define TOGGLE_PREVIEW ADM_PREVIEW_OUTPUT
+     case ACT_PreviewChanged:
+     {
+@@ -583,64 +543,14 @@
+       A_setPostproc();
+       break;
+ 
+-    case ACT_NextFrame:
+-      GUI_NextFrame ();
+-      break;
+-    case ACT_NextKFrame:
+-      GUI_NextKeyFrame ();
+-      break;
+-    case ACT_NextBlackFrame:
+-      GUI_NextPrevBlackFrame(1);
+-      break;
+-    case ACT_PrevBlackFrame:
+-      GUI_NextPrevBlackFrame(-1);
+-      break;
++   
+     case ACT_AllBlackFrames:
+       GUI_FileSelWrite (QT_TR_NOOP(&quot;Select File to Save&quot;), (SELFILE_CB *)A_ListAllBlackFrames);
+         break;
+ 
+-    case ACT_PreviousFrame:
+-        GUI_PrevFrame();
+-      break;
+-    case ACT_Forward100Frames:
+-      //GUI_GoToKFrame (curframe + (avifileinfo-&gt;fps1000 / 1000 * 4));
+-      break;
++ 
+ 
+-    case ACT_Back100Frames:
+-      //GUI_GoToKFrame (curframe - (avifileinfo-&gt;fps1000 / 1000 * 4));
+-      break;
+-
+-
+-    case ACT_Forward50Frames:
+-      //GUI_GoToFrame (curframe + 50);
+-      break;
+-
+-    case ACT_Forward25Frames:
+-      //GUI_GoToFrame (curframe + 25);
+-      break;
+-
+-    case ACT_Back50Frames:
+-      //if (curframe &gt;= 50)
+-	{
+-	  DIA_StartBusy ();
+-	  //GUI_GoToFrame (curframe - 50);
+-	  DIA_StopBusy ();
+-	}
+-      break;
+-
+-    case ACT_Back25Frames:
+-    //  if (curframe &gt;= 25)
+-	{
+-	  DIA_StartBusy ();
+-	  //GUI_GoToFrame (curframe - 25);
+-	  DIA_StopBusy ();
+-
+-	}
+-      break;
+-
+-    case ACT_PreviousKFrame:
+-      GUI_PreviousKeyFrame ();
+-      break;
++ 
+     case ACT_AudioSourceAvi:
+       //currentaudiostream=aviaudiostream;
+       A_changeAudioStream (aviaudiostream, AudioAvi,NULL);
+@@ -680,26 +590,7 @@
+ 	}
+       UI_setMarkers (frameStart, frameEnd);
+       break;
+-    case ACT_GotoMarkA:
+-    case ACT_GotoMarkB:
+-
+-      if (action == ACT_GotoMarkA)
+-	nf = frameStart;
+-      else
+-	nf = frameEnd;
+-      GUI_GoToFrame (nf);
+-      break;
+-    case ACT_Goto:
+-      uint32_t fn;
+-      fn=video_body-&gt;getCurrentFrame();
+-      if (DIA_GetIntegerValue ((int *)&amp;fn,0,avifileinfo-&gt;nb_frames,QT_TR_NOOP(&quot;Go to Frame&quot;),QT_TR_NOOP(&quot;_Go to frame:&quot;)))
+-	{
+-		if (fn &lt; avifileinfo-&gt;nb_frames)
+-			GUI_GoToFrame (fn);
+-		else
+-			GUI_Error_HIG (QT_TR_NOOP(&quot;Out of bounds&quot;), NULL);
+-	}
+-      break;
++  
+ //----------------------test-----------------------
+     case ACT_SaveAvi:
+       GUI_FileSelWrite (QT_TR_NOOP(&quot;Select File to Save&quot;),(SELFILE_CB *)A_SaveWrapper); // A_SaveAudioNVideo);
+@@ -1886,19 +1777,7 @@
+ }
+ extern int DIA_getMPParams( uint32_t *pplevel, uint32_t *ppstrength,uint32_t *swap);
+ //
+-uint8_t A_jumpToTime(uint32_t hh,uint32_t mm,uint32_t ss,uint32_t ms)
+-{
+-uint32_t frame;
+-        time2frame(&amp;frame,avifileinfo-&gt;fps1000,hh,mm,ss,ms);
+-        if(frame&gt;=avifileinfo-&gt;nb_frames)
+-        {
+-                printf(&quot;Frame is out of bound\n&quot;);
+-                return 0;
+-        }
+-        return GUI_GoToFrame(frame);
+ 
+-}
+-
+ //
+ void	A_setPostproc( void )
+ {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/gtkgui.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gtkgui.h	2009-02-22 18:27:36 UTC (rev 4623)
++++ branches/avidemux_2.6_branch_mean/avidemux/gtkgui.h	2009-02-22 18:27:38 UTC (rev 4624)
+@@ -36,7 +36,7 @@
+ void GUI_detransient(void );
+ void GUI_retransient(void );
+ 
+-uint8_t GUI_getFrameContent(ADMImage *image, uint32_t frame);
++//
+ 
+ //EOF
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/gui_action.names
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gui_action.names	2009-02-22 18:27:36 UTC (rev 4623)
++++ branches/avidemux_2.6_branch_mean/avidemux/gui_action.names	2009-02-22 18:27:38 UTC (rev 4624)
+@@ -30,6 +30,8 @@
+ ACT(XVCD)
+ 
+ ACT(SetPostProcessing)
++//--- NAVIGATE----
++ACT(NAVIGATE_BEGIN)
+ ACT(NextFrame)
+ ACT(Back100Frames)
+ ACT(Back50Frames)
+@@ -42,16 +44,21 @@
+ ACT(PreviousFrame)
+ ACT(PrevBlackFrame)
+ ACT(NextBlackFrame)
+-ACT(AllBlackFrames)
+-
+-ACT(Scale)
+-
+ ACT(Goto)
+ ACT(GotoTime)
+-
+ ACT(Begin)
+ ACT(End)
++ACT(GotoMarkA)
++ACT(GotoMarkB)
++ACT(Scale)
++ACT(NAVIGATE_END)
++//--- NAVIGATE----
++ACT(AllBlackFrames)
+ 
++
++
++
++
+ ACT(AudioSourceAvi)
+ ACT(AudioSourceMP3)
+ ACT(AudioSourceWAV)
+@@ -60,8 +67,6 @@
+ 
+ ACT(MarkA)
+ ACT(MarkB)
+-ACT(GotoMarkA)
+-ACT(GotoMarkB)
+ 
+ ACT(AudioModeProcess)
+ ACT(AudioModeCopy)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/gui_navigate.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gui_navigate.cpp	2009-02-22 18:27:36 UTC (rev 4623)
++++ branches/avidemux_2.6_branch_mean/avidemux/gui_navigate.cpp	2009-02-22 18:27:38 UTC (rev 4624)
+@@ -18,153 +18,167 @@
+  *                                                                         *
+  ***************************************************************************/
+ 
+-
++#include &quot;ADM_default.h&quot;
+ #include &quot;avi_vars.h&quot;
+ 
+ #include &lt;math.h&gt;
+-
+-#include &quot;DIA_fileSel.h&quot;
+-#include &quot;ADM_assert.h&quot;
+ #include &quot;prototype.h&quot;
+-#include &quot;audio_out.h&quot;
+-#include &quot;ADM_audio/aviaudio.hxx&quot;
+-#include &quot;ADM_audiofilter/audioprocess.hxx&quot;
+ #include &quot;gui_action.hxx&quot;
+ #include &quot;gtkgui.h&quot;
++
+ #include &quot;DIA_coreToolkit.h&quot;
+-#include &quot;ADM_userInterfaces/ADM_render/GUI_render.h&quot;
+-#include &quot;DIA_working.h&quot;
+-#include &quot;ADM_videoFilter.h&quot;
+-#include &quot;ADM_videoFilter_internal.h&quot;
+ #include &quot;ADM_userInterfaces/ADM_commonUI/DIA_busy.h&quot;
+ #include &quot;ADM_userInterfaces/ADM_commonUI/GUI_ui.h&quot;
++#include &quot;DIA_enter.h&quot;
+ 
+ #include &quot;ADM_video/ADM_vidMisc.h&quot;
+ #include &quot;ADM_preview.h&quot;
+ 
+-extern void    UI_purge(void );
++extern void UI_purge(void);
++extern uint8_t DIA_gotoTime(uint16_t *hh, uint16_t *mm, uint16_t *ss);
++extern bool SliderIsShifted;
++
++uint8_t A_jumpToTime(uint32_t hh,uint32_t mm,uint32_t ss,uint32_t ms);
+ /**
+     \fn HandleAction_Navigate
+ 
+ */
+-void HandleAction_Navigate (Action action)
++void HandleAction_Navigate(Action action)
+ {
+-    switch(action)
+-    {
+-  case ACT_GotoMarkA:
+-    case ACT_GotoMarkB:
++static int ignore_change=0;
++    switch (action)
++      {
++      case ACT_Scale:
++        if (!ignore_change)
++        {
++          uint32_t nf;
++          ignore_change++;
++          nf = GUI_GetScale ();
++          if (!SliderIsShifted) GUI_GoToKFrame (nf);
++          else GUI_GoToFrame (nf);
++          ignore_change--;
+ 
+-      if (action == ACT_GotoMarkA)
+-	nf = frameStart;
+-      else
+-	nf = frameEnd;
+-      GUI_GoToFrame (nf);
+-      break;
+-    case ACT_Goto:
+-      uint32_t fn;
+-      fn=video_body-&gt;getCurrentFrame();
+-      if (DIA_GetIntegerValue ((int *)&amp;fn,0,avifileinfo-&gt;nb_frames,QT_TR_NOOP(&quot;Go to Frame&quot;),QT_TR_NOOP(&quot;_Go to frame:&quot;)))
+-	{
++        }
++        break;
++      case ACT_GotoMarkA:
++      case ACT_GotoMarkB:
++            {
++                uint32_t nf;
++                  if (action == ACT_GotoMarkA)
++                      nf = frameStart;
++                  else
++                      nf = frameEnd;
++                  GUI_GoToFrame(nf);
++            }
++	  break;
++      case ACT_Goto:
++	  uint32_t fn;
++	  fn = video_body-&gt;getCurrentFrame();
++	  if (DIA_GetIntegerValue
++	      ((int *) &amp;fn, 0, avifileinfo-&gt;nb_frames,
++	       QT_TR_NOOP(&quot;Go to Frame&quot;), QT_TR_NOOP(&quot;_Go to frame:&quot;)))
++	    {
+ 		if (fn &lt; avifileinfo-&gt;nb_frames)
+-			GUI_GoToFrame (fn);
++		    GUI_GoToFrame(fn);
+ 		else
+-			GUI_Error_HIG (QT_TR_NOOP(&quot;Out of bounds&quot;), NULL);
+-	}
+-      break;
+-   case ACT_Back25Frames:
+-    //  if (curframe &gt;= 25)
+-	{
+-	  DIA_StartBusy ();
+-	  //GUI_GoToFrame (curframe - 25);
+-	  DIA_StopBusy ();
++		    GUI_Error_HIG(QT_TR_NOOP(&quot;Out of bounds&quot;), NULL);
++	    }
++	  break;
++      case ACT_Back25Frames:
++          if (video_body-&gt;getCurrentFrame() &gt;= 25)
++          {
++              DIA_StartBusy();
++              GUI_GoToFrame (video_body-&gt;getCurrentFrame() - 25);
++              DIA_StopBusy();
++          }
++	  break;
+ 
+-	}
+-      break;
+-
+-    case ACT_PreviousKFrame:
+-      GUI_PreviousKeyFrame ();
+-      break;
+-   case ACT_PreviousFrame:
++      case ACT_PreviousKFrame:
++        GUI_PreviousKeyFrame();
++	  break;
++      case ACT_PreviousFrame:
+         GUI_PrevFrame();
+-      break;
+-    case ACT_Forward100Frames:
+-      //GUI_GoToKFrame (curframe + (avifileinfo-&gt;fps1000 / 1000 * 4));
+-      break;
++	  break;
++      case ACT_Forward100Frames:
++        //GUI_GoToKFrame (curframe + (avifileinfo-&gt;fps1000 / 1000 * 4));
++	  break;
+ 
+-    case ACT_Back100Frames:
+-      //GUI_GoToKFrame (curframe - (avifileinfo-&gt;fps1000 / 1000 * 4));
+-      break;
++      case ACT_Back100Frames:
++        //GUI_GoToKFrame (curframe - (avifileinfo-&gt;fps1000 / 1000 * 4));
++	  break;
+ 
+ 
+-    case ACT_Forward50Frames:
+-      //GUI_GoToFrame (curframe + 50);
+-      break;
++      case ACT_Forward50Frames:
++	  // GUI_GoToFrame (curframe + 50);
++	  break;
+ 
+-    case ACT_Forward25Frames:
+-      //GUI_GoToFrame (curframe + 25);
+-      break;
++      case ACT_Forward25Frames:
++	  // GUI_GoToFrame (curframe + 25);
++	  break;
+ 
+-    case ACT_Back50Frames:
+-      //if (curframe &gt;= 50)
+-	{
+-	  DIA_StartBusy ();
+-	  //GUI_GoToFrame (curframe - 50);
+-	  DIA_StopBusy ();
+-	}
+-      break;
+- case ACT_NextFrame:
+-      GUI_NextFrame ();
+-      break;
+-    case ACT_NextKFrame:
+-      GUI_NextKeyFrame ();
+-      break;
+-    case ACT_NextBlackFrame:
+-      GUI_NextPrevBlackFrame(1);
+-      break;
+-    case ACT_PrevBlackFrame:
+-      GUI_NextPrevBlackFrame(-1);
+-      break;
+-   case ACT_End:
++      case ACT_Back50Frames:
++	  // if (curframe &gt;= 50)
++	  {
++	      DIA_StartBusy();
++	      // GUI_GoToFrame (curframe - 50);
++	      DIA_StopBusy();
++	  }
++	  break;
++      case ACT_NextFrame:
++        GUI_NextFrame();
++	  break;
++      case ACT_NextKFrame:
++        GUI_NextKeyFrame();
++	  break;
++      case ACT_NextBlackFrame:
++        GUI_NextPrevBlackFrame(1);
++	  break;
++      case ACT_PrevBlackFrame:
++        GUI_NextPrevBlackFrame(-1);
++	  break;
++      case ACT_End:
++            {
++                uint32_t nf = avifileinfo-&gt;nb_frames;
++                          GUI_GoToFrame(nf - 1);
++            }
++	  break;
++      case ACT_Begin:
++        GUI_GoToKFrame(0);
++	  break;
++      case ACT_JumpToFrame:
++        {
++              // read value
++              uint32_t nf = UI_readCurFrame();
++              if (nf &lt; avifileinfo-&gt;nb_frames)
++                  GUI_GoToFrame(nf);
++              UI_JumpDone();
++        }
++	  break;
++      case ACT_JumpToTime:
++	  {
++	      uint16_t hh, mm, ss, ms;
+ 
+-      nf = avifileinfo-&gt;nb_frames;
+-      GUI_GoToFrame (nf - 1);
++	      if (UI_readCurTime(hh, mm, ss, ms))
++		  A_jumpToTime(hh, mm, ss, ms);
++	  }
++	  break;
++      case ACT_GotoTime:
++	  {
++           // Get current time
++            uint64_t pts=video_body-&gt;estimatePts(video_body-&gt;getCurrentFrame());
+ 
+-      break;
+-  case ACT_Begin:
+-      GUI_GoToKFrame (0);
+-
+-      break;
+-  case ACT_JumpToFrame:
+-                // read value
+-                nf=UI_readCurFrame();
+-				if(nf&lt; avifileinfo-&gt;nb_frames)
+-					GUI_GoToFrame(nf);
+-                UI_JumpDone();
+-                break;
+-	case ACT_JumpToTime:
+-		{
+-			uint16_t hh, mm, ss, ms;
+-
+-			if (UI_readCurTime(hh, mm, ss, ms))
+-				A_jumpToTime(hh, mm, ss, ms);
+-		}
+-		break;
+-    case ACT_GotoTime:
+-                {
+-#if 0
+-                        uint16_t mm,hh,ss,ms;
+-                             frame2time(curframe,avifileinfo-&gt;fps1000,&amp;hh,&amp;mm,&amp;ss,&amp;ms);
+-                             if(DIA_gotoTime(&amp;hh,&amp;mm,&amp;ss))
+-                                {
+-                                        A_jumpToTime(hh,mm,ss, 0);
+-                                }
+-#endif
+-                }
+-                break;
+-    default:
+-        ADM_assert(0);
+-        break;
+-    }
++	      uint16_t mm, hh, ss, ms;
++            ms2time((uint32_t)(pts/1000),&amp;hh,&amp;mm,&amp;ss,&amp;ms);
++	      if (DIA_gotoTime(&amp;hh, &amp;mm, &amp;ss))
++          {
++		    A_jumpToTime(hh, mm, ss, 0);
++          }
++	  }
++	  break;
++      default:
++	  ADM_assert(0);
++	  break;
++      }
+ }
+ /**
+     \fn GUI_NextFrame
+@@ -172,14 +186,16 @@
+ */
+ void GUI_NextFrame(uint32_t frameCount)
+ {
+-//    uint8_t *ptr;
+-uint32_t flags;
+-    if (playing)	return;
+-    if (!avifileinfo) return;
++    // uint8_t *ptr;
++    uint32_t flags;
++    if (playing)
++	return;
++    if (!avifileinfo)
++	return;
+ 
+-      admPreview::nextPicture( ) ;
+-      GUI_setCurrentFrameAndTime();
+-      UI_purge();
++    admPreview::nextPicture();
++    GUI_setCurrentFrameAndTime();
++    UI_purge();
+ }
+ 
+ 
+@@ -190,15 +206,17 @@
+ */
+ void GUI_NextKeyFrame(void)
+ {
+- 
+-    if (playing)	return;
+-    if (!avifileinfo) return;
+ 
+-    if(!admPreview::nextKeyFrame())
+-    {
++    if (playing)
++	return;
++    if (!avifileinfo)
++	return;
++
++    if (!admPreview::nextKeyFrame())
++      {
+         GUI_Error_HIG(QT_TR_NOOP(&quot;Error&quot;),QT_TR_NOOP(&quot;Cannot go to next keyframe&quot;));
+         return;
+-    }
++      }
+     GUI_setCurrentFrameAndTime();
+     UI_purge();
+ }
+@@ -210,21 +228,23 @@
+ void GUI_GoToKFrame(uint32_t frame)
+ {
+ 
+-    if (playing)            return;
+-    if(!avifileinfo) return;
++    if (playing)
++	return;
++    if (!avifileinfo)
++	return;
+     uint32_t f;
+-    video_body-&gt;getFlags(0,&amp;f);
+-    if(!frame &amp;&amp; (f&amp;AVI_KEY_FRAME))
+-    {
++    video_body-&gt;getFlags(0, &amp;f);
++    if (!frame &amp;&amp; (f &amp; AVI_KEY_FRAME))
++      {
+ 
+-    }else
+-    {
+-        if(!video_body-&gt;getPKFrame(&amp;frame))
+-        {
+-            printf(&quot;[GUI_GoToKFrame] failed for frame %u\n&quot;,frame);
+-            return;
+-        }
+-    }
++    } else
++      {
++	  if (!video_body-&gt;getPKFrame(&amp;frame))
++	    {
++		printf(&quot;[GUI_GoToKFrame] failed for frame %u\n&quot;, frame);
++		return;
++	    }
++      }
+     admPreview::seekToIntra(frame);
+     admPreview::samePicture();
+     GUI_setCurrentFrameAndTime();
+@@ -236,15 +256,21 @@
+ */
+ int GUI_GoToFrame(uint32_t frame)
+ {
+-uint32_t flags;
++    uint32_t flags;
+ 
+-      if (playing)              return 0;
+-      if (!avifileinfo)         return 0;
+-      if(frame&gt;=avifileinfo-&gt;nb_frames) return 0;
+-    
+-     if(! video_body-&gt;setCurrentFrame(frame)) return 0;
+-     return admPreview::samePicture();
+-    
++    if (playing)
++        return 0;
++    if (!avifileinfo)
++        return 0;
++    if (frame &gt;= avifileinfo-&gt;nb_frames)
++        return 0;
++
++    if (!video_body-&gt;setCurrentFrame(frame))
++        return 0;    
++
++    if(!admPreview::samePicture()) return 0;
++    GUI_setAllFrameAndTime();
++    return 1;
+ }
+ 
+ /**
+@@ -255,19 +281,22 @@
+ void GUI_PreviousKeyFrame(void)
+ {
+ 
+- uint32_t f;
+- uint32_t flags;
++    uint32_t f;
++    uint32_t flags;
+ 
+ 
+-    if (playing)		return;
+-    if (!avifileinfo)   return;
++    if (playing)
++	return;
++    if (!avifileinfo)
++	return;
+ 
+ 
+-    if(!admPreview::previousKeyFrame())
+-    {
+-        GUI_Error_HIG(QT_TR_NOOP(&quot;Error&quot;),QT_TR_NOOP(&quot;Cannot go to next keyframe&quot;));
+-        return;
+-    }
++    if (!admPreview::previousKeyFrame())
++      {
++	  GUI_Error_HIG(QT_TR_NOOP(&quot;Error&quot;),
++			QT_TR_NOOP(&quot;Cannot go to next keyframe&quot;));
++	  return;
++      }
+     GUI_setCurrentFrameAndTime();
+     UI_purge();
+ 
+@@ -276,25 +305,25 @@
+ uint8_t A_rebuildKeyFrame(void)
+ {
+ 
+-        return video_body-&gt;rebuildFrameType();
++    return video_body-&gt;rebuildFrameType();
+ }
+ /**
+     \fn GUI_PrevFrame
+     \brief Go to current frame -1
+ */
+-void        GUI_PrevFrame(uint32_t frameCount)
++void GUI_PrevFrame(uint32_t frameCount)
+ {
+-      return; 
++    return;
+ }
+ /**
+       \fn A_jogRead
+       \brief read an average value of jog
+ */
+ #define NB_JOG_READ           3
+-#define JOG_READ_PERIOD_US    5*1000 // 5ms
++#define JOG_READ_PERIOD_US    5*1000	// 5ms
+ #define JOG_THRESH1           40
+ #define JOG_THRESH2           80
+-#define JOG_THRESH1_PERIOD    100*1000 //us
++#define JOG_THRESH1_PERIOD    100*1000	// us
+ #define JOG_THRESH2_PERIOD    40*1000
+ #define JOG_THRESH3_PERIOD    500
+ /**
+@@ -303,15 +332,16 @@
+ */
+ uint32_t A_jogRead(void)
+ {
+-  int32_t sum=0,v;
+-    for(int i=0;i&lt;NB_JOG_READ;i++)
+-    {
+-        v=UI_readJog();
+-        if(abs(v)&lt;10) v=0;
+-        sum+=v;
+-        ADM_usleep(JOG_READ_PERIOD_US);
+-    } 
+-    return sum/NB_JOG_READ;
++    int32_t sum = 0, v;
++    for (int i = 0; i &lt; NB_JOG_READ; i++)
++      {
++	  v = UI_readJog();
++	  if (abs(v) &lt; 10)
++	      v = 0;
++	  sum += v;
++	  ADM_usleep(JOG_READ_PERIOD_US);
++      }
++    return sum / NB_JOG_READ;
+ }
+ #define REFRESH 10000
+ /**
+@@ -320,60 +350,66 @@
+ */
+ void A_jog(void)
+ {
+-  int32_t r;
+-  uint32_t a;
+-  uint32_t slip;
+-  static int jog=0;
+-  if(jog) return;
+-  jog++;
+-  while(r=A_jogRead())
+-  {
+-      a=abs(r);
+-      printf(&quot;%d \n&quot;,r);
+-      if(a&lt;JOG_THRESH1) slip=JOG_THRESH1_PERIOD;
+-        else if(a&lt;JOG_THRESH2) slip=JOG_THRESH2_PERIOD;
+-          else slip=JOG_THRESH3_PERIOD;
+-    
+-      if(r&gt;0) GUI_NextKeyFrame();
+-      else GUI_PreviousKeyFrame();       
+-      UI_purge();
+-      for(int i=0;i&lt;slip/REFRESH;i++)
++    int32_t r;
++    uint32_t a;
++    uint32_t slip;
++    static int jog = 0;
++    if (jog)
++	return;
++    jog++;
++    while (r = A_jogRead())
+       {
+-        UI_purge();
+-        ADM_usleep(REFRESH);
+-        UI_purge();
++	  a = abs(r);
++	  printf(&quot;%d \n&quot;, r);
++	  if (a &lt; JOG_THRESH1)
++	      slip = JOG_THRESH1_PERIOD;
++	  else if (a &lt; JOG_THRESH2)
++	      slip = JOG_THRESH2_PERIOD;
++	  else
++	      slip = JOG_THRESH3_PERIOD;
++
++	  if (r &gt; 0)
++	      GUI_NextKeyFrame();
++	  else
++	      GUI_PreviousKeyFrame();
++	  UI_purge();
++	  for (int i = 0; i &lt; slip / REFRESH; i++)
++	    {
++		UI_purge();
++		ADM_usleep(REFRESH);
++		UI_purge();
++	    }
+       }
+-  }
+-  jog--;
++    jog--;
+ }
+ /**
+     \fn     GUI_setAllFrameAndTime
+     \brief  Update all  informations : current frame # and current time, total frame ...
+ 
+ */
+-void  GUI_setAllFrameAndTime(void)
++void GUI_setAllFrameAndTime(void)
+ {
+     char text[80];
+     double len;
+-//    int val;
++    // int val;
+ 
+-    //    if(!guiReady) return ;
++    // if(!guiReady) return ;
+     text[0] = 0;
+- 
+-	UI_updateFrameCount(video_body-&gt;getCurrentFrame());
++
++    UI_updateFrameCount(video_body-&gt;getCurrentFrame());
+     UI_setCurrentTime(admPreview::getCurrentPts());
+-	UI_setTotalTime(video_body-&gt;getVideoDuration());
+-    
++    UI_setTotalTime(video_body-&gt;getVideoDuration());
++
+     // progress bar
+     len = 100;
+-    if(avifileinfo-&gt;nb_frames&gt;1)
+-    	len=len / (double) (avifileinfo-&gt;nb_frames-1);
++    if (avifileinfo-&gt;nb_frames &gt; 1)
++	len = len / (double) (avifileinfo-&gt;nb_frames - 1);
+     len *= (double) video_body-&gt;getCurrentFrame();
+ 
+-   
+ 
+-     UI_setScale(len);
+-   	
++
++    UI_setScale(len);
++
+ }
+ 
+ /**
+@@ -384,22 +420,45 @@
+ {
+     char text[80];
+     double len;
+-//    int val;
++    // int val;
+ 
+-    //    if(!guiReady) return ;
++    // if(!guiReady) return ;
+     text[0] = 0;
+- 
+-	UI_setFrameCount( video_body-&gt;getCurrentFrame(), avifileinfo-&gt;nb_frames);
+-	UI_setCurrentTime(admPreview::getCurrentPts());
+-	
++
++    UI_setFrameCount(video_body-&gt;getCurrentFrame(),
++		     avifileinfo-&gt;nb_frames);
++    UI_setCurrentTime(admPreview::getCurrentPts());
++
+     // progress bar
+     len = 100;
+-    if(avifileinfo-&gt;nb_frames&gt;1)
+-    	len=len / (double) (avifileinfo-&gt;nb_frames-1);
++    if (avifileinfo-&gt;nb_frames &gt; 1)
++	len = len / (double) (avifileinfo-&gt;nb_frames - 1);
+     len *= (double) video_body-&gt;getCurrentFrame();
+ 
+ 
+ 
+-     UI_setScale(len);
++    UI_setScale(len);
+ }
+-//EOF
++/**
++    \fn A_jumpToTime
++    \brief Jump to a given time
++*/
++#warning CFR ASSUMED FIXME
++#warning CFR ASSUMED FIXME
++#warning CFR ASSUMED FIXME
++#warning CFR ASSUMED FIXME
++#warning CFR ASSUMED FIXME
++uint8_t A_jumpToTime(uint32_t hh,uint32_t mm,uint32_t ss,uint32_t ms)
++{
++uint32_t frame;
++        time2frame(&amp;frame,avifileinfo-&gt;fps1000,hh,mm,ss,ms);
++        if(frame&gt;=avifileinfo-&gt;nb_frames)
++        {
++                printf(&quot;Frame is out of bound\n&quot;);
++                return 0;
++        }
++        return GUI_GoToFrame(frame);
++
++}
++
++// EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001853.html">[Avidemux-svn-commit] r4623 -	branches/avidemux_2.6_branch_mean/avidemux
+</A></li>
+	<LI>Next message: <A HREF="001855.html">[Avidemux-svn-commit] r4625 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1854">[ date ]</a>
+              <a href="thread.html#1854">[ thread ]</a>
+              <a href="subject.html#1854">[ subject ]</a>
+              <a href="author.html#1854">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

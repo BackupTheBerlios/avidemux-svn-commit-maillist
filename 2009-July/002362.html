@@ -1,0 +1,350 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5147 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5147%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec&In-Reply-To=%3C200907251610.n6PGA7dD009567%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002361.html">
+   <LINK REL="Next"  HREF="002363.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5147 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5147%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec&In-Reply-To=%3C200907251610.n6PGA7dD009567%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5147 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sat Jul 25 18:10:07 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002361.html">[Avidemux-svn-commit] r5146 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src
+</A></li>
+        <LI>Next message: <A HREF="002363.html">[Avidemux-svn-commit] r5148 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces:	ADM_dialog ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2362">[ date ]</a>
+              <a href="thread.html#2362">[ thread ]</a>
+              <a href="subject.html#2362">[ subject ]</a>
+              <a href="author.html#2362">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-07-25 18:10:00 +0200 (Sat, 25 Jul 2009)
+New Revision: 5147
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.h
+Log:
+[mpeg1] add config menu control to plugin config window
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.cpp	2009-07-25 14:35:32 UTC (rev 5146)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.cpp	2009-07-25 16:10:00 UTC (rev 5147)
+@@ -19,9 +19,14 @@
+ #include &quot;DIA_factory.h&quot;
+ 
+ extern int _uiType;
++static bool changedConfig(const char* fileName, ConfigMenuType configType);
++static char *serializeConfig(void);
++static Mpeg1Encoder *encoder = NULL;
+ 
+ Mpeg1Encoder::Mpeg1Encoder(void)
+ {
++	encoder = this;
++
+ 	init(CODEC_ID_MPEG1VIDEO, ADM_CSP_YV12);
+ 
+ 	_encodeOptions.structSize = sizeof(vidEncOptions);
+@@ -76,20 +81,8 @@
+ 
+ int Mpeg1Encoder::configure(vidEncConfigParameters *configParameters, vidEncVideoProperties *properties)
+ {
+-	unsigned int minBitrate = _options.getMinBitrate();
+-	unsigned int maxBitrate = _options.getMaxBitrate();
+-	unsigned int useXvidRateControl = _options.getXvidRateControl();
+-	unsigned int bufferSize = _options.getBufferSize();
+-	unsigned int widescreen = _options.getWidescreen();
+-	unsigned int interlaced = _options.getInterlaced();
+-	unsigned int userMatrix = _options.getMatrix();
+-	unsigned int gopSize = _options.getGopSize();
++	loadSettings(&amp;_encodeOptions, &amp;_options);
+ 
+-	_bitrateParam.avg_bitrate = 1000;
+-	_bitrateParam.finalsize = 700;
+-
+-	updateEncodeProperties(properties);
+-
+ 	diaMenuEntry wideM[] = {
+ 		{0, &quot;4:3&quot;},
+ 		{1, &quot;16:9&quot;}};
+@@ -108,53 +101,128 @@
+ 	};
+ 
+ 	diaElemBitrate ctlBitrate(&amp;_bitrateParam, NULL);
+-	diaElemUInteger ctlMaxb(&amp;maxBitrate, &quot;Ma_x. bitrate:&quot;, 100, 9000);
+-	diaElemUInteger ctlMinb(&amp;minBitrate, &quot;Mi_n. bitrate:&quot;, 0, 9000);
+-	diaElemToggle ctlXvid(&amp;useXvidRateControl, &quot;_Use Xvid rate control&quot;);
+-	diaElemUInteger ctlVbv(&amp;bufferSize, &quot;_Buffer size:&quot;, 1, 1024);
+-	diaElemMenu ctlWidescreen(&amp;widescreen, &quot;Aspect _ratio:&quot;, 2, wideM);
+-	diaElemMenu ctlMatrix(&amp;userMatrix, &quot;_Matrices:&quot;, 4, matrixM);
+-	diaElemUInteger ctlGop(&amp;gopSize, &quot;_GOP size:&quot;, 1, 30);
+-	diaElemMenu ctlInterW(&amp;interlaced, &quot;_Interlacing:&quot;, 3, interM);
++	diaElemUInteger ctlMaxb(&amp;_maxBitrate, &quot;Ma_x. bitrate:&quot;, 100, 9000);
++	diaElemUInteger ctlMinb(&amp;_minBitrate, &quot;Mi_n. bitrate:&quot;, 0, 9000);
++	diaElemToggle ctlXvid(&amp;_useXvidRateControl, &quot;_Use Xvid rate control&quot;);
++	diaElemUInteger ctlVbv(&amp;_bufferSize, &quot;_Buffer size:&quot;, 1, 1024);
++	diaElemMenu ctlWidescreen(&amp;_widescreen, &quot;Aspect _ratio:&quot;, 2, wideM);
++	diaElemMenu ctlMatrix(&amp;_userMatrix, &quot;_Matrices:&quot;, 4, matrixM);
++	diaElemUInteger ctlGop(&amp;_gopSize, &quot;_GOP size:&quot;, 1, 30);
++	diaElemMenu ctlInterW(&amp;_interlaced, &quot;_Interlacing:&quot;, 3, interM);
++	diaElem *elmGeneral[9]= {&amp;ctlBitrate, &amp;ctlMinb, &amp;ctlMaxb, &amp;ctlXvid, &amp;ctlVbv, &amp;ctlWidescreen, &amp;ctlInterW, &amp;ctlMatrix, &amp;ctlGop};
+ 
+-	diaElem *elems[9]= {&amp;ctlBitrate, &amp;ctlMinb, &amp;ctlMaxb, &amp;ctlXvid, &amp;ctlVbv, &amp;ctlWidescreen, &amp;ctlInterW, &amp;ctlMatrix, &amp;ctlGop};
++	diaElemConfigMenu ctlConfigMenu(_options.getUserConfigDirectory(), _options.getSystemConfigDirectory(), changedConfig, serializeConfig, elmGeneral, 9);
++	diaElem *elmHeader[1] = {&amp;ctlConfigMenu};
+ 
+-	if (diaFactoryRun(&quot;avcodec MPEG-1 Configuration&quot;, 9, elems))
++	diaElemTabs tabGeneral(&quot;User Interface&quot;, 9, elmGeneral);
++	diaElemTabs *tabs[] = {&amp;tabGeneral};
++
++	if (diaFactoryRunTabs(&quot;avcodec MPEG-1 Configuration&quot;, 1, elmHeader, 1, tabs))
+ 	{
+-		switch (_bitrateParam.mode)
+-		{
+-			case COMPRESS_CQ:
+-				_encodeOptions.encodeMode = ADM_VIDENC_MODE_CQP;
+-				_encodeOptions.encodeModeParameter = _bitrateParam.qz;
++		saveSettings(&amp;_encodeOptions, &amp;_options);
+ 
+-				break;
+-			case COMPRESS_2PASS:
+-				_encodeOptions.encodeMode = ADM_VIDENC_MODE_2PASS_SIZE;
+-				_encodeOptions.encodeModeParameter = _bitrateParam.finalsize;
++		return 1;
++	}
+ 
+-				break;
+-			case COMPRESS_2PASS_BITRATE:
+-				_encodeOptions.encodeMode = COMPRESS_2PASS_BITRATE;
+-				_encodeOptions.encodeModeParameter = _bitrateParam.avg_bitrate;
++	return 0;
++}
+ 
+-				break;
+-		}
++void Mpeg1Encoder::loadSettings(vidEncOptions *encodeOptions, Mpeg1EncoderOptions *options)
++{
++	_minBitrate = options-&gt;getMinBitrate();
++	_maxBitrate = options-&gt;getMaxBitrate();
++	_useXvidRateControl = options-&gt;getXvidRateControl();
++	_bufferSize = options-&gt;getBufferSize();
++	_widescreen = options-&gt;getWidescreen();
++	_interlaced = options-&gt;getInterlaced();
++	_userMatrix = options-&gt;getMatrix();
++	_gopSize = options-&gt;getGopSize();
+ 
+-		_options.setMinBitrate(minBitrate);
+-		_options.setMaxBitrate(maxBitrate);
+-		_options.setXvidRateControl(useXvidRateControl);
+-		_options.setBufferSize(bufferSize);
+-		_options.setWidescreen(widescreen);
+-		_options.setInterlaced((InterlacedMode)interlaced);
+-		_options.setMatrix((MatrixMode)userMatrix);
+-		_options.setGopSize(gopSize);
++	_bitrateParam.qz = 1000;
++	_bitrateParam.finalsize = 700;
+ 
+-		return 1;
++	updateEncodeProperties(encodeOptions, NULL);
++}
++
++void Mpeg1Encoder::saveSettings(vidEncOptions *encodeOptions, Mpeg1EncoderOptions *options)
++{
++	switch (_bitrateParam.mode)
++	{
++		case COMPRESS_CQ:
++			encodeOptions-&gt;encodeMode = ADM_VIDENC_MODE_CQP;
++			encodeOptions-&gt;encodeModeParameter = _bitrateParam.qz;
++
++			break;
++		case COMPRESS_2PASS:
++			encodeOptions-&gt;encodeMode = ADM_VIDENC_MODE_2PASS_SIZE;
++			encodeOptions-&gt;encodeModeParameter = _bitrateParam.finalsize;
++
++			break;
++		case COMPRESS_2PASS_BITRATE:
++			encodeOptions-&gt;encodeMode = COMPRESS_2PASS_BITRATE;
++			encodeOptions-&gt;encodeModeParameter = _bitrateParam.avg_bitrate;
++
++			break;
+ 	}
+ 
+-	return 0;
++	options-&gt;setMinBitrate(_minBitrate);
++	options-&gt;setMaxBitrate(_maxBitrate);
++	options-&gt;setXvidRateControl(_useXvidRateControl);
++	options-&gt;setBufferSize(_bufferSize);
++	options-&gt;setWidescreen(_widescreen);
++	options-&gt;setInterlaced((InterlacedMode)_interlaced);
++	options-&gt;setMatrix((MatrixMode)_userMatrix);
++	options-&gt;setGopSize(_gopSize);
+ }
+ 
++bool changedConfig(const char* configName, ConfigMenuType configType)
++{
++	bool failure = false;
++
++	if (configType == CONFIG_MENU_DEFAULT)
++	{
++		Mpeg1EncoderOptions defaultOptions;
++		vidEncOptions *defaultEncodeOptions = defaultOptions.getEncodeOptions();
++
++		encoder-&gt;loadSettings(defaultEncodeOptions, &amp;defaultOptions);
++
++		delete defaultEncodeOptions;
++	}
++	else if (configType != CONFIG_MENU_CUSTOM)
++	{
++		Mpeg1EncoderOptions options;
++		vidEncOptions *encodeOptions;
++
++		options.setPresetConfiguration(configName, (PluginConfigType)configType);
++
++		if (options.loadPresetConfiguration())
++		{
++			encodeOptions = options.getEncodeOptions();
++
++			encoder-&gt;loadSettings(encodeOptions, &amp;options);
++
++			delete encodeOptions;
++		}
++		else
++		{
++			failure = true;
++		}
++	}
++
++	return !failure;
++}
++
++char *serializeConfig(void)
++{
++	vidEncOptions encodeOptions;
++	Mpeg1EncoderOptions options;
++
++	encoder-&gt;saveSettings(&amp;encodeOptions, &amp;options);
++	options.setEncodeOptions(&amp;encodeOptions);
++
++	return options.toXml(PLUGIN_XML_EXTERNAL);
++}
++
+ int Mpeg1Encoder::getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize)
+ {
+ 	char* xml = _options.toXml(PLUGIN_XML_INTERNAL);
+@@ -190,7 +258,7 @@
+ 	if (encodeOptions &amp;&amp; success)
+ 	{
+ 		memcpy(&amp;_encodeOptions, encodeOptions, sizeof(vidEncOptions));
+-		updateEncodeProperties(NULL);
++		updateEncodeProperties(encodeOptions, NULL);
+ 	}
+ 
+ 	if (success)
+@@ -214,22 +282,22 @@
+ 	return ret;
+ }
+ 
+-void Mpeg1Encoder::updateEncodeProperties(vidEncVideoProperties *properties)
++void Mpeg1Encoder::updateEncodeProperties(vidEncOptions *encodeOptions, vidEncVideoProperties *properties)
+ {
+-	switch (_encodeOptions.encodeMode)
++	switch (encodeOptions-&gt;encodeMode)
+ 	{
+ 		case ADM_VIDENC_MODE_CQP:
+ 			_passCount = 1;
+ 
+ 			_bitrateParam.mode = COMPRESS_CQ;
+-			_bitrateParam.qz = _encodeOptions.encodeModeParameter;
++			_bitrateParam.qz = encodeOptions-&gt;encodeModeParameter;
+ 
+ 			break;
+ 		case ADM_VIDENC_MODE_2PASS_SIZE:
+ 			_passCount = 2;
+ 
+ 			_bitrateParam.mode = COMPRESS_2PASS;
+-			_bitrateParam.finalsize = _encodeOptions.encodeModeParameter;
++			_bitrateParam.finalsize = encodeOptions-&gt;encodeModeParameter;
+ 
+ 			//if (properties)
+ 				//bitrateParam-&gt;bitrate = calculateBitrate(properties-&gt;fpsNum, properties-&gt;fpsDen, properties-&gt;frameCount, _encodeOptions.encodeModeParameter) / 1000;					
+@@ -241,7 +309,7 @@
+ 			_passCount = 2;
+ 
+ 			_bitrateParam.mode = COMPRESS_2PASS_BITRATE;
+-			_bitrateParam.avg_bitrate = _encodeOptions.encodeModeParameter;
++			_bitrateParam.avg_bitrate = encodeOptions-&gt;encodeModeParameter;
+ 
+ 			break;
+ 	}
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.h	2009-07-25 14:35:32 UTC (rev 5146)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.h	2009-07-25 16:10:00 UTC (rev 5147)
+@@ -31,10 +31,12 @@
+ {
+ 	private:
+ 		COMPRES_PARAMS _bitrateParam;
++		unsigned int _minBitrate, _maxBitrate, _useXvidRateControl, _bufferSize, _widescreen, _interlaced, _userMatrix, _gopSize;
++
+ 		Mpeg1EncoderOptions _options;
+ 		vidEncOptions _encodeOptions;
+ 
+-		void updateEncodeProperties(vidEncVideoProperties *properties);
++		void updateEncodeProperties(vidEncOptions *encodeOptions, vidEncVideoProperties *properties);
+ 		unsigned int calculateBitrate(unsigned int fpsNum, unsigned int fpsDen, unsigned int frameCount, unsigned int sizeInMb);
+ 
+ 	public:
+@@ -46,6 +48,8 @@
+ 		const char* getEncoderGuid(void);
+ 		int isConfigurable(void);
+ 		int configure(vidEncConfigParameters *configParameters, vidEncVideoProperties *properties);
++		void loadSettings(vidEncOptions *encodeOptions, Mpeg1EncoderOptions *options);
++		void saveSettings(vidEncOptions *encodeOptions, Mpeg1EncoderOptions *options);
+ 		int getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize);
+ 		int setOptions(vidEncOptions *encodeOptions, char *pluginOptions);
+ 		int beginPass(vidEncPassParameters *passParameters);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002361.html">[Avidemux-svn-commit] r5146 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src
+</A></li>
+	<LI>Next message: <A HREF="002363.html">[Avidemux-svn-commit] r5148 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces:	ADM_dialog ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2362">[ date ]</a>
+              <a href="thread.html#2362">[ thread ]</a>
+              <a href="subject.html#2362">[ subject ]</a>
+              <a href="author.html#2362">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

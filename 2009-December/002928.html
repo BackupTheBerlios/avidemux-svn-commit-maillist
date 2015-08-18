@@ -1,0 +1,150 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5721 -	branches/avidemux_2.6_branch_mean/avidemux/common
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5721%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common&In-Reply-To=%3C200912221530.nBMFUQQl024343%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002926.html">
+   <LINK REL="Next"  HREF="002929.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5721 -	branches/avidemux_2.6_branch_mean/avidemux/common</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5721%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common&In-Reply-To=%3C200912221530.nBMFUQQl024343%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5721 -	branches/avidemux_2.6_branch_mean/avidemux/common">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Dec 22 16:30:26 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002926.html">[Avidemux-svn-commit] r5720 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_toolkit
+</A></li>
+        <LI>Next message: <A HREF="002929.html">[Avidemux-svn-commit] r5722 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2928">[ date ]</a>
+              <a href="thread.html#2928">[ thread ]</a>
+              <a href="subject.html#2928">[ subject ]</a>
+              <a href="author.html#2928">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-12-22 16:30:24 +0100 (Tue, 22 Dec 2009)
+New Revision: 5721
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/gui_play.cpp
+Log:
+[playback] Update vumeter upon playback + gather channel information so that audiodevice can be properly configured
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gui_play.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gui_play.cpp	2009-12-22 15:30:22 UTC (rev 5720)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gui_play.cpp	2009-12-22 15:30:24 UTC (rev 5721)
+@@ -26,9 +26,10 @@
+ #include &quot;avidemutils.h&quot;
+ #include &quot;ADM_preview.h&quot;
+ #include &quot;audiofilter.h&quot;
++#include &quot;GUI_ui.h&quot;
+ //___________________________________
+-// In ms
+-#define AUDIO_PRELOAD 200
++// In 10 ms chunks
++#define AUDIO_PRELOAD 100
+ #define EVEN(x) (x&amp;0xffffffe)
+ //___________________________________
+ 
+@@ -285,15 +286,15 @@
+              if (! (oaf = playbackAudio-&gt;fill(256*16,  wavbuf,&amp;status)))
+              {
+                   printf(&quot;[Playback] Error reading audio stream...\n&quot;);
+-                  
+-                  return false;
++                  break;
+              }
+             AVDM_AudioPlay(wavbuf, oaf);
+             nbSamplesSent += oaf/channels;
+             load+=oaf;
+     }
+-    //printf(&quot;[Playback] Wrote %u bytes\n&quot;,load);
+-    // finally play the filled up buffer
++    uint32_t stat[6];
++    AVDM_getStats(stat);
++    UI_setVUMeter(stat);
+     return true;
+ }
+ 
+@@ -306,7 +307,7 @@
+ {
+     uint32_t state,latency, preload;
+     uint32_t small_;
+-    uint32_t channels;
++    uint32_t channels,frequency;
+ 
+     wavbuf = 0;
+ 
+@@ -319,14 +320,20 @@
+     if(!playbackAudio) return false;
+ 
+     channels= playbackAudio-&gt;getInfo()-&gt;channels;
++    frequency=playbackAudio-&gt;getInfo()-&gt;frequency;
+     preload=  (wavinfo-&gt;frequency * channels)/5;	// 200 ms preload
+     // 4 sec buffer..               
+     wavbuf =  (float *)  ADM_alloc((20*sizeof(float)*preload)); // 4 secs buffers
+     ADM_assert(wavbuf);
++    // Read a at least one block to have the proper channel mapping
++    uint32_t fill=0;
++    AUD_Status status;
++    small_ = playbackAudio-&gt;fill(channels, wavbuf,&amp;status);
++    fill+=small_;
+     // Call it twice to be sure it is properly setup
+-     state = AVDM_AudioSetup(playbackAudio-&gt;getInfo()-&gt;frequency,  channels );
++     state = AVDM_AudioSetup(frequency,  channels ,playbackAudio-&gt;getChannelMapping());
+      AVDM_AudioClose();
+-     state = AVDM_AudioSetup(playbackAudio-&gt;getInfo()-&gt;frequency,  channels );
++     state = AVDM_AudioSetup(frequency,  channels ,playbackAudio-&gt;getChannelMapping());
+      latency=AVDM_GetLayencyMs();
+      printf(&quot;[Playback] Latency : %d ms\n&quot;,latency);
+       if (!state)
+@@ -335,9 +342,6 @@
+           cleanupAudio();
+           return false;
+       }
+-     
+-     AUD_Status status;
+-    uint32_t fill=0;
+     while(fill&lt;preload)
+     {
+       if (!(small_ = playbackAudio-&gt;fill(preload-fill, wavbuf+fill,&amp;status)))
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002926.html">[Avidemux-svn-commit] r5720 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_toolkit
+</A></li>
+	<LI>Next message: <A HREF="002929.html">[Avidemux-svn-commit] r5722 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2928">[ date ]</a>
+              <a href="thread.html#2928">[ thread ]</a>
+              <a href="subject.html#2928">[ subject ]</a>
+              <a href="author.html#2928">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

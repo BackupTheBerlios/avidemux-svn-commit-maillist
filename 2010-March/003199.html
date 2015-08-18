@@ -1,0 +1,191 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5994 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5994%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4&In-Reply-To=%3C201003131115.o2DBFIZH025947%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003198.html">
+   <LINK REL="Next"  HREF="003200.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5994 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5994%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4&In-Reply-To=%3C201003131115.o2DBFIZH025947%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5994 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Mar 13 12:15:18 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003198.html">[Avidemux-svn-commit] r5993 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4
+</A></li>
+        <LI>Next message: <A HREF="003200.html">[Avidemux-svn-commit] r5995 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3199">[ date ]</a>
+              <a href="thread.html#3199">[ thread ]</a>
+              <a href="subject.html#3199">[ subject ]</a>
+              <a href="author.html#3199">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-03-13 12:15:17 +0100 (Sat, 13 Mar 2010)
+New Revision: 5994
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/ADM_xvid4.cpp
+Log:
+[xvid] better one way, worse another
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/ADM_xvid4.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/ADM_xvid4.cpp	2010-03-11 19:00:21 UTC (rev 5993)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/ADM_xvid4.cpp	2010-03-13 11:15:17 UTC (rev 5994)
+@@ -21,12 +21,13 @@
+ #undef ADM_MINIMAL_UI_INTERFACE // we need the full UI
+ #include &quot;DIA_factory.h&quot;
+ 
+-#if 1
++#if 0
+ #define aprintf(...) {}
+ #else
+ #define aprintf printf
+ #endif
+ 
++
+ #define MMSET(x) memset(&amp;(x),0,sizeof(x))
+ 
+ xvid4_encoder xvid4Settings=
+@@ -41,12 +42,12 @@
+     },
+     
+             false, //mpegQuant
+-            0, // rdMode
+-            0, // MotionEstimation
++            3, // rdMode
++            3, // MotionEstimation
+             0, // cqmMode
+             0, // arMode
+-            0, // MaxBframe
+-            0, // MaxKeyInterval
++            2, // MaxBframe
++            200, // MaxKeyInterval
+             true // Trellis
+     
+ };
+@@ -187,6 +188,8 @@
+   xvid_enc_create.plugins = plugins;
+   xvid_enc_create.num_plugins = 2;
+ 
++  xvid_enc_create.max_bframes = xvid4Settings.maxBFrame;
++  xvid_enc_create.max_key_interval = xvid4Settings.maxKeyFrameInterval;
+     //Framerate
+     int n,d;    
+     uint64_t f=source-&gt;getInfo()-&gt;frameIncrement;
+@@ -235,7 +238,7 @@
+     // 1 fetch a frame...
+     uint32_t nb;
+     // update
+-    
++again:    
+     if(source-&gt;getNextFrame(&amp;nb,image)==false)
+     {
+         ADM_warning(&quot;[xvid4] Cannot get next image\n&quot;);
+@@ -244,7 +247,7 @@
+     // Store Pts/DTS
+     ADM_timeMapping map; // Store real PTS &lt;-&gt;lav value mapping
+     map.realTS=image-&gt;Pts+getEncoderDelay();
+- //   printf(&quot;Pushing fn=%d Time=%&quot;LLU&quot;\n&quot;,frameNum,map.realTS);
++    aprintf(&quot;Pushing fn=%d Time=%&quot;LLU&quot;\n&quot;,frameNum,map.realTS);
+     map.internalTS=frameNum++;
+     mapper.push_back(map);
+     queueOfDts.push_back(image-&gt;Pts);
+@@ -262,7 +265,11 @@
+         ADM_error(&quot;[Xvid] Error performing encode %d\n&quot;, size);
+         return false;
+     }
+-    
++    if(!size)
++    {
++        ADM_info(&quot;Dummy null frame\n&quot;);
++        goto again;
++    }
+     // 3-encode
+     if(false==postAmble(out,size))
+     {
+@@ -299,8 +306,15 @@
+   xvid_enc_frame.length = 0;
+   if (xvid4Settings.mpegQuant)
+     xvid_enc_frame.vol_flags |= XVID_VOL_MPEGQUANT;
+- 
+ 
++   switch(xvid4Settings.params.mode)
++    {
++      case COMPRESS_SAME:
++      case COMPRESS_CQ:
++            xvid_enc_frame.quant = xvid4Settings.params.qz;
++            break;
++      default:break;
++    }
+ #define SVOP(x,y) if(xvid4Settings.x) xvid_enc_frame.vop_flags|=XVID_VOP_##y
+ 
+   xvid_enc_frame.motion = motionMode[xvid4Settings.motionEstimation];
+@@ -392,8 +406,11 @@
+   out-&gt;len=size;
+   // update Pts/DTS
+   outFrameNum=outFrameStatic;
+-//  printf(&quot;Popping fn=%d at %&quot;LLX&quot;\n&quot;,(int)outFrameNum,&amp;outFrameNum);
+-  getRealPtsFromInternal(outFrameNum,&amp;(out-&gt;dts),&amp;(out-&gt;pts)); 
++  aprintf(&quot;Popping fn=%d size=%d flags=0x%x\n&quot;,(int)outFrameNum,(int)size,(int)out-&gt;flags);
++    getRealPtsFromInternal(outFrameNum,&amp;(out-&gt;dts),&amp;(out-&gt;pts)); 
++    out-&gt;dts=frameNum*source-&gt;getInfo()-&gt;frameIncrement;
++    out-&gt;pts=out-&gt;dts+encoderDelay
++;
+   return 1;
+ }
+ /**
+@@ -404,9 +421,10 @@
+ {
+   xvid_plg_data_t *data = (xvid_plg_data_t *) param1;
+  //printf(&quot;plugin called with %u (%&quot;LLX&quot; %&quot;LLX&quot;)\n&quot;,opt,param1,param2);
+-  // printf(&quot;Pass %d value %d\n&quot;,opt,data-&gt;frame_num);
+-  if (opt == XVID_PLG_FRAME)
++  
++  if (opt == 0*XVID_PLG_AFTER+1*XVID_PLG_FRAME)
+     {
++     printf(&quot;Pass %d value %d\n&quot;,opt,data-&gt;frame_num);
+      outFrameStatic = data-&gt;frame_num;
+     }
+   return 0;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003198.html">[Avidemux-svn-commit] r5993 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4
+</A></li>
+	<LI>Next message: <A HREF="003200.html">[Avidemux-svn-commit] r5995 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3199">[ date ]</a>
+              <a href="thread.html#3199">[ thread ]</a>
+              <a href="subject.html#3199">[ subject ]</a>
+              <a href="author.html#3199">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

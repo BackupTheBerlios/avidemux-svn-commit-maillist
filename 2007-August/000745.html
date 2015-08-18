@@ -1,0 +1,750 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3470 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_ocr
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3470%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_ocr&In-Reply-To=%3C200708031515.l73FFC4E003946%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000744.html">
+   <LINK REL="Next"  HREF="000746.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3470 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_ocr</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3470%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_ocr&In-Reply-To=%3C200708031515.l73FFC4E003946%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3470 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_ocr">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Aug  3 17:15:12 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000744.html">[Avidemux-svn-commit] r3469 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex
+</A></li>
+        <LI>Next message: <A HREF="000746.html">[Avidemux-svn-commit] r3471 - in	branches/avidemux_2.4_branch/avidemux: ADM_ocr	ADM_userInterfaces/ADM_GTK/ADM_ocr	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#745">[ date ]</a>
+              <a href="thread.html#745">[ thread ]</a>
+              <a href="subject.html#745">[ subject ]</a>
+              <a href="author.html#745">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-08-03 17:15:08 +0200 (Fri, 03 Aug 2007)
+New Revision: 3470
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_ocr/Q_ocr.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_ocr/ocr.ui
+Log:
+[QT] Mostly working OCR for QT
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_ocr/Q_ocr.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_ocr/Q_ocr.cpp	2007-08-03 00:04:40 UTC (rev 3469)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_ocr/Q_ocr.cpp	2007-08-03 15:15:08 UTC (rev 3470)
+@@ -37,23 +37,61 @@
+ #include &quot;ADM_ocr/ADM_ocr.h&quot;
+ #include &quot;ADM_ocr/ADM_ocrInternal.h&quot;
+ #include &quot;ui_ocr.h&quot;
++#include &quot;../ADM_dialog/DIA_flyDialogQt4.h&quot;
++extern void UI_purge(void);
+ 
+-
+-//
+-//	Video is in YV12 Colorspace
+-//
+-//
++//*********************************************
+ class Ui_ocrWindow : public QDialog
+  {
+      Q_OBJECT
+  protected :
++	 
+  public:
+      Ui_ocrWindow(void);
+      ~Ui_ocrWindow();
+      Ui_DialogOcr ui;
+      
+-     void  gather(void);
++     uint32_t _w,_h;
++     uint8_t *data;
++     ADM_QCanvas *canvas;
++     admGlyph *_glyph,*_head;
++     char *_decodedString;
++     
++     ADM_QCanvas *smallCanvas;
++     ReplyType _reply;
++     
++     void setGlyph(admGlyph *glyph,admGlyph *head,char *decodedString)
++     {
++    	 		_glyph=glyph;
++    	 		_head=head;
++    	 		_decodedString=decodedString;
++     }
++     void dialogReturn(ReplyType r)
++     {
++    	 _reply=r;
++    	 accept();
++     }
++     
++     void resizeSmall(uint32_t w,uint32_t h,uint8_t *smallData)
++     {
++    	 	smallCanvas-&gt;changeSize(w*2,h*2);
++    		smallCanvas-&gt;dataBuffer=smallData;
++    		QGraphicsView *graphicsView=ui.smallView;
++    		
++    		graphicsView-&gt;resize(w*2, h*2);
++    		smallCanvas-&gt;setMinimumSize(w*2,h*2);
++    		smallCanvas-&gt;resize(w*2, h*2); 
++     }
++     
+  public slots:
++ 		void pushButtonCalibrate(bool i);
++ 		void pushButtonSkipAll(bool i);
++ 		void pushButtonSkip(bool i);
++ 		void pushButtonIgnore(bool i);
++ 		
++ 		void pushButtonOk(bool i);
++ 		void pushButtonClose(bool i);
++
+  private slots:
+  private:
+      
+@@ -61,56 +99,299 @@
+   Ui_ocrWindow::Ui_ocrWindow(void)
+   {
+         ui.setupUi(this);
+-      
++        ui.textEdit-&gt;setReadOnly(TRUE);
++        data=NULL;
++        _w=_h=100;
++        canvas=new ADM_QCanvas(ui.bigView,_w,_h);
++        smallCanvas= new ADM_QCanvas(ui.smallView,_w,_h);
++#define BUTTON(x)   connect(ui.x,SIGNAL(clicked(bool)),this,SLOT(x(bool)))
++        BUTTON(pushButtonCalibrate);
++        BUTTON(pushButtonSkipAll);
++        BUTTON(pushButtonSkip);
++        BUTTON(pushButtonIgnore);
++        BUTTON(pushButtonOk);
++        BUTTON(pushButtonClose);
++        _glyph=_head=NULL;
++        _decodedString=NULL;
++        //ui.lineEdit-&gt;setBuddy(ui.pushButtonOk);
+         
++
+   }
+- 
++//***********************************************
++
++void  Ui_ocrWindow::pushButtonSkip(bool i)
++  {
++	  	dialogReturn(ReplySkip);
++  }
++void    Ui_ocrWindow::pushButtonSkipAll(bool i)
++  {
++	  	dialogReturn(ReplySkipAll);
++  }
++void  Ui_ocrWindow::pushButtonIgnore(bool i)
++  {
++	  	ADM_assert(_glyph);
++	  	ADM_assert(_head);
++	  	_glyph-&gt;code=NULL;
++	  	insertInGlyphTree(_head,_glyph);
++	  	dialogReturn(ReplyOk);
++  }
++void    Ui_ocrWindow::pushButtonClose(bool i)
++  {
++	  	dialogReturn(ReplyClose);
++  }
++void    Ui_ocrWindow::pushButtonCalibrate(bool i)
++  {
++	  	dialogReturn(ReplyCalibrate);
++  }
++void    Ui_ocrWindow::pushButtonOk(bool i)
++  {
++		// Retrieve content typed
++	 		char *data=(ui.lineEdit-&gt;text()).toAscii().data(); // Memleak ??
++	 		if(data&amp;&amp; strlen(data))
++	                     {
++	                         _glyph-&gt;code=ADM_strdup(data);
++	                         insertInGlyphTree(_head,_glyph);
++	                         strcat(_decodedString,_glyph-&gt;code);
++	                     }
++	  	dialogReturn(ReplyOk);
++  }
++//***********************************************
+ Ui_ocrWindow::~Ui_ocrWindow()
+ {
++	delete canvas;
++	canvas=NULL;
++	
++	delete smallCanvas;
++	smallCanvas=NULL;
++	
++	if(data) delete [] data;
++	data=NULL;	   
+ }
+ 
++Ui_ocrWindow *gDialog=NULL;
++/**
++ * 	\fn ADM_ocrUpdateNbLines
++ *  \brief Update the number of lines ocr'ed
++ */
+ uint8_t ADM_ocrUpdateNbLines(void *ui,uint32_t cur,uint32_t total)
+ {
+ 	return 1;
+ }
++/**
++ * 	\fn ADM_ocrUpdateNbGlyphs
++ *  \brief Update the number of glyphs learnt (not used ATM)
++ */
++
+ uint8_t ADM_ocrUpdateNbGlyphs(void *ui,uint32_t nbGlyphs)
+ {
+ 	return 1;
+ }
++/**
++ * 	\fn ADM_ocrUpdateTextAndTime
++ *  \brief Update the currently ocr'ed text from the current image
++ */
++
+ uint8_t ADM_ocrUpdateTextAndTime(void *ui,char *decodedString,char *timeCode)
+ {
++	Ui_ocrWindow *dialog=( Ui_ocrWindow *)ui;
++	 ADM_assert(dialog==gDialog);
++	 if(timeCode)
++	 {
++		 QLabel *labelTimecode=dialog-&gt;ui.labelTimecode;
++		 labelTimecode-&gt;setText(timeCode);
++	 }
++	 if(decodedString)
++	 {
++		 QTextEdit *textedit=dialog-&gt;ui.textEdit;
++		 textedit-&gt;clear();
++		 textedit-&gt;textCursor().insertText(decodedString);
++	 }
++	 UI_purge();
+ 	return 1;
+ }
++
++static void convertBWtoRGB32(uint32_t w,uint32_t h,uint8_t *in,uint8_t *out)
++{
++	for(int y=0;y&lt;h;y++)
++		for(int x=0;x&lt;w;x++)
++		{
++			uint8_t a=*in++;
++			*(out+0)=a;
++			*(out+1)=a;
++			*(out+2)=a;
++			*(out+3)=255; // alpha
++			out+=4;
++		}
++}
++static void convertBWtoRGB32Zoom(uint32_t w,uint32_t h,uint32_t strideW,uint32_t strideH,uint8_t *in,uint8_t *out)
++{
++	ADM_assert(strideW&gt;=w);
++	memset(out,0,strideW*strideH*4*4);
++	for(int y=0;y&lt;h;y++)
++	{
++		for(int x=0;x&lt;w;x++)
++		{
++			uint8_t a=*in++;
++			*(out+0)=a;
++			*(out+1)=a;
++			*(out+2)=a;
++			*(out+3)=255; // alpha
++			*(out+4)=a;
++			*(out+5)=a;
++			*(out+6)=a;
++			*(out+7)=255; // alpha
++			out+=8;
++		}
++		out+=(strideW-w)*8;
++		memcpy(out,out-8*strideW,8*w);
++		out+=8*strideW;
++			
++	}
++}
++/**
++ * 	\fn ADM_ocrDrawFull
++ *  \brief Redraw the full image
++ *  @param data : uin8_t image to redraw (1 byte per pixel)
++ */
++
+ uint8_t ADM_ocrDrawFull(void *d,uint8_t *data)
+ {
++	Ui_ocrWindow *dialog=( Ui_ocrWindow *)d;
++	ADM_assert(dialog==gDialog);
++	uint8_t *out=dialog-&gt;data;
++	uint8_t *in=data;
++	uint32_t w=dialog-&gt;_w,h=dialog-&gt;_h;
++	
++	convertBWtoRGB32(w,h,in,out);
++	
++	// Paint!
++	
++	dialog-&gt;canvas-&gt;dataBuffer=dialog-&gt;data;
++	
++	
++	QGraphicsView *graphicsView=dialog-&gt;ui.bigView;
++	
++	graphicsView-&gt;resize(w, h);
++	dialog-&gt;canvas-&gt;setMinimumSize(w,h);
++	dialog-&gt;canvas-&gt;resize(w, h);
++	
++	
++	
++	dialog-&gt;canvas-&gt;repaint();
+ 	return 1;	
+ }
+-uint8_t ADM_ocrSetRedrawSize(uint32_t w,uint32_t h)
++/**
++ * 	\fn ADM_ocrSetRedrawSize
++ *  \brief Set the new image dimensions. Redraw is disabled until ocrDrawFull is called with new datas
++ *  @param w New image width
++ *  @param h New image height
++ */
++
++uint8_t ADM_ocrSetRedrawSize(void *d,uint32_t w,uint32_t h)
+ {
++	Ui_ocrWindow *dialog=( Ui_ocrWindow *)d;
++	ADM_assert(dialog==gDialog);
++	dialog-&gt;_w=w;
++	dialog-&gt;_h=h;
++	
++	dialog-&gt;canvas-&gt;changeSize(w,h);
++	
++	if(dialog-&gt;data) delete [] dialog-&gt;data;
++	dialog-&gt;data=NULL;
++	dialog-&gt;data=new uint8_t[w*h*4];
++	
++
+ 	return 1;
+ }
++/**
++ * 	\fn ADM_ocrUiEnd
++ *  \brief Destroy the UI for OCR
++ */
+ 
+ 
+ uint8_t ADM_ocrUiEnd(void *d)
+ {
+ 	   Ui_ocrWindow *dialog=( Ui_ocrWindow *)d;
+-	   ADM_assert(dialog);
++	   ADM_assert(dialog==gDialog);
++		
++		
++	   gDialog=NULL;
+ 	   delete dialog;
+ 	   return 1;	
+ }
++/**
++ * 	\fn ADM_ocrUiSetup
++ *  \brief Create OCR UI
++ */
++
+ void 	*ADM_ocrUiSetup(void)
+ {
+ 	
+ 	   Ui_ocrWindow *dialog=new Ui_ocrWindow;
++	   dialog-&gt;setModal(TRUE);
++	   dialog-&gt;show();
++	   gDialog=dialog;
+ 	   return dialog;
+ }
++/**
++ * 	\fn glyphToText
++ *  \brief OCR one gluph
++ *  @param glyph : Glyph to OCR
++ *  @param head  : Pointer to the head of known glyph
++ *  @param decodedString : String containing the current ocred text so far
++ *  FIXME : Add ui as parameter!!
++ */
++#define MAX_W 32
++#define MAX_H 32
+ 
+ ReplyType glyphToText(admGlyph *glyph,admGlyph *head,char *decodedString)
+ {
+-	return ReplyOk;
++	// First draw small glyph
++	uint32_t w,h,clipW,clipH;
++	w=glyph-&gt;width;
++	h=glyph-&gt;height;
++	
++	// Known glyph ?
++	  if(glyph-&gt;width&lt;2 &amp;&amp; glyph-&gt;height&lt;2)
++	  {
++	         // ????delete glyph;
++	         return ReplyOk;
++	   }
++	  admGlyph *cand=NULL;
++	  cand=searchGlyph(head,glyph);
++	  if(cand) // New glyph?
++	  {
++		   if(cand-&gt;code)
++			   		strcat(decodedString,cand-&gt;code);
++		   	delete glyph;
++		   	return ReplyOk;
++	  }
++	  // Yes, it is a new one
++	//
++#ifndef MAX
++        #define MAX(a,b) a&gt;b?a:b
++#endif
++	 clipW=MAX(MAX_W,w);
++	 clipH=MAX(MAX_H,h);
++	// Set datas too
++	uint8_t smallData[clipW*clipH*4*4];
++	// upscale &amp; convert to RGB32 for display
++	convertBWtoRGB32Zoom(w,h,clipW,clipH,glyph-&gt;data,smallData);
++	//
++	gDialog-&gt;resizeSmall(clipW,clipH,smallData);
++	//
++	gDialog-&gt;setGlyph(glyph,head,decodedString);
++	//
++	gDialog-&gt;ui.lineEdit-&gt;clear();
++	gDialog-&gt;ui.lineEdit-&gt;setFocus(Qt::OtherFocusReason);
++	ADM_ocrUpdateTextAndTime(gDialog,decodedString,NULL); // put ocred text so far
++	//
++    gDialog-&gt;exec();
++    
++    gDialog-&gt;smallCanvas-&gt;dataBuffer=NULL;
++    // ???delete glyph;
++	return gDialog-&gt;_reply;
+ }
+ 
+ //____________________________________
+ // EOF
+-
+-
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_ocr/ocr.ui
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_ocr/ocr.ui	2007-08-03 00:04:40 UTC (rev 3469)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_ocr/ocr.ui	2007-08-03 15:15:08 UTC (rev 3470)
+@@ -12,164 +12,137 @@
+   &lt;property name=&quot;windowTitle&quot; &gt;
+    &lt;string&gt;Dialog&lt;/string&gt;
+   &lt;/property&gt;
+-  &lt;widget class=&quot;QLabel&quot; name=&quot;label&quot; &gt;
+-   &lt;property name=&quot;geometry&quot; &gt;
+-    &lt;rect&gt;
+-     &lt;x&gt;40&lt;/x&gt;
+-     &lt;y&gt;20&lt;/y&gt;
+-     &lt;width&gt;58&lt;/width&gt;
+-     &lt;height&gt;17&lt;/height&gt;
+-    &lt;/rect&gt;
++  &lt;layout class=&quot;QGridLayout&quot; &gt;
++   &lt;property name=&quot;margin&quot; &gt;
++    &lt;number&gt;9&lt;/number&gt;
+    &lt;/property&gt;
+-   &lt;property name=&quot;text&quot; &gt;
+-    &lt;string&gt;Nb Lines :&lt;/string&gt;
++   &lt;property name=&quot;spacing&quot; &gt;
++    &lt;number&gt;6&lt;/number&gt;
+    &lt;/property&gt;
+-  &lt;/widget&gt;
+-  &lt;widget class=&quot;QLabel&quot; name=&quot;labelNbLines&quot; &gt;
+-   &lt;property name=&quot;geometry&quot; &gt;
+-    &lt;rect&gt;
+-     &lt;x&gt;110&lt;/x&gt;
+-     &lt;y&gt;20&lt;/y&gt;
+-     &lt;width&gt;58&lt;/width&gt;
+-     &lt;height&gt;17&lt;/height&gt;
+-    &lt;/rect&gt;
+-   &lt;/property&gt;
+-   &lt;property name=&quot;text&quot; &gt;
+-    &lt;string&gt;0/0&lt;/string&gt;
+-   &lt;/property&gt;
+-  &lt;/widget&gt;
+-  &lt;widget class=&quot;QLabel&quot; name=&quot;label_2&quot; &gt;
+-   &lt;property name=&quot;geometry&quot; &gt;
+-    &lt;rect&gt;
+-     &lt;x&gt;40&lt;/x&gt;
+-     &lt;y&gt;40&lt;/y&gt;
+-     &lt;width&gt;58&lt;/width&gt;
+-     &lt;height&gt;17&lt;/height&gt;
+-    &lt;/rect&gt;
+-   &lt;/property&gt;
+-   &lt;property name=&quot;text&quot; &gt;
+-    &lt;string&gt;Timecode:&lt;/string&gt;
+-   &lt;/property&gt;
+-  &lt;/widget&gt;
+-  &lt;widget class=&quot;QLabel&quot; name=&quot;labelTimecode&quot; &gt;
+-   &lt;property name=&quot;geometry&quot; &gt;
+-    &lt;rect&gt;
+-     &lt;x&gt;110&lt;/x&gt;
+-     &lt;y&gt;40&lt;/y&gt;
+-     &lt;width&gt;58&lt;/width&gt;
+-     &lt;height&gt;17&lt;/height&gt;
+-    &lt;/rect&gt;
+-   &lt;/property&gt;
+-   &lt;property name=&quot;text&quot; &gt;
+-    &lt;string&gt;00:00:00/000&lt;/string&gt;
+-   &lt;/property&gt;
+-  &lt;/widget&gt;
+-  &lt;widget class=&quot;QGraphicsView&quot; name=&quot;smallView&quot; &gt;
+-   &lt;property name=&quot;geometry&quot; &gt;
+-    &lt;rect&gt;
+-     &lt;x&gt;30&lt;/x&gt;
+-     &lt;y&gt;130&lt;/y&gt;
+-     &lt;width&gt;104&lt;/width&gt;
+-     &lt;height&gt;94&lt;/height&gt;
+-    &lt;/rect&gt;
+-   &lt;/property&gt;
+-  &lt;/widget&gt;
+-  &lt;widget class=&quot;QGraphicsView&quot; name=&quot;bigView&quot; &gt;
+-   &lt;property name=&quot;geometry&quot; &gt;
+-    &lt;rect&gt;
+-     &lt;x&gt;30&lt;/x&gt;
+-     &lt;y&gt;220&lt;/y&gt;
+-     &lt;width&gt;361&lt;/width&gt;
+-     &lt;height&gt;201&lt;/height&gt;
+-    &lt;/rect&gt;
+-   &lt;/property&gt;
+-  &lt;/widget&gt;
+-  &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButtonClose&quot; &gt;
+-   &lt;property name=&quot;geometry&quot; &gt;
+-    &lt;rect&gt;
+-     &lt;x&gt;440&lt;/x&gt;
+-     &lt;y&gt;440&lt;/y&gt;
+-     &lt;width&gt;83&lt;/width&gt;
+-     &lt;height&gt;27&lt;/height&gt;
+-    &lt;/rect&gt;
+-   &lt;/property&gt;
+-   &lt;property name=&quot;text&quot; &gt;
+-    &lt;string&gt;Close&lt;/string&gt;
+-   &lt;/property&gt;
+-  &lt;/widget&gt;
+-  &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButton&quot; &gt;
+-   &lt;property name=&quot;geometry&quot; &gt;
+-    &lt;rect&gt;
+-     &lt;x&gt;30&lt;/x&gt;
+-     &lt;y&gt;70&lt;/y&gt;
+-     &lt;width&gt;83&lt;/width&gt;
+-     &lt;height&gt;27&lt;/height&gt;
+-    &lt;/rect&gt;
+-   &lt;/property&gt;
+-   &lt;property name=&quot;text&quot; &gt;
+-    &lt;string&gt;PushButton&lt;/string&gt;
+-   &lt;/property&gt;
+-  &lt;/widget&gt;
+-  &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButton_2&quot; &gt;
+-   &lt;property name=&quot;geometry&quot; &gt;
+-    &lt;rect&gt;
+-     &lt;x&gt;120&lt;/x&gt;
+-     &lt;y&gt;70&lt;/y&gt;
+-     &lt;width&gt;83&lt;/width&gt;
+-     &lt;height&gt;27&lt;/height&gt;
+-    &lt;/rect&gt;
+-   &lt;/property&gt;
+-   &lt;property name=&quot;text&quot; &gt;
+-    &lt;string&gt;PushButton&lt;/string&gt;
+-   &lt;/property&gt;
+-  &lt;/widget&gt;
+-  &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButton_3&quot; &gt;
+-   &lt;property name=&quot;geometry&quot; &gt;
+-    &lt;rect&gt;
+-     &lt;x&gt;210&lt;/x&gt;
+-     &lt;y&gt;70&lt;/y&gt;
+-     &lt;width&gt;83&lt;/width&gt;
+-     &lt;height&gt;27&lt;/height&gt;
+-    &lt;/rect&gt;
+-   &lt;/property&gt;
+-   &lt;property name=&quot;text&quot; &gt;
+-    &lt;string&gt;PushButton&lt;/string&gt;
+-   &lt;/property&gt;
+-  &lt;/widget&gt;
+-  &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButton_4&quot; &gt;
+-   &lt;property name=&quot;geometry&quot; &gt;
+-    &lt;rect&gt;
+-     &lt;x&gt;300&lt;/x&gt;
+-     &lt;y&gt;70&lt;/y&gt;
+-     &lt;width&gt;83&lt;/width&gt;
+-     &lt;height&gt;27&lt;/height&gt;
+-    &lt;/rect&gt;
+-   &lt;/property&gt;
+-   &lt;property name=&quot;text&quot; &gt;
+-    &lt;string&gt;PushButton&lt;/string&gt;
+-   &lt;/property&gt;
+-  &lt;/widget&gt;
+-  &lt;widget class=&quot;QLineEdit&quot; name=&quot;lineEdit&quot; &gt;
+-   &lt;property name=&quot;geometry&quot; &gt;
+-    &lt;rect&gt;
+-     &lt;x&gt;30&lt;/x&gt;
+-     &lt;y&gt;100&lt;/y&gt;
+-     &lt;width&gt;113&lt;/width&gt;
+-     &lt;height&gt;25&lt;/height&gt;
+-    &lt;/rect&gt;
+-   &lt;/property&gt;
+-  &lt;/widget&gt;
+-  &lt;widget class=&quot;QTextEdit&quot; name=&quot;textEdit&quot; &gt;
+-   &lt;property name=&quot;geometry&quot; &gt;
+-    &lt;rect&gt;
+-     &lt;x&gt;160&lt;/x&gt;
+-     &lt;y&gt;110&lt;/y&gt;
+-     &lt;width&gt;104&lt;/width&gt;
+-     &lt;height&gt;94&lt;/height&gt;
+-    &lt;/rect&gt;
+-   &lt;/property&gt;
+-  &lt;/widget&gt;
++   &lt;item row=&quot;2&quot; column=&quot;0&quot; colspan=&quot;5&quot; &gt;
++    &lt;layout class=&quot;QHBoxLayout&quot; &gt;
++     &lt;property name=&quot;margin&quot; &gt;
++      &lt;number&gt;0&lt;/number&gt;
++     &lt;/property&gt;
++     &lt;property name=&quot;spacing&quot; &gt;
++      &lt;number&gt;6&lt;/number&gt;
++     &lt;/property&gt;
++     &lt;item&gt;
++      &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButtonCalibrate&quot; &gt;
++       &lt;property name=&quot;text&quot; &gt;
++        &lt;string&gt;Calibrate&lt;/string&gt;
++       &lt;/property&gt;
++      &lt;/widget&gt;
++     &lt;/item&gt;
++     &lt;item&gt;
++      &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButtonSkipAll&quot; &gt;
++       &lt;property name=&quot;text&quot; &gt;
++        &lt;string&gt;Skip All&lt;/string&gt;
++       &lt;/property&gt;
++      &lt;/widget&gt;
++     &lt;/item&gt;
++     &lt;item&gt;
++      &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButtonSkip&quot; &gt;
++       &lt;property name=&quot;text&quot; &gt;
++        &lt;string&gt;Skip Glyph&lt;/string&gt;
++       &lt;/property&gt;
++      &lt;/widget&gt;
++     &lt;/item&gt;
++     &lt;item&gt;
++      &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButtonIgnore&quot; &gt;
++       &lt;property name=&quot;text&quot; &gt;
++        &lt;string&gt;Ignore&lt;/string&gt;
++       &lt;/property&gt;
++      &lt;/widget&gt;
++     &lt;/item&gt;
++     &lt;item&gt;
++      &lt;spacer&gt;
++       &lt;property name=&quot;orientation&quot; &gt;
++        &lt;enum&gt;Qt::Horizontal&lt;/enum&gt;
++       &lt;/property&gt;
++       &lt;property name=&quot;sizeHint&quot; &gt;
++        &lt;size&gt;
++         &lt;width&gt;40&lt;/width&gt;
++         &lt;height&gt;20&lt;/height&gt;
++        &lt;/size&gt;
++       &lt;/property&gt;
++      &lt;/spacer&gt;
++     &lt;/item&gt;
++     &lt;item&gt;
++      &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButtonOk&quot; &gt;
++       &lt;property name=&quot;text&quot; &gt;
++        &lt;string&gt;Ok&lt;/string&gt;
++       &lt;/property&gt;
++      &lt;/widget&gt;
++     &lt;/item&gt;
++    &lt;/layout&gt;
++   &lt;/item&gt;
++   &lt;item rowspan=&quot;2&quot; row=&quot;3&quot; column=&quot;3&quot; colspan=&quot;2&quot; &gt;
++    &lt;widget class=&quot;QTextEdit&quot; name=&quot;textEdit&quot; /&gt;
++   &lt;/item&gt;
++   &lt;item row=&quot;6&quot; column=&quot;0&quot; colspan=&quot;5&quot; &gt;
++    &lt;widget class=&quot;QGraphicsView&quot; name=&quot;bigView&quot; /&gt;
++   &lt;/item&gt;
++   &lt;item row=&quot;3&quot; column=&quot;0&quot; colspan=&quot;3&quot; &gt;
++    &lt;widget class=&quot;QLineEdit&quot; name=&quot;lineEdit&quot; /&gt;
++   &lt;/item&gt;
++   &lt;item row=&quot;7&quot; column=&quot;4&quot; &gt;
++    &lt;widget class=&quot;QPushButton&quot; name=&quot;pushButtonClose&quot; &gt;
++     &lt;property name=&quot;text&quot; &gt;
++      &lt;string&gt;Close&lt;/string&gt;
++     &lt;/property&gt;
++    &lt;/widget&gt;
++   &lt;/item&gt;
++   &lt;item rowspan=&quot;2&quot; row=&quot;4&quot; column=&quot;0&quot; colspan=&quot;2&quot; &gt;
++    &lt;widget class=&quot;QGraphicsView&quot; name=&quot;smallView&quot; /&gt;
++   &lt;/item&gt;
++   &lt;item row=&quot;1&quot; column=&quot;1&quot; colspan=&quot;3&quot; &gt;
++    &lt;widget class=&quot;QLabel&quot; name=&quot;labelTimecode&quot; &gt;
++     &lt;property name=&quot;text&quot; &gt;
++      &lt;string&gt;00:00:00/000&lt;/string&gt;
++     &lt;/property&gt;
++    &lt;/widget&gt;
++   &lt;/item&gt;
++   &lt;item row=&quot;1&quot; column=&quot;0&quot; &gt;
++    &lt;widget class=&quot;QLabel&quot; name=&quot;label_2&quot; &gt;
++     &lt;property name=&quot;text&quot; &gt;
++      &lt;string&gt;Timecode:&lt;/string&gt;
++     &lt;/property&gt;
++    &lt;/widget&gt;
++   &lt;/item&gt;
++   &lt;item row=&quot;0&quot; column=&quot;1&quot; colspan=&quot;3&quot; &gt;
++    &lt;widget class=&quot;QLabel&quot; name=&quot;labelNbLines&quot; &gt;
++     &lt;property name=&quot;text&quot; &gt;
++      &lt;string&gt;0/0&lt;/string&gt;
++     &lt;/property&gt;
++    &lt;/widget&gt;
++   &lt;/item&gt;
++   &lt;item row=&quot;0&quot; column=&quot;0&quot; &gt;
++    &lt;widget class=&quot;QLabel&quot; name=&quot;label&quot; &gt;
++     &lt;property name=&quot;text&quot; &gt;
++      &lt;string&gt;Nb Lines :&lt;/string&gt;
++     &lt;/property&gt;
++    &lt;/widget&gt;
++   &lt;/item&gt;
++  &lt;/layout&gt;
+  &lt;/widget&gt;
+  &lt;resources/&gt;
+- &lt;connections/&gt;
++ &lt;connections&gt;
++  &lt;connection&gt;
++   &lt;sender&gt;lineEdit&lt;/sender&gt;
++   &lt;signal&gt;returnPressed()&lt;/signal&gt;
++   &lt;receiver&gt;pushButtonOk&lt;/receiver&gt;
++   &lt;slot&gt;click()&lt;/slot&gt;
++   &lt;hints&gt;
++    &lt;hint type=&quot;sourcelabel&quot; &gt;
++     &lt;x&gt;61&lt;/x&gt;
++     &lt;y&gt;115&lt;/y&gt;
++    &lt;/hint&gt;
++    &lt;hint type=&quot;destinationlabel&quot; &gt;
++     &lt;x&gt;420&lt;/x&gt;
++     &lt;y&gt;88&lt;/y&gt;
++    &lt;/hint&gt;
++   &lt;/hints&gt;
++  &lt;/connection&gt;
++ &lt;/connections&gt;
+ &lt;/ui&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000744.html">[Avidemux-svn-commit] r3469 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex
+</A></li>
+	<LI>Next message: <A HREF="000746.html">[Avidemux-svn-commit] r3471 - in	branches/avidemux_2.4_branch/avidemux: ADM_ocr	ADM_userInterfaces/ADM_GTK/ADM_ocr	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#745">[ date ]</a>
+              <a href="thread.html#745">[ thread ]</a>
+              <a href="subject.html#745">[ subject ]</a>
+              <a href="author.html#745">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

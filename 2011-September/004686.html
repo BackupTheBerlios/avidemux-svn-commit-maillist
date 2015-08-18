@@ -1,0 +1,1742 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7538 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7538%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src&In-Reply-To=%3C20110914094250.EB22448129A%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004685.html">
+   <LINK REL="Next"  HREF="004687.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7538 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7538%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src&In-Reply-To=%3C20110914094250.EB22448129A%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7538 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Wed Sep 14 11:42:50 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004685.html">[Avidemux-svn-commit] r7537 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+</A></li>
+        <LI>Next message: <A HREF="004687.html">[Avidemux-svn-commit] r7539 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4686">[ date ]</a>
+              <a href="thread.html#4686">[ thread ]</a>
+              <a href="subject.html#4686">[ subject ]</a>
+              <a href="author.html#4686">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2011-09-14 11:42:50 +0200 (Wed, 14 Sep 2011)
+New Revision: 7538
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp
+Log:
+[fileio] only add separator if needed
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp	2011-09-14 09:34:05 UTC (rev 7537)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp	2011-09-14 09:42:50 UTC (rev 7538)
+@@ -1,365 +1,365 @@
+-/***************************************************************************
+-                    
+-    copyright            : (C) 2006 by mean
+-    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+- ***************************************************************************/
+-
+-/***************************************************************************
+- *                                                                         *
+- *   This program is free software; you can redistribute it and/or modify  *
+- *   it under the terms of the GNU General Public License as published by  *
+- *   the Free Software Foundation; either version 2 of the License, or     *
+- *   (at your option) any later version.                                   *
+- *                                                                         *
+- ***************************************************************************/
+-
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+-#include &lt;string.h&gt;
+-#include &lt;dirent.h&gt;
+-#include &lt;errno.h&gt;
+-#include &lt;sys/stat.h&gt;
+-#include &lt;unistd.h&gt;
+-
+-#if defined(__APPLE__)
+- #include &lt;Carbon/Carbon.h&gt;
+-#else
+- #include &lt;fcntl.h&gt;
+- #ifdef __WIN32
+-  #include &lt;direct.h&gt;
+-  #include &lt;shlobj.h&gt;
+- #endif
+-#endif
+-
+-#include &quot;ADM_default.h&quot;
+-
+-#define WIN32_PORTABLE_MODE 1
+-
+-#ifdef __WIN32
+-static const char *SEPARATOR=&quot;\\&quot;;
+-
+-#ifdef WIN32_PORTABLE_MODE
+-    const char *ADM_DIR_NAME=&quot;settings&quot;;
+-    bool portable=true;
+-#else
+-    const char *ADM_DIR_NAME=&quot;avidemux6&quot;;
+-    bool portable=false;
+-#endif
+-#elif defined __HAIKU__
+-static const char *SEPARATOR=&quot;/&quot;;
+-const char *ADM_DIR_NAME=&quot;config/settings/avidemux6&quot;;
+-
+-#else
+-static const char *SEPARATOR=&quot;/&quot;;
+-const char *ADM_DIR_NAME=&quot;.avidemux6&quot;;
+-#endif
+-
+-static char ADM_basedir[1024] = {0};
+-static char *ADM_jobdir = NULL;
+-static char *ADM_customdir = NULL;
+-static char *ADM_autodir = NULL;
+-static char *ADM_systemPluginSettings=NULL;
+-static char *ADM_userPluginSettings=NULL;
+-static int baseDirDone = 0;
+-
+-#undef fread
+-#undef fwrite
+-#undef fopen
+-#undef fclose
+-
+-#ifdef __WIN32
+-extern int utf8StringToWideChar(const char *utf8String, int utf8StringLength, wchar_t *wideCharString);
+-extern int wideCharStringToUtf8(const wchar_t *wideCharString, int wideCharStringLength, char *utf8String);
+-#endif
+-
+-size_t ADM_fread (void *ptr, size_t size, size_t n, FILE *sstream)
+-{
+-	return fread(ptr,size,n,sstream);
+-}
+-
+-size_t ADM_fwrite(const void *ptr, size_t size, size_t n, FILE *sstream)
+-{
+-	return fwrite(ptr,size,n,sstream);
+-}
+-/**
+-    \fn ADM_eraseFile
+-*/
+-uint8_t ADM_eraseFile(const char *file)
+-{
+-    if(!unlink(file))
+-        return true;
+-    return false;
+-}
+-/**
+-    \fn ADM_fileSize
+-    \brief return filesize, -1 on error
+-*/
+-int64_t ADM_fileSize(const char *file)
+-{
+-    FILE *f=ADM_fopen(file,&quot;r&quot;);
+-    if(!f) return -1;
+-    fseeko(f,0,SEEK_END);
+-    int64_t v=ftello(f);
+-    fclose(f);
+-    return v;
+-}
+-/**
+-    \fn ADM_fopen
+-    \brief utf8 aware fopen, so that we can use utf8 string even on win32
+-*/
+-FILE *ADM_fopen(const char *file, const char *mode)
+-{
+-#ifdef __MINGW32__
+-	// Override fopen to handle Unicode filenames and to ensure exclusive access when initially writing to a file.
+-	int fileNameLength = utf8StringToWideChar(file, -1, NULL);
+-	wchar_t wcFile[fileNameLength];
+-	int creation = 0, access = 0;
+-	HANDLE hFile;
+-
+-	utf8StringToWideChar(file, -1, wcFile);
+-
+-	if (strchr(mode, 'w'))
+-	{
+-		creation = CREATE_ALWAYS;
+-		access = GENERIC_WRITE;
+-
+-		if (strchr(mode, '+'))
+-			access |= GENERIC_READ;
+-	}
+-	else if (strchr(mode, 'r'))
+-	{
+-		creation = OPEN_EXISTING;
+-		access = GENERIC_READ;
+-
+-		if (strchr(mode, '+'))
+-			access = GENERIC_WRITE;
+-	}
+-	else if (strchr(mode, 'a'))
+-	{
+-		creation = OPEN_ALWAYS;
+-		access = GENERIC_WRITE;
+-
+-		if (strchr(mode, '+'))
+-			access |= GENERIC_READ;
+-	}
+-
+-	if (creation &amp; GENERIC_WRITE)
+-	{
+-		hFile = CreateFileW(wcFile, access, 0, NULL, creation, 0, NULL);
+-
+-		if (hFile == INVALID_HANDLE_VALUE)
+-			return NULL;
+-		else
+-			CloseHandle(hFile);
+-	}
+-
+-	hFile = CreateFileW(wcFile, access, FILE_SHARE_READ, NULL, creation, 0, NULL);
+-
+-	if (hFile == INVALID_HANDLE_VALUE)
+-		return NULL;
+-	else
+-		return _fdopen(_open_osfhandle((intptr_t)hFile, 0), mode);
+-#else
+-	return fopen(file, mode);
+-#endif
+-}
+-
+-#if __WIN32
+-extern &quot;C&quot;
+-{
+-	// libavformat uses open (in the file_open function) so we need to override that too.
+-	// Following the same rules as ADM_fopen.
+-	int ADM_open(const char *path, int oflag, ...)
+-	{
+-		int fileNameLength = utf8StringToWideChar(path, -1, NULL);
+-		wchar_t wcFile[fileNameLength];
+-		int creation = 0, access = 0;
+-		HANDLE hFile;
+-
+-		utf8StringToWideChar(path, -1, wcFile);
+-
+-		if (oflag &amp; O_WRONLY || oflag &amp; O_RDWR)
+-		{
+-			access = GENERIC_WRITE;
+-
+-			if (oflag &amp; O_RDWR)
+-				access |= GENERIC_READ;
+-
+-			if (oflag &amp; O_CREAT)
+-			{
+-				if (oflag &amp; O_EXCL)
+-					creation = CREATE_NEW;
+-				else if (oflag &amp; O_TRUNC)
+-					creation = CREATE_ALWAYS;
+-				else
+-					creation = OPEN_ALWAYS;
+-			}
+-			else if (oflag &amp; O_TRUNC)
+-				creation = TRUNCATE_EXISTING;
+-		}
+-		else if (oflag &amp; O_RDONLY)
+-			creation = OPEN_EXISTING;
+-
+-		if (creation &amp; GENERIC_WRITE)
+-		{
+-			hFile = CreateFileW(wcFile, access, 0, NULL, creation, 0, NULL);
+-
+-			if (hFile == INVALID_HANDLE_VALUE)
+-				return -1;
+-			else
+-				CloseHandle(hFile);
+-		}
+-
+-		hFile = CreateFileW(wcFile, access, FILE_SHARE_READ, NULL, creation, 0, NULL);
+-
+-		if (hFile == INVALID_HANDLE_VALUE)
+-			return -1;
+-		else
+-			return _open_osfhandle((intptr_t)hFile, oflag);
+-	}
+-}
+-#endif
+-
+-int ADM_fclose(FILE *file)
+-{
+-	return fclose(file); 
+-}
+-
+-/*
+-      Get the  directory where jobs are stored
+-******************************************************/
+-char *ADM_getCustomDir(void)
+-{
+-	if (ADM_customdir)
+-		return ADM_customdir;
+-
+-	ADM_customdir = ADM_getHomeRelativePath(&quot;custom&quot;);
+-
+-	if (!ADM_mkdir(ADM_customdir))
+-	{
+-		printf(&quot;can't create custom directory (%s).\n&quot;, ADM_customdir);
+-		return NULL;
+-	}
+-
+-	return ADM_customdir;
+-}
+-/**
+-    \fn ADM_getAutoDir
+-    \brief  Get the  directory where auto script are stored. No need to free the string.
+-******************************************************/
+-char *ADM_getAutoDir(void)
+-{
+-	if (ADM_autodir )
+-		return ADM_autodir;
+-    ADM_autodir = ADM_getInstallRelativePath(ADM_RELATIVE_LIB_DIR, ADM_PLUGIN_DIR, &quot;autoScripts&quot;);
+-	return ADM_autodir;
+-}
+-/**
+-    \fn ADM_getPluginSettingsDir
+-    \brief Get the folder containing the plugin settings (presets etc..)
+-*/
+-const char *ADM_getSystemPluginSettingsDir(void)
+-{
+-    if(ADM_systemPluginSettings) return ADM_systemPluginSettings;
+-    ADM_systemPluginSettings=ADM_getInstallRelativePath(ADM_RELATIVE_LIB_DIR, ADM_PLUGIN_DIR, &quot;pluginSettings&quot;);
+-    return ADM_systemPluginSettings;
+-}
+-/**
+-
+-*/
+-const char *ADM_getUserPluginSettingsDir(void)
+-{
+-    if(ADM_userPluginSettings) return ADM_userPluginSettings;
+-    ADM_userPluginSettings=ADM_getHomeRelativePath(&quot;pluginSettings&quot;);
+-    return ADM_userPluginSettings;
+-}
+-
+-/*
+-      Get the  directory where jobs are stored
+-******************************************************/
+-char *ADM_getJobDir(void)
+-{
+-	if (ADM_jobdir)
+-		return ADM_jobdir;
+-
+-	ADM_jobdir = ADM_getHomeRelativePath(&quot;jobs&quot;);
+-
+-
+-	if (!ADM_mkdir(ADM_jobdir))
+-	{
+-		printf(&quot;can't create custom directory (%s).\n&quot;, ADM_jobdir);
+-		return NULL;
+-	}
+-
+-	return ADM_jobdir;
+-}
+-
+-static void AddSeparator(char *path)
+-{
+-	if (path &amp;&amp; (strlen(path) &lt; strlen(SEPARATOR) || strncmp(path + strlen(path) - strlen(SEPARATOR), SEPARATOR, strlen(SEPARATOR)) != 0))
+-		strcat(path, SEPARATOR);
+-}
+-
+-/**
+- * 	\fn ADM_getRelativePath
+- */
+-static char *ADM_getRelativePath(const char *base0, const char *base1, const char *base2, const char *base3)
+-{
+-	char *result;
+-	int length = strlen(base0) + 2;
+-
+-	if (base1)
+-		length += strlen(base1) + 1;
+-
+-	if (base2)
+-		length += strlen(base2) + 1;
+-
+-	if (base3)
+-		length += strlen(base3) + 1;
+-
+-	result = (char *)new char[length];
+-	strcpy(result, base0);
+-	AddSeparator(result);
+-
+-	if (base1)
+-	{
+-		if (strlen(base1))
+-		{
+-			strcat(result, base1);
+-			strcat(result, SEPARATOR);
+-		}
+-
+-		if (base2)
+-		{
+-			if (strlen(base2))
+-			{
+-				strcat(result, base2);
+-				strcat(result, SEPARATOR);
+-			}
+-
+-			if (base3 &amp;&amp; strlen(base3))
+-			{
+-				strcat(result, base3);				
+-				strcat(result, SEPARATOR);
+-			}
+-		}
+-	}
+-
+-	return result;
+-}
+-
+-/**
+- * 	\fn char *ADM_getHomeRelativePath(const char *base1, const char *base2=NULL,const char *base3=NULL);
+- *  \brief Returns home directory +base 1 + base 2... The return value is a copy, and must be deleted []
+- */
+-char *ADM_getHomeRelativePath(const char *base1, const char *base2, const char *base3)
+-{
+-	return ADM_getRelativePath(ADM_getBaseDir(), base1, base2, base3);
+-}
+-
+-char *ADM_getInstallRelativePath(const char *base1, const char *base2, const char *base3)
+-{
++/***************************************************************************
++                    
++    copyright            : (C) 2006 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++#include &lt;string.h&gt;
++#include &lt;dirent.h&gt;
++#include &lt;errno.h&gt;
++#include &lt;sys/stat.h&gt;
++#include &lt;unistd.h&gt;
++
++#if defined(__APPLE__)
++ #include &lt;Carbon/Carbon.h&gt;
++#else
++ #include &lt;fcntl.h&gt;
++ #ifdef __WIN32
++  #include &lt;direct.h&gt;
++  #include &lt;shlobj.h&gt;
++ #endif
++#endif
++
++#include &quot;ADM_default.h&quot;
++
++#define WIN32_PORTABLE_MODE 1
++
+ #ifdef __WIN32
++static const char *SEPARATOR=&quot;\\&quot;;
++
++#ifdef WIN32_PORTABLE_MODE
++    const char *ADM_DIR_NAME=&quot;settings&quot;;
++    bool portable=true;
++#else
++    const char *ADM_DIR_NAME=&quot;avidemux6&quot;;
++    bool portable=false;
++#endif
++#elif defined __HAIKU__
++static const char *SEPARATOR=&quot;/&quot;;
++const char *ADM_DIR_NAME=&quot;config/settings/avidemux6&quot;;
++
++#else
++static const char *SEPARATOR=&quot;/&quot;;
++const char *ADM_DIR_NAME=&quot;.avidemux6&quot;;
++#endif
++
++static char ADM_basedir[1024] = {0};
++static char *ADM_jobdir = NULL;
++static char *ADM_customdir = NULL;
++static char *ADM_autodir = NULL;
++static char *ADM_systemPluginSettings=NULL;
++static char *ADM_userPluginSettings=NULL;
++static int baseDirDone = 0;
++
++#undef fread
++#undef fwrite
++#undef fopen
++#undef fclose
++
++#ifdef __WIN32
++extern int utf8StringToWideChar(const char *utf8String, int utf8StringLength, wchar_t *wideCharString);
++extern int wideCharStringToUtf8(const wchar_t *wideCharString, int wideCharStringLength, char *utf8String);
++#endif
++
++size_t ADM_fread (void *ptr, size_t size, size_t n, FILE *sstream)
++{
++	return fread(ptr,size,n,sstream);
++}
++
++size_t ADM_fwrite(const void *ptr, size_t size, size_t n, FILE *sstream)
++{
++	return fwrite(ptr,size,n,sstream);
++}
++/**
++    \fn ADM_eraseFile
++*/
++uint8_t ADM_eraseFile(const char *file)
++{
++    if(!unlink(file))
++        return true;
++    return false;
++}
++/**
++    \fn ADM_fileSize
++    \brief return filesize, -1 on error
++*/
++int64_t ADM_fileSize(const char *file)
++{
++    FILE *f=ADM_fopen(file,&quot;r&quot;);
++    if(!f) return -1;
++    fseeko(f,0,SEEK_END);
++    int64_t v=ftello(f);
++    fclose(f);
++    return v;
++}
++/**
++    \fn ADM_fopen
++    \brief utf8 aware fopen, so that we can use utf8 string even on win32
++*/
++FILE *ADM_fopen(const char *file, const char *mode)
++{
++#ifdef __MINGW32__
++	// Override fopen to handle Unicode filenames and to ensure exclusive access when initially writing to a file.
++	int fileNameLength = utf8StringToWideChar(file, -1, NULL);
++	wchar_t wcFile[fileNameLength];
++	int creation = 0, access = 0;
++	HANDLE hFile;
++
++	utf8StringToWideChar(file, -1, wcFile);
++
++	if (strchr(mode, 'w'))
++	{
++		creation = CREATE_ALWAYS;
++		access = GENERIC_WRITE;
++
++		if (strchr(mode, '+'))
++			access |= GENERIC_READ;
++	}
++	else if (strchr(mode, 'r'))
++	{
++		creation = OPEN_EXISTING;
++		access = GENERIC_READ;
++
++		if (strchr(mode, '+'))
++			access = GENERIC_WRITE;
++	}
++	else if (strchr(mode, 'a'))
++	{
++		creation = OPEN_ALWAYS;
++		access = GENERIC_WRITE;
++
++		if (strchr(mode, '+'))
++			access |= GENERIC_READ;
++	}
++
++	if (creation &amp; GENERIC_WRITE)
++	{
++		hFile = CreateFileW(wcFile, access, 0, NULL, creation, 0, NULL);
++
++		if (hFile == INVALID_HANDLE_VALUE)
++			return NULL;
++		else
++			CloseHandle(hFile);
++	}
++
++	hFile = CreateFileW(wcFile, access, FILE_SHARE_READ, NULL, creation, 0, NULL);
++
++	if (hFile == INVALID_HANDLE_VALUE)
++		return NULL;
++	else
++		return _fdopen(_open_osfhandle((intptr_t)hFile, 0), mode);
++#else
++	return fopen(file, mode);
++#endif
++}
++
++#if __WIN32
++extern &quot;C&quot;
++{
++	// libavformat uses open (in the file_open function) so we need to override that too.
++	// Following the same rules as ADM_fopen.
++	int ADM_open(const char *path, int oflag, ...)
++	{
++		int fileNameLength = utf8StringToWideChar(path, -1, NULL);
++		wchar_t wcFile[fileNameLength];
++		int creation = 0, access = 0;
++		HANDLE hFile;
++
++		utf8StringToWideChar(path, -1, wcFile);
++
++		if (oflag &amp; O_WRONLY || oflag &amp; O_RDWR)
++		{
++			access = GENERIC_WRITE;
++
++			if (oflag &amp; O_RDWR)
++				access |= GENERIC_READ;
++
++			if (oflag &amp; O_CREAT)
++			{
++				if (oflag &amp; O_EXCL)
++					creation = CREATE_NEW;
++				else if (oflag &amp; O_TRUNC)
++					creation = CREATE_ALWAYS;
++				else
++					creation = OPEN_ALWAYS;
++			}
++			else if (oflag &amp; O_TRUNC)
++				creation = TRUNCATE_EXISTING;
++		}
++		else if (oflag &amp; O_RDONLY)
++			creation = OPEN_EXISTING;
++
++		if (creation &amp; GENERIC_WRITE)
++		{
++			hFile = CreateFileW(wcFile, access, 0, NULL, creation, 0, NULL);
++
++			if (hFile == INVALID_HANDLE_VALUE)
++				return -1;
++			else
++				CloseHandle(hFile);
++		}
++
++		hFile = CreateFileW(wcFile, access, FILE_SHARE_READ, NULL, creation, 0, NULL);
++
++		if (hFile == INVALID_HANDLE_VALUE)
++			return -1;
++		else
++			return _open_osfhandle((intptr_t)hFile, oflag);
++	}
++}
++#endif
++
++int ADM_fclose(FILE *file)
++{
++	return fclose(file); 
++}
++
++/*
++      Get the  directory where jobs are stored
++******************************************************/
++char *ADM_getCustomDir(void)
++{
++	if (ADM_customdir)
++		return ADM_customdir;
++
++	ADM_customdir = ADM_getHomeRelativePath(&quot;custom&quot;);
++
++	if (!ADM_mkdir(ADM_customdir))
++	{
++		printf(&quot;can't create custom directory (%s).\n&quot;, ADM_customdir);
++		return NULL;
++	}
++
++	return ADM_customdir;
++}
++/**
++    \fn ADM_getAutoDir
++    \brief  Get the  directory where auto script are stored. No need to free the string.
++******************************************************/
++char *ADM_getAutoDir(void)
++{
++	if (ADM_autodir )
++		return ADM_autodir;
++    ADM_autodir = ADM_getInstallRelativePath(ADM_RELATIVE_LIB_DIR, ADM_PLUGIN_DIR, &quot;autoScripts&quot;);
++	return ADM_autodir;
++}
++/**
++    \fn ADM_getPluginSettingsDir
++    \brief Get the folder containing the plugin settings (presets etc..)
++*/
++const char *ADM_getSystemPluginSettingsDir(void)
++{
++    if(ADM_systemPluginSettings) return ADM_systemPluginSettings;
++    ADM_systemPluginSettings=ADM_getInstallRelativePath(ADM_RELATIVE_LIB_DIR, ADM_PLUGIN_DIR, &quot;pluginSettings&quot;);
++    return ADM_systemPluginSettings;
++}
++/**
++
++*/
++const char *ADM_getUserPluginSettingsDir(void)
++{
++    if(ADM_userPluginSettings) return ADM_userPluginSettings;
++    ADM_userPluginSettings=ADM_getHomeRelativePath(&quot;pluginSettings&quot;);
++    return ADM_userPluginSettings;
++}
++
++/*
++      Get the  directory where jobs are stored
++******************************************************/
++char *ADM_getJobDir(void)
++{
++	if (ADM_jobdir)
++		return ADM_jobdir;
++
++	ADM_jobdir = ADM_getHomeRelativePath(&quot;jobs&quot;);
++
++
++	if (!ADM_mkdir(ADM_jobdir))
++	{
++		printf(&quot;can't create custom directory (%s).\n&quot;, ADM_jobdir);
++		return NULL;
++	}
++
++	return ADM_jobdir;
++}
++
++static void AddSeparator(char *path)
++{
++	if (path &amp;&amp; (strlen(path) &lt; strlen(SEPARATOR) || strncmp(path + strlen(path) - strlen(SEPARATOR), SEPARATOR, strlen(SEPARATOR)) != 0))
++		strcat(path, SEPARATOR);
++}
++
++/**
++ * 	\fn ADM_getRelativePath
++ */
++static char *ADM_getRelativePath(const char *base0, const char *base1, const char *base2, const char *base3)
++{
++	char *result;
++	int length = strlen(base0) + 2;
++
++	if (base1)
++		length += strlen(base1) + 1;
++
++	if (base2)
++		length += strlen(base2) + 1;
++
++	if (base3)
++		length += strlen(base3) + 1;
++
++	result = (char *)new char[length];
++	strcpy(result, base0);
++	AddSeparator(result);
++
++	if (base1)
++	{
++		if (strlen(base1))
++		{
++			strcat(result, base1);
++			strcat(result, SEPARATOR);
++		}
++
++		if (base2)
++		{
++			if (strlen(base2))
++			{
++				strcat(result, base2);
++				strcat(result, SEPARATOR);
++			}
++
++			if (base3 &amp;&amp; strlen(base3))
++			{
++				strcat(result, base3);				
++				strcat(result, SEPARATOR);
++			}
++		}
++	}
++
++	return result;
++}
++
++/**
++ * 	\fn char *ADM_getHomeRelativePath(const char *base1, const char *base2=NULL,const char *base3=NULL);
++ *  \brief Returns home directory +base 1 + base 2... The return value is a copy, and must be deleted []
++ */
++char *ADM_getHomeRelativePath(const char *base1, const char *base2, const char *base3)
++{
++	return ADM_getRelativePath(ADM_getBaseDir(), base1, base2, base3);
++}
++
++char *ADM_getInstallRelativePath(const char *base1, const char *base2, const char *base3)
++{
++#ifdef __WIN32
+ 	wchar_t wcModuleName[MAX_PATH];
+ 
+ 	GetModuleFileNameW(0, wcModuleName, sizeof(wcModuleName) / sizeof(wchar_t));
+@@ -374,471 +374,471 @@
+ 	if (slash)
+ 		*slash = '\0';
+ 
+-	return ADM_getRelativePath(moduleName, base1, base2, base3);
+-#elif defined(__APPLE__)
+-#define MAX_PATH_SIZE 1024
+-
+-	char buffer[MAX_PATH_SIZE];
+-
+-	CFURLRef url(CFBundleCopyExecutableURL(CFBundleGetMainBundle()));
+-	buffer[0] = '\0';
+-
+-	if (url)
+-	{
+-		CFURLGetFileSystemRepresentation(url, true, (UInt8*)buffer, MAX_PATH_SIZE);
+-		CFRelease(url);
+-
+-		char *slash = strrchr(buffer, '/');
+-		
+-		if (slash)
+-			*slash = '\0';
+-	}
+-
+-	return ADM_getRelativePath(buffer, base1, base2, base3);
+-#else
+-	return ADM_getRelativePath(ADM_INSTALL_DIR, base1, base2, base3);
+-#endif
+-}
+-/*
+-      Get the root directory for .avidemux stuff
+-******************************************************/
+-char *ADM_getBaseDir(void)
+-{
+-	char *home;
+-
+-	if (baseDirDone)
+-		return ADM_basedir;
+-
+-	// Get the base directory
+-#ifdef __WIN32
+-    if (portable)
+-    {
+-        // Portable mode...
+-        home = ADM_getInstallRelativePath(NULL, NULL, NULL);
+-    }
+-	else
+-    {
+-        wchar_t wcHome[MAX_PATH];
+-
+-        if (SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, wcHome) == S_OK)
+-        {
+-            int len = wideCharStringToUtf8(wcHome, -1, NULL);
+-            home = new char[len];
+-
+-            wideCharStringToUtf8(wcHome, -1, home);
+-        }
+-        else
+-        {
+-            printf(&quot;Oops: can't determine the Application Data folder.&quot;);
+-            home = ADM_strdup(&quot;c:\\&quot;);
+-        }
+-    }
+-#else
+-	const char* homeEnv = getenv(&quot;HOME&quot;);
+-
+-	if (homeEnv)
+-	{
+-		home = new char[strlen(homeEnv) + 2];
+-		strcpy(home, homeEnv);
+-	}
+-	else
+-	{
+-		printf(&quot;Oops: can't determine $HOME.&quot;);
+-
+-		return NULL;
+-	}
+-#endif
+-
+-	// Try to open the .avidemux directory
+-
+-	strcpy(ADM_basedir, home);
+-	strcat(ADM_basedir, SEPARATOR);
+-	strcat(ADM_basedir, ADM_DIR_NAME);
+-	strcat(ADM_basedir, SEPARATOR);
+-
+-    delete [] home;
+-    home=NULL;
+-
+-	if (!ADM_mkdir(ADM_basedir))
+-	{
+-		ADM_error(&quot;Oops: cannot create the .avidemux directoryi (%s)\n&quot;,ADM_basedir);
+-		return NULL;
+-	}
+-
+-	// Now built the filename
+-	baseDirDone = 1;
+-	printf(&quot;Using %s as base directory for prefs/jobs/...\n&quot;, ADM_basedir);
+-	return ADM_basedir;
+-}
+-
+-#ifdef __WIN32
+-#define DIR _WDIR
+-#define dirent _wdirent
+-#define opendir _wopendir
+-#define readdir _wreaddir
+-#define closedir _wclosedir
+-#endif
+-
+-/*----------------------------------------
+-      Create a directory
+-      If it already exists, do nothing
+-------------------------------------------*/
+-uint8_t ADM_mkdir(const char *dirname)
+-{
+-	DIR *dir = NULL;
+-
+-#ifdef __WIN32
+-	int dirNameLength = utf8StringToWideChar(dirname, -1, NULL);
+-	wchar_t dirname2[dirNameLength];
+-
+-	utf8StringToWideChar(dirname, -1, dirname2);
+-#else
+-	const char* dirname2 = dirname;
+-#endif
+-
+-	// Check it already exists ?
+-	dir = opendir(dirname2);
+-
+-	if (dir)
+-	{ 
+-		printf(&quot;Directory %s exists.Good.\n&quot;, dirname);
+-		closedir(dir);
+-		return 1;
+-	}
+-#ifdef __WIN32
+-	if (_wmkdir(dirname2))
+-	{
+-		printf(&quot;Oops: mkdir failed on %s\n&quot;, dirname);
+-		return 0;
+-	}
+-#else
+-	printf(&quot;Creating dir :%s\n&quot;, dirname2);
+-	mkdir(dirname2,0755);
+-
+-#endif
+-
+-	if ((dir = opendir(dirname2)) == NULL)
+-		return 0;
+-
+-	closedir(dir);
+-
+-	return 1;
+-}
+-/**
+- *  \fn buildDirectoryContent
+- * 	\brief Returns the content of a dir with the extension ext. The receiving array must be allocated by caller
+- * (just the array, not the names themselves)
+- */
+-uint8_t buildDirectoryContent(uint32_t *outnb, const char *base, char *jobName[], int maxElems, const char *ext)
+-{
+-	DIR *dir;
+-	struct dirent *direntry;
+-	int dirmax = 0, len;
+-	int extlen = strlen(ext);
+-
+-	ADM_assert(extlen);
+-
+-#ifdef __WIN32
+-	int dirNameLength = utf8StringToWideChar(base, -1, NULL);
+-	wchar_t base2[dirNameLength];
+-
+-	utf8StringToWideChar(base, -1, base2);
+-#else
+-	const char *base2 = base;
+-#endif
+-
+-	dir = opendir(base2);
+-	if (!dir)
+-		return 0;
+-
+-	while ((direntry = readdir(dir)))
+-	{
+-#ifdef __WIN32
+-		int dirLength = wideCharStringToUtf8(direntry-&gt;d_name, -1, NULL);
+-		char d_name[dirLength];
+-
+-		wideCharStringToUtf8(direntry-&gt;d_name, -1, d_name);
+-#else
+-		const char *d_name = direntry-&gt;d_name;
+-#endif
+-
+-		len = strlen(d_name);
+-
+-		if (len &lt; (extlen + 1))
+-			continue;
+-
+-		int xbase = len - extlen;
+-
+-		if (memcmp(d_name + xbase, ext, extlen))
+-		{
+-			printf(&quot;ignored: %s\n&quot;, d_name);
+-			continue;
+-		}
+-
+-		jobName[dirmax] = (char *)ADM_alloc(strlen(base) + strlen(d_name) + 2);
+-		strcpy(jobName[dirmax], base);
+-		AddSeparator(jobName[dirmax]);
+-		strcat(jobName[dirmax], d_name);
+-		dirmax++;
+-
+-		if (dirmax &gt;= maxElems)
+-		{
+-			printf(&quot;[jobs]: Max # of jobs exceeded\n&quot;);
+-			break;
+-		}
+-	}
+-
+-	closedir(dir);
+-	*outnb = dirmax;
+-
+-	return 1;
+-}
+-/**
+-    \fn clearDirectoryContent
+-*/
+-uint8_t    clearDirectoryContent(const uint32_t nb, char *jobName[])
+-{
+-    for(int i=0;i&lt;nb;i++)
+-        if(jobName[i])
+-        {
+-            ADM_dealloc(jobName[i]);
+-            jobName[i]=NULL;
+-        }
+-    return true;
+-}
+-//------------------------------------------------------------------
+-
+-/*
+-
+-** note: it modifies it's first argument
+-*/
+-void simplify_path(char **buf)
+-{
+-	unsigned int last1slash = 0;
+-	unsigned int last2slash = 0;
+-
+-	while (!strncmp(*buf, &quot;/../&quot;, 4))
+-		memmove(*buf, *buf + 3, strlen(*buf + 3) + 1);
+-
+-	for (unsigned int i = 0; i &lt; strlen(*buf) - 2; i++)
+-		while (!strncmp(*buf + i, &quot;/./&quot;, 3))
+-			memmove(*buf + i, *buf + i + 2, strlen(*buf + i + 2) + 1);
+-
+-	for (unsigned int i = 0; i &lt; strlen(*buf) - 3; i++)
+-	{
+-		if (*(*buf + i) == '/')
+-		{
+-			last2slash = last1slash;
+-			last1slash = i;
+-		}
+-
+-		if (!strncmp(*buf + i, &quot;/../&quot;, 4))
+-		{
+-			memmove(*buf + last2slash, *buf + i + 3, strlen(*buf + i + 3) + 1);
+-
+-			return simplify_path(buf);
+-		}
+-	}
+-}
+-
+-/**
+-        \fn ADM_PathCanonize
+-        \brief Canonize the path, returns a copy of the absolute path given as parameter
+-*/
+-char *ADM_PathCanonize(const char *tmpname)
+-{
+-	char path[300];
+-	char *out;
+-
+-	if (!getcwd(path, 300))
+-	{
+-		fprintf(stderr, &quot;\ngetcwd() failed with: %s (%u)\n&quot;, strerror(errno), errno);
+-		path[0] = '\0';
+-	}
+-
+-	if (!tmpname || tmpname[0] == 0)
+-	{
+-		out = new char[strlen(path) + 2];
+-		strcpy(out, path);
+-#ifndef __WIN32
+-		strcat(out, &quot;/&quot;);
+-#else
+-		strcat(out, &quot;\\&quot;);
+-#endif
+-		printf(&quot;\n Canonizing null string ??? (%s)\n&quot;, out);
+-	}
+-	else if (tmpname[0] == '/'
+-#if defined(__WIN32)
+-		|| tmpname[1] == ':'
+-#endif
+-		)
+-	{
+-		out = new char[strlen(tmpname) + 1];
+-		strcpy(out, tmpname);
+-
+-		return out;
+-	}
+-	else
+-	{
+-		out = new char[strlen(path) + strlen(tmpname) + 6];
+-		strcpy(out, path);
+-#ifndef __WIN32
+-		strcat(out, &quot;/&quot;);
+-#else
+-		strcat(out, &quot;\\&quot;);
+-#endif
+-		strcat(out, tmpname);
+-	}
+-
+-	simplify_path(&amp;out);
+-
+-	return out;
+-}
+-
+-/**
+-        \fn ADM_PathStripName
+-	\brief Returns path only /foo/bar.avi -&gt; /foo INPLACE, no copy done
+-
+-*/
+-void ADM_PathStripName(char *str)
+-{
+-	int len = strlen(str);
+-
+-	if (len &lt;= 1)
+-		return;
+-
+-	len--;
+-
+-#ifndef __WIN32
+-	while (*(str + len) != '/' &amp;&amp; len)
+-#else
+-	while (*(str + len) != '\\' &amp;&amp; len)
+-#endif
+-	{
+-		*(str + len) = 0;
+-		len--;
+-	}
+-}
+-
+-/**
+-    \fn ADM_GetFileName
+-    \brief Get the filename without path. /foo/bar.avi -&gt; bar.avi INPLACE, NO COPY
+-
+-*/
+-const char *ADM_GetFileName(const char *str)
+-{
+-	const char *filename;
+-	const char *filename2;
+-
+-#ifndef __WIN32
+-	filename = strrchr(str, '/');
+-#else
+-	filename = strrchr(str, '\\');
+-	filename2 = strrchr(str, '/');
+-
+-	if (filename2 &amp;&amp; filename)
+-		if (filename2 &gt; filename)
+-			filename = filename2;
+-#endif
+-
+-	if (filename)
+-		return filename + 1;
+-	else
+-		return str;
+-}
+-
+-/**
+-    \fn ADM_PathSplit
+-    \brief Split path into absolute path+name and extention i.e. /foo/bar/zee.avi -&gt; /foo/bar/zee,avi.             Copy are returned
+-
+-*/
+-void ADM_PathSplit(const char *str, char **root, char **ext)
+-{
+-	char *full;
+-	uint32_t l;
+-
+-	full = ADM_PathCanonize(str);
+-	// Search the last
+-	l = strlen(full);
+-	l--;
+-	ADM_assert(l &gt; 0);
+-
+-	while (*(full + l) != '.' &amp;&amp; l)
+-		l--;
+-
+-	if (!l || l == (strlen(full) - 1))
+-	{
+-		if (l == (strlen(full) - 1))
+-			*(full + l) = 0;  // remove trailing
+-
+-		*ext = new char[2];
+-		*root = full;
+-		strcpy(*ext, &quot;&quot;);
+-
+-		return;
+-	}
+-	// else we do get an extension
+-	// starting at l+1
+-	uint32_t suff;
+-
+-	suff = strlen(full) - l - 1;
+-	*ext = new char[suff + 1];
+-	strcpy(*ext, full + l + 1);
+-	*(full + l) = 0;
+-	*root = full;
+-}
+-/**
+-    \fn ADM_copyFile
+-*/
+-uint8_t ADM_copyFile(const char *source, const char *target)
+-{
+-    FILE *fin=ADM_fopen(source,&quot;rb&quot;);
+-    if(!fin)
+-    {
+-        ADM_error(&quot;Cannot open %s for reading\n&quot;,source);
+-        return false;
+-    }
+-    FILE *fout=ADM_fopen(target,&quot;wb&quot;);
+-    if(!fout)
+-    {
+-        fclose(fin);
+-        ADM_error(&quot;Cannot open %s for writting\n&quot;,target);
+-        return false;
+-    }
+-    uint8_t buffer[1024];
+-    while(!feof(fin))
+-    {
+-        int r=fread(buffer,1,1024,fin);
+-        fwrite(buffer,1,r,fout);
+-        if(r!=1024) break;
+-    }
+-
+-    fclose(fin);
+-    fclose(fout);
+-    return true;
+-}
+-
+-/**
+-    \fn ADM_copyFile
+-*/
+-uint8_t ADM_renameFile(const char *source, const char *target)
+-{
+-#ifdef __MINGW32__
+-	int sourceFileNameLength = utf8StringToWideChar(source, -1, NULL);
+-    int targetFileNameLength = utf8StringToWideChar(target, -1, NULL);
+-    wchar_t wcFileSource[sourceFileNameLength];
+-    wchar_t wcFileTarget[targetFileNameLength];
+-    
+-    utf8StringToWideChar(source, -1, wcFileSource);
+-    utf8StringToWideChar(target, -1, wcFileTarget);
+-   
+-    if(!_wrename(wcFileSource,wcFileTarget)) return true;
+-    ADM_error(&quot;Failed to rename %s to %s\n&quot;,source,target);
+-    return false;
+-#else
+-    if(!rename(source,target)) return true;
+-    return false;
+-#endif
+-}
+-
+-// EOF
++	return ADM_getRelativePath(moduleName, base1, base2, base3);
++#elif defined(__APPLE__)
++#define MAX_PATH_SIZE 1024
++
++	char buffer[MAX_PATH_SIZE];
++
++	CFURLRef url(CFBundleCopyExecutableURL(CFBundleGetMainBundle()));
++	buffer[0] = '\0';
++
++	if (url)
++	{
++		CFURLGetFileSystemRepresentation(url, true, (UInt8*)buffer, MAX_PATH_SIZE);
++		CFRelease(url);
++
++		char *slash = strrchr(buffer, '/');
++		
++		if (slash)
++			*slash = '\0';
++	}
++
++	return ADM_getRelativePath(buffer, base1, base2, base3);
++#else
++	return ADM_getRelativePath(ADM_INSTALL_DIR, base1, base2, base3);
++#endif
++}
++/*
++      Get the root directory for .avidemux stuff
++******************************************************/
++char *ADM_getBaseDir(void)
++{
++	char *home;
++
++	if (baseDirDone)
++		return ADM_basedir;
++
++	// Get the base directory
++#ifdef __WIN32
++    if (portable)
++    {
++        // Portable mode...
++        home = ADM_getInstallRelativePath(NULL, NULL, NULL);
++    }
++	else
++    {
++        wchar_t wcHome[MAX_PATH];
++
++        if (SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, wcHome) == S_OK)
++        {
++            int len = wideCharStringToUtf8(wcHome, -1, NULL);
++            home = new char[len];
++
++            wideCharStringToUtf8(wcHome, -1, home);
++        }
++        else
++        {
++            printf(&quot;Oops: can't determine the Application Data folder.&quot;);
++            home = ADM_strdup(&quot;c:\\&quot;);
++        }
++    }
++#else
++	const char* homeEnv = getenv(&quot;HOME&quot;);
++
++	if (homeEnv)
++	{
++		home = new char[strlen(homeEnv) + 2];
++		strcpy(home, homeEnv);
++	}
++	else
++	{
++		printf(&quot;Oops: can't determine $HOME.&quot;);
++
++		return NULL;
++	}
++#endif
++
++	// Try to open the .avidemux directory
++
++	strcpy(ADM_basedir, home);
++	AddSeparator(ADM_basedir);
++	strcat(ADM_basedir, ADM_DIR_NAME);
++	strcat(ADM_basedir, SEPARATOR);
++
++    delete [] home;
++    home=NULL;
++
++	if (!ADM_mkdir(ADM_basedir))
++	{
++		ADM_error(&quot;Oops: cannot create the .avidemux directoryi (%s)\n&quot;,ADM_basedir);
++		return NULL;
++	}
++
++	// Now built the filename
++	baseDirDone = 1;
++	printf(&quot;Using %s as base directory for prefs/jobs/...\n&quot;, ADM_basedir);
++	return ADM_basedir;
++}
++
++#ifdef __WIN32
++#define DIR _WDIR
++#define dirent _wdirent
++#define opendir _wopendir
++#define readdir _wreaddir
++#define closedir _wclosedir
++#endif
++
++/*----------------------------------------
++      Create a directory
++      If it already exists, do nothing
++------------------------------------------*/
++uint8_t ADM_mkdir(const char *dirname)
++{
++	DIR *dir = NULL;
++
++#ifdef __WIN32
++	int dirNameLength = utf8StringToWideChar(dirname, -1, NULL);
++	wchar_t dirname2[dirNameLength];
++
++	utf8StringToWideChar(dirname, -1, dirname2);
++#else
++	const char* dirname2 = dirname;
++#endif
++
++	// Check it already exists ?
++	dir = opendir(dirname2);
++
++	if (dir)
++	{ 
++		printf(&quot;Directory %s exists.Good.\n&quot;, dirname);
++		closedir(dir);
++		return 1;
++	}
++#ifdef __WIN32
++	if (_wmkdir(dirname2))
++	{
++		printf(&quot;Oops: mkdir failed on %s\n&quot;, dirname);
++		return 0;
++	}
++#else
++	printf(&quot;Creating dir :%s\n&quot;, dirname2);
++	mkdir(dirname2,0755);
++
++#endif
++
++	if ((dir = opendir(dirname2)) == NULL)
++		return 0;
++
++	closedir(dir);
++
++	return 1;
++}
++/**
++ *  \fn buildDirectoryContent
++ * 	\brief Returns the content of a dir with the extension ext. The receiving array must be allocated by caller
++ * (just the array, not the names themselves)
++ */
++uint8_t buildDirectoryContent(uint32_t *outnb, const char *base, char *jobName[], int maxElems, const char *ext)
++{
++	DIR *dir;
++	struct dirent *direntry;
++	int dirmax = 0, len;
++	int extlen = strlen(ext);
++
++	ADM_assert(extlen);
++
++#ifdef __WIN32
++	int dirNameLength = utf8StringToWideChar(base, -1, NULL);
++	wchar_t base2[dirNameLength];
++
++	utf8StringToWideChar(base, -1, base2);
++#else
++	const char *base2 = base;
++#endif
++
++	dir = opendir(base2);
++	if (!dir)
++		return 0;
++
++	while ((direntry = readdir(dir)))
++	{
++#ifdef __WIN32
++		int dirLength = wideCharStringToUtf8(direntry-&gt;d_name, -1, NULL);
++		char d_name[dirLength];
++
++		wideCharStringToUtf8(direntry-&gt;d_name, -1, d_name);
++#else
++		const char *d_name = direntry-&gt;d_name;
++#endif
++
++		len = strlen(d_name);
++
++		if (len &lt; (extlen + 1))
++			continue;
++
++		int xbase = len - extlen;
++
++		if (memcmp(d_name + xbase, ext, extlen))
++		{
++			printf(&quot;ignored: %s\n&quot;, d_name);
++			continue;
++		}
++
++		jobName[dirmax] = (char *)ADM_alloc(strlen(base) + strlen(d_name) + 2);
++		strcpy(jobName[dirmax], base);
++		AddSeparator(jobName[dirmax]);
++		strcat(jobName[dirmax], d_name);
++		dirmax++;
++
++		if (dirmax &gt;= maxElems)
++		{
++			printf(&quot;[jobs]: Max # of jobs exceeded\n&quot;);
++			break;
++		}
++	}
++
++	closedir(dir);
++	*outnb = dirmax;
++
++	return 1;
++}
++/**
++    \fn clearDirectoryContent
++*/
++uint8_t    clearDirectoryContent(const uint32_t nb, char *jobName[])
++{
++    for(int i=0;i&lt;nb;i++)
++        if(jobName[i])
++        {
++            ADM_dealloc(jobName[i]);
++            jobName[i]=NULL;
++        }
++    return true;
++}
++//------------------------------------------------------------------
++
++/*
++
++** note: it modifies it's first argument
++*/
++void simplify_path(char **buf)
++{
++	unsigned int last1slash = 0;
++	unsigned int last2slash = 0;
++
++	while (!strncmp(*buf, &quot;/../&quot;, 4))
++		memmove(*buf, *buf + 3, strlen(*buf + 3) + 1);
++
++	for (unsigned int i = 0; i &lt; strlen(*buf) - 2; i++)
++		while (!strncmp(*buf + i, &quot;/./&quot;, 3))
++			memmove(*buf + i, *buf + i + 2, strlen(*buf + i + 2) + 1);
++
++	for (unsigned int i = 0; i &lt; strlen(*buf) - 3; i++)
++	{
++		if (*(*buf + i) == '/')
++		{
++			last2slash = last1slash;
++			last1slash = i;
++		}
++
++		if (!strncmp(*buf + i, &quot;/../&quot;, 4))
++		{
++			memmove(*buf + last2slash, *buf + i + 3, strlen(*buf + i + 3) + 1);
++
++			return simplify_path(buf);
++		}
++	}
++}
++
++/**
++        \fn ADM_PathCanonize
++        \brief Canonize the path, returns a copy of the absolute path given as parameter
++*/
++char *ADM_PathCanonize(const char *tmpname)
++{
++	char path[300];
++	char *out;
++
++	if (!getcwd(path, 300))
++	{
++		fprintf(stderr, &quot;\ngetcwd() failed with: %s (%u)\n&quot;, strerror(errno), errno);
++		path[0] = '\0';
++	}
++
++	if (!tmpname || tmpname[0] == 0)
++	{
++		out = new char[strlen(path) + 2];
++		strcpy(out, path);
++#ifndef __WIN32
++		strcat(out, &quot;/&quot;);
++#else
++		strcat(out, &quot;\\&quot;);
++#endif
++		printf(&quot;\n Canonizing null string ??? (%s)\n&quot;, out);
++	}
++	else if (tmpname[0] == '/'
++#if defined(__WIN32)
++		|| tmpname[1] == ':'
++#endif
++		)
++	{
++		out = new char[strlen(tmpname) + 1];
++		strcpy(out, tmpname);
++
++		return out;
++	}
++	else
++	{
++		out = new char[strlen(path) + strlen(tmpname) + 6];
++		strcpy(out, path);
++#ifndef __WIN32
++		strcat(out, &quot;/&quot;);
++#else
++		strcat(out, &quot;\\&quot;);
++#endif
++		strcat(out, tmpname);
++	}
++
++	simplify_path(&amp;out);
++
++	return out;
++}
++
++/**
++        \fn ADM_PathStripName
++	\brief Returns path only /foo/bar.avi -&gt; /foo INPLACE, no copy done
++
++*/
++void ADM_PathStripName(char *str)
++{
++	int len = strlen(str);
++
++	if (len &lt;= 1)
++		return;
++
++	len--;
++
++#ifndef __WIN32
++	while (*(str + len) != '/' &amp;&amp; len)
++#else
++	while (*(str + len) != '\\' &amp;&amp; len)
++#endif
++	{
++		*(str + len) = 0;
++		len--;
++	}
++}
++
++/**
++    \fn ADM_GetFileName
++    \brief Get the filename without path. /foo/bar.avi -&gt; bar.avi INPLACE, NO COPY
++
++*/
++const char *ADM_GetFileName(const char *str)
++{
++	const char *filename;
++	const char *filename2;
++
++#ifndef __WIN32
++	filename = strrchr(str, '/');
++#else
++	filename = strrchr(str, '\\');
++	filename2 = strrchr(str, '/');
++
++	if (filename2 &amp;&amp; filename)
++		if (filename2 &gt; filename)
++			filename = filename2;
++#endif
++
++	if (filename)
++		return filename + 1;
++	else
++		return str;
++}
++
++/**
++    \fn ADM_PathSplit
++    \brief Split path into absolute path+name and extention i.e. /foo/bar/zee.avi -&gt; /foo/bar/zee,avi.             Copy are returned
++
++*/
++void ADM_PathSplit(const char *str, char **root, char **ext)
++{
++	char *full;
++	uint32_t l;
++
++	full = ADM_PathCanonize(str);
++	// Search the last
++	l = strlen(full);
++	l--;
++	ADM_assert(l &gt; 0);
++
++	while (*(full + l) != '.' &amp;&amp; l)
++		l--;
++
++	if (!l || l == (strlen(full) - 1))
++	{
++		if (l == (strlen(full) - 1))
++			*(full + l) = 0;  // remove trailing
++
++		*ext = new char[2];
++		*root = full;
++		strcpy(*ext, &quot;&quot;);
++
++		return;
++	}
++	// else we do get an extension
++	// starting at l+1
++	uint32_t suff;
++
++	suff = strlen(full) - l - 1;
++	*ext = new char[suff + 1];
++	strcpy(*ext, full + l + 1);
++	*(full + l) = 0;
++	*root = full;
++}
++/**
++    \fn ADM_copyFile
++*/
++uint8_t ADM_copyFile(const char *source, const char *target)
++{
++    FILE *fin=ADM_fopen(source,&quot;rb&quot;);
++    if(!fin)
++    {
++        ADM_error(&quot;Cannot open %s for reading\n&quot;,source);
++        return false;
++    }
++    FILE *fout=ADM_fopen(target,&quot;wb&quot;);
++    if(!fout)
++    {
++        fclose(fin);
++        ADM_error(&quot;Cannot open %s for writting\n&quot;,target);
++        return false;
++    }
++    uint8_t buffer[1024];
++    while(!feof(fin))
++    {
++        int r=fread(buffer,1,1024,fin);
++        fwrite(buffer,1,r,fout);
++        if(r!=1024) break;
++    }
++
++    fclose(fin);
++    fclose(fout);
++    return true;
++}
++
++/**
++    \fn ADM_copyFile
++*/
++uint8_t ADM_renameFile(const char *source, const char *target)
++{
++#ifdef __MINGW32__
++	int sourceFileNameLength = utf8StringToWideChar(source, -1, NULL);
++    int targetFileNameLength = utf8StringToWideChar(target, -1, NULL);
++    wchar_t wcFileSource[sourceFileNameLength];
++    wchar_t wcFileTarget[targetFileNameLength];
++    
++    utf8StringToWideChar(source, -1, wcFileSource);
++    utf8StringToWideChar(target, -1, wcFileTarget);
++   
++    if(!_wrename(wcFileSource,wcFileTarget)) return true;
++    ADM_error(&quot;Failed to rename %s to %s\n&quot;,source,target);
++    return false;
++#else
++    if(!rename(source,target)) return true;
++    return false;
++#endif
++}
++
++// EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004685.html">[Avidemux-svn-commit] r7537 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+</A></li>
+	<LI>Next message: <A HREF="004687.html">[Avidemux-svn-commit] r7539 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4686">[ date ]</a>
+              <a href="thread.html#4686">[ thread ]</a>
+              <a href="subject.html#4686">[ subject ]</a>
+              <a href="author.html#4686">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,226 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6130 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6130%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv&In-Reply-To=%3C201004162026.o3GKQI8I026730%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003333.html">
+   <LINK REL="Next"  HREF="003335.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6130 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6130%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv&In-Reply-To=%3C201004162026.o3GKQI8I026730%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6130 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Apr 16 22:26:18 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003333.html">[Avidemux-svn-commit] r6129 - in	branches/avidemux_2.5_branch_gruntster/platforms/windows/build_scripts/avidemux:	. Tools
+</A></li>
+        <LI>Next message: <A HREF="003335.html">[Avidemux-svn-commit] r6131 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3334">[ date ]</a>
+              <a href="thread.html#3334">[ thread ]</a>
+              <a href="subject.html#3334">[ subject ]</a>
+              <a href="author.html#3334">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-04-16 22:26:18 +0200 (Fri, 16 Apr 2010)
+New Revision: 6130
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.h
+Log:
+[Flv] Better decoding of metadata, fixes #92
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp	2010-04-15 19:22:45 UTC (rev 6129)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp	2010-04-16 20:26:18 UTC (rev 6130)
+@@ -27,7 +27,8 @@
+ // Borrowed from lavformt/flv.h
+ #include &quot;libavformat/flv.h&quot;
+ // Borrowed from lavformt/flv.h    
+-
++#define ADM_warning printfs
++#define LU  &quot;u&quot;
+ uint32_t ADM_UsecFromFps1000(uint32_t fps1000);
+ extern uint8_t extractH263FLVInfo(uint8_t *buffer,uint32_t len,uint32_t *w,uint32_t *h);
+ /**
+@@ -118,38 +119,51 @@
+     }
+ 
+ }
++
+ /**
+-    \fn parseMetaData
+-    \brief
++    \fn parseOneMeta
+ */
+-uint8_t flvHeader::parseMetaData(uint32_t remaining)
++bool flvHeader::parseOneMeta(const char *s,uint64_t endPos)
+ {
+-    uint32_t endPos=ftello(_fd)+remaining;
+-    {
+-        // Check the first one is onMetaData...
+-        uint8_t type=read8();
+-
+-        if(type!=AMF_DATA_TYPE_STRING) // String!
+-            goto endit;
+-        char *z=readFlvString();
+-        printf(&quot;[FlashString] %s\n&quot;,z);
+-        if(z &amp;&amp; strncmp(z,&quot;onMetaData&quot;,10)) goto endit;
+-        // Normally the next one is mixed array
+-        Skip(4);
+-        Skip(1);
+-        while(ftello(_fd)&lt;endPos-4)
+-        {
+-
+-            char *s=readFlvString();
+-            printf(&quot;[FlvType] :%d String : %s&quot;,type,s);
+-            type=read8();
++            int type=read8();
++            printf(&quot;type :%d : &quot;,type);
+             switch(type)
+             {
++                case AMF_DATA_TYPE_OBJECT_END:break;
++                case AMF_DATA_TYPE_OBJECT: 
++                {
++                        printf(&quot;\n&quot;);
++                        while(ftello(_fd)&lt;endPos-4)
++                        {
++                                char *o=readFlvString();
++                                printf(&quot;\t Object:%s&quot;,o);
++                                if(false==parseOneMeta(o,endPos)) return false;
++/*
++                                char objType=read8();
++                                printf(&quot;--&gt;%d&quot;,objType);
++                                if(objType!=10) 
++                                {
++                                        ADM_warning(&quot;type is not strict array\n&quot;);
++                                        goto xxer;
++                                }
++                                int count=read32();
++                                printf(&quot;, count=%d\n&quot;,count);
++                                for(int i=0;i&lt;count;i++)
++                                {
++                                        if(false==parseOneMeta(endPos)) return false;
++                                }
++                                break;
++*/
++                        }
++                        break;
++                        
++                }
+                 case AMF_DATA_TYPE_ARRAY:
+                                     {
+                                             uint32_t len=read32();
+-                                            printf(&quot;[FLV] Array :&quot;);
+-                                            for(int i=0;i&lt;len;i++) printf(&quot;%02x &quot;,read8());
++                                            printf(&quot;\n\t[FLV] Array : %&quot;LU&quot; entries\n&quot;,len);
++                                            for(int i=0;i&lt;len;i++) 
++                                                if(false==parseOneMeta(&quot;&quot;,endPos)) return false;
+                                             printf(&quot;\n&quot;);
+                                             break;
+                                     }
+@@ -161,20 +175,45 @@
+                                             hi=read32();lo=read32();
+                                             hi=(hi&lt;&lt;32)+lo;
+                                             val=(float)av_int2dbl(hi);
+-                                            printf(&quot;-&gt;%f\n&quot;,val);
++                                            printf(&quot;-&gt;%f&quot;,val);
+                                             setProperties(s,val);
+                                         }
+                                         ;break;
+                 case AMF_DATA_TYPE_STRING: {int r=read16();Skip(r);}break;
+                 case AMF_DATA_TYPE_BOOL: read8();break;
+-                case AMF_DATA_TYPE_OBJECT: goto endit; // unsupported for the moment
++                
+                 default : printf(&quot;\n&quot;);ADM_assert(0);
+             }
+             printf(&quot;\n&quot;);
+-
++            return true;
++xxer:
++    return false;
++}
++/**
++    \fn parseMetaData
++    \brief
++*/
++uint8_t flvHeader::parseMetaData(uint32_t remaining)
++{
++    uint32_t endPos=ftello(_fd)+remaining;
++    {
++        // Check the first one is onMetaData...
++        uint8_t type=read8();
++        if(type!=AMF_DATA_TYPE_STRING) // String!
++            goto endit;
++        char *z=readFlvString();
++        printf(&quot;[FlashString] %s\n&quot;,z);
++        if(z &amp;&amp; strncmp(z,&quot;onMetaData&quot;,10)) goto endit;
++        // Normally the next one is mixed array
++        Skip(4);
++        Skip(1);
++        while(ftello(_fd)&lt;endPos-4)
++        {
++            char *s=readFlvString();
++            printf(&quot;[FlvType]  String : %s&quot;,s);
++            
++            if(false==parseOneMeta(s,endPos)) goto endit;
+         }
+-
+-        // Process them...
+     }
+ endit:
+     fseeko(_fd,endPos,SEEK_SET);
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.h	2010-04-15 19:22:45 UTC (rev 6129)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv/ADM_flv.h	2010-04-16 20:26:18 UTC (rev 6130)
+@@ -105,6 +105,7 @@
+     
+     uint8_t     getFrameSize (uint32_t frame, uint32_t * size);
+     uint8_t     parseMetaData(uint32_t remaining);
++    bool        parseOneMeta(const char *s,uint64_t endPos);
+     void        setProperties(const char *name,float value);
+     char        *readFlvString(void);
+  
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003333.html">[Avidemux-svn-commit] r6129 - in	branches/avidemux_2.5_branch_gruntster/platforms/windows/build_scripts/avidemux:	. Tools
+</A></li>
+	<LI>Next message: <A HREF="003335.html">[Avidemux-svn-commit] r6131 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3334">[ date ]</a>
+              <a href="thread.html#3334">[ thread ]</a>
+              <a href="subject.html#3334">[ subject ]</a>
+              <a href="author.html#3334">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,525 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6755 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6755%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20101113142558.1CEFA480F68%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003934.html">
+   <LINK REL="Next"  HREF="003937.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6755 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6755%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20101113142558.1CEFA480F68%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6755 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Nov 13 15:25:58 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003934.html">[Avidemux-svn-commit] r6754 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="003937.html">[Avidemux-svn-commit] r6756 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3933">[ date ]</a>
+              <a href="thread.html#3933">[ thread ]</a>
+              <a href="subject.html#3933">[ subject ]</a>
+              <a href="author.html#3933">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-11-13 15:25:57 +0100 (Sat, 13 Nov 2010)
+New Revision: 6755
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsComputeTimeStamp.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexH264.cpp
+Log:
+[TS/H264] new indexer, no audio
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp	2010-11-13 14:25:55 UTC (rev 6754)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp	2010-11-13 14:25:57 UTC (rev 6755)
+@@ -75,6 +75,7 @@
+ */
+ uint64_t  ADM_tsAccess::getDurationInUs(void)
+ {
++    if(!seekPoints.size()) return 0;
+     // Take last seek point; should be accurate enough
+     return timeConvert(seekPoints[seekPoints.size()-1].dts);
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsComputeTimeStamp.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsComputeTimeStamp.cpp	2010-11-13 14:25:55 UTC (rev 6754)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsComputeTimeStamp.cpp	2010-11-13 14:25:57 UTC (rev 6755)
+@@ -48,6 +48,7 @@
+         for(int i=0;i&lt;listOfAudioTracks.size();i++)
+         {
+             vector          &lt;ADM_mpgAudioSeekPoint &gt; *seekPoints=&amp;(listOfAudioTracks[i]-&gt;access-&gt;seekPoints);
++            if(!((*seekPoints).size())) continue;
+             uint64_t secondDts=(*seekPoints)[0].dts;
+             uint64_t secondSize=(*seekPoints)[0].size;
+             if(secondSize &amp;&amp; listOfAudioTracks[i]-&gt;header.byterate)
+@@ -100,6 +101,7 @@
+         }
+         for(int i=0;i&lt;listOfAudioTracks.size();i++)
+         {
++            if(!listOfAudioTracks[i]-&gt;access-&gt;seekPoints.size()) continue;
+             uint64_t a=listOfAudioTracks[i]-&gt;access-&gt;seekPoints[0].dts;
+             if(a&lt;startDts) startDts=a;
+         }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2010-11-13 14:25:55 UTC (rev 6754)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2010-11-13 14:25:57 UTC (rev 6755)
+@@ -16,6 +16,31 @@
+  *                                                                         *
+  ***************************************************************************/
+ #include &quot;ADM_tsIndex.h&quot;
++
++static const uint32_t FPS[16]={
++                0,                      // 0
++                23976,          // 1 (23.976 fps) - FILM
++                24000,          // 2 (24.000 fps)
++                25000,          // 3 (25.000 fps) - PAL
++                29970,          // 4 (29.970 fps) - NTSC
++                30000,          // 5 (30.000 fps)
++                50000,          // 6 (50.000 fps) - PAL noninterlaced
++                59940,          // 7 (59.940 fps) - NTSC noninterlaced
++                60000,          // 8 (60.000 fps)
++                0,                      // 9
++                0,                      // 10
++                0,                      // 11
++                0,                      // 12
++                0,                      // 13
++                0,                      // 14
++                0                       // 15
++        };
++static const uint32_t  VC1_ar[16][2] = {  // From VLC
++                        { 0, 0}, { 1, 1}, {12,11}, {10,11}, {16,11}, {40,33},
++                        {24,11}, {20,11}, {32,11}, {80,33}, {18,11}, {15,11},
++                        {64,33}, {160,99},{ 0, 0}, { 0, 0}};
++
++
+ /**
+       \fn TsIndexer 
+       \brief main indexing loop for mpeg2 payload
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.h	2010-11-13 14:25:55 UTC (rev 6754)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.h	2010-11-13 14:25:57 UTC (rev 6755)
+@@ -46,30 +46,6 @@
+ #endif
+ static const char Structure[4]={'X','T','B','F'}; // X Top Bottom Frame
+ static const char Type[5]={'X','I','P','B','D'};
+-
+-static const uint32_t FPS[16]={
+-                0,                      // 0
+-                23976,          // 1 (23.976 fps) - FILM
+-                24000,          // 2 (24.000 fps)
+-                25000,          // 3 (25.000 fps) - PAL
+-                29970,          // 4 (29.970 fps) - NTSC
+-                30000,          // 5 (30.000 fps)
+-                50000,          // 6 (50.000 fps) - PAL noninterlaced
+-                59940,          // 7 (59.940 fps) - NTSC noninterlaced
+-                60000,          // 8 (60.000 fps)
+-                0,                      // 9
+-                0,                      // 10
+-                0,                      // 11
+-                0,                      // 12
+-                0,                      // 13
+-                0,                      // 14
+-                0                       // 15
+-        };
+-static const uint32_t  VC1_ar[16][2] = {  // From VLC
+-                        { 0, 0}, { 1, 1}, {12,11}, {10,11}, {16,11}, {40,33},
+-                        {24,11}, {20,11}, {32,11}, {80,33}, {18,11}, {15,11},
+-                        {64,33}, {160,99},{ 0, 0}, { 0, 0}};
+-
+ #define VC1_MAX_SEQ_SIZE 64
+ class TSVideo
+ {
+@@ -126,9 +102,28 @@
+         VC1Context() {advanced=false;interlaced=false;interpolate=false;}
+ 
+ };
++/**
++    \class H264Unit
++*/
++class H264Unit
++{
++public:
++    int             unitType;
++    dmxPacketInfo   packetInfo;
++    uint64_t        consumedSoFar;
++    uint32_t        overRead;
++    int             imageType;
++    pictureStructure imageStructure;
++    uint32_t        recoveryCount;
++                    H264Unit() {memset(this,0,sizeof(*this));recoveryCount=0xff;imageStructure=pictureFrame;}
++};
++enum
++{
++    unitTypeSei=1,
++    unitTypePic=2,
++    unitTypeSps=3
++};
+ 
+-
+-
+ /**
+     \class TsIndexer
+ */
+@@ -151,6 +146,9 @@
+         bool                    decodeSEI(uint32_t nalSize, uint8_t *org,uint32_t *recoveryLength,pictureStructure *nextpicstruct);
+         bool                    decodeVC1Seq(tsGetBits &amp;bits,TSVideo &amp;video);
+         bool                    decodeVC1Pic(tsGetBits &amp;bits,uint32_t &amp;frameType,uint32_t &amp;frameStructure);
++        // H264
++        bool                    addUnit(indexerData &amp;data,int unitType,const H264Unit &amp;unit,uint32_t overRead);
++        bool                    dumpUnits(indexerData &amp;data,uint64_t nextConsumed);
+ public:
+                 TsIndexer(listOfTsAudioTracks *tr);
+                 ~TsIndexer();
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexH264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexH264.cpp	2010-11-13 14:25:55 UTC (rev 6754)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexH264.cpp	2010-11-13 14:25:57 UTC (rev 6755)
+@@ -17,7 +17,88 @@
+  ***************************************************************************/
+ #include &quot;ADM_tsIndex.h&quot;
+ 
++static vector &lt;H264Unit&gt; listOfUnits;
+ /**
++    \fn dumpUnits
++*/
++bool TsIndexer::dumpUnits(indexerData &amp;data,uint64_t nextConsumed)
++{
++        // if it contain a SPS or a intra/idr, we start a new line
++        bool mustFlush=false;
++        int n=listOfUnits.size();
++        int picIndex=0;
++        H264Unit *unit=&amp;(listOfUnits[0]);
++        pictureStructure pictStruct=pictureFrame;
++        
++        // if I, IDR or SPS we start a new line
++        for(int i=0;i&lt;n;i++)
++        {
++            switch(listOfUnits[i].unitType)
++            {
++                case unitTypeSps: mustFlush=true;;break;
++                case unitTypePic: 
++                            picIndex=i;
++                            if(listOfUnits[i].imageType==1 || listOfUnits[i].imageType==4)
++                            mustFlush=true;
++                            break;
++                case unitTypeSei:
++                            pictStruct=listOfUnits[i].imageStructure;
++                            break;
++                default:
++                        ADM_assert(0);
++                        break;
++            }
++        }
++        dmxPacketInfo *pic=&amp;(listOfUnits[picIndex].packetInfo);
++        dmxPacketInfo *p=&amp;(unit-&gt;packetInfo);
++        H264Unit      *picUnit=&amp;(listOfUnits[picIndex]);
++        if(mustFlush) 
++        {
++            data.beginPts=pic-&gt;pts;
++            data.beginDts=pic-&gt;dts;
++            // start a new line
++            qfprintf(index,&quot;\nVideo at:%08&quot;LLX&quot;:%04&quot;LX&quot; Pts:%08&quot;LLD&quot;:%08&quot;LLD&quot; &quot;,
++                        p-&gt;startAt,p-&gt;offset-unit-&gt;overRead,pic-&gt;pts,pic-&gt;dts);
++        }
++       
++        
++            int64_t deltaPts,deltaDts;
++
++            if(data.beginPts==-1 || pic-&gt;pts==-1) deltaPts=-1;
++                else deltaPts=pic-&gt;pts-data.beginPts;
++
++            if(data.beginDts==-1 || pic-&gt;dts==-1) deltaDts=-1;
++                else deltaDts=pic-&gt;dts-data.beginDts;            
++
++
++            qfprintf(index,&quot; %c%c:%06&quot;LX&quot;:%&quot;LLD&quot;:%&quot;LLD,
++                                    Type[picUnit-&gt;imageType],
++                                    Structure[pictStruct&amp;3],
++                                    nextConsumed-beginConsuming,
++                                    deltaPts,deltaDts);
++        beginConsuming=nextConsumed;
++        listOfUnits.clear();
++        return true;
++}
++/**
++    \fn addUnit
++*/
++bool TsIndexer::addUnit(indexerData &amp;data,int unitType2,const H264Unit &amp;unit,uint32_t overRead)
++{
++        H264Unit myUnit=unit;
++        myUnit.unitType=unitType2;
++        myUnit.overRead=overRead;
++        int n=listOfUnits.size();
++        if(n)
++            if(listOfUnits[n-1].unitType==unitTypePic)
++            {
++                dumpUnits(data,myUnit.consumedSoFar-overRead);
++            }
++        listOfUnits.push_back(myUnit);
++        return true;
++}
++
++/**
+         \fn decodeSEI
+         \brief decode SEI to get short ref I
+         @param recoveryLength # of recovery frame
+@@ -95,16 +176,20 @@
+ */  
+ bool TsIndexer::runH264(const char *file,ADM_TS_TRACK *videoTrac)
+ {
+-bool    pic_started=false;
++bool    decodingImage=false;
+ bool    seq_found=false;
++bool    firstSps=true;
+ 
+ TSVideo video;
+ indexerData  data;    
+-dmxPacketInfo info;
++dmxPacketInfo tmpInfo;
+ TS_PESpacket SEI_nal(0);
+ bool result=false;
+-uint32_t recoveryCount=0xff;
++H264Unit thisUnit;
+ 
++    beginConsuming=0;
++    listOfUnits.clear();
++
+     printf(&quot;Starting H264 indexer\n&quot;);
+     if(!videoTrac) return false;
+     if(videoTrac[0].trackType!=ADM_TS_H264)
+@@ -116,7 +201,6 @@
+ 
+     memset(&amp;data,0,sizeof(data));
+     data.picStructure=pictureFrame;
+-    pictureStructure nextPicStruct=pictureFrame;
+     string indexName=string(file);
+     indexName=indexName+string(&quot;.idx2&quot;);
+     index=qfopen(indexName,(const char*)&quot;wt&quot;);
+@@ -151,7 +235,7 @@
+           uint8_t buffer[60] ; // should be enough
+           uint32_t xA,xR;
+           // Get info
+-          pkt-&gt;getInfo(&amp;info);
++          pkt-&gt;getInfo(&amp;tmpInfo);
+           pkt-&gt;read(SPS_READ_AHEAD,buffer);
+           if (extractSPSInfo(buffer, SPS_READ_AHEAD,&amp;spsInfo))
+           {
+@@ -167,17 +251,17 @@
+               writeAudio();
+               qfprintf(index,&quot;[Data]&quot;);
+               // Rewind
+-              pkt-&gt;seek(info.startAt,info.offset-5);
++              pkt-&gt;seek(tmpInfo.startAt,tmpInfo.offset-5);
+               break;              
+           };
+       }
+       
+         if(!seq_found) goto the_end;
+-        data.state=idx_startAtImage;
++        
++        decodingImage=false;
+     //******************
+     // 2 Index
+     //******************
+-
+       while(1)
+       {
+         int startCode=pkt-&gt;findStartCode();
+@@ -198,7 +282,7 @@
+         aprintf(&quot;[%02x] Nal :0x%x,ref=%d,lastRef=%d at : %d \n&quot;,fullStartCode,startCode,ref,lastRefIdc,pkt-&gt;getConsumed()-beginConsuming);
+         
+           // Ignore multiple chunk of the same pic
+-          if((startCode==NAL_NON_IDR || startCode==NAL_IDR)&amp;&amp;pic_started )  //&amp;&amp; ref==lastRefIdc) 
++          if((startCode==NAL_NON_IDR || startCode==NAL_IDR)&amp;&amp;decodingImage )
+           {
+             aprintf(&quot;Still capturing, ignore\n&quot;);
+             continue;
+@@ -209,14 +293,11 @@
+                   case NAL_AU_DELIMITER:
+                         {
+                           aprintf(&quot;AU DELIMITER\n&quot;);
+-                          pic_started = false;
++                          decodingImage = false;
+                         }
+                           break;
+                   case NAL_SEI:
+-                    {
+-#if 0
+-                        printf(&quot;&gt;&gt;SEI\n&quot;);
+-#else
++                        {
+                         // Load the whole NAL
+                             SEI_nal.empty();
+                             uint32_t code=0xffff+0xffff0000;
+@@ -230,36 +311,31 @@
+                             aprintf(&quot;[SEI] Nal size :%d\n&quot;,SEI_nal.payloadSize);
+                             if(SEI_nal.payloadSize&gt;=7)
+                                 decodeSEI(SEI_nal.payloadSize-4,
+-                                    SEI_nal.payload,&amp;recoveryCount,&amp;nextPicStruct);
+-                            else printf(&quot;[SEI] Too short size+4=%d\n&quot;,*(SEI_nal.payload));
++                                    SEI_nal.payload,&amp;(thisUnit.recoveryCount),&amp;(thisUnit.imageStructure));
++                            else 
++                                    printf(&quot;[SEI] Too short size+4=%d\n&quot;,*(SEI_nal.payload));
+                             startCode=pkt-&gt;readi8();
+-
+-                              if( data.state!=idx_startAtGopOrSeq)
+-                              {
+-                                  pic_started = false;
+-                                  pkt-&gt;getInfo(&amp;info);
+-                                  data.frameType=2;
+-                                  Mark(&amp;data,&amp;info,5+SEI_nal.payloadSize+1);
+-                                  data.state=idx_startAtGopOrSeq;
+-                                  recoveryCount=0xff;
+-                               }
++                            decodingImage=false;
++                            pkt-&gt;getInfo(&amp;thisUnit.packetInfo);
++                            thisUnit.consumedSoFar=pkt-&gt;getConsumed();
++                            addUnit(data,unitTypeSei,thisUnit,5+SEI_nal.payloadSize+1);                            
+                             goto resume;
+-#endif
+-                        }
++                            }
+                             break;
+                   
+                   case NAL_SPS:
+-                              pic_started = false;
+-                              aprintf(&quot;Sps \n&quot;);
+-                              pkt-&gt;getInfo(&amp;info);
+-                              data.frameType=1;
+-                              Mark(&amp;data,&amp;info,5);
+-                              data.state=idx_startAtGopOrSeq;
+-                              recoveryCount=0xff;
++                                decodingImage=false;
++                                pkt-&gt;getInfo(&amp;thisUnit.packetInfo);
++                                if(firstSps)
++                                {
++                                    pkt-&gt;setConsumed(5); // reset consume counter
++                                    firstSps=false;
++                                }
++                                thisUnit.consumedSoFar=pkt-&gt;getConsumed();
++                                addUnit(data,unitTypeSps,thisUnit,5);
+                           break;
+ 
+                   case NAL_IDR:
+-                    //zprintf(&quot;KOWABOUNGA\n&quot;);
+                   case NAL_NON_IDR:
+                     {
+ #define NON_IDR_PRE_READ 8
+@@ -287,29 +363,28 @@
+                         switch(slice_type)
+                         {
+ 
+-                            case 0 : data.frameType=2;break; // P
+-                            case 1 : data.frameType=3;break; // B
+-                            case 2 : data.frameType=1;break; // I
+-                            default : data.frameType=2;break; // SP/SI
++                            case 0 : thisUnit.imageType=2;break; // P
++                            case 1 : thisUnit.imageType=3;break; // B
++                            case 2 : thisUnit.imageType=1;break; // I
++                            default : thisUnit.imageType=2;break; // SP/SI
+                         }
+-                      if(startCode==NAL_IDR) data.frameType=4; // IDR
+-                      aprintf(&quot;[&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;] Pic Type %&quot;LU&quot; Recovery %&quot;LU&quot;\n&quot;,data.frameType,recoveryCount);
+-                      if(data.frameType==1 &amp;&amp; !recoveryCount) data.frameType=4; //I  + Recovery=0 = IDR!
+-                      data.picStructure=nextPicStruct;
+-                      if(data.state==idx_startAtGopOrSeq) 
+-                      {
+-                              currentFrameType=data.frameType;;
+-                              updateUI();
+-                              
+-                      }else
+-                      {
+-                            pkt-&gt;getInfo(&amp;info);
+-                            Mark(&amp;data,&amp;info,5+NON_IDR_PRE_READ);
+-                       }
+-                      data.state=idx_startAtImage;
++                      if(startCode==NAL_IDR) thisUnit.imageType=4; // IDR
++                      aprintf(&quot;[&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;] Pic Type %&quot;LU&quot; Recovery %&quot;LU&quot;\n&quot;,thisUnit.imageType,recoveryCount);
++                      if(thisUnit.imageType==1 &amp;&amp; !thisUnit.recoveryCount) 
++                                thisUnit.imageType=4; //I  + Recovery=0 = IDR!
++
+                       data.nbPics++;
+-                      pic_started = true;
+-                      recoveryCount=0xff;
++
++                      
++
++                      decodingImage=true;
++                      pkt-&gt;getInfo(&amp;thisUnit.packetInfo);
++                      thisUnit.consumedSoFar=pkt-&gt;getConsumed();
++
++                      addUnit(data,unitTypePic,thisUnit,5+NON_IDR_PRE_READ);
++                        // reset to default
++                      thisUnit.imageStructure=pictureFrame;
++                      thisUnit.recoveryCount=0xff;
+                     }
+                   
+                     break;
+@@ -320,7 +395,7 @@
+       result=true;
+ the_end:
+         printf(&quot;\n&quot;);
+-        Mark(&amp;data,&amp;info,0);
++#warning TODO PURGE    
+         qfprintf(index,&quot;\n[End]\n&quot;);
+         qfclose(index);
+         index=NULL;
+@@ -330,6 +405,7 @@
+         return result; 
+ }
+ 
++
+ /********************************************************************************************/
+ /********************************************************************************************/
+ /********************************************************************************************/
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003934.html">[Avidemux-svn-commit] r6754 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="003937.html">[Avidemux-svn-commit] r6756 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3933">[ date ]</a>
+              <a href="thread.html#3933">[ thread ]</a>
+              <a href="subject.html#3933">[ subject ]</a>
+              <a href="author.html#3933">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

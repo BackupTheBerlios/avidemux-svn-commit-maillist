@@ -1,0 +1,214 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7490 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7490%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render&In-Reply-To=%3C20110909082355.270A8481270%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004638.html">
+   <LINK REL="Next"  HREF="004640.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7490 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7490%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render&In-Reply-To=%3C20110909082355.270A8481270%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7490 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Sep  9 10:23:54 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004638.html">[Avidemux-svn-commit] r7489 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="004640.html">[Avidemux-svn-commit] r7491 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4639">[ date ]</a>
+              <a href="thread.html#4639">[ thread ]</a>
+              <a href="subject.html#4639">[ subject ]</a>
+              <a href="author.html#4639">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-09-09 10:23:54 +0200 (Fri, 09 Sep 2011)
+New Revision: 7490
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.cpp
+Log:
+[render] Try to cleanup + dont update the window when we dont have data
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp	2011-09-09 06:32:07 UTC (rev 7489)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp	2011-09-09 08:23:54 UTC (rev 7490)
+@@ -77,6 +77,7 @@
+     displayWidth=width;
+     displayHeight=height;
+     resize(displayWidth,displayHeight);
++    firstRun = true;
+     return true;
+ }
+ /**
+@@ -84,6 +85,8 @@
+ */
+ QtGlAccelWidget::~QtGlAccelWidget()
+ {
++    if(glProgram) delete glProgram;
++    glProgram=NULL;
+     glDeleteTextures(3,textureName);
+ }
+ /**
+@@ -240,7 +243,8 @@
+ 	glVertex2i(0, height());
+ 	glEnd();
+     
+-}
++}
++//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ /**
+     \fn ctor
+ */
+@@ -248,7 +252,15 @@
+ {
+ 	glWidget = NULL;
+ 
++}
++/**
++    \fn dtor
++*/
++QtGlRender::~QtGlRender(void)
++{
++	stop();
+ }
++
+ /**
+     \fn stop
+ */
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.cpp	2011-09-09 06:32:07 UTC (rev 7489)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.cpp	2011-09-09 08:23:54 UTC (rev 7490)
+@@ -57,6 +57,7 @@
+ static uint8_t      _lock=0;
+ 
+ static const UI_FUNCTIONS_T *HookFunc=NULL;
++static bool  enableDraw=true;
+ 
+ refreshSB refreshCallback=NULL;
+ /**
+@@ -120,6 +121,7 @@
+ uint8_t renderInit( void )
+ {
+ 	draw=MUI_getDrawWidget(  );
++    enableDraw=false;
+ 	return 1;
+ }
+ 
+@@ -132,6 +134,7 @@
+         delete renderer;
+         renderer=NULL;
+     }
++    enableDraw=false;
+ }
+ 
+ /**
+@@ -159,6 +162,7 @@
+ uint8_t renderDisplayResize(uint32_t w, uint32_t h,renderZoom zoom)
+ {
+         bool create=false;
++        enableDraw=false;
+         ADM_info(&quot;Render to %&quot;LU&quot;x%&quot;LU&quot; zoom=%d\n&quot;,w,h,zoom);
+         if(!renderer) create=true;
+         else
+@@ -167,7 +171,11 @@
+         }
+         if(create)
+         {
+-            if(renderer) delete renderer;
++            if(renderer) 
++            {
++                renderer-&gt;stop();
++                delete renderer;
++            }
+             renderer=NULL;
+             phyW=w;
+             phyH=h;
+@@ -202,9 +210,12 @@
+ //----------------------------------------
+ uint8_t renderUpdateImage(ADMImage *image)
+ {
++    
+     ADM_assert(!_lock);
++    enableDraw=true;
+     if(renderer-&gt;getPreferedImage()!=image-&gt;refType)
+             image-&gt;hwDownloadFromRef();
++    
+     renderer-&gt;displayImage(image);
+     return 1;
+ }
+@@ -217,6 +228,7 @@
+ uint8_t renderRefresh(void)
+ {
+       if(_lock) return 1;
++      if(enableDraw==false) return true;
+       if(renderer)
+         renderer-&gt;refresh();
+       return 1;
+@@ -228,6 +240,7 @@
+ bool renderCompleteRedrawRequest(void)
+ {
+     ADM_info(&quot;RedrawRequest\n&quot;);
++    if(enableDraw==false) return true;
+     if(refreshCallback)
+         refreshCallback();
+     return true;
+@@ -237,6 +250,7 @@
+ */
+ uint8_t renderExpose(void)
+ {
++    if(enableDraw==false) return true;
+     renderRefresh();
+     return 1;
+ }
+@@ -351,6 +365,7 @@
+ */
+ uint8_t renderStopPlaying( void )
+ {      
++      
+       return true;
+ }
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004638.html">[Avidemux-svn-commit] r7489 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="004640.html">[Avidemux-svn-commit] r7491 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4639">[ date ]</a>
+              <a href="thread.html#4639">[ thread ]</a>
+              <a href="subject.html#4639">[ subject ]</a>
+              <a href="author.html#4639">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

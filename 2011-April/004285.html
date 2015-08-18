@@ -1,0 +1,196 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7126 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264:	. qt4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7126%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264%3A%0A%09.%20qt4&In-Reply-To=%3C20110409065400.7C583480B78%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004284.html">
+   <LINK REL="Next"  HREF="004286.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7126 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264:	. qt4</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7126%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264%3A%0A%09.%20qt4&In-Reply-To=%3C20110409065400.7C583480B78%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7126 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264:	. qt4">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Apr  9 08:54:00 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004284.html">[Avidemux-svn-commit] r7124 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264:	. qt4
+</A></li>
+        <LI>Next message: <A HREF="004286.html">[Avidemux-svn-commit] r7127 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/preset
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4285">[ date ]</a>
+              <a href="thread.html#4285">[ thread ]</a>
+              <a href="subject.html#4285">[ subject ]</a>
+              <a href="author.html#4285">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-04-09 08:53:59 +0200 (Sat, 09 Apr 2011)
+New Revision: 7126
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4/Q_x264.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.conf
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_json.cpp
+Log:
+[x264] Add fast first pass binding
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp	2011-04-08 14:09:29 UTC (rev 7125)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp	2011-04-09 06:53:59 UTC (rev 7126)
+@@ -51,6 +51,7 @@
+         0*ADM_ENC_CAP_SAME
+     },
+     99, // Threads : auto
++    true // Fast first pass
+     },
+     31, // Level
+     {1,1}, // Sar width/height
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp	2011-04-08 14:09:29 UTC (rev 7125)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp	2011-04-09 06:53:59 UTC (rev 7126)
+@@ -219,7 +219,23 @@
+ 
+   // We do pseudo cfr ...
+   param.b_vfr_input=0;
+-
++ //
++  if(true==x264Settings.general.fast_first_pass)
++  {
++    if(passNumber==1)
++    {
++        switch(x264Settings.general.params.mode)
++        {
++            case COMPRESS_2PASS:
++            case COMPRESS_2PASS_BITRATE:
++                     ADM_info(&quot;Appling fast first pass settings\n&quot;);
++                     x264_param_apply_fastfirstpass(&amp;param);
++                    break;
++            default:
++                    break;
++        }
++    }
++  }
+   dumpx264Setup(&amp;param);
+   ADM_info(&quot;Creating x264 encoder\n&quot;);
+   handle = x264_encoder_open (&amp;param);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4/Q_x264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4/Q_x264.cpp	2011-04-08 14:09:29 UTC (rev 7125)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4/Q_x264.cpp	2011-04-09 06:53:59 UTC (rev 7126)
+@@ -140,7 +140,8 @@
+ bool x264Dialog::upload(void)
+ {
+           
+-          MK_CHECKBOX(fastFirstPassCheckBox,analyze.fast_pskip);
++          MK_CHECKBOX(fastFirstPassCheckBox,general.fast_first_pass);
++          MK_CHECKBOX(fastPSkipCheckBox,analyze.fast_pskip);
+           MK_CHECKBOX(weightedPredictCheckBox,analyze.weighted_bipred);
+           MK_CHECKBOX(dct8x8CheckBox,analyze.b_8x8);
+           MK_CHECKBOX(i4x4CheckBox,analyze.b_i4x4);
+@@ -243,7 +244,8 @@
+ #define MK_MENU(x,y)        myCopy.y=ui.x-&gt;currentIndex()
+ bool x264Dialog::download(void)
+ {
+-          MK_CHECKBOX(fastFirstPassCheckBox,analyze.fast_pskip);
++          MK_CHECKBOX(fastFirstPassCheckBox,general.fast_first_pass);
++          MK_CHECKBOX(fastPSkipCheckBox,analyze.fast_pskip);
+           MK_CHECKBOX(weightedPredictCheckBox,analyze.weighted_bipred);
+           MK_CHECKBOX(dct8x8CheckBox,analyze.b_8x8);
+           MK_CHECKBOX(i4x4CheckBox,analyze.b_i4x4);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.conf
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.conf	2011-04-08 14:09:29 UTC (rev 7125)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.conf	2011-04-09 06:53:59 UTC (rev 7126)
+@@ -2,6 +2,7 @@
+ general{
+ video_encode:params;
+ uint32_t:threads;
++bool:fast_first_pass;
+ }
+ uint32_t:level
+ vui{
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.h	2011-04-08 14:09:29 UTC (rev 7125)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.h	2011-04-09 06:53:59 UTC (rev 7126)
+@@ -5,6 +5,7 @@
+ struct  {
+ 	COMPRES_PARAMS params;
+ 	uint32_t threads;
++	bool fast_first_pass;
+ }general;
+ uint32_t level;
+ struct  {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp	2011-04-08 14:09:29 UTC (rev 7125)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp	2011-04-09 06:53:59 UTC (rev 7126)
+@@ -2,6 +2,7 @@
+ extern const ADM_paramList x264_encoder_param[]={
+  {&quot;general.params&quot;,offsetof(x264_encoder,general.params),&quot;COMPRES_PARAMS&quot;,ADM_param_video_encode},
+  {&quot;general.threads&quot;,offsetof(x264_encoder,general.threads),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;general.fast_first_pass&quot;,offsetof(x264_encoder,general.fast_first_pass),&quot;bool&quot;,ADM_param_bool},
+  {&quot;level&quot;,offsetof(x264_encoder,level),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;vui.sar_height&quot;,offsetof(x264_encoder,vui.sar_height),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;vui.sar_width&quot;,offsetof(x264_encoder,vui.sar_width),&quot;uint32_t&quot;,ADM_param_uint32_t},
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_json.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_json.cpp	2011-04-08 14:09:29 UTC (rev 7125)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_json.cpp	2011-04-09 06:53:59 UTC (rev 7126)
+@@ -8,6 +8,7 @@
+ json.addNode(&quot;general&quot;);
+ json.addCompressParam(&quot;params&quot;,key-&gt;general.params);
+ json.addUint32(&quot;threads&quot;,key-&gt;general.threads);
++json.addBool(&quot;fast_first_pass&quot;,key-&gt;general.fast_first_pass);
+ json.endNode();
+ json.addUint32(&quot;level&quot;,key-&gt;level);
+ json.addNode(&quot;vui&quot;);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004284.html">[Avidemux-svn-commit] r7124 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264:	. qt4
+</A></li>
+	<LI>Next message: <A HREF="004286.html">[Avidemux-svn-commit] r7127 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/preset
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4285">[ date ]</a>
+              <a href="thread.html#4285">[ thread ]</a>
+              <a href="subject.html#4285">[ subject ]</a>
+              <a href="author.html#4285">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

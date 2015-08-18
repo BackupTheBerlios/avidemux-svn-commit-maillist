@@ -1,0 +1,487 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3249 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3249%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv&In-Reply-To=%3C200706141952.l5EJqdsP023820%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000543.html">
+   <LINK REL="Next"  HREF="000545.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3249 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3249%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv&In-Reply-To=%3C200706141952.l5EJqdsP023820%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3249 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jun 14 21:52:39 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000543.html">[Avidemux-svn-commit] r3248 - in	branches/avidemux_2.4_branch/avidemux: . ADM_editor	ADM_inputs ADM_inputs/ADM_flv
+</A></li>
+        <LI>Next message: <A HREF="000545.html">[Avidemux-svn-commit] r3253 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_libraries/ADM_lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#544">[ date ]</a>
+              <a href="thread.html#544">[ thread ]</a>
+              <a href="subject.html#544">[ subject ]</a>
+              <a href="author.html#544">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-06-14 21:52:39 +0200 (Thu, 14 Jun 2007)
+New Revision: 3249
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.h
+Log:
+new files, skeleton
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp	2007-06-14 17:38:24 UTC (rev 3248)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp	2007-06-14 19:52:39 UTC (rev 3249)
+@@ -0,0 +1,294 @@
++/***************************************************************************
++    copyright            : (C) 2007 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++    
++      See lavformat/flv[dec/env].c for detail
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;config.h&quot;
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++
++#include &lt;string.h&gt;
++
++#include &quot;math.h&quot;
++
++#include &quot;default.h&quot;
++#include &quot;ADM_editor/ADM_Video.h&quot;
++#include &lt;ADM_assert.h&gt;
++
++#include &quot;fourcc.h&quot;
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
++
++#include &quot;ADM_flv.h&quot;
++
++enum {
++    FLV_TAG_TYPE_AUDIO = 0x08,
++    FLV_TAG_TYPE_VIDEO = 0x09,
++    FLV_TAG_TYPE_META  = 0x12,
++};
++/**
++    \fn Skip
++    \brief Skip some bytes from the file
++*/
++uint8_t flvHeader::Skip(uint32_t len)
++{
++  fseeko(_fd,len,SEEK_CUR);
++  return 1; 
++}
++/**
++    \fn read
++    \brief read the given size from file
++*/
++
++uint8_t flvHeader::read(uint32_t len, uint8_t *where)
++{
++  
++    uint32_t got=fread(where,1,len,_fd);
++    if(len!=got)
++    {
++      printf(&quot;[FLV] Read error : asked %u, got %u\n&quot;,len,got); 
++      return 0;
++    }
++    return 1; 
++}
++//__________________________________________________________
++uint8_t flvHeader::read8(void)
++{
++  uint8_t r;
++    fread(&amp;r,1,1,_fd);
++    return r; 
++}
++uint32_t flvHeader::read16(void)
++{
++  uint8_t r[2];
++    fread(r,2,1,_fd);
++    return (r[0]&lt;&lt;8)+r[1]; 
++}
++uint32_t flvHeader::read24(void)
++{
++  uint8_t r[3];
++    fread(r,3,1,_fd);
++    return (r[0]&lt;&lt;16)+(r[1]&lt;&lt;8)+r[2]; 
++}
++uint32_t flvHeader::read32(void)
++{
++  uint8_t r[4];
++    fread(r,4,1,_fd);
++    return (r[0]&lt;&lt;24)+(r[1]&lt;&lt;16)+(r[2]&lt;&lt;8)+r[3]; 
++}
++
++/*
++    __________________________________________________________
++*/
++
++uint8_t flvHeader::open(char *name)
++{
++  
++  
++  _isvideopresent=0;
++ 
++  _filename=ADM_strdup(name);
++  _fd=fopen(name,&quot;rb&quot;);
++  if(!_fd)
++  {
++    printf(&quot;[FLV] Cannot open %s\n&quot;,name);
++    return 0; 
++  }
++  // It must begin by F L V 01
++  uint8_t four[4];
++  
++  read(4,four);
++  if(four[0]!='F' || four[1]!='L' || four[2]!='V')
++  {
++     printf(&quot;[FLV] Not a flv file %s\n&quot;,name);
++    return 0; 
++  }
++  // Next one is flags
++  uint32_t flags=read8();
++  if(flags &amp; 1) // VIDEO
++  {
++    _isvideopresent=1;
++    printf(&quot;[FLV] Video flag\n&quot;);
++  }
++  if(flags &amp; 4) // Audio
++  {
++    printf(&quot;[FLV] Audio flag\n&quot;);
++  }
++  // Skip header
++  uint32_t skip=read32();
++  fseeko(_fd,skip,SEEK_SET);
++  
++  
++  // Loop
++  while(!feof(_fd))
++  {
++    uint32_t prevLen, type, size, pts,pos;
++    pos=ftello(_fd);
++    prevLen=read32();
++    type=read8();
++    size=read24();
++    pts=read24();
++    read32(); // ???
++    printf(&quot;[FLV] At %08x found type %x size %u pts%u\n&quot;,pos,type,size,pts);
++    printf(&quot;Flags :%x\n&quot;,read8());
++    Skip(size-1);
++  }
++  
++  
++  printf(&quot;[FLV]FLV successfully read\n&quot;);
++  
++  return 0;
++}
++/*
++  __________________________________________________________
++*/
++WAVHeader *flvHeader::getAudioInfo(void )
++{
++  return NULL;
++}
++/*
++    __________________________________________________________
++*/
++
++uint8_t flvHeader::getAudioStream(AVDMGenericAudioStream **audio)
++{
++  *audio=NULL;
++  return 0; 
++}
++/*
++    __________________________________________________________
++*/
++
++void flvHeader::Dump(void)
++{
++ 
++}
++/*
++    __________________________________________________________
++*/
++
++uint32_t flvHeader::getNbStream(void) 
++{
++  return 0; 
++}
++/*
++    __________________________________________________________
++*/
++
++uint8_t flvHeader::close(void)
++{
++  if(_filename) ADM_dealloc(_filename);
++  if(videoTrack) delete videoTrack;
++  if(audioTrack) delete audioTrack;
++  if(_fd) fclose(_fd);
++    _fd=NULL;
++    _filename=NULL;
++    videoTrack=NULL;
++    audioTrack=NULL;
++
++}
++/*
++    __________________________________________________________
++*/
++
++uint8_t flvHeader::needDecompress(void)
++{
++  return 1; 
++}
++/*
++    __________________________________________________________
++*/
++
++ flvHeader::flvHeader( void ) : vidHeader()
++{ 
++    _fd=NULL;
++    _filename=NULL;
++    videoTrack=NULL;
++    audioTrack=NULL;
++    
++}
++/*
++    __________________________________________________________
++*/
++
++ flvHeader::~flvHeader(  )
++{
++  close();
++}
++
++/*
++    __________________________________________________________
++*/
++
++/*
++    __________________________________________________________
++*/
++
++  uint8_t  flvHeader::setFlag(uint32_t frame,uint32_t flags)
++{
++}
++/*
++    __________________________________________________________
++*/
++
++uint32_t flvHeader::getFlags(uint32_t frame,uint32_t *flags)
++{
++}
++/*
++    __________________________________________________________
++*/
++
++uint8_t  flvHeader::getFrameNoAlloc(uint32_t framenum,ADMCompressedImage *img)
++{
++}
++/*
++    __________________________________________________________
++*/
++
++uint8_t  flvHeader::getExtraHeaderData(uint32_t *len, uint8_t **data)
++{
++                *len=0; //_tracks[0].extraDataLen;
++                *data=NULL; //_tracks[0].extraData;
++                return 1;            
++}
++/*
++    __________________________________________________________
++*/
++uint8_t  flvHeader::changeAudioStream(uint32_t newstream)
++{
++    return 0;
++}
++/*
++    __________________________________________________________
++*/
++uint32_t  flvHeader::getCurrentAudioStreamNumber(void)
++{
++  return 0;
++}
++/**
++    \fn getAudioStreamsInfo
++    \brief returns infos about audio streams (code,...)
++    @param nbStreams (out) nb audio streams
++    @param infos (out) pointer to streams info. It is up to the caller to free them.
++*/
++uint8_t  flvHeader::getAudioStreamsInfo(uint32_t *nbStreams, audioInfo **infos)
++{
++    
++    {
++        *nbStreams=0;
++        *infos=NULL;
++        return 1;
++    }
++    
++}
++//EOF
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.h	2007-06-14 17:38:24 UTC (rev 3248)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.h	2007-06-14 19:52:39 UTC (rev 3249)
+@@ -0,0 +1,110 @@
++/***************************************************************************
++                         ADM_FLV
++                             -------------------
++    begin                : Mon Jun 3 2002
++    copyright            : (C) 2002 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++ 
++
++
++#ifndef ADM_FLV_H
++#define ADM_FLV_H
++
++#include &quot;ADM_editor/ADM_Video.h&quot;
++#include &quot;ADM_audio/aviaudio.hxx&quot;
++
++
++typedef struct 
++{
++    uint64_t pos;
++    uint32_t size;
++    uint32_t flags;
++    uint32_t timeCode;  // Time code in ms from start
++}flvIndex;
++//**********************************************
++typedef struct 
++{
++  /* Index in mkv */
++  uint32_t  streamIndex;
++  uint32_t  length;
++  uint8_t    *extraData;
++  uint32_t   extraDataLen;
++  flvIndex  *_index;
++  uint32_t  _nbIndex;  // current size of the index
++  uint32_t  _indexMax; // Max size of the index
++  uint32_t  _sizeInBytes; // Approximate size in bytes of that stream
++  uint32_t  _defaultFrameDuration; // in us!
++}flvTrak;
++
++
++class flvHeader         :public vidHeader
++{
++  protected:
++                                
++    FILE                    *_fd;
++    char                    *_filename;
++    flvTrak                 *videoTrack;
++    flvTrak                 *audioTrack;
++    
++    uint8_t                 changeAudioStream(uint32_t newstream);
++    uint32_t                getCurrentAudioStreamNumber(void);
++    uint8_t                 getAudioStreamsInfo(uint32_t *nbStreams, audioInfo **infos);
++    
++    /* */
++    
++    uint8_t     read(uint32_t len, uint8_t *where);
++    uint8_t     read8(void);
++    uint32_t    read16(void);
++    uint32_t    read24(void);
++    uint32_t    read32(void);
++    uint8_t     Skip(uint32_t len);
++    
++  public:
++
++
++    virtual   void          Dump(void);
++    virtual   uint32_t      getNbStream(void) ;
++    virtual   uint8_t       needDecompress(void);
++
++            flvHeader( void );
++   virtual  ~flvHeader(  ) ;
++// AVI io
++    virtual uint8_t  open(char *name);
++    virtual uint8_t  close(void) ;
++  //__________________________
++  //  Info
++  //__________________________
++
++  //__________________________
++  //  Audio
++  //__________________________
++
++    virtual   WAVHeader *getAudioInfo(void ) ;
++    virtual uint8_t getAudioStream(AVDMGenericAudioStream **audio);
++
++
++// Frames
++  //__________________________
++  //  video
++  //__________________________
++
++    virtual uint8_t  setFlag(uint32_t frame,uint32_t flags);
++    virtual uint32_t getFlags(uint32_t frame,uint32_t *flags);
++    virtual uint8_t  getFrameNoAlloc(uint32_t framenum,ADMCompressedImage *img);
++
++            uint8_t  getExtraHeaderData(uint32_t *len, uint8_t **data);
++
++};
++#endif
++
++
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000543.html">[Avidemux-svn-commit] r3248 - in	branches/avidemux_2.4_branch/avidemux: . ADM_editor	ADM_inputs ADM_inputs/ADM_flv
+</A></li>
+	<LI>Next message: <A HREF="000545.html">[Avidemux-svn-commit] r3253 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_libraries/ADM_lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#544">[ date ]</a>
+              <a href="thread.html#544">[ thread ]</a>
+              <a href="subject.html#544">[ subject ]</a>
+              <a href="author.html#544">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

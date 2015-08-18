@@ -1,0 +1,267 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6572 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_faad
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6572%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_faad&In-Reply-To=%3C20100903090956.8784C480ED6%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003757.html">
+   <LINK REL="Next"  HREF="003759.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6572 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_faad</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6572%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_faad&In-Reply-To=%3C20100903090956.8784C480ED6%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6572 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_faad">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Sep  3 11:09:56 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003757.html">[Avidemux-svn-commit] r6571 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+        <LI>Next message: <A HREF="003759.html">[Avidemux-svn-commit] r6573 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3758">[ date ]</a>
+              <a href="thread.html#3758">[ thread ]</a>
+              <a href="subject.html#3758">[ subject ]</a>
+              <a href="author.html#3758">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-09-03 11:09:56 +0200 (Fri, 03 Sep 2010)
+New Revision: 6572
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_faad/ADM_ad_faad.cpp
+Log:
+[faad] Cleaner code + workaround FAAD bad handling of mono stream
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_faad/ADM_ad_faad.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_faad/ADM_ad_faad.cpp	2010-09-02 16:42:57 UTC (rev 6571)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_faad/ADM_ad_faad.cpp	2010-09-03 09:09:56 UTC (rev 6572)
+@@ -10,7 +10,7 @@
+ // The big drawback if that in some case you can eat up a lot of the stream
+ // before finding a packet start code to enable correct init of the codec
+ //
+-// Author: mean &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>&gt;, (C) 2004
++// Author: mean &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>&gt;, (C) 2004/2010
+ //
+ // Copyright: See COPYING file that comes with this distribution
+ //
+@@ -20,15 +20,16 @@
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_ad_plugin.h&quot;
+ 
+-#define FAAD_BUFFER 2048
++#define FAAD_BUFFER (10*1024)
+ 
+ class ADM_faad : public     ADM_Audiocodec
+ {
+ 	protected:
+ 		uint8_t _inited;
+ 		void	*_instance;
+-		uint8_t _buffer[FAAD_BUFFER];
+-		uint32_t _inbuffer;
++		uint8_t  _buffer[FAAD_BUFFER*2];
++		uint32_t head, tail;
++        bool     monoFaadBug; // if true, the stream is mono, but faad outputs stereo
+ 
+ 	public:
+ 		ADM_faad(uint32_t fourcc, WAVHeader *info, uint32_t l, uint8_t *d);
+@@ -65,11 +66,12 @@
+ unsigned char chan;
+ 		_inited=0;
+ 		_instance=NULL;
+-		_inbuffer=0;
++        head=tail=0;
++        monoFaadBug=false;
+ 		_instance = faacDecOpen();
+ 		conf=faacDecGetCurrentConfiguration(_instance);
+ 		// Update the field we know about
+-		conf-&gt;outputFormat=FAAD_FMT_16BIT;
++		conf-&gt;outputFormat=FAAD_FMT_FLOAT;
+ 		conf-&gt;defSampleRate=info-&gt;frequency;
+   	    conf-&gt;defObjectType =LC;
+ 		faacDecSetConfiguration(_instance, conf);
+@@ -87,8 +89,13 @@
+                         }
+                         if(chan!=info-&gt;channels) // Ask for stereo !
+                         {
+-                             printf(&quot;[FAAD]channel mismatch!!! %d to %d \n&quot;,info-&gt;channels,chan);
+-                            info-&gt;channels=chan;
++                            printf(&quot;[FAAD]channel mismatch!!! %d to %d \n&quot;,info-&gt;channels,chan);
++                            if(info-&gt;channels==1 &amp;&amp; chan==2) 
++                            {
++                                    ADM_warning(&quot;Workaround Faad mono stream handling... \n&quot;);
++                                    monoFaadBug=true;
++                            }
++                            
+                         }
+ 		}
+ 		else // we will init it later on...
+@@ -131,23 +138,26 @@
+ 
+ void ADM_faad::purge(void)
+ {
+-	_inbuffer=0;
+-	 faacDecPostSeekReset(_instance, 0);
++	head=tail=0;
++	faacDecPostSeekReset(_instance, 0);
+ }
+ uint8_t ADM_faad:: beginDecompress( void )
+ {
+-	_inbuffer=0;
++	head=tail=0;
+     return 1;
+ }
+ uint8_t ADM_faad::endDecompress( void )
+ {
+-	_inbuffer=0;
++	 head=tail=0;
+ 	 faacDecPostSeekReset(_instance, 0);
+      return 1;
+ }
++/**
++    \fn run
++*/
+ uint8_t ADM_faad::run(uint8_t *inptr, uint32_t nbIn, float *outptr, uint32_t *nbOut)
+ {
+-uint32_t xin;
++uint32_t consumed;
+ long int res;
+ void *outbuf;
+ faacDecFrameInfo info;
+@@ -173,10 +183,9 @@
+ 				printf(&quot;Faad Inited : rate:%&quot;LU&quot; chan:%&quot;LU&quot; off:%ld\n&quot;,srate,chan,res);
+ 				_inited=1;
+ 				first=1;
+-				_inbuffer=0;
++				head=tail=0;
+ 				inptr+=res;
+ 				nbIn-=res;
+-
+ 			}
+ 		}
+ 		if(!_inited)
+@@ -187,27 +196,29 @@
+ 		// The codec is initialized, feed him
+ 		do
+ 		{
+-			max=FAAD_BUFFER-_inbuffer;
++            // Shrink ? The buffer is 2*FAAD_BUFFER
++            if(tail&gt;FAAD_BUFFER &amp;&amp; head)
++            {
++                memmove(_buffer,_buffer+head,tail-head);
++                tail-=head;
++                head=0;
++            }
++            // Add incoming data to our own buffer
++			max=FAAD_BUFFER*2-tail;
+ 			if(nbIn&lt;max) max=nbIn;
+-			memcpy(_buffer+_inbuffer,inptr,max);
++			memcpy(_buffer+tail,inptr,max);
+ 			inptr+=max;
+ 			nbIn-=max;
+-			_inbuffer+=max;
+-			/*
+-			if(_inbuffer&lt;FAAD_MIN_STREAMSIZE*2)
+-			{
+-				return 1;
+-			}*/
++			tail+=max;
+ 			memset(&amp;info,0,sizeof(info));
+ 			//printf(&quot;%x %x\n&quot;,_buffer[0],_buffer[1]);
+-		 	outbuf = faacDecDecode(_instance, &amp;info, _buffer, _inbuffer);
++		 	outbuf = faacDecDecode(_instance, &amp;info, _buffer+head, tail-head);
+ 			if(info.error)
+ 			{
+-				printf(&quot;Faad: Error %d :%s\n&quot;,info.error,
+-					faacDecGetErrorMessage(info.error));
+-				printf(&quot;Bye consumed %&quot;LLU&quot;, bytes dropped %&quot;LU&quot; \n&quot;,info.bytesconsumed,_inbuffer);
++				ADM_warning(&quot;Faad: Error %d :%s\n&quot;,info.error,faacDecGetErrorMessage(info.error));
++				ADM_warning(&quot;Bye consumed %&quot;LLU&quot;, bytes dropped %&quot;LU&quot; \n&quot;,info.bytesconsumed,tail-head);
+ 
+-                                _inbuffer=0; // Purge buffer
++                head=tail=0; // Purge buffer
+ 				return 1;
+ 			}
+ 			if(first)
+@@ -215,24 +226,30 @@
+ 				printf(&quot;Channels : %d\n&quot;,info.channels);
+ 				printf(&quot;Frequency: %&quot;LLU&quot;\n&quot;,info.samplerate);
+ 				printf(&quot;SBR      : %d\n&quot;,info.sbr);
+-
+-
+ 			}
+-			xin=info.bytesconsumed ;
+-			if(xin&gt;_inbuffer) xin=0;
+-
+-			memmove(_buffer,_buffer+xin,_inbuffer-xin);
+-			_inbuffer-=xin;
++			consumed=info.bytesconsumed ;
++			if(consumed&gt;(tail-head)) consumed=0;
++            head+=consumed;
+ 			if(info.samples)
+ 			{
+-				*nbOut+= info.samples;
+-				int16_t *in = (int16_t *) outbuf;
+-				for (int i = 0; i &lt; info.samples; i++) {
+-					*(outptr++) = (float)*in / 32768;
+-					in++;
+-				}
++                if(monoFaadBug)
++                {
++                    uint32_t n=info.samples/2;
++                    float *f=(float *)outbuf;
++                    for(int i=0;i&lt;n;i++)
++                    {
++                        *outptr++=*f; // drop one out of two samples
++                        f+=2;
++                    }
++                    *nbOut+=n;
++                }else   
++                {
++                    *nbOut+= info.samples;
++                    memcpy(outptr,outbuf,info.samples*sizeof(float));
++                    outptr+=info.samples;
++                }
+ 			}
+-		}while(nbIn);
++		}while(nbIn || (tail-head));
+ 		return 1;
+ }
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003757.html">[Avidemux-svn-commit] r6571 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+	<LI>Next message: <A HREF="003759.html">[Avidemux-svn-commit] r6573 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3758">[ date ]</a>
+              <a href="thread.html#3758">[ thread ]</a>
+              <a href="subject.html#3758">[ subject ]</a>
+              <a href="author.html#3758">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,164 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5700 -	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_filters
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5700%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_filters&In-Reply-To=%3C200912211332.nBLDWMcg028600%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002906.html">
+   <LINK REL="Next"  HREF="002908.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5700 -	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_filters</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5700%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_filters&In-Reply-To=%3C200912211332.nBLDWMcg028600%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5700 -	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_filters">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Dec 21 14:32:22 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002906.html">[Avidemux-svn-commit] r5699 - in	branches/avidemux_2.6_branch_mean/avidemux:	gtk/ADM_userInterfaces/ADM_filters gtk/ADM_userInterfaces/ADM_gui2	qt4/ADM_userInterfaces/ADM_filters/icons
+</A></li>
+        <LI>Next message: <A HREF="002908.html">[Avidemux-svn-commit] r5701 -	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2907">[ date ]</a>
+              <a href="thread.html#2907">[ thread ]</a>
+              <a href="subject.html#2907">[ subject ]</a>
+              <a href="author.html#2907">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-12-21 14:32:21 +0100 (Mon, 21 Dec 2009)
+New Revision: 5700
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_filters/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_filters/gui_filtermanager.cpp
+Log:
+[gtk] Skeleton for gtk video filter manager
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_filters/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_filters/CMakeLists.txt	2009-12-21 13:32:18 UTC (rev 5699)
++++ branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_filters/CMakeLists.txt	2009-12-21 13:32:21 UTC (rev 5700)
+@@ -4,3 +4,5 @@
+ 	gui_filtermanager.cpp  gui_filtermanager_dialog.cpp)
+ 
+ ADD_LIBRARY(${ADM_LIB} STATIC ${${ADM_LIB}_SRCS})
++FILE(GLOB ADM_filterIcons ${AVIDEMUX_TOP_SOURCE_DIR}/avidemux/common/ADM_icons/videoFilter/*.png)
++INSTALL(FILES videoFilter.gtkBuilder ${ADM_filterIcons} DESTINATION &quot;${CMAKE_INSTALL_PREFIX}/lib/ADM_glade/videoFilter&quot;)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_filters/gui_filtermanager.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_filters/gui_filtermanager.cpp	2009-12-21 13:32:18 UTC (rev 5699)
++++ branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_filters/gui_filtermanager.cpp	2009-12-21 13:32:21 UTC (rev 5700)
+@@ -16,7 +16,69 @@
+ #include &quot;DIA_fileSel.h&quot;
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+ #include &quot;avi_vars.h&quot;
+-//#include &quot;ADM_filter/vidVCD.h&quot;
++#include &quot;GUI_glade.h&quot;
++
++static admGlade glade;
++#define WOD(x) glade.getWidget (#x)
++typedef enum
++{
++    actionUp=20,
++    actionDown,
++    actionAdd,
++    actionRemove,
++    actionConfigure
++}vFilterAction;
++/**
++    \fn GUI_handleVFilter
++*/
++int GUI_handleVFilter (void)
++{
++     ADM_info(&quot;Entering video filter\n&quot;);
++     glade.init();
++     if(!glade.loadFile(&quot;videoFilter/videoFilter.gtkBuilder&quot;))
++     {
++            GUI_Error_HIG(&quot;Glade&quot;,&quot;Cannot load glade file&quot;);
++            return 0;
++    }
++    // create top window
++    GtkWidget *dialog=glade.getWidget(&quot;dialog1&quot;);
++    gtk_register_dialog(dialog);
++	#define ASSOCIATE(x,y)   gtk_dialog_add_action_widget (GTK_DIALOG (dialog), WOD(x),y)
++	    
++	    ASSOCIATE(buttonAdd,          actionAdd);
++	    ASSOCIATE(buttonConfigure,    actionConfigure);
++	    ASSOCIATE(buttonUp,           actionUp);
++	    ASSOCIATE(buttonDown,         actionDown);
++	    ASSOCIATE(buttonRemove,       actionRemove);
++	    
++	   
++	gtk_widget_show(dialog);
++    
++    bool ext=false;
++
++    while(false==ext)
++    {
++        gint action=gtk_dialog_run(GTK_DIALOG(dialog));
++        printf(&quot;Action:%d\n&quot;,action);
++        switch(action)
++        {
++            case actionAdd:
++            case actionUp:
++            case actionDown:
++            case actionRemove:
++            case actionConfigure:
++                    break;
++            default:
++                ext=true;
++
++        }
++    };
++    gtk_widget_destroy(dialog);
++    return 0;
++}
++
++
++#if 0
+ //___________________________________________
+ typedef enum 
+ {
+@@ -622,4 +684,4 @@
+ 
+ }
+ 
+-
++#endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002906.html">[Avidemux-svn-commit] r5699 - in	branches/avidemux_2.6_branch_mean/avidemux:	gtk/ADM_userInterfaces/ADM_filters gtk/ADM_userInterfaces/ADM_gui2	qt4/ADM_userInterfaces/ADM_filters/icons
+</A></li>
+	<LI>Next message: <A HREF="002908.html">[Avidemux-svn-commit] r5701 -	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2907">[ date ]</a>
+              <a href="thread.html#2907">[ thread ]</a>
+              <a href="subject.html#2907">[ subject ]</a>
+              <a href="author.html#2907">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

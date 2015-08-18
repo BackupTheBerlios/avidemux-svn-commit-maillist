@@ -1,0 +1,205 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6615 -	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6615%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2&In-Reply-To=%3C20100912141721.9DFF5480FEB%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003798.html">
+   <LINK REL="Next"  HREF="003800.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6615 -	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6615%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2&In-Reply-To=%3C20100912141721.9DFF5480FEB%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6615 -	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Sep 12 16:17:21 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003798.html">[Avidemux-svn-commit] r6614 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui
+</A></li>
+        <LI>Next message: <A HREF="003800.html">[Avidemux-svn-commit] r6616 -	branches/avidemux_2.6_branch_mean/avidemux/cli/ADM_userInterfaces/ADM_dialog
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3799">[ date ]</a>
+              <a href="thread.html#3799">[ thread ]</a>
+              <a href="subject.html#3799">[ subject ]</a>
+              <a href="author.html#3799">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-09-12 16:17:21 +0200 (Sun, 12 Sep 2010)
+New Revision: 6615
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2/GUI_bindings.cpp
+Log:
+[Gtk] Add recent file menu entry
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2/GUI_bindings.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2/GUI_bindings.cpp	2010-09-12 14:17:19 UTC (rev 6614)
++++ branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2/GUI_bindings.cpp	2010-09-12 14:17:21 UTC (rev 6615)
+@@ -66,6 +66,7 @@
+ 
+ 
+ static GtkWidget *guiVideoToggle=NULL;
++static GtkWidget *guiRecentMenu=NULL;
+ static GdkCursor *guiCursorBusy=NULL;
+ static GdkCursor *guiCursorNormal=NULL;
+ 
+@@ -348,6 +349,8 @@
+ #endif
+ 
+     ui_setMenus();
++    UI_updateRecentMenu(  );
++    GUI_initCustom();
+ 
+ 	return ret;
+ }
+@@ -547,8 +550,8 @@
+                        GTK_SIGNAL_FUNC(on_format_change),
+                        NULL);
+ 
+-        // Add initial recent files
+-        UI_updateRecentMenu(  );
++        
++        
+     //
+     //CYB 2005.02.22: DND (START)
+     // Set up avidemux as an available drag'n'drop target.
+@@ -566,8 +569,6 @@
+ 
+    // By default enable arrow keys
+    UI_arrow_enabled();
+-  // Add custom menu
+- GUI_initCustom();
+     return 1;
+ 
+ }
+@@ -942,12 +943,12 @@
+ /**
+     \fn ui_setMenus
+ */
+-void ui_setOneMenu(const char *menuName, MenuEntry *desc, int nb)
++GtkWidget *ui_fillOneMenu(GtkWidget *rootMenu, MenuEntry *desc, int nb)
+ {
++    
+     GtkWidget *window;
+     GtkWidget *menu;
+     GtkWidget *menu_bar;
+-    GtkWidget *root_menu;
+     GtkWidget *menu_items;
+     GtkWidget *submenu=NULL;
+ 
+@@ -990,22 +991,31 @@
+         }
+     }
+ 
+-    /* This is the root menu, and will be the label
+-     * displayed on the menu bar.  There won't be a signal handler attached,
+-     * as it only pops up the rest of the menu when pressed. */
+-    root_menu = gtk_menu_item_new_with_label (menuName);
++    /* Now we specify that we want our newly created &quot;menu&quot; to be the menu
++     * for the &quot;root menu&quot; */
++    gtk_menu_item_set_submenu (GTK_MENU_ITEM (rootMenu), menu);
++    return rootMenu;
++}
+ 
++/**
++    \fn ui_setOneMenu
++*/
++GtkWidget *ui_setOneMenu(const char *menuName, MenuEntry *desc, int nb)
++{
++    GtkWidget *root_menu = gtk_menu_item_new_with_label (menuName);
++
+     gtk_widget_show (root_menu);
+ 
+-    /* Now we specify that we want our newly created &quot;menu&quot; to be the menu
+-     * for the &quot;root menu&quot; */
+-    gtk_menu_item_set_submenu (GTK_MENU_ITEM (root_menu), menu);
+     /* Create a menu-bar to hold the menus and add it to our main window */
+-    menu_bar=(glade.getWidget(&quot;menuBar&quot;));
++    GtkWidget *menu_bar=(glade.getWidget(&quot;menuBar&quot;));
+     /* Create a button to which to attach menu as a popup */
+     /* And finally we append the menu-item to the menu-bar -- this is the
+      * &quot;root&quot; menu-item I have been raving about =) */
+     gtk_menu_shell_append (GTK_MENU_SHELL (menu_bar), root_menu);
++    if(nb)
++        ui_fillOneMenu(root_menu, desc,  nb);
++    return root_menu;
++
+ }
+ /**
+     \fn ui_setMenus
+@@ -1014,7 +1024,7 @@
+ {
+ #define SZ(x) x,sizeof(x)/sizeof(MenuEntry)
+     ui_setOneMenu(&quot;File&quot;, SZ(myMenuFile));
+-    ui_setOneMenu(&quot;Recent&quot;, NULL,0);
++    guiRecentMenu=ui_setOneMenu(&quot;Recent&quot;, NULL,0);
+     ui_setOneMenu(&quot;Edit&quot;, SZ(myMenuEdit));
+     ui_setOneMenu(&quot;View&quot;, SZ(myMenuView));
+     ui_setOneMenu(&quot;Video&quot;, SZ(myMenuVideo));
+@@ -1389,7 +1399,27 @@
+                 gtk_widget_show (item[i]);
+         }
+         gtk_menu_tool_button_set_menu   (GTK_MENU_TOOL_BUTTON(button),menu);
+-        return 1;
++/**/
++    {
++    GtkWidget *menu;
++    GtkWidget *menu_items;
++    menu = gtk_menu_new ();
++    gtk_menu_item_set_submenu (GTK_MENU_ITEM (guiRecentMenu), menu);
++    for(int i=0;i&lt;4;i++)
++        {
++                     if(!names[i]) break;
++                     menu_items = gtk_menu_item_new_with_label (names[i]);
++                     gtk_menu_shell_append (GTK_MENU_SHELL (menu), menu_items);
++                     gtk_widget_show (menu_items);
++                     gtk_signal_connect(GTK_OBJECT(menu_items), &quot;activate&quot;, 
++                        GTK_SIGNAL_FUNC(guiCallback),                   (void *) recent[i]);
++                     gtk_widget_show (menu_items);
++        }
++      
++    gtk_widget_show(menu);
++    gtk_widget_show(guiRecentMenu);
++    }  
++    return 1;
+ }
+ 
+ // Override arrow keys to quickly navigate
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003798.html">[Avidemux-svn-commit] r6614 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui
+</A></li>
+	<LI>Next message: <A HREF="003800.html">[Avidemux-svn-commit] r6616 -	branches/avidemux_2.6_branch_mean/avidemux/cli/ADM_userInterfaces/ADM_dialog
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3799">[ date ]</a>
+              <a href="thread.html#3799">[ thread ]</a>
+              <a href="subject.html#3799">[ subject ]</a>
+              <a href="author.html#3799">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

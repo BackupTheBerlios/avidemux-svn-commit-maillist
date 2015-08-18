@@ -1,0 +1,671 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3353 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_ocr glade
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3353%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK%3A%0A%09ADM_ocr%20glade&In-Reply-To=%3C200707091615.l69GFEwQ024254%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000629.html">
+   <LINK REL="Next"  HREF="000631.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3353 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_ocr glade</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3353%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK%3A%0A%09ADM_ocr%20glade&In-Reply-To=%3C200707091615.l69GFEwQ024254%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3353 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_ocr glade">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Jul  9 18:15:14 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000629.html">[Avidemux-svn-commit] r3352 - in	branches/avidemux_2.4_branch/avidemux: . ADM_osSupport
+</A></li>
+        <LI>Next message: <A HREF="000631.html">[Avidemux-svn-commit] r3354 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_gui2 glade
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#630">[ date ]</a>
+              <a href="thread.html#630">[ thread ]</a>
+              <a href="subject.html#630">[ subject ]</a>
+              <a href="author.html#630">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-07-09 18:15:14 +0200 (Mon, 09 Jul 2007)
+New Revision: 3353
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/glade/glyphedit.glade
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr/adm_editglyph.cpp
+Log:
+very basic glyph editor, end
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr/adm_editglyph.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr/adm_editglyph.cpp	2007-07-09 14:04:04 UTC (rev 3352)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr/adm_editglyph.cpp	2007-07-09 16:15:14 UTC (rev 3353)
+@@ -28,7 +28,7 @@
+ #include &quot;../ADM_GTK/ADM_toolkit_gtk/toolkit_gtk_include.h&quot;
+ 
+ #include &quot;ADM_ocr/adm_glyph.h&quot;
+-
++#include &quot;ADM_userInterfaces/ADM_commonUI/DIA_factory.h&quot;
+ static GtkWidget *create_dialog1 (void);
+ static admGlyph *currentGlyph=NULL;
+ static GtkWidget *dialog;
+@@ -36,6 +36,7 @@
+ static uint8_t loadGlyph(char *name,admGlyph *head,uint32_t *outNb);
+ static uint8_t saveGlyph(char *name,admGlyph *head,uint32_t nb);
+ static gboolean glyphDraw( void );
++static gboolean glyphActivate(void);
+ static void glyphUpdate(void );
+ /**
+     \fn DIA_glyphEdit
+@@ -85,6 +86,9 @@
+ #define ACTION_NEXT_EMPTY 40
+ #define ACTION_SAVE 50
+ #define ACTION_DELETE 60
++#define ACTION_ACTIVATE 70
++#define ACTION_SEARCH 80
++#define ACTION_REWIND 90
+   
+   ASSOCIATE(buttonPrev,ACTION_PREV);
+   ASSOCIATE(buttonNext,ACTION_NEXT);
+@@ -92,8 +96,13 @@
+   ASSOCIATE(buttonNextEmpty,ACTION_NEXT_EMPTY);
+   ASSOCIATE(buttonSave,ACTION_SAVE);
+   ASSOCIATE(buttonDelete,ACTION_DELETE);
++  ASSOCIATE(buttonSearch,ACTION_SEARCH);
++  ASSOCIATE(buttonRewind,ACTION_REWIND);
+   
++  
+   CONNECT(drawingarea1,expose_event,glyphDraw);
++  CONNECT(entry1,activate,glyphActivate);
++  
+   gtk_widget_show(dialog);
+   glyphUpdate();
+   while(1)
+@@ -101,6 +110,50 @@
+    gint b=gtk_dialog_run(GTK_DIALOG(dialog));
+     switch(b)
+     {
++      case ACTION_REWIND:
++                            currentGlyph=head.next;
++                            glyphUpdate();
++                            continue;
++      case ACTION_SEARCH:
++                          {
++                          char *tomatch=NULL;
++                          {
++                            // Dialog Factory to the rescue ! 
++                              
++                              diaElemText txt(&amp;tomatch,_(&quot;String&quot;),NULL);
++                              diaElem *elems[]={&amp;txt};
++                              if(!diaFactoryRun(_(&quot;Search string&quot;),1,elems))
++                              {
++                                  continue;
++                                  break;
++                              }
++                          }
++                          printf(&quot;Searched string &lt;%s&gt;\n&quot;,tomatch);
++                          
++                          while(currentGlyph-&gt;next)
++                          {
++                             currentGlyph=currentGlyph-&gt;next;
++                             glyphUpdate();
++                             
++                             if(currentGlyph-&gt;code)
++                             {
++                                printf(&quot;%s vs %s\n&quot;,currentGlyph-&gt;code,tomatch);
++                                if(!strcmp(currentGlyph-&gt;code,tomatch))
++                                {
++                                  
++                                  glyphUpdate();
++                                  break;  
++                                }
++                             }
++                          }
++                          ADM_dezalloc(tomatch);
++                          if(!currentGlyph-&gt;next)
++                                GUI_Error_HIG(_(&quot;End reached&quot;),_(&quot;No more glyphs&quot;));
++                          }
++                          
++                          continue;
++                          break;
++                        ;
+       case ACTION_PREV: 
+                         printf(&quot;PREV\n&quot;);
+                         if(currentGlyph!=head.next)
+@@ -184,6 +237,22 @@
+                       glyphUpdate();
+                       continue;break; 
+                   }
++      case ACTION_ACTIVATE:
++                  {
++                      const gchar  *old;
++                      if(currentGlyph-&gt;code) delete [] currentGlyph-&gt;code;
++                      currentGlyph-&gt;code=NULL;
++                      // Retrieve new one
++                      old=gtk_entry_get_text (GTK_ENTRY (WID(entry1)));
++                      
++                      if(old &amp;&amp; strlen(old))
++                      {
++                        currentGlyph-&gt;code=new char[strlen(old)+1];
++                        strcpy(currentGlyph-&gt;code,old);
++                      }
++                    
++                  }
++                        continue;break; 
+     }
+     break; // exit while(1)
+   }
+@@ -249,6 +318,17 @@
+   }
+ }
+ /**
++    \fn glyphActivate
++    \brief Transforms the enter keystroke into a dialog signal
++*/
++gboolean glyphActivate(void)
++{
++  printf(&quot;Activate\n&quot;);
++  gtk_dialog_response                 (GTK_DIALOG(dialog),    ACTION_ACTIVATE);
++  return true; 
++}
++
++/**
+     \fn     glyphDraw
+     \brief  display glyph
+ */
+@@ -338,6 +418,8 @@
+   GtkWidget *label3;
+   GtkWidget *buttonDelete;
+   GtkWidget *buttonSave;
++  GtkWidget *buttonSearch;
++  GtkWidget *buttonRewind;
+   GtkWidget *dialog_action_area1;
+   GtkWidget *closebutton1;
+ 
+@@ -360,7 +442,7 @@
+   gtk_widget_show (entry1);
+   gtk_box_pack_start (GTK_BOX (vbox2), entry1, FALSE, FALSE, 0);
+ 
+-  table1 = gtk_table_new (3, 2, FALSE);
++  table1 = gtk_table_new (4, 2, FALSE);
+   gtk_widget_show (table1);
+   gtk_box_pack_start (GTK_BOX (vbox2), table1, TRUE, TRUE, 0);
+ 
+@@ -422,16 +504,28 @@
+ 
+   buttonDelete = gtk_button_new_from_stock (&quot;gtk-delete&quot;);
+   gtk_widget_show (buttonDelete);
+-  gtk_table_attach (GTK_TABLE (table1), buttonDelete, 0, 1, 2, 3,
++  gtk_table_attach (GTK_TABLE (table1), buttonDelete, 0, 1, 3, 4,
+                     (GtkAttachOptions) (GTK_FILL),
+                     (GtkAttachOptions) (0), 0, 0);
+ 
+   buttonSave = gtk_button_new_from_stock (&quot;gtk-save&quot;);
+   gtk_widget_show (buttonSave);
+-  gtk_table_attach (GTK_TABLE (table1), buttonSave, 1, 2, 2, 3,
++  gtk_table_attach (GTK_TABLE (table1), buttonSave, 1, 2, 3, 4,
+                     (GtkAttachOptions) (GTK_FILL),
+                     (GtkAttachOptions) (0), 0, 0);
+ 
++  buttonSearch = gtk_button_new_from_stock (&quot;gtk-find&quot;);
++  gtk_widget_show (buttonSearch);
++  gtk_table_attach (GTK_TABLE (table1), buttonSearch, 0, 1, 2, 3,
++                    (GtkAttachOptions) (GTK_FILL),
++                    (GtkAttachOptions) (0), 0, 0);
++
++  buttonRewind = gtk_button_new_from_stock (&quot;gtk-home&quot;);
++  gtk_widget_show (buttonRewind);
++  gtk_table_attach (GTK_TABLE (table1), buttonRewind, 1, 2, 2, 3,
++                    (GtkAttachOptions) (GTK_FILL),
++                    (GtkAttachOptions) (0), 0, 0);
++
+   dialog_action_area1 = GTK_DIALOG (dialog1)-&gt;action_area;
+   gtk_widget_show (dialog_action_area1);
+   gtk_button_box_set_layout (GTK_BUTTON_BOX (dialog_action_area1), GTK_BUTTONBOX_END);
+@@ -462,6 +556,8 @@
+   GLADE_HOOKUP_OBJECT (dialog1, label3, &quot;label3&quot;);
+   GLADE_HOOKUP_OBJECT (dialog1, buttonDelete, &quot;buttonDelete&quot;);
+   GLADE_HOOKUP_OBJECT (dialog1, buttonSave, &quot;buttonSave&quot;);
++  GLADE_HOOKUP_OBJECT (dialog1, buttonSearch, &quot;buttonSearch&quot;);
++  GLADE_HOOKUP_OBJECT (dialog1, buttonRewind, &quot;buttonRewind&quot;);
+   GLADE_HOOKUP_OBJECT_NO_REF (dialog1, dialog_action_area1, &quot;dialog_action_area1&quot;);
+   GLADE_HOOKUP_OBJECT (dialog1, closebutton1, &quot;closebutton1&quot;);
+ 
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/glade/glyphedit.glade
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/glade/glyphedit.glade	2007-07-09 14:04:04 UTC (rev 3352)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/glade/glyphedit.glade	2007-07-09 16:15:14 UTC (rev 3353)
+@@ -0,0 +1,397 @@
++&lt;?xml version=&quot;1.0&quot; standalone=&quot;no&quot;?&gt; &lt;!--*- mode: xml -*--&gt;
++&lt;!DOCTYPE glade-interface SYSTEM &quot;<A HREF="http://glade.gnome.org/glade-2.0.dtd">http://glade.gnome.org/glade-2.0.dtd</A>&quot;&gt;
++
++&lt;glade-interface&gt;
++
++&lt;widget class=&quot;GtkDialog&quot; id=&quot;dialog1&quot;&gt;
++  &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++  &lt;property name=&quot;title&quot; translatable=&quot;yes&quot;&gt;dialog1&lt;/property&gt;
++  &lt;property name=&quot;type&quot;&gt;GTK_WINDOW_TOPLEVEL&lt;/property&gt;
++  &lt;property name=&quot;window_position&quot;&gt;GTK_WIN_POS_NONE&lt;/property&gt;
++  &lt;property name=&quot;modal&quot;&gt;False&lt;/property&gt;
++  &lt;property name=&quot;resizable&quot;&gt;True&lt;/property&gt;
++  &lt;property name=&quot;destroy_with_parent&quot;&gt;False&lt;/property&gt;
++  &lt;property name=&quot;decorated&quot;&gt;True&lt;/property&gt;
++  &lt;property name=&quot;skip_taskbar_hint&quot;&gt;False&lt;/property&gt;
++  &lt;property name=&quot;skip_pager_hint&quot;&gt;False&lt;/property&gt;
++  &lt;property name=&quot;type_hint&quot;&gt;GDK_WINDOW_TYPE_HINT_DIALOG&lt;/property&gt;
++  &lt;property name=&quot;gravity&quot;&gt;GDK_GRAVITY_NORTH_WEST&lt;/property&gt;
++  &lt;property name=&quot;focus_on_map&quot;&gt;True&lt;/property&gt;
++  &lt;property name=&quot;urgency_hint&quot;&gt;False&lt;/property&gt;
++  &lt;property name=&quot;has_separator&quot;&gt;True&lt;/property&gt;
++
++  &lt;child internal-child=&quot;vbox&quot;&gt;
++    &lt;widget class=&quot;GtkVBox&quot; id=&quot;dialog-vbox1&quot;&gt;
++      &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++      &lt;property name=&quot;homogeneous&quot;&gt;False&lt;/property&gt;
++      &lt;property name=&quot;spacing&quot;&gt;0&lt;/property&gt;
++
++      &lt;child internal-child=&quot;action_area&quot;&gt;
++	&lt;widget class=&quot;GtkHButtonBox&quot; id=&quot;dialog-action_area1&quot;&gt;
++	  &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++	  &lt;property name=&quot;layout_style&quot;&gt;GTK_BUTTONBOX_END&lt;/property&gt;
++
++	  &lt;child&gt;
++	    &lt;widget class=&quot;GtkButton&quot; id=&quot;closebutton1&quot;&gt;
++	      &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++	      &lt;property name=&quot;can_default&quot;&gt;True&lt;/property&gt;
++	      &lt;property name=&quot;can_focus&quot;&gt;True&lt;/property&gt;
++	      &lt;property name=&quot;label&quot;&gt;gtk-close&lt;/property&gt;
++	      &lt;property name=&quot;use_stock&quot;&gt;True&lt;/property&gt;
++	      &lt;property name=&quot;relief&quot;&gt;GTK_RELIEF_NORMAL&lt;/property&gt;
++	      &lt;property name=&quot;focus_on_click&quot;&gt;True&lt;/property&gt;
++	      &lt;property name=&quot;response_id&quot;&gt;-7&lt;/property&gt;
++	    &lt;/widget&gt;
++	  &lt;/child&gt;
++	&lt;/widget&gt;
++	&lt;packing&gt;
++	  &lt;property name=&quot;padding&quot;&gt;0&lt;/property&gt;
++	  &lt;property name=&quot;expand&quot;&gt;False&lt;/property&gt;
++	  &lt;property name=&quot;fill&quot;&gt;True&lt;/property&gt;
++	  &lt;property name=&quot;pack_type&quot;&gt;GTK_PACK_END&lt;/property&gt;
++	&lt;/packing&gt;
++      &lt;/child&gt;
++
++      &lt;child&gt;
++	&lt;widget class=&quot;GtkVBox&quot; id=&quot;vbox2&quot;&gt;
++	  &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++	  &lt;property name=&quot;homogeneous&quot;&gt;False&lt;/property&gt;
++	  &lt;property name=&quot;spacing&quot;&gt;0&lt;/property&gt;
++
++	  &lt;child&gt;
++	    &lt;widget class=&quot;GtkDrawingArea&quot; id=&quot;drawingarea1&quot;&gt;
++	      &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++	    &lt;/widget&gt;
++	    &lt;packing&gt;
++	      &lt;property name=&quot;padding&quot;&gt;0&lt;/property&gt;
++	      &lt;property name=&quot;expand&quot;&gt;True&lt;/property&gt;
++	      &lt;property name=&quot;fill&quot;&gt;True&lt;/property&gt;
++	    &lt;/packing&gt;
++	  &lt;/child&gt;
++
++	  &lt;child&gt;
++	    &lt;widget class=&quot;GtkEntry&quot; id=&quot;entry1&quot;&gt;
++	      &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++	      &lt;property name=&quot;can_focus&quot;&gt;True&lt;/property&gt;
++	      &lt;property name=&quot;editable&quot;&gt;True&lt;/property&gt;
++	      &lt;property name=&quot;visibility&quot;&gt;True&lt;/property&gt;
++	      &lt;property name=&quot;max_length&quot;&gt;0&lt;/property&gt;
++	      &lt;property name=&quot;text&quot; translatable=&quot;yes&quot;&gt;&lt;/property&gt;
++	      &lt;property name=&quot;has_frame&quot;&gt;True&lt;/property&gt;
++	      &lt;property name=&quot;invisible_char&quot;&gt;*&lt;/property&gt;
++	      &lt;property name=&quot;activates_default&quot;&gt;False&lt;/property&gt;
++	    &lt;/widget&gt;
++	    &lt;packing&gt;
++	      &lt;property name=&quot;padding&quot;&gt;0&lt;/property&gt;
++	      &lt;property name=&quot;expand&quot;&gt;False&lt;/property&gt;
++	      &lt;property name=&quot;fill&quot;&gt;False&lt;/property&gt;
++	    &lt;/packing&gt;
++	  &lt;/child&gt;
++
++	  &lt;child&gt;
++	    &lt;widget class=&quot;GtkTable&quot; id=&quot;table1&quot;&gt;
++	      &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++	      &lt;property name=&quot;n_rows&quot;&gt;4&lt;/property&gt;
++	      &lt;property name=&quot;n_columns&quot;&gt;2&lt;/property&gt;
++	      &lt;property name=&quot;homogeneous&quot;&gt;False&lt;/property&gt;
++	      &lt;property name=&quot;row_spacing&quot;&gt;0&lt;/property&gt;
++	      &lt;property name=&quot;column_spacing&quot;&gt;0&lt;/property&gt;
++
++	      &lt;child&gt;
++		&lt;widget class=&quot;GtkButton&quot; id=&quot;buttonNext&quot;&gt;
++		  &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;can_focus&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;label&quot;&gt;gtk-media-next&lt;/property&gt;
++		  &lt;property name=&quot;use_stock&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;relief&quot;&gt;GTK_RELIEF_NORMAL&lt;/property&gt;
++		  &lt;property name=&quot;focus_on_click&quot;&gt;True&lt;/property&gt;
++		&lt;/widget&gt;
++		&lt;packing&gt;
++		  &lt;property name=&quot;left_attach&quot;&gt;1&lt;/property&gt;
++		  &lt;property name=&quot;right_attach&quot;&gt;2&lt;/property&gt;
++		  &lt;property name=&quot;top_attach&quot;&gt;0&lt;/property&gt;
++		  &lt;property name=&quot;bottom_attach&quot;&gt;1&lt;/property&gt;
++		  &lt;property name=&quot;x_options&quot;&gt;expand|shrink|fill&lt;/property&gt;
++		  &lt;property name=&quot;y_options&quot;&gt;expand|shrink&lt;/property&gt;
++		&lt;/packing&gt;
++	      &lt;/child&gt;
++
++	      &lt;child&gt;
++		&lt;widget class=&quot;GtkButton&quot; id=&quot;buttonPrev&quot;&gt;
++		  &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;can_focus&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;label&quot;&gt;gtk-media-previous&lt;/property&gt;
++		  &lt;property name=&quot;use_stock&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;relief&quot;&gt;GTK_RELIEF_NORMAL&lt;/property&gt;
++		  &lt;property name=&quot;focus_on_click&quot;&gt;True&lt;/property&gt;
++		&lt;/widget&gt;
++		&lt;packing&gt;
++		  &lt;property name=&quot;left_attach&quot;&gt;0&lt;/property&gt;
++		  &lt;property name=&quot;right_attach&quot;&gt;1&lt;/property&gt;
++		  &lt;property name=&quot;top_attach&quot;&gt;0&lt;/property&gt;
++		  &lt;property name=&quot;bottom_attach&quot;&gt;1&lt;/property&gt;
++		  &lt;property name=&quot;x_options&quot;&gt;expand|shrink|fill&lt;/property&gt;
++		  &lt;property name=&quot;y_options&quot;&gt;expand|shrink|fill&lt;/property&gt;
++		&lt;/packing&gt;
++	      &lt;/child&gt;
++
++	      &lt;child&gt;
++		&lt;widget class=&quot;GtkButton&quot; id=&quot;buttonEmptyPrev&quot;&gt;
++		  &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;can_focus&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;relief&quot;&gt;GTK_RELIEF_NORMAL&lt;/property&gt;
++		  &lt;property name=&quot;focus_on_click&quot;&gt;True&lt;/property&gt;
++
++		  &lt;child&gt;
++		    &lt;widget class=&quot;GtkAlignment&quot; id=&quot;alignment2&quot;&gt;
++		      &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++		      &lt;property name=&quot;xalign&quot;&gt;0.5&lt;/property&gt;
++		      &lt;property name=&quot;yalign&quot;&gt;0.5&lt;/property&gt;
++		      &lt;property name=&quot;xscale&quot;&gt;0&lt;/property&gt;
++		      &lt;property name=&quot;yscale&quot;&gt;0&lt;/property&gt;
++		      &lt;property name=&quot;top_padding&quot;&gt;0&lt;/property&gt;
++		      &lt;property name=&quot;bottom_padding&quot;&gt;0&lt;/property&gt;
++		      &lt;property name=&quot;left_padding&quot;&gt;0&lt;/property&gt;
++		      &lt;property name=&quot;right_padding&quot;&gt;0&lt;/property&gt;
++
++		      &lt;child&gt;
++			&lt;widget class=&quot;GtkHBox&quot; id=&quot;hbox4&quot;&gt;
++			  &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++			  &lt;property name=&quot;homogeneous&quot;&gt;False&lt;/property&gt;
++			  &lt;property name=&quot;spacing&quot;&gt;2&lt;/property&gt;
++
++			  &lt;child&gt;
++			    &lt;widget class=&quot;GtkImage&quot; id=&quot;image2&quot;&gt;
++			      &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++			      &lt;property name=&quot;stock&quot;&gt;gtk-media-previous&lt;/property&gt;
++			      &lt;property name=&quot;icon_size&quot;&gt;4&lt;/property&gt;
++			      &lt;property name=&quot;xalign&quot;&gt;0.5&lt;/property&gt;
++			      &lt;property name=&quot;yalign&quot;&gt;0.5&lt;/property&gt;
++			      &lt;property name=&quot;xpad&quot;&gt;0&lt;/property&gt;
++			      &lt;property name=&quot;ypad&quot;&gt;0&lt;/property&gt;
++			    &lt;/widget&gt;
++			    &lt;packing&gt;
++			      &lt;property name=&quot;padding&quot;&gt;0&lt;/property&gt;
++			      &lt;property name=&quot;expand&quot;&gt;False&lt;/property&gt;
++			      &lt;property name=&quot;fill&quot;&gt;False&lt;/property&gt;
++			    &lt;/packing&gt;
++			  &lt;/child&gt;
++
++			  &lt;child&gt;
++			    &lt;widget class=&quot;GtkLabel&quot; id=&quot;label2&quot;&gt;
++			      &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++			      &lt;property name=&quot;label&quot; translatable=&quot;yes&quot;&gt;Prev. Empty&lt;/property&gt;
++			      &lt;property name=&quot;use_underline&quot;&gt;True&lt;/property&gt;
++			      &lt;property name=&quot;use_markup&quot;&gt;False&lt;/property&gt;
++			      &lt;property name=&quot;justify&quot;&gt;GTK_JUSTIFY_LEFT&lt;/property&gt;
++			      &lt;property name=&quot;wrap&quot;&gt;False&lt;/property&gt;
++			      &lt;property name=&quot;selectable&quot;&gt;False&lt;/property&gt;
++			      &lt;property name=&quot;xalign&quot;&gt;0.5&lt;/property&gt;
++			      &lt;property name=&quot;yalign&quot;&gt;0.5&lt;/property&gt;
++			      &lt;property name=&quot;xpad&quot;&gt;0&lt;/property&gt;
++			      &lt;property name=&quot;ypad&quot;&gt;0&lt;/property&gt;
++			      &lt;property name=&quot;ellipsize&quot;&gt;PANGO_ELLIPSIZE_NONE&lt;/property&gt;
++			      &lt;property name=&quot;width_chars&quot;&gt;-1&lt;/property&gt;
++			      &lt;property name=&quot;single_line_mode&quot;&gt;False&lt;/property&gt;
++			      &lt;property name=&quot;angle&quot;&gt;0&lt;/property&gt;
++			    &lt;/widget&gt;
++			    &lt;packing&gt;
++			      &lt;property name=&quot;padding&quot;&gt;0&lt;/property&gt;
++			      &lt;property name=&quot;expand&quot;&gt;False&lt;/property&gt;
++			      &lt;property name=&quot;fill&quot;&gt;False&lt;/property&gt;
++			    &lt;/packing&gt;
++			  &lt;/child&gt;
++			&lt;/widget&gt;
++		      &lt;/child&gt;
++		    &lt;/widget&gt;
++		  &lt;/child&gt;
++		&lt;/widget&gt;
++		&lt;packing&gt;
++		  &lt;property name=&quot;left_attach&quot;&gt;0&lt;/property&gt;
++		  &lt;property name=&quot;right_attach&quot;&gt;1&lt;/property&gt;
++		  &lt;property name=&quot;top_attach&quot;&gt;1&lt;/property&gt;
++		  &lt;property name=&quot;bottom_attach&quot;&gt;2&lt;/property&gt;
++		  &lt;property name=&quot;x_options&quot;&gt;expand|shrink|fill&lt;/property&gt;
++		  &lt;property name=&quot;y_options&quot;&gt;expand|shrink&lt;/property&gt;
++		&lt;/packing&gt;
++	      &lt;/child&gt;
++
++	      &lt;child&gt;
++		&lt;widget class=&quot;GtkButton&quot; id=&quot;buttonNextEmpty&quot;&gt;
++		  &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;can_focus&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;relief&quot;&gt;GTK_RELIEF_NORMAL&lt;/property&gt;
++		  &lt;property name=&quot;focus_on_click&quot;&gt;True&lt;/property&gt;
++
++		  &lt;child&gt;
++		    &lt;widget class=&quot;GtkAlignment&quot; id=&quot;alignment3&quot;&gt;
++		      &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++		      &lt;property name=&quot;xalign&quot;&gt;0.5&lt;/property&gt;
++		      &lt;property name=&quot;yalign&quot;&gt;0.5&lt;/property&gt;
++		      &lt;property name=&quot;xscale&quot;&gt;0&lt;/property&gt;
++		      &lt;property name=&quot;yscale&quot;&gt;0&lt;/property&gt;
++		      &lt;property name=&quot;top_padding&quot;&gt;0&lt;/property&gt;
++		      &lt;property name=&quot;bottom_padding&quot;&gt;0&lt;/property&gt;
++		      &lt;property name=&quot;left_padding&quot;&gt;0&lt;/property&gt;
++		      &lt;property name=&quot;right_padding&quot;&gt;0&lt;/property&gt;
++
++		      &lt;child&gt;
++			&lt;widget class=&quot;GtkHBox&quot; id=&quot;hbox5&quot;&gt;
++			  &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++			  &lt;property name=&quot;homogeneous&quot;&gt;False&lt;/property&gt;
++			  &lt;property name=&quot;spacing&quot;&gt;2&lt;/property&gt;
++
++			  &lt;child&gt;
++			    &lt;widget class=&quot;GtkImage&quot; id=&quot;image3&quot;&gt;
++			      &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++			      &lt;property name=&quot;stock&quot;&gt;gtk-media-next&lt;/property&gt;
++			      &lt;property name=&quot;icon_size&quot;&gt;4&lt;/property&gt;
++			      &lt;property name=&quot;xalign&quot;&gt;0.5&lt;/property&gt;
++			      &lt;property name=&quot;yalign&quot;&gt;0.5&lt;/property&gt;
++			      &lt;property name=&quot;xpad&quot;&gt;0&lt;/property&gt;
++			      &lt;property name=&quot;ypad&quot;&gt;0&lt;/property&gt;
++			    &lt;/widget&gt;
++			    &lt;packing&gt;
++			      &lt;property name=&quot;padding&quot;&gt;0&lt;/property&gt;
++			      &lt;property name=&quot;expand&quot;&gt;False&lt;/property&gt;
++			      &lt;property name=&quot;fill&quot;&gt;False&lt;/property&gt;
++			    &lt;/packing&gt;
++			  &lt;/child&gt;
++
++			  &lt;child&gt;
++			    &lt;widget class=&quot;GtkLabel&quot; id=&quot;label3&quot;&gt;
++			      &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++			      &lt;property name=&quot;label&quot; translatable=&quot;yes&quot;&gt;Next Empty&lt;/property&gt;
++			      &lt;property name=&quot;use_underline&quot;&gt;True&lt;/property&gt;
++			      &lt;property name=&quot;use_markup&quot;&gt;False&lt;/property&gt;
++			      &lt;property name=&quot;justify&quot;&gt;GTK_JUSTIFY_LEFT&lt;/property&gt;
++			      &lt;property name=&quot;wrap&quot;&gt;False&lt;/property&gt;
++			      &lt;property name=&quot;selectable&quot;&gt;False&lt;/property&gt;
++			      &lt;property name=&quot;xalign&quot;&gt;0.5&lt;/property&gt;
++			      &lt;property name=&quot;yalign&quot;&gt;0.5&lt;/property&gt;
++			      &lt;property name=&quot;xpad&quot;&gt;0&lt;/property&gt;
++			      &lt;property name=&quot;ypad&quot;&gt;0&lt;/property&gt;
++			      &lt;property name=&quot;ellipsize&quot;&gt;PANGO_ELLIPSIZE_NONE&lt;/property&gt;
++			      &lt;property name=&quot;width_chars&quot;&gt;-1&lt;/property&gt;
++			      &lt;property name=&quot;single_line_mode&quot;&gt;False&lt;/property&gt;
++			      &lt;property name=&quot;angle&quot;&gt;0&lt;/property&gt;
++			    &lt;/widget&gt;
++			    &lt;packing&gt;
++			      &lt;property name=&quot;padding&quot;&gt;0&lt;/property&gt;
++			      &lt;property name=&quot;expand&quot;&gt;False&lt;/property&gt;
++			      &lt;property name=&quot;fill&quot;&gt;False&lt;/property&gt;
++			    &lt;/packing&gt;
++			  &lt;/child&gt;
++			&lt;/widget&gt;
++		      &lt;/child&gt;
++		    &lt;/widget&gt;
++		  &lt;/child&gt;
++		&lt;/widget&gt;
++		&lt;packing&gt;
++		  &lt;property name=&quot;left_attach&quot;&gt;1&lt;/property&gt;
++		  &lt;property name=&quot;right_attach&quot;&gt;2&lt;/property&gt;
++		  &lt;property name=&quot;top_attach&quot;&gt;1&lt;/property&gt;
++		  &lt;property name=&quot;bottom_attach&quot;&gt;2&lt;/property&gt;
++		  &lt;property name=&quot;x_options&quot;&gt;expand|shrink|fill&lt;/property&gt;
++		  &lt;property name=&quot;y_options&quot;&gt;expand|shrink&lt;/property&gt;
++		&lt;/packing&gt;
++	      &lt;/child&gt;
++
++	      &lt;child&gt;
++		&lt;widget class=&quot;GtkButton&quot; id=&quot;buttonDelete&quot;&gt;
++		  &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;can_focus&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;label&quot;&gt;gtk-delete&lt;/property&gt;
++		  &lt;property name=&quot;use_stock&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;relief&quot;&gt;GTK_RELIEF_NORMAL&lt;/property&gt;
++		  &lt;property name=&quot;focus_on_click&quot;&gt;True&lt;/property&gt;
++		&lt;/widget&gt;
++		&lt;packing&gt;
++		  &lt;property name=&quot;left_attach&quot;&gt;0&lt;/property&gt;
++		  &lt;property name=&quot;right_attach&quot;&gt;1&lt;/property&gt;
++		  &lt;property name=&quot;top_attach&quot;&gt;3&lt;/property&gt;
++		  &lt;property name=&quot;bottom_attach&quot;&gt;4&lt;/property&gt;
++		  &lt;property name=&quot;x_options&quot;&gt;fill&lt;/property&gt;
++		  &lt;property name=&quot;y_options&quot;&gt;&lt;/property&gt;
++		&lt;/packing&gt;
++	      &lt;/child&gt;
++
++	      &lt;child&gt;
++		&lt;widget class=&quot;GtkButton&quot; id=&quot;buttonSave&quot;&gt;
++		  &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;can_focus&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;label&quot;&gt;gtk-save&lt;/property&gt;
++		  &lt;property name=&quot;use_stock&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;relief&quot;&gt;GTK_RELIEF_NORMAL&lt;/property&gt;
++		  &lt;property name=&quot;focus_on_click&quot;&gt;True&lt;/property&gt;
++		&lt;/widget&gt;
++		&lt;packing&gt;
++		  &lt;property name=&quot;left_attach&quot;&gt;1&lt;/property&gt;
++		  &lt;property name=&quot;right_attach&quot;&gt;2&lt;/property&gt;
++		  &lt;property name=&quot;top_attach&quot;&gt;3&lt;/property&gt;
++		  &lt;property name=&quot;bottom_attach&quot;&gt;4&lt;/property&gt;
++		  &lt;property name=&quot;x_options&quot;&gt;fill&lt;/property&gt;
++		  &lt;property name=&quot;y_options&quot;&gt;&lt;/property&gt;
++		&lt;/packing&gt;
++	      &lt;/child&gt;
++
++	      &lt;child&gt;
++		&lt;widget class=&quot;GtkButton&quot; id=&quot;buttonSearch&quot;&gt;
++		  &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;can_focus&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;label&quot;&gt;gtk-find&lt;/property&gt;
++		  &lt;property name=&quot;use_stock&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;relief&quot;&gt;GTK_RELIEF_NORMAL&lt;/property&gt;
++		  &lt;property name=&quot;focus_on_click&quot;&gt;True&lt;/property&gt;
++		&lt;/widget&gt;
++		&lt;packing&gt;
++		  &lt;property name=&quot;left_attach&quot;&gt;0&lt;/property&gt;
++		  &lt;property name=&quot;right_attach&quot;&gt;1&lt;/property&gt;
++		  &lt;property name=&quot;top_attach&quot;&gt;2&lt;/property&gt;
++		  &lt;property name=&quot;bottom_attach&quot;&gt;3&lt;/property&gt;
++		  &lt;property name=&quot;x_options&quot;&gt;fill&lt;/property&gt;
++		  &lt;property name=&quot;y_options&quot;&gt;&lt;/property&gt;
++		&lt;/packing&gt;
++	      &lt;/child&gt;
++
++	      &lt;child&gt;
++		&lt;widget class=&quot;GtkButton&quot; id=&quot;buttonRewind&quot;&gt;
++		  &lt;property name=&quot;visible&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;can_focus&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;label&quot;&gt;gtk-home&lt;/property&gt;
++		  &lt;property name=&quot;use_stock&quot;&gt;True&lt;/property&gt;
++		  &lt;property name=&quot;relief&quot;&gt;GTK_RELIEF_NORMAL&lt;/property&gt;
++		  &lt;property name=&quot;focus_on_click&quot;&gt;True&lt;/property&gt;
++		&lt;/widget&gt;
++		&lt;packing&gt;
++		  &lt;property name=&quot;left_attach&quot;&gt;1&lt;/property&gt;
++		  &lt;property name=&quot;right_attach&quot;&gt;2&lt;/property&gt;
++		  &lt;property name=&quot;top_attach&quot;&gt;2&lt;/property&gt;
++		  &lt;property name=&quot;bottom_attach&quot;&gt;3&lt;/property&gt;
++		  &lt;property name=&quot;x_options&quot;&gt;fill&lt;/property&gt;
++		  &lt;property name=&quot;y_options&quot;&gt;&lt;/property&gt;
++		&lt;/packing&gt;
++	      &lt;/child&gt;
++	    &lt;/widget&gt;
++	    &lt;packing&gt;
++	      &lt;property name=&quot;padding&quot;&gt;0&lt;/property&gt;
++	      &lt;property name=&quot;expand&quot;&gt;True&lt;/property&gt;
++	      &lt;property name=&quot;fill&quot;&gt;True&lt;/property&gt;
++	    &lt;/packing&gt;
++	  &lt;/child&gt;
++
++	  &lt;child&gt;
++	    &lt;placeholder/&gt;
++	  &lt;/child&gt;
++	&lt;/widget&gt;
++	&lt;packing&gt;
++	  &lt;property name=&quot;padding&quot;&gt;0&lt;/property&gt;
++	  &lt;property name=&quot;expand&quot;&gt;True&lt;/property&gt;
++	  &lt;property name=&quot;fill&quot;&gt;True&lt;/property&gt;
++	&lt;/packing&gt;
++      &lt;/child&gt;
++    &lt;/widget&gt;
++  &lt;/child&gt;
++&lt;/widget&gt;
++
++&lt;/glade-interface&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000629.html">[Avidemux-svn-commit] r3352 - in	branches/avidemux_2.4_branch/avidemux: . ADM_osSupport
+</A></li>
+	<LI>Next message: <A HREF="000631.html">[Avidemux-svn-commit] r3354 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_gui2 glade
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#630">[ date ]</a>
+              <a href="thread.html#630">[ thread ]</a>
+              <a href="subject.html#630">[ subject ]</a>
+              <a href="author.html#630">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

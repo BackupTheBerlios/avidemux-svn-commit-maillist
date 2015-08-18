@@ -1,0 +1,995 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2968 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_inputs/ADM_matroska ADM_userInterfaces/ADM_GTK/ADM_gui2
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2968%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%0A%09ADM_inputs/ADM_matroska%20ADM_userInterfaces/ADM_GTK/ADM_gui2&In-Reply-To=%3C200704251919.l3PJJGms007642%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000284.html">
+   <LINK REL="Next"  HREF="000286.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2968 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_inputs/ADM_matroska ADM_userInterfaces/ADM_GTK/ADM_gui2</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2968%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%0A%09ADM_inputs/ADM_matroska%20ADM_userInterfaces/ADM_GTK/ADM_gui2&In-Reply-To=%3C200704251919.l3PJJGms007642%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2968 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_inputs/ADM_matroska ADM_userInterfaces/ADM_GTK/ADM_gui2">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Apr 25 21:19:16 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000284.html">[Avidemux-svn-commit] r2967 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+        <LI>Next message: <A HREF="000286.html">[Avidemux-svn-commit] r2969 -	branches/avidemux_2.4_branch/avidemux/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#285">[ date ]</a>
+              <a href="thread.html#285">[ thread ]</a>
+              <a href="subject.html#285">[ subject ]</a>
+              <a href="author.html#285">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-04-25 21:19:15 +0200 (Wed, 25 Apr 2007)
+New Revision: 2968
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2/GUI_main2.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2/GUI_menumap.h
+   branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp
+   branches/avidemux_2.4_branch/avidemux/gui_action.hxx
+Log:
+more stuff, does not work for h264
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2007-04-25 17:19:01 UTC (rev 2967)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2007-04-25 19:19:15 UTC (rev 2968)
+@@ -86,10 +86,15 @@
+     }
+   // update some infos
+   _videostream.dwLength= _mainaviheader.dwTotalFrames=_tracks[0]._nbIndex; 
+-  printf(&quot;Matroska successfully read\n&quot;);
++  
+   _parser=new ADM_ebml_file();
+   ADM_assert(_parser-&gt;open(name));
+   _filename=ADM_strdup(name);
++  
++  // Finaly update index with queue
++  readCue(&amp;ebml);
++  printf(&quot;[MKV]Matroska successfully read\n&quot;);
++  
+   return 1;
+ }
+ /**
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h	2007-04-25 17:19:01 UTC (rev 2967)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h	2007-04-25 19:19:15 UTC (rev 2968)
+@@ -91,6 +91,7 @@
+     uint8_t                 addVideoEntry(uint64_t where, uint32_t size);
+     uint8_t                 addVideoEntry(uint32_t track,uint64_t where, uint32_t size);
+     uint8_t                 videoIndexer(ADM_ebml_file *parser);
++    uint8_t                 readCue(ADM_ebml_file *parser);
+   public:
+ 
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-04-25 17:19:01 UTC (rev 2967)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-04-25 19:19:15 UTC (rev 2968)
+@@ -203,4 +203,90 @@
+   }
+   return -1;
+ }
++
++/**
++  \fn readCue
++  \brief Update index with cue content
++
++*/
++uint8_t                 mkvHeader::readCue(ADM_ebml_file *parser)
++{
++  uint64_t fileSize,len,bsize;
++  uint32_t alen,vlen;
++  uint64_t id;
++  ADM_MKV_TYPE type;
++  const char *ss;
++  uint64_t time;
++  
++   parser-&gt;seek(0);
++   
++   if(!parser-&gt;find(ADM_MKV_PRIMARY,MKV_SEGMENT,MKV_CLUSTER,&amp;vlen))
++   {
++     printf(&quot;[MKV] Cannot find CLUSTER atom\n&quot;);
++     return 0;
++   }
++   ADM_ebml_file segment(parser,vlen);
++   
++   while(segment.find(ADM_MKV_PRIMARY,MKV_CUES,MKV_CLUSTER,&amp;alen,0))
++  {
++   ADM_ebml_file cues(&amp;segment,alen);
++   while(!cues.finished())
++   {
++      cues.readElemId(&amp;id,&amp;len);
++      if(!ADM_searchMkvTag( (MKV_ELEM_ID)id,&amp;ss,&amp;type))
++      {
++        printf(&quot;[MKV] Tag 0x%x not found (len %llu)\n&quot;,id,len);
++        cues.skip(len);
++        continue;
++      }
++      if(id!=MKV_CUE_POINT)
++      {
++        printf(&quot;Found %s in CUES, ignored \n&quot;,ss); 
++        cues.skip(len);
++        continue;
++      }
++      ADM_ebml_file cue(&amp;cues,len);
++      // Cue TIME normally
++       cue.readElemId(&amp;id,&amp;len);
++       if(id!=MKV_CUE_TIME)
++       {
++          ADM_searchMkvTag( (MKV_ELEM_ID)id,&amp;ss,&amp;type);
++          printf(&quot;Found %s(0x%x), expected CUE_TIME  (0x%x)\n&quot;, ss,id,MKV_CUE_TIME);
++          cue.skip(cue.remaining());
++          continue;
++       }
++       time=cue.readUnsignedInt(len);
++       
++       
++       cue.readElemId(&amp;id,&amp;len);
++       if(id!=MKV_CUE_TRACK_POSITION)
++       {
++          ADM_searchMkvTag( (MKV_ELEM_ID)id,&amp;ss,&amp;type);
++          printf(&quot;Found %s (0x%x), expected MKV_CUE_TRACK_POSITION (0x%x)\n&quot;, ss,id,MKV_CUE_TRACK_POSITION);
++          cue.skip(cues.remaining());
++          continue;
++       }
++       ADM_ebml_file trackPos(&amp;cue,len);
++       uint64_t tid=0;
++       uint64_t cluster_position=0;
++       while(!trackPos.finished())
++       {
++         trackPos.readElemId(&amp;id,&amp;len);
++         switch(id)
++         {
++           case MKV_CUE_TRACK: tid=trackPos.readUnsignedInt(len);break;
++           case MKV_CUE_CLUSTER_POSITION: cluster_position=trackPos.readUnsignedInt(len);break;
++           default: 
++                 ADM_searchMkvTag( (MKV_ELEM_ID)id,&amp;ss,&amp;type);
++                 printf(&quot;[MKV] in cluster position found tag %s (0x%x)\n&quot;,ss,id);
++                 trackPos.skip(len);
++                 continue;
++         }
++       }
++       printf(&quot;Track %u Position 0x%llx time %llu\n&quot;,tid,cluster_position,time);
++     }
++   }
++   printf(&quot;[MKV] Cues updated\n&quot;);
++   return 1;  
++}
+ //EOF
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2007-04-25 17:19:01 UTC (rev 2967)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2007-04-25 19:19:15 UTC (rev 2968)
+@@ -83,6 +83,20 @@
+ */
+ uint8_t             mkvAudio::goTo(uint32_t newoffset)
+ {
++  uint32_t cumul=0;
++  for(int i=0;i&lt;_track-&gt;_nbIndex;i++)
++  {
++    if(newoffset&gt;=cumul &amp;&amp; newoffset&lt;=cumul+_track-&gt;_index[i].size)
++    {
++      _offset=0;
++      _index=i;
++      _parser-&gt;seek(_track-&gt;_index[_index].pos);
++      return 1;
++    }
++    cumul+=_track-&gt;_index[i].size;
++  }
++  // 
++  printf(&quot;[Mkv audio] Goto failed\n&quot;);
+   _parser-&gt;seek(_track-&gt;_index[0].pos);
+     _offset=0;
+     _index=0;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2/GUI_main2.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2/GUI_main2.cpp	2007-04-25 17:19:01 UTC (rev 2967)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2/GUI_main2.cpp	2007-04-25 19:19:15 UTC (rev 2968)
+@@ -11,18 +11,12 @@
+ #include &lt;unistd.h&gt;
+ #include &lt;string.h&gt;
+ #include &lt;stdio.h&gt;
++#include &quot;../ADM_toolkit_gtk/ADM_gladeSupport.h&quot;
+ 
+ #include &lt;gdk/gdkkeysyms.h&gt;
+ #include &lt;gtk/gtk.h&gt;
+-#if 0
+-#include &quot;callbacks.h&quot;
+-#include &quot;interface.h&quot;
+-#include &quot;support.h&quot;
+-#else
+-#include &quot;default.h&quot;
+-#include &quot;ADM_toolkit_gtk/toolkit_gtk.h&quot;
+-#include &quot;ADM_toolkit_gtk/ADM_gladeSupport.h&quot;
+-#endif
++
++
+ #define GLADE_HOOKUP_OBJECT(component,widget,name) \
+   g_object_set_data_full (G_OBJECT (component), name, \
+     gtk_widget_ref (widget), (GDestroyNotify) gtk_widget_unref)
+@@ -40,11 +34,11 @@
+   GtkWidget *menuitem1;
+   GtkWidget *menuitem1_menu;
+   GtkWidget *open_video1;
+-  GtkWidget *image7996;
++  GtkWidget *image8046;
+   GtkWidget *append_video1;
+-  GtkWidget *image7997;
++  GtkWidget *image8047;
+   GtkWidget *save_stuff;
+-  GtkWidget *image7998;
++  GtkWidget *image8048;
+   GtkWidget *save_stuff_menu;
+   GtkWidget *save_as_avi1;
+   GtkWidget *separator1;
+@@ -53,39 +47,39 @@
+   GtkWidget *save_selection_as_jpegs1;
+   GtkWidget *separator3;
+   GtkWidget *save_project1;
+-  GtkWidget *image7999;
++  GtkWidget *image8049;
+   GtkWidget *save_project_as1;
+-  GtkWidget *image8000;
++  GtkWidget *image8050;
+   GtkWidget *run_script1;
+-  GtkWidget *image8001;
++  GtkWidget *image8051;
+   GtkWidget *add_to_joblist1;
+   GtkWidget *joblist1;
+   GtkWidget *separator16;
+   GtkWidget *video_informations1;
+-  GtkWidget *image8002;
++  GtkWidget *image8052;
+   GtkWidget *avi_muxer_options1;
+   GtkWidget *separator4;
+   GtkWidget *quit1;
+-  GtkWidget *image8003;
++  GtkWidget *image8053;
+   GtkWidget *menuitem2;
+   GtkWidget *menuitem2_menu;
+   GtkWidget *reset_edits1;
+-  GtkWidget *image8004;
++  GtkWidget *image8054;
+   GtkWidget *separator5;
+   GtkWidget *cut1;
+-  GtkWidget *image8005;
++  GtkWidget *image8055;
+   GtkWidget *copy1;
+-  GtkWidget *image8006;
++  GtkWidget *image8056;
+   GtkWidget *paste1;
+-  GtkWidget *image8007;
++  GtkWidget *image8057;
+   GtkWidget *delete1;
+-  GtkWidget *image8008;
++  GtkWidget *image8058;
+   GtkWidget *separator6;
+   GtkWidget *set_marker_a1;
+   GtkWidget *set_marker_b1;
+   GtkWidget *separator7;
+   GtkWidget *preferences1;
+-  GtkWidget *image8009;
++  GtkWidget *image8059;
+   GtkWidget *view1;
+   GtkWidget *view1_menu;
+   GtkWidget *toolbar1;
+@@ -114,13 +108,13 @@
+   GtkWidget *build_vbr_time_map1;
+   GtkWidget *separator11;
+   GtkWidget *save_audio1;
+-  GtkWidget *image8010;
++  GtkWidget *image8060;
+   GtkWidget *audio_encoder1;
+   GtkWidget *filters2;
+   GtkWidget *tools1;
+   GtkWidget *tools1_menu;
+   GtkWidget *calculator1;
+-  GtkWidget *image8011;
++  GtkWidget *image8061;
+   GtkWidget *separator12;
+   GtkWidget *rebuild_frames;
+   GtkWidget *check_frames;
+@@ -129,6 +123,8 @@
+   GtkWidget *separator13;
+   GtkWidget *v2v;
+   GtkWidget *ocr_vobsub_2_srt;
++  GtkWidget *separator17;
++  GtkWidget *see_hex1;
+   GtkWidget *help1;
+   GtkWidget *help1_menu;
+   GtkWidget *vcd1;
+@@ -139,34 +135,34 @@
+   GtkWidget *go1;
+   GtkWidget *go1_menu;
+   GtkWidget *play_video1;
+-  GtkWidget *image8012;
++  GtkWidget *image8062;
+   GtkWidget *previous_frame1;
+-  GtkWidget *image8013;
++  GtkWidget *image8063;
+   GtkWidget *next_frame1;
+-  GtkWidget *image8014;
++  GtkWidget *image8064;
+   GtkWidget *previous_intra_frame1;
+-  GtkWidget *image8015;
++  GtkWidget *image8065;
+   GtkWidget *next_intra_frame1;
+-  GtkWidget *image8016;
++  GtkWidget *image8066;
+   GtkWidget *search_previous_black_frame1;
+   GtkWidget *search_next_black_frame1;
+   GtkWidget *first_frame1;
+-  GtkWidget *image8017;
++  GtkWidget *image8067;
+   GtkWidget *last_frame1;
+-  GtkWidget *image8018;
++  GtkWidget *image8068;
+   GtkWidget *separator14;
+   GtkWidget *go_to_marker_a1;
+   GtkWidget *go_to_marker_b1;
+   GtkWidget *separator15;
+   GtkWidget *jum_to_frame1;
+-  GtkWidget *image8019;
++  GtkWidget *image8069;
+   GtkWidget *jump_to_time1;
+-  GtkWidget *image8020;
++  GtkWidget *image8070;
+   GtkWidget *custom1;
+   GtkWidget *help2;
+   GtkWidget *help2_menu;
+   GtkWidget *about1;
+-  GtkWidget *image8021;
++  GtkWidget *image8071;
+   GtkWidget *show_builtin_support1;
+   GtkWidget *toolbar2;
+   GtkIconSize tmp_toolbar_icon_size;
+@@ -293,9 +289,9 @@
+                               GDK_O, (GdkModifierType)( GDK_CONTROL_MASK),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image7996 = gtk_image_new_from_stock (&quot;gtk-open&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image7996);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (open_video1), image7996);
++  image8046 = gtk_image_new_from_stock (&quot;gtk-open&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8046);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (open_video1), image8046);
+ 
+   append_video1 = gtk_image_menu_item_new_with_mnemonic (_(&quot;_Append...&quot;));
+   gtk_widget_show (append_video1);
+@@ -304,17 +300,17 @@
+                               GDK_A, (GdkModifierType)( GDK_CONTROL_MASK | GDK_MOD1_MASK),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image7997 = gtk_image_new_from_stock (&quot;gtk-add&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image7997);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (append_video1), image7997);
++  image8047 = gtk_image_new_from_stock (&quot;gtk-add&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8047);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (append_video1), image8047);
+ 
+   save_stuff = gtk_image_menu_item_new_with_mnemonic (_(&quot;_Save&quot;));
+   gtk_widget_show (save_stuff);
+   gtk_container_add (GTK_CONTAINER (menuitem1_menu), save_stuff);
+ 
+-  image7998 = gtk_image_new_from_stock (&quot;gtk-save&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image7998);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (save_stuff), image7998);
++  image8048 = gtk_image_new_from_stock (&quot;gtk-save&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8048);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (save_stuff), image8048);
+ 
+   save_stuff_menu = gtk_menu_new ();
+   gtk_menu_item_set_submenu (GTK_MENU_ITEM (save_stuff), save_stuff_menu);
+@@ -352,25 +348,25 @@
+   gtk_widget_show (save_project1);
+   gtk_container_add (GTK_CONTAINER (menuitem1_menu), save_project1);
+ 
+-  image7999 = gtk_image_new_from_stock (&quot;gtk-save&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image7999);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (save_project1), image7999);
++  image8049 = gtk_image_new_from_stock (&quot;gtk-save&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8049);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (save_project1), image8049);
+ 
+   save_project_as1 = gtk_image_menu_item_new_with_mnemonic (_(&quot;Save P_roject As...&quot;));
+   gtk_widget_show (save_project_as1);
+   gtk_container_add (GTK_CONTAINER (menuitem1_menu), save_project_as1);
+ 
+-  image8000 = gtk_image_new_from_stock (&quot;gtk-save-as&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8000);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (save_project_as1), image8000);
++  image8050 = gtk_image_new_from_stock (&quot;gtk-save-as&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8050);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (save_project_as1), image8050);
+ 
+   run_script1 = gtk_image_menu_item_new_with_mnemonic (_(&quot;_Load/Run Project...&quot;));
+   gtk_widget_show (run_script1);
+   gtk_container_add (GTK_CONTAINER (menuitem1_menu), run_script1);
+ 
+-  image8001 = gtk_image_new_from_stock (&quot;gtk-execute&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8001);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (run_script1), image8001);
++  image8051 = gtk_image_new_from_stock (&quot;gtk-execute&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8051);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (run_script1), image8051);
+ 
+   add_to_joblist1 = gtk_menu_item_new_with_mnemonic (_(&quot;A_dd to Joblist...&quot;));
+   gtk_widget_show (add_to_joblist1);
+@@ -395,9 +391,9 @@
+                               GDK_Return, (GdkModifierType)( GDK_MOD1_MASK),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8002 = gtk_image_new_from_stock (&quot;gtk-properties&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8002);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (video_informations1), image8002);
++  image8052 = gtk_image_new_from_stock (&quot;gtk-properties&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8052);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (video_informations1), image8052);
+ 
+   avi_muxer_options1 = gtk_menu_item_new_with_mnemonic (_(&quot;AVI _Muxer Options&quot;));
+   gtk_widget_show (avi_muxer_options1);
+@@ -415,9 +411,9 @@
+                               GDK_Q, (GdkModifierType)( GDK_CONTROL_MASK),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8003 = gtk_image_new_from_stock (&quot;gtk-quit&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8003);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (quit1), image8003);
++  image8053 = gtk_image_new_from_stock (&quot;gtk-quit&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8053);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (quit1), image8053);
+ 
+   menuitem2 = gtk_menu_item_new_with_mnemonic (_(&quot;_Edit&quot;));
+   gtk_widget_show (menuitem2);
+@@ -430,9 +426,9 @@
+   gtk_widget_show (reset_edits1);
+   gtk_container_add (GTK_CONTAINER (menuitem2_menu), reset_edits1);
+ 
+-  image8004 = gtk_image_new_from_stock (&quot;gtk-undo&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8004);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (reset_edits1), image8004);
++  image8054 = gtk_image_new_from_stock (&quot;gtk-undo&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8054);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (reset_edits1), image8054);
+ 
+   separator5 = gtk_separator_menu_item_new ();
+   gtk_widget_show (separator5);
+@@ -446,9 +442,9 @@
+                               GDK_X, (GdkModifierType)( GDK_CONTROL_MASK),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8005 = gtk_image_new_from_stock (&quot;gtk-cut&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8005);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (cut1), image8005);
++  image8055 = gtk_image_new_from_stock (&quot;gtk-cut&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8055);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (cut1), image8055);
+ 
+   copy1 = gtk_image_menu_item_new_with_mnemonic (_(&quot;_Copy&quot;));
+   gtk_widget_show (copy1);
+@@ -457,9 +453,9 @@
+                               GDK_C, (GdkModifierType)( GDK_CONTROL_MASK),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8006 = gtk_image_new_from_stock (&quot;gtk-copy&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8006);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (copy1), image8006);
++  image8056 = gtk_image_new_from_stock (&quot;gtk-copy&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8056);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (copy1), image8056);
+ 
+   paste1 = gtk_image_menu_item_new_with_mnemonic (_(&quot;_Paste&quot;));
+   gtk_widget_show (paste1);
+@@ -468,9 +464,9 @@
+                               GDK_V, (GdkModifierType)( GDK_CONTROL_MASK),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8007 = gtk_image_new_from_stock (&quot;gtk-paste&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8007);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (paste1), image8007);
++  image8057 = gtk_image_new_from_stock (&quot;gtk-paste&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8057);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (paste1), image8057);
+ 
+   delete1 = gtk_image_menu_item_new_with_mnemonic (_(&quot;_Delete&quot;));
+   gtk_widget_show (delete1);
+@@ -479,9 +475,9 @@
+                               GDK_Delete, (GdkModifierType)( 0 ),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8008 = gtk_image_new_from_stock (&quot;gtk-remove&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8008);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (delete1), image8008);
++  image8058 = gtk_image_new_from_stock (&quot;gtk-remove&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8058);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (delete1), image8058);
+ 
+   separator6 = gtk_separator_menu_item_new ();
+   gtk_widget_show (separator6);
+@@ -511,9 +507,9 @@
+   gtk_widget_show (preferences1);
+   gtk_container_add (GTK_CONTAINER (menuitem2_menu), preferences1);
+ 
+-  image8009 = gtk_image_new_from_stock (&quot;gtk-preferences&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8009);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (preferences1), image8009);
++  image8059 = gtk_image_new_from_stock (&quot;gtk-preferences&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8059);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (preferences1), image8059);
+ 
+   view1 = gtk_menu_item_new_with_mnemonic (_(&quot;_View&quot;));
+   gtk_widget_show (view1);
+@@ -667,9 +663,9 @@
+                               GDK_S, (GdkModifierType)( GDK_CONTROL_MASK | GDK_MOD1_MASK),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8010 = gtk_image_new_from_stock (&quot;gtk-save-as&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8010);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (save_audio1), image8010);
++  image8060 = gtk_image_new_from_stock (&quot;gtk-save-as&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8060);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (save_audio1), image8060);
+ 
+   audio_encoder1 = gtk_menu_item_new_with_mnemonic (_(&quot;_Encoder&quot;));
+   gtk_widget_show (audio_encoder1);
+@@ -696,9 +692,9 @@
+                               GDK_F7, (GdkModifierType)( 0 ),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8011 = create_pixmap (mainWindow, &quot;gnome-calculator_small.xpm&quot;);
+-  gtk_widget_show (image8011);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (calculator1), image8011);
++  image8061 = create_pixmap (mainWindow, &quot;gnome-calculator_small.xpm&quot;);
++  gtk_widget_show (image8061);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (calculator1), image8061);
+ 
+   separator12 = gtk_separator_menu_item_new ();
+   gtk_widget_show (separator12);
+@@ -734,6 +730,15 @@
+   gtk_widget_show (ocr_vobsub_2_srt);
+   gtk_container_add (GTK_CONTAINER (tools1_menu), ocr_vobsub_2_srt);
+ 
++  separator17 = gtk_separator_menu_item_new ();
++  gtk_widget_show (separator17);
++  gtk_container_add (GTK_CONTAINER (tools1_menu), separator17);
++  gtk_widget_set_sensitive (separator17, FALSE);
++
++  see_hex1 = gtk_menu_item_new_with_mnemonic (_(&quot;See Hex&quot;));
++  gtk_widget_show (see_hex1);
++  gtk_container_add (GTK_CONTAINER (tools1_menu), see_hex1);
++
+   help1 = gtk_menu_item_new_with_mnemonic (_(&quot;A_uto&quot;));
+   gtk_widget_show (help1);
+   gtk_container_add (GTK_CONTAINER (menuBar), help1);
+@@ -775,9 +780,9 @@
+                               GDK_P, (GdkModifierType)( 0 ),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8012 = gtk_image_new_from_stock (&quot;gtk-media-play&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8012);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (play_video1), image8012);
++  image8062 = gtk_image_new_from_stock (&quot;gtk-media-play&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8062);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (play_video1), image8062);
+ 
+   previous_frame1 = gtk_image_menu_item_new_with_mnemonic (_(&quot;P_revious Frame&quot;));
+   gtk_widget_show (previous_frame1);
+@@ -786,9 +791,9 @@
+                               GDK_KP_4, (GdkModifierType)( 0 ),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8013 = gtk_image_new_from_stock (&quot;gtk-media-previous&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8013);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (previous_frame1), image8013);
++  image8063 = gtk_image_new_from_stock (&quot;gtk-media-previous&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8063);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (previous_frame1), image8063);
+ 
+   next_frame1 = gtk_image_menu_item_new_with_mnemonic (_(&quot;_Next Frame&quot;));
+   gtk_widget_show (next_frame1);
+@@ -797,9 +802,9 @@
+                               GDK_KP_6, (GdkModifierType)( 0 ),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8014 = gtk_image_new_from_stock (&quot;gtk-media-next&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8014);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (next_frame1), image8014);
++  image8064 = gtk_image_new_from_stock (&quot;gtk-media-next&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8064);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (next_frame1), image8064);
+ 
+   previous_intra_frame1 = gtk_image_menu_item_new_with_mnemonic (_(&quot;Pr_evious Intra Frame&quot;));
+   gtk_widget_show (previous_intra_frame1);
+@@ -808,9 +813,9 @@
+                               GDK_KP_2, (GdkModifierType)( 0 ),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8015 = gtk_image_new_from_stock (&quot;gtk-media-rewind&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8015);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (previous_intra_frame1), image8015);
++  image8065 = gtk_image_new_from_stock (&quot;gtk-media-rewind&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8065);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (previous_intra_frame1), image8065);
+ 
+   next_intra_frame1 = gtk_image_menu_item_new_with_mnemonic (_(&quot;Next _Intra Frame&quot;));
+   gtk_widget_show (next_intra_frame1);
+@@ -819,9 +824,9 @@
+                               GDK_KP_8, (GdkModifierType)( 0 ),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8016 = gtk_image_new_from_stock (&quot;gtk-media-forward&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8016);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (next_intra_frame1), image8016);
++  image8066 = gtk_image_new_from_stock (&quot;gtk-media-forward&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8066);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (next_intra_frame1), image8066);
+ 
+   search_previous_black_frame1 = gtk_menu_item_new_with_mnemonic (_(&quot;Previou_s Black Frame&quot;));
+   gtk_widget_show (search_previous_black_frame1);
+@@ -838,9 +843,9 @@
+                               GDK_Home, (GdkModifierType)( 0 ),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8017 = gtk_image_new_from_stock (&quot;gtk-goto-first&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8017);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (first_frame1), image8017);
++  image8067 = gtk_image_new_from_stock (&quot;gtk-goto-first&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8067);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (first_frame1), image8067);
+ 
+   last_frame1 = gtk_image_menu_item_new_with_mnemonic (_(&quot;_Last Frame&quot;));
+   gtk_widget_show (last_frame1);
+@@ -849,9 +854,9 @@
+                               GDK_End, (GdkModifierType)( 0 ),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8018 = gtk_image_new_from_stock (&quot;gtk-goto-last&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8018);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (last_frame1), image8018);
++  image8068 = gtk_image_new_from_stock (&quot;gtk-goto-last&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8068);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (last_frame1), image8068);
+ 
+   separator14 = gtk_separator_menu_item_new ();
+   gtk_widget_show (separator14);
+@@ -884,9 +889,9 @@
+                               GDK_F, (GdkModifierType)( GDK_CONTROL_MASK),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8019 = gtk_image_new_from_stock (&quot;gtk-jump-to&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8019);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (jum_to_frame1), image8019);
++  image8069 = gtk_image_new_from_stock (&quot;gtk-jump-to&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8069);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (jum_to_frame1), image8069);
+ 
+   jump_to_time1 = gtk_image_menu_item_new_with_mnemonic (_(&quot;Jump to _Time...&quot;));
+   gtk_widget_show (jump_to_time1);
+@@ -895,9 +900,9 @@
+                               GDK_T, (GdkModifierType)( GDK_CONTROL_MASK),
+                               GTK_ACCEL_VISIBLE);
+ 
+-  image8020 = gtk_image_new_from_stock (&quot;gtk-jump-to&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8020);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (jump_to_time1), image8020);
++  image8070 = gtk_image_new_from_stock (&quot;gtk-jump-to&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8070);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (jump_to_time1), image8070);
+ 
+   custom1 = gtk_menu_item_new_with_mnemonic (_(&quot;Custom&quot;));
+   gtk_widget_show (custom1);
+@@ -914,9 +919,9 @@
+   gtk_widget_show (about1);
+   gtk_container_add (GTK_CONTAINER (help2_menu), about1);
+ 
+-  image8021 = gtk_image_new_from_stock (&quot;gtk-about&quot;, GTK_ICON_SIZE_MENU);
+-  gtk_widget_show (image8021);
+-  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (about1), image8021);
++  image8071 = gtk_image_new_from_stock (&quot;gtk-about&quot;, GTK_ICON_SIZE_MENU);
++  gtk_widget_show (image8071);
++  gtk_image_menu_item_set_image (GTK_IMAGE_MENU_ITEM (about1), image8071);
+ 
+   show_builtin_support1 = gtk_menu_item_new_with_mnemonic (_(&quot;Show builtin support&quot;));
+   gtk_widget_show (show_builtin_support1);
+@@ -1015,7 +1020,7 @@
+   gtk_box_pack_start (GTK_BOX (vbox7), comboboxVideo, FALSE, FALSE, 0);
+   gtk_combo_box_append_text (GTK_COMBO_BOX (comboboxVideo), _(&quot;Copy&quot;));
+ 
+-  buttonConfV = gtk_button_new_with_mnemonic (&quot;Configure&quot;);
++  buttonConfV = gtk_button_new_with_mnemonic (_(&quot;Configure&quot;));
+   gtk_widget_show (buttonConfV);
+   gtk_box_pack_start (GTK_BOX (vbox7), buttonConfV, FALSE, FALSE, 0);
+   gtk_tooltips_set_tip (tooltips, buttonConfV, _(&quot;Configure video encoder&quot;), NULL);
+@@ -1055,7 +1060,7 @@
+   gtk_box_pack_start (GTK_BOX (vbox8), comboboxAudio, FALSE, FALSE, 0);
+   gtk_combo_box_append_text (GTK_COMBO_BOX (comboboxAudio), _(&quot;Copy&quot;));
+ 
+-  buttonConfA = gtk_button_new_with_mnemonic (&quot;Configure&quot;);
++  buttonConfA = gtk_button_new_with_mnemonic (_(&quot;Configure&quot;));
+   gtk_widget_show (buttonConfA);
+   gtk_box_pack_start (GTK_BOX (vbox8), buttonConfA, FALSE, FALSE, 0);
+   gtk_tooltips_set_tip (tooltips, buttonConfA, _(&quot;Configure audio encoder&quot;), NULL);
+@@ -1418,11 +1423,11 @@
+   GLADE_HOOKUP_OBJECT (mainWindow, menuitem1, &quot;menuitem1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, menuitem1_menu, &quot;menuitem1_menu&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, open_video1, &quot;open_video1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image7996, &quot;image7996&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8046, &quot;image8046&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, append_video1, &quot;append_video1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image7997, &quot;image7997&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8047, &quot;image8047&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, save_stuff, &quot;save_stuff&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image7998, &quot;image7998&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8048, &quot;image8048&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, save_stuff_menu, &quot;save_stuff_menu&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, save_as_avi1, &quot;save_as_avi1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, separator1, &quot;separator1&quot;);
+@@ -1431,39 +1436,39 @@
+   GLADE_HOOKUP_OBJECT (mainWindow, save_selection_as_jpegs1, &quot;save_selection_as_jpegs1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, separator3, &quot;separator3&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, save_project1, &quot;save_project1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image7999, &quot;image7999&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8049, &quot;image8049&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, save_project_as1, &quot;save_project_as1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8000, &quot;image8000&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8050, &quot;image8050&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, run_script1, &quot;run_script1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8001, &quot;image8001&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8051, &quot;image8051&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, add_to_joblist1, &quot;add_to_joblist1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, joblist1, &quot;joblist1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, separator16, &quot;separator16&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, video_informations1, &quot;video_informations1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8002, &quot;image8002&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8052, &quot;image8052&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, avi_muxer_options1, &quot;avi_muxer_options1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, separator4, &quot;separator4&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, quit1, &quot;quit1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8003, &quot;image8003&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8053, &quot;image8053&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, menuitem2, &quot;menuitem2&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, menuitem2_menu, &quot;menuitem2_menu&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, reset_edits1, &quot;reset_edits1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8004, &quot;image8004&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8054, &quot;image8054&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, separator5, &quot;separator5&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, cut1, &quot;cut1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8005, &quot;image8005&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8055, &quot;image8055&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, copy1, &quot;copy1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8006, &quot;image8006&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8056, &quot;image8056&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, paste1, &quot;paste1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8007, &quot;image8007&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8057, &quot;image8057&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, delete1, &quot;delete1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8008, &quot;image8008&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8058, &quot;image8058&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, separator6, &quot;separator6&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, set_marker_a1, &quot;set_marker_a1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, set_marker_b1, &quot;set_marker_b1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, separator7, &quot;separator7&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, preferences1, &quot;preferences1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8009, &quot;image8009&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8059, &quot;image8059&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, view1, &quot;view1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, view1_menu, &quot;view1_menu&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, toolbar1, &quot;toolbar1&quot;);
+@@ -1492,13 +1497,13 @@
+   GLADE_HOOKUP_OBJECT (mainWindow, build_vbr_time_map1, &quot;build_vbr_time_map1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, separator11, &quot;separator11&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, save_audio1, &quot;save_audio1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8010, &quot;image8010&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8060, &quot;image8060&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, audio_encoder1, &quot;audio_encoder1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, filters2, &quot;filters2&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, tools1, &quot;tools1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, tools1_menu, &quot;tools1_menu&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, calculator1, &quot;calculator1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8011, &quot;image8011&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8061, &quot;image8061&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, separator12, &quot;separator12&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, rebuild_frames, &quot;rebuild_frames&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, check_frames, &quot;check_frames&quot;);
+@@ -1507,6 +1512,8 @@
+   GLADE_HOOKUP_OBJECT (mainWindow, separator13, &quot;separator13&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, v2v, &quot;v2v&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, ocr_vobsub_2_srt, &quot;ocr_vobsub_2_srt&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, separator17, &quot;separator17&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, see_hex1, &quot;see_hex1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, help1, &quot;help1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, help1_menu, &quot;help1_menu&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, vcd1, &quot;vcd1&quot;);
+@@ -1517,34 +1524,34 @@
+   GLADE_HOOKUP_OBJECT (mainWindow, go1, &quot;go1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, go1_menu, &quot;go1_menu&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, play_video1, &quot;play_video1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8012, &quot;image8012&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8062, &quot;image8062&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, previous_frame1, &quot;previous_frame1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8013, &quot;image8013&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8063, &quot;image8063&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, next_frame1, &quot;next_frame1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8014, &quot;image8014&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8064, &quot;image8064&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, previous_intra_frame1, &quot;previous_intra_frame1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8015, &quot;image8015&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8065, &quot;image8065&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, next_intra_frame1, &quot;next_intra_frame1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8016, &quot;image8016&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8066, &quot;image8066&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, search_previous_black_frame1, &quot;search_previous_black_frame1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, search_next_black_frame1, &quot;search_next_black_frame1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, first_frame1, &quot;first_frame1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8017, &quot;image8017&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8067, &quot;image8067&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, last_frame1, &quot;last_frame1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8018, &quot;image8018&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8068, &quot;image8068&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, separator14, &quot;separator14&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, go_to_marker_a1, &quot;go_to_marker_a1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, go_to_marker_b1, &quot;go_to_marker_b1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, separator15, &quot;separator15&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, jum_to_frame1, &quot;jum_to_frame1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8019, &quot;image8019&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8069, &quot;image8069&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, jump_to_time1, &quot;jump_to_time1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8020, &quot;image8020&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8070, &quot;image8070&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, custom1, &quot;custom1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, help2, &quot;help2&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, help2_menu, &quot;help2_menu&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, about1, &quot;about1&quot;);
+-  GLADE_HOOKUP_OBJECT (mainWindow, image8021, &quot;image8021&quot;);
++  GLADE_HOOKUP_OBJECT (mainWindow, image8071, &quot;image8071&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, show_builtin_support1, &quot;show_builtin_support1&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, toolbar2, &quot;toolbar2&quot;);
+   GLADE_HOOKUP_OBJECT (mainWindow, menutoolbuttonOpen, &quot;menutoolbuttonOpen&quot;);
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2/GUI_menumap.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2/GUI_menumap.h	2007-04-25 17:19:01 UTC (rev 2967)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2/GUI_menumap.h	2007-04-25 19:19:15 UTC (rev 2968)
+@@ -6,6 +6,7 @@
+ 
+ 
+ */
++CALLBACK( see_hex1                              ,ACT_HEX_DUMP);
+ CALLBACK( show_builtin_support1                 ,ACT_BUILT_IN);
+ CALLBACK( open_video1         			,ACT_OpenAvi); 
+ CALLBACK( append_video1     			,ACT_AppendAvi);
+
+Modified: branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp	2007-04-25 17:19:01 UTC (rev 2967)
++++ branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp	2007-04-25 19:19:15 UTC (rev 2968)
+@@ -166,9 +166,9 @@
+ extern const char * GUI_getCustomScript(uint32_t nb);
+ extern gboolean SliderIsShifted;
+ 
++void GUI_showCurrentFrameHex(void);
+ 
+ 
+-
+ //___________________________________________
+ // serialization of user event throught gui
+ //
+@@ -827,6 +827,10 @@
+ 	}
+       break;
+ 
++   case ACT_HEX_DUMP:
++      GUI_showCurrentFrameHex();
++      break;
++      
+     default:
+       printf (&quot;\n unhandled action %d\n&quot;, action);
+       ADM_assert (0);
+@@ -2383,4 +2387,42 @@
+   return 1; 
+ }
+ 
++/**
++      \fn GUI_showCurrentFrameHex
++      \brief Display the first 32 bytes of the current frame in hex
++*/
++
++void GUI_showCurrentFrameHex(void)
++{
++#define DISPLAY_HEX 32
++ uint8_t *buffer;
++ uint32_t len,fullLen;
++ char     string[DISPLAY_HEX*3+6],*s;
++ char     title[80];
++ 
++ if (!avifileinfo) return;
++ 
++ buffer=new uint8_t [avifileinfo-&gt;width*avifileinfo-&gt;height*3];
++ video_body-&gt;getRaw (curframe, buffer, &amp;fullLen);  
++ 
++ len=fullLen;
++ if(len&gt;DISPLAY_HEX) len=DISPLAY_HEX;
++ s=string;
++ for(int i=0;i&lt;len;i++)
++ {
++    sprintf(s,&quot;%02x &quot;,buffer[i]); 
++    s+=3;
++    if(i%8==7)
++    {
++      *s++='\n'; 
++    }
++    
++ }
++ *s=0;
++ sprintf(title,&quot;Len: %u bytes\n&quot;,fullLen);
++ 
++ GUI_Info_HIG( ADM_LOG_IMPORTANT,title, string);
++ delete [] buffer;
++}
++
+ // EOF
+
+Modified: branches/avidemux_2.4_branch/avidemux/gui_action.hxx
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/gui_action.hxx	2007-04-25 17:19:01 UTC (rev 2967)
++++ branches/avidemux_2.4_branch/avidemux/gui_action.hxx	2007-04-25 19:19:15 UTC (rev 2968)
+@@ -187,6 +187,7 @@
+ ACT_ZOOM_2_1,
+ ACT_ZOOM_4_1,
+ ACT_BUILT_IN,
++ACT_HEX_DUMP,
+ ACT_CUSTOM_BASE,
+ ACT_CUSTOM_END=ACT_CUSTOM_BASE+ADM_MAC_CUSTOM_SCRIPT,
+ ACT_DUMMY
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000284.html">[Avidemux-svn-commit] r2967 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+	<LI>Next message: <A HREF="000286.html">[Avidemux-svn-commit] r2969 -	branches/avidemux_2.4_branch/avidemux/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#285">[ date ]</a>
+              <a href="thread.html#285">[ thread ]</a>
+              <a href="subject.html#285">[ subject ]</a>
+              <a href="author.html#285">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,415 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7624 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7624%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062901.10A6B481404%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004768.html">
+   <LINK REL="Next"  HREF="004770.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7624 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7624%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062901.10A6B481404%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7624 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Oct 28 08:29:01 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004768.html">[Avidemux-svn-commit] r7623 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+        <LI>Next message: <A HREF="004770.html">[Avidemux-svn-commit] r7625 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4769">[ date ]</a>
+              <a href="thread.html#4769">[ thread ]</a>
+              <a href="subject.html#4769">[ subject ]</a>
+              <a href="author.html#4769">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-10-28 08:29:00 +0200 (Fri, 28 Oct 2011)
+New Revision: 7624
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.h
+Log:
+[asf] Remplace alloc/free for each packet by  storing already made packet into a storage queue
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp	2011-10-28 06:28:59 UTC (rev 7623)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp	2011-10-28 06:29:00 UTC (rev 7624)
+@@ -23,7 +23,7 @@
+ #include &quot;ADM_asf.h&quot;
+ #include &quot;ADM_asfPacket.h&quot;
+ 
+-#if 0
++#if 1
+ #define aprintf printf
+ #else
+ #define aprintf(...) {}
+@@ -165,7 +165,7 @@
+                 (int)_allAudioTracks[i].streamIndex,(int)_allAudioTracks[i].streamIndex);
+   buildIndex();
+   fseeko(_fd,_dataStartOffset,SEEK_SET);
+-  _packet=new asfPacket(_fd,_nbPackets,_packetSize,&amp;readQueue,_dataStartOffset);
++  _packet=new asfPacket(_fd,_nbPackets,_packetSize,&amp;readQueue,&amp;storageQueue,_dataStartOffset);
+   curSeq=1;
+   for(int i=0;i&lt;_nbAudioTrack;i++)
+   {
+@@ -291,10 +291,11 @@
+   uint32_t delta;
+   while(1)
+   {
+-    while(!readQueue.isEmpty())
++    while(readQueue.size())
+     {
+       asfBit *bit;
+-      ADM_assert(readQueue.pop((void**)&amp;bit));
++      bit=readQueue.front();
++      readQueue.pop_front();
+       aprintf(&quot;&gt;found packet of size %d seq %d, while curseq =%d wanted seg=%u current offset=%u\n&quot;,bit-&gt;len,bit-&gt;sequence,curSeq,_index[framenum].segNb,len);
+       // Here it is tricky
+       // if len==0 we are reading the first part of our frame
+@@ -309,8 +310,8 @@
+           {
+             aprintf(&quot;Dropping seq=%u too old for %u delta %d\n&quot;,
+                   bit-&gt;sequence,_index[framenum].segNb,delta);
+-            delete[] bit-&gt;data;
+-            delete bit;
++            storageQueue.push_back(bit);
++            bit=NULL;
+             if(delta&lt;230)
+             {
+               printf(&quot;[ASF] Very suspicious delta :%&quot;LU&quot;\n&quot;,delta);
+@@ -331,15 +332,15 @@
+       {
+         aprintf(&quot;New sequence %u-&gt;%u while loading %u frame\n&quot;,curSeq,bit-&gt;sequence,framenum);
+         img-&gt;dataLength=len;
+-        readQueue.pushBack(bit); // don't delete it, we will use it later...
++        readQueue.push_front(bit);
+         curSeq=bit-&gt;sequence;
+         goto gotcha;
+       }
+       // still same sequence ...add
+       memcpy(img-&gt;data+len,bit-&gt;data,bit-&gt;len);
+       len+=bit-&gt;len;
+-	  delete[] bit-&gt;data;
+-      delete bit;
++      storageQueue.push_back(bit);
++      bit=NULL;
+     }
+     if(!_packet-&gt;nextPacket(_videoStreamId))
+     {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h	2011-10-28 06:28:59 UTC (rev 7623)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h	2011-10-28 06:29:00 UTC (rev 7624)
+@@ -21,6 +21,7 @@
+ #include &quot;ADM_queue.h&quot;
+ #include &quot;ADM_asfPacket.h&quot;
+ #include &quot;BVector.h&quot;
++#include &lt;vector&gt;
+ #define ASF_MAX_AUDIO_TRACK 8
+ 
+ typedef struct
+@@ -122,7 +123,8 @@
+     uint32_t                _dataStart;
+     asfPacket               *_packet;
+     FILE                    *_fd;
+-    ADM_queue               readQueue;
++    queueOfAsfBits          readQueue;
++    queueOfAsfBits          storageQueue;
+     uint32_t                _packetSize;
+     class asfHeader         *_father;
+     asfAudioTrak            *_track;
+@@ -162,7 +164,9 @@
+     bool                    loadAudio(asfChunk *s,uint32_t sid);
+     bool                    decodeExtHeader(asfChunk *s);
+     bool                    decodeStreamHeader(asfChunk *s);
+-    ADM_queue               readQueue;
++    queueOfAsfBits          readQueue;
++    queueOfAsfBits          storageQueue;
++               
+     uint32_t                curSeq;
+     asfPacket               *_packet;
+     //uint32_t                _currentAudioStream;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp	2011-10-28 06:28:59 UTC (rev 7623)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp	2011-10-28 06:29:00 UTC (rev 7624)
+@@ -63,7 +63,7 @@
+     fseeko(_fd,_dataStart,SEEK_SET);
+     _packetSize=_father-&gt;_packetSize;
+     _packet=new asfPacket(_fd,_father-&gt;_nbPackets,_packetSize,
+-                          &amp;readQueue,_dataStart);
++                          &amp;readQueue,&amp;storageQueue,_dataStart);
+     _seekPoints=&amp;(_father-&gt;audioSeekPoints[myRank]);
+     printf(&quot;[asfAudio] Length %u\n&quot;,getLength());
+ }
+@@ -119,18 +119,17 @@
+   while(1)
+   {
+    
+-    while(!readQueue.isEmpty())
++    while(readQueue.size())
+     {
+       asfBit *bit;
+-      ADM_assert(readQueue.pop((void**)&amp;bit));
+-      //printf(&quot;[Asf] Audio found packet of size %d seq %d\n&quot;,bit-&gt;len,bit-&gt;sequence);
+-      
++      bit=readQueue.front();
++      readQueue.pop_front();
+       // still same sequence ...add
+       memcpy(dest,bit-&gt;data,bit-&gt;len);
+       *len=bit-&gt;len;
+       *dts=bit-&gt;pts; // for audio PTS=DTS...
+-      delete[] bit-&gt;data;
+-      delete bit;
++      storageQueue.push_back(bit);
++      bit=NULL;
+       return 1;
+     }
+     r=_packet-&gt;nextPacket(_streamId);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-28 06:28:59 UTC (rev 7623)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-28 06:29:00 UTC (rev 7624)
+@@ -397,7 +397,7 @@
+   
+   // Here we go
+   asfPacket *aPacket=new asfPacket(_fd,_nbPackets,_packetSize,
+-                                   &amp;readQueue,_dataStartOffset);
++                                   &amp;readQueue,&amp;storageQueue,_dataStartOffset);
+   uint32_t packet=1;
+ #define MAXIMAGE (_nbPackets)
+   uint32_t sequence=1;
+@@ -421,14 +421,17 @@
+ 
+   while(packet&lt;_nbPackets)
+   {
+-    while(!readQueue.isEmpty())
++    while(readQueue.size())
+     {
+       asfBit *bit=NULL;
+ 
+       // update UI
+       uint32_t curPos=(uint32_t)(ftello(_fd)&gt;&gt;10);
+       progressBar-&gt;update(curPos,fileSizeMB);
+-      ADM_assert(readQueue.pop((void**)&amp;bit));
++
++      bit=readQueue.front();
++      readQueue.pop_front();
++
+       // --
+       uint64_t dts=bit-&gt;dts;
+       uint64_t pts=bit-&gt;pts;
+@@ -459,7 +462,7 @@
+             indexEntry.dts=dts;
+             indexEntry.pts=pts;
+ 
+-            readQueue.pushBack(bit);
++            readQueue.push_front(bit); // reuse it next time
+     
+             sequence=bit-&gt;sequence;
+             len=0;
+@@ -495,8 +498,7 @@
+           printf(&quot;Unmapped stream %u\n&quot;,bit-&gt;stream); 
+         }
+       }
+-     delete[] bit-&gt;data;
+-     delete bit;
++      storageQueue.push_back(bit);
+     }
+     //working-&gt;update(packet,_nbPackets);
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2011-10-28 06:28:59 UTC (rev 7623)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2011-10-28 06:29:00 UTC (rev 7624)
+@@ -37,7 +37,7 @@
+ /**
+     \fn asfPacket ctor
+ */ 
+-asfPacket::asfPacket(FILE *f,uint32_t nb,uint32_t pSize,ADM_queue *q,uint32_t startDataOffset)
++asfPacket::asfPacket(FILE *f,uint32_t nb,uint32_t pSize,queueOfAsfBits *q,queueOfAsfBits *s,uint32_t startDataOffset)
+  {
+    _fd=f;
+    pakSize=pSize;
+@@ -46,6 +46,7 @@
+    aprintf(&quot;Packet created at %x\n&quot;,packetStart);
+    ADM_assert(_fd);
+    queue=q;
++   storage=s;
+    ADM_assert(q);
+    currentPacket=0;
+    _nbPackets=nb;
+@@ -56,7 +57,7 @@
+ */
+  asfPacket::~asfPacket()
+  {
+-	 purge();
++	 
+  }
+  /**
+     \fn goToPacket
+@@ -292,7 +293,19 @@
+                 uint32_t offset,uint32_t sequence,uint32_t payloadLen,uint32_t stream,
+                 uint64_t dts,uint64_t pts)
+  {
+-   asfBit *bit=new asfBit;
++
++    // Get a packet...
++    asfBit *bit;
++
++    if(storage-&gt;empty())
++    {
++        bit=new asfBit();
++    }else
++    {
++        bit=storage-&gt;front();
++        storage-&gt;pop_front();
++    }
++
+    aprintf(&quot;Pushing packet stream=%d len=%d offset=%d seq=%d packet=%d dts=%s \n&quot;,
+                 stream,payloadLen,offset,sequence,packetnb,ADM_us2plain(dts));
+    bit-&gt;sequence=sequence;
+@@ -306,12 +319,12 @@
+    bit-&gt;pts=pts;
+    if(!read(bit-&gt;data,bit-&gt;len))
+    {
+-		delete[] bit-&gt;data;
+-		delete bit;
++        storage-&gt;push_back(bit);
++        bit=NULL;
+ 		return 0; 
+    }
+ 
+-   queue-&gt;push((void *)bit);
++   queue-&gt;push_back(bit);
+    return 1;
+  }
+  /**
+@@ -379,19 +392,23 @@
+    return 1;
+   
+  }
+- //****************************
++ /**
++    \fn purge
++    \brief empty queue to storage
++*/
+  uint8_t asfPacket::purge(void)
+  {
+     // Flush queue
+-   while(!queue-&gt;isEmpty())
++   while(!queue-&gt;size())
+    {
+      asfBit *bit;
+-     ADM_assert(queue-&gt;pop((void**)&amp;bit));
+-     delete[] bit-&gt;data;
+-     delete bit;
++     bit=queue-&gt;front();
++     queue-&gt;pop_front();
++     storage-&gt;push_back(bit);
+    }
+    return 1; 
+  }
++#if 0
+  //****************************
+  uint8_t   asfPacket::packTo(uint8_t *buffer,uint32_t *len)
+  {
+@@ -407,8 +424,8 @@
+    }
+    return 1;
+  }
++#endif 
+  
+- 
+ #ifndef ASF_INLINE
+ #include &quot;ADM_asfIo.h&quot;
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.h	2011-10-28 06:28:59 UTC (rev 7623)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.h	2011-10-28 06:29:00 UTC (rev 7624)
+@@ -18,6 +18,7 @@
+ #define ASF_PACKET_H
+ 
+ #include &quot;ADM_queue.h&quot;
++#include &lt;list&gt;
+ /**
+     \struct asfBit
+ */
+@@ -34,6 +35,9 @@
+   uint8_t  *data;
+   
+ }asfBit;
++
++typedef std::list &lt;asfBit *&gt;  queueOfAsfBits;
++
+ /**
+     \class asfPacket
+ */
+@@ -49,14 +53,15 @@
+     uint32_t        packetStart;
+     uint8_t         segmentId;
+     uint32_t        pakSize;
+-    ADM_queue       *queue;
++    queueOfAsfBits  *queue;
++    queueOfAsfBits  *storage;
+     uint32_t        _offset;
+     uint32_t        currentPacket;
+     uint32_t        _startDataOffset;
+     uint32_t        _nbPackets;
+   public:
+     
+-    asfPacket(FILE *f,uint32_t nbElem,uint32_t pSize,ADM_queue *q,uint32_t startDataOffset);
++    asfPacket(FILE *f,uint32_t nbElem,uint32_t pSize,queueOfAsfBits *q,queueOfAsfBits *s,uint32_t startDataOffset);
+     ~asfPacket();
+     uint8_t   dump(void);
+     
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004768.html">[Avidemux-svn-commit] r7623 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+	<LI>Next message: <A HREF="004770.html">[Avidemux-svn-commit] r7625 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4769">[ date ]</a>
+              <a href="thread.html#4769">[ thread ]</a>
+              <a href="subject.html#4769">[ subject ]</a>
+              <a href="author.html#4769">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

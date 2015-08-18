@@ -1,0 +1,144 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7327 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7327%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src&In-Reply-To=%3C20110723155707.58B06480EC9%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004480.html">
+   <LINK REL="Next"  HREF="004482.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7327 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7327%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src&In-Reply-To=%3C20110723155707.58B06480EC9%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7327 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jul 23 17:57:07 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004480.html">[Avidemux-svn-commit] r7326 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+        <LI>Next message: <A HREF="004482.html">[Avidemux-svn-commit] r7328 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4481">[ date ]</a>
+              <a href="thread.html#4481">[ thread ]</a>
+              <a href="subject.html#4481">[ subject ]</a>
+              <a href="author.html#4481">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-07-23 17:57:06 +0200 (Sat, 23 Jul 2011)
+New Revision: 7327
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageUtils.cpp
+Log:
+[image] Fix + optimize blendSSE
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageUtils.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageUtils.cpp	2011-07-23 07:26:15 UTC (rev 7326)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageUtils.cpp	2011-07-23 15:57:06 UTC (rev 7327)
+@@ -205,8 +205,59 @@
+ 
+         return true;
+ }
++/**
++    \fn blendSSE
++*/
++static bool blendSSE(int width, int height,
++                    uint8_t *target,uint32_t stride,
++                    uint8_t *src1,  uint32_t stride1,
++                    uint8_t *src2,  uint32_t stride2)
++{
++uint32_t ww,rr;
++uint8_t *s1,*s2,*d1;
++        int a1,a2;
+ 
++        ww=width&gt;&gt;3;
++        rr=width&amp;7;
+ 
++          for(int y=0;y&lt;height;y++)
++          {
++                int count=ww;
++                s1=src1;
++                s2=src2;
++                d1=target;
++                if(rr)
++                {
++                    blendC(rr,height,d1+(ww&lt;&lt;3), stride,s1+(ww&lt;&lt;3),stride1,s2+(ww&lt;&lt;3),stride2);
++                }
++
++                    
++                __asm__(
++                        &quot;1: \n&quot;
++                        &quot;movq           (%0),%%mm0  \n&quot;
++                        &quot;movq           (%1),%%mm1  \n&quot;
++                        &quot;pavgb          %%mm1,%%mm0 \n&quot;
++                        &quot;movq           %%mm0,(%2)  \n&quot;
++                        &quot;add           $8,%0      \n&quot;
++                        &quot;add           $8,%1      \n&quot;
++                        &quot;add           $8,%2      \n&quot;
++                        &quot;sub           $1,%3      \n&quot;
++                        &quot;jnz             1b        \n&quot;
++
++                : : &quot;r&quot; (s1),&quot;r&quot; (s2),&quot;r&quot;(d1),&quot;r&quot;(count)
++                );
++                src1+=stride1;
++                src2+=stride2;
++                target+=stride;
++           }
++        __asm__(
++                        &quot;emms\n&quot;
++                ::
++                );
++
++        return true;
++}
++
+ #endif
+ /**
+     \fn blend
+@@ -218,6 +269,8 @@
+ #ifdef ADM_CPU_X86
+     if(CpuCaps::hasMMX())
+             myBlend=blendMMX;
++    if(CpuCaps::hasSSE())
++            myBlend=blendSSE;
+ #endif
+     ADM_assert(src1-&gt;_width==src2-&gt;_width);
+     ADM_assert(_width==src2-&gt;_width);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004480.html">[Avidemux-svn-commit] r7326 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+	<LI>Next message: <A HREF="004482.html">[Avidemux-svn-commit] r7328 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4481">[ date ]</a>
+              <a href="thread.html#4481">[ thread ]</a>
+              <a href="subject.html#4481">[ subject ]</a>
+              <a href="author.html#4481">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

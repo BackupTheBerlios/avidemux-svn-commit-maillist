@@ -1,0 +1,124 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5963 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5963%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften&In-Reply-To=%3C201003011849.o21Intcr016914%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003167.html">
+   <LINK REL="Next"  HREF="003175.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5963 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5963%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften&In-Reply-To=%3C201003011849.o21Intcr016914%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5963 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Mar  1 19:49:55 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003167.html">[Avidemux-svn-commit] r5962 - in	branches/avidemux_2.5_branch_gruntster: cmake	cmake_compile_check plugins/ADM_audioEncoders/aften
+</A></li>
+        <LI>Next message: <A HREF="003175.html">[Avidemux-svn-commit] r5964 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins:	ADM_muxers/muxerDummy ADM_videoEncoder ADM_videoEncoder/null
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3168">[ date ]</a>
+              <a href="thread.html#3168">[ thread ]</a>
+              <a href="subject.html#3168">[ subject ]</a>
+              <a href="author.html#3168">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-03-01 19:49:54 +0100 (Mon, 01 Mar 2010)
+New Revision: 5963
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften.cpp
+Log:
+[aften] Fix channel reordering, backport from 2.6, fixes #81, refs #60
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften.cpp	2010-03-01 18:43:44 UTC (rev 5962)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften.cpp	2010-03-01 18:49:54 UTC (rev 5963)
+@@ -88,6 +88,33 @@
+ #else
+   _HANDLE-&gt;system.n_threads=1;
+ #endif
++
++#define ADM_CH_(XX) CHTYP_##XX
++  switch(channels)
++  {
++    case 1:
++        outputChannelMapping[1] = ADM_CH_(FRONT_LEFT);
++        break;
++    case 2:
++        outputChannelMapping[0] = ADM_CH_(FRONT_LEFT);
++        outputChannelMapping[1] = ADM_CH_(FRONT_RIGHT);
++      break;
++    default :
++
++    CHANNEL_TYPE *f=outputChannelMapping;
++
++        *f++ = ADM_CH_(FRONT_LEFT);
++        *f++ = ADM_CH_(FRONT_CENTER);
++        *f++ = ADM_CH_(FRONT_RIGHT);
++
++        *f++ = ADM_CH_(REAR_LEFT);
++        *f++ = ADM_CH_(REAR_RIGHT);
++
++        *f++ = ADM_CH_(LFE);
++        break;
++  }
++
++
+ };
+ 
+ /**
+@@ -176,13 +203,7 @@
+         }
+         ptr=(void *)&amp;(tmpbuffer[tmphead]);
+         ADM_assert(tmptail&gt;=tmphead);
+-
+-#ifdef USE_AFTEN_05
+-		aften_remap_wav_to_a52(ptr, 256*6, _wavheader-&gt;channels, A52_SAMPLE_FMT_FLT, _HANDLE-&gt;acmod, _HANDLE-&gt;lfe);
+-#else
+-		aften_remap_wav_to_a52(ptr, 256*6, _wavheader-&gt;channels, A52_SAMPLE_FMT_FLT, _HANDLE-&gt;acmod);
+-#endif
+-
++        reorderChannels(&amp;(tmpbuffer[tmphead]),256*6,_incoming-&gt;getChannelMapping(),outputChannelMapping);
+         r=aften_encode_frame(_HANDLE, dest,(void *)ptr
+ #ifdef USE_AFTEN_08_SVN
+             ,256*6
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003167.html">[Avidemux-svn-commit] r5962 - in	branches/avidemux_2.5_branch_gruntster: cmake	cmake_compile_check plugins/ADM_audioEncoders/aften
+</A></li>
+	<LI>Next message: <A HREF="003175.html">[Avidemux-svn-commit] r5964 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins:	ADM_muxers/muxerDummy ADM_videoEncoder ADM_videoEncoder/null
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3168">[ date ]</a>
+              <a href="thread.html#3168">[ thread ]</a>
+              <a href="subject.html#3168">[ subject ]</a>
+              <a href="author.html#3168">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

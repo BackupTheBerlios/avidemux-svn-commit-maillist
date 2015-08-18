@@ -1,0 +1,439 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5661 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_core/src	cmake/patches
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5661%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_core/src%0A%09cmake/patches&In-Reply-To=%3C200912191851.nBJIpd99009573%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002867.html">
+   <LINK REL="Next"  HREF="002869.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5661 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_core/src	cmake/patches</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5661%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_core/src%0A%09cmake/patches&In-Reply-To=%3C200912191851.nBJIpd99009573%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5661 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_core/src	cmake/patches">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sat Dec 19 19:51:39 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002867.html">[Avidemux-svn-commit] r5660 - tags
+</A></li>
+        <LI>Next message: <A HREF="002869.html">[Avidemux-svn-commit] r5662 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/McDeint
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2868">[ date ]</a>
+              <a href="thread.html#2868">[ thread ]</a>
+              <a href="subject.html#2868">[ subject ]</a>
+              <a href="author.html#2868">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-12-19 19:51:33 +0100 (Sat, 19 Dec 2009)
+New Revision: 5661
+
+Removed:
+   branches/avidemux_2.5_branch_gruntster/cmake/patches/libavutil_mem.c.patch
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_memsupport.cpp
+   branches/avidemux_2.5_branch_gruntster/cmake/patches/createPatches.sh
+Log:
+[ffmpeg] remove overloaded av* memory functions and let ffmpeg libs look after themselves - it might break things that aren't correctly freed using av_free
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_memsupport.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_memsupport.cpp	2009-12-19 14:20:59 UTC (rev 5660)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_memsupport.cpp	2009-12-19 18:51:33 UTC (rev 5661)
+@@ -42,13 +42,6 @@
+ extern size_t getSizeFromPointer(void* ptr);
+ #endif
+ 
+-extern &quot;C&quot;
+-{
+-	void *av_malloc(unsigned int size);
+-	void av_free(void *ptr);
+-	void *av_realloc(void *ptr, unsigned int size);
+-}
+-
+ void ADM_memStat(void);
+ void ADM_memStatInit(void);
+ void ADM_memStatEnd(void);
+@@ -180,50 +173,7 @@
+ {
+ 	ADM_dezalloc(c);
+ }
+-//********************************
+-// lavcodec wrapper
+-//********************************
+-extern &quot;C&quot;
+-{
+-	void *av_malloc(unsigned int size)
+-	{
+- 		return ADM_alloc(size);
+-	}
+ 
+-	void av_freep(void *arg)
+-	{
+-		void **ptr= (void**)arg;
+-		av_free(*ptr);
+-		*ptr = NULL;
+-	}
+-
+-	void *av_mallocz(unsigned int size)
+-	{
+-		void *ptr;
+-
+-		ptr = av_malloc(size);
+-
+-		if (ptr)
+-			memset(ptr, 0, size);
+-
+-		return ptr;
+-	}
+-
+-	char *av_strdup(const char *s)
+-	{
+-		char *ptr;
+-		int len;
+-
+-		len = strlen(s) + 1;
+-		ptr = (char *)av_malloc(len);
+-
+-		if (ptr)
+-			memcpy(ptr, s, len);
+-
+-		return ptr;
+-	}
+-}
+-
+ /**
+  * av_realloc semantics (same as glibc): if ptr is NULL and size &gt; 0,
+  * identical to malloc(size). If size is zero, it is identical to
+@@ -282,18 +232,6 @@
+ #endif
+ }
+ 
+-void *av_realloc(void *ptr, unsigned int newsize)
+-{
+-	return ADM_realloc(ptr,newsize);
+-}
+-
+-/* NOTE: ptr = NULL is explicetly allowed */
+-void av_free(void *ptr)
+-{
+-	if(ptr)
+-		ADM_dealloc(ptr);  
+-}
+-
+ char *ADM_strdup(const char *in)
+ {
+ 	if(!in)
+@@ -365,58 +303,5 @@
+ 
+ 	return nalloc;
+ }
+-
+-extern &quot;C&quot;
+-{
+-	void *av_malloc(unsigned int size)
+-	{
+-		return operator new(size, (char*)_DEBUG_NEW_CALLER_ADDRESS, 0);
+-	}
+-	void av_freep(void *arg)
+-	{
+-		void **ptr = (void**)arg;
+-		av_free(*ptr);
+-		*ptr = NULL;
+-	}
+-
+-	void *av_mallocz(unsigned int size)
+-	{
+-		void *ptr;
+-
+-		ptr = operator new(size, (char*)_DEBUG_NEW_CALLER_ADDRESS, 0);
+-
+-		if (ptr)
+-			memset(ptr, 0, size);
+-
+-		return ptr;
+-	}
+-}
+-
+-char *av_strdup(const char *s)
+-{
+-    char *ptr;
+-    int len;
+-    len = strlen(s) + 1;
+-	ptr = (char *)operator new(len, (char*)_DEBUG_NEW_CALLER_ADDRESS, 0);
+-
+-    if (ptr)
+-        memcpy(ptr, s, len);
+-
+-    return ptr;
+-}
+-
+-void *av_realloc(void *ptr, unsigned int newsize)
+-{
+-	if(!ptr)
+-		return operator new(newsize, (char*)_DEBUG_NEW_CALLER_ADDRESS, 0);
+-	else
+-		return ADM_realloc(ptr,newsize);
+-}
+-
+-void av_free(void *ptr)
+-{
+-	if(ptr)
+-		operator delete(ptr, (char*)_DEBUG_NEW_CALLER_ADDRESS, 0);
+-}
+ #endif
+ // EOF
+
+Modified: branches/avidemux_2.5_branch_gruntster/cmake/patches/createPatches.sh
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/cmake/patches/createPatches.sh	2009-12-19 14:20:59 UTC (rev 5660)
++++ branches/avidemux_2.5_branch_gruntster/cmake/patches/createPatches.sh	2009-12-19 18:51:33 UTC (rev 5661)
+@@ -33,4 +33,3 @@
+ updatePatch libavformat movenc.c
+ updatePatch libavutil avutil.h
+ updatePatch libavutil internal.h
+-updatePatch libavutil mem.c
+
+Deleted: branches/avidemux_2.5_branch_gruntster/cmake/patches/libavutil_mem.c.patch
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/cmake/patches/libavutil_mem.c.patch	2009-12-19 14:20:59 UTC (rev 5660)
++++ branches/avidemux_2.5_branch_gruntster/cmake/patches/libavutil_mem.c.patch	2009-12-19 18:51:33 UTC (rev 5661)
+@@ -1,202 +0,0 @@
+-*** libavutil/mem.c.old	Wed Apr  1 18:35:44 2009
+---- libavutil/mem.c	Wed Apr  1 18:35:44 2009
+-***************
+-*** 46,132 ****
+-  
+-  void *av_malloc(unsigned int size)
+-  {
+-!     void *ptr = NULL;
+-! #if CONFIG_MEMALIGN_HACK
+-!     long diff;
+-! #endif
+-  
+-!     /* let's disallow possible ambiguous cases */
+-!     if(size &gt; (INT_MAX-16) )
+-!         return NULL;
+-! 
+-! #if CONFIG_MEMALIGN_HACK
+-!     ptr = malloc(size+16);
+-!     if(!ptr)
+-!         return ptr;
+-!     diff= ((-(long)ptr - 1)&amp;15) + 1;
+-!     ptr = (char*)ptr + diff;
+-!     ((char*)ptr)[-1]= diff;
+-! #elif HAVE_POSIX_MEMALIGN
+-!     if (posix_memalign(&amp;ptr,16,size))
+-!         ptr = NULL;
+-! #elif HAVE_MEMALIGN
+-!     ptr = memalign(16,size);
+-!     /* Why 64?
+-!        Indeed, we should align it:
+-!          on 4 for 386
+-!          on 16 for 486
+-!          on 32 for 586, PPro - K6-III
+-!          on 64 for K7 (maybe for P3 too).
+-!        Because L1 and L2 caches are aligned on those values.
+-!        But I don't want to code such logic here!
+-!      */
+-!      /* Why 16?
+-!         Because some CPUs need alignment, for example SSE2 on P4, &amp; most RISC CPUs
+-!         it will just trigger an exception and the unaligned load will be done in the
+-!         exception handler or it will just segfault (SSE2 on P4).
+-!         Why not larger? Because I did not see a difference in benchmarks ...
+-!      */
+-!      /* benchmarks with P3
+-!         memalign(64)+1          3071,3051,3032
+-!         memalign(64)+2          3051,3032,3041
+-!         memalign(64)+4          2911,2896,2915
+-!         memalign(64)+8          2545,2554,2550
+-!         memalign(64)+16         2543,2572,2563
+-!         memalign(64)+32         2546,2545,2571
+-!         memalign(64)+64         2570,2533,2558
+-  
+-!         BTW, malloc seems to do 8-byte alignment by default here.
+-!      */
+-! #else
+-!     ptr = malloc(size);
+-  #endif
+--     return ptr;
+-  }
+-  
+-! void *av_realloc(void *ptr, unsigned int size)
+-  {
+-! #if CONFIG_MEMALIGN_HACK
+-!     int diff;
+-! #endif
+-  
+-!     /* let's disallow possible ambiguous cases */
+-!     if(size &gt; (INT_MAX-16) )
+-!         return NULL;
+-! 
+-! #if CONFIG_MEMALIGN_HACK
+-!     //FIXME this isn't aligned correctly, though it probably isn't needed
+-!     if(!ptr) return av_malloc(size);
+-!     diff= ((char*)ptr)[-1];
+-!     return (char*)realloc((char*)ptr - diff, size + diff) + diff;
+-  #else
+-!     return realloc(ptr, size);
+-  #endif
+-  }
+-  
+-  void av_free(void *ptr)
+-  {
+-!     /* XXX: this test should not be needed on most libcs */
+-!     if (ptr)
+-! #if CONFIG_MEMALIGN_HACK
+-!         free((char*)ptr - ((char*)ptr)[-1]);
+-  #else
+-!         free(ptr);
+-  #endif
+-  }
+-  
+---- 46,155 ----
+-  
+-  void *av_malloc(unsigned int size)
+-  {
+-! #ifdef __APPLE__
+-! 	return malloc(size);
+-! #else
+-! 	char *c;
+-  
+-! 	uint64_t l, lorg;
+-! 	uint32_t *backdoor;
+-  
+-! 	l = (uint64_t)malloc(size + 32);
+-! 
+-! 	// Get next boundary
+-! 	lorg = l;
+-! 	l = (l + 15) &amp; 0xfffffffffffffff0LL;
+-! 	l += 16;
+-! 	c = (char*)l;
+-! 	backdoor = (uint32_t*)(c - 8);
+-! 	*backdoor = (0xdead &lt;&lt; 16) + l - lorg;
+-! 	backdoor[1] = size;
+-! 
+-! 	return c;
+-  #endif
+-  }
+-  
+-! void *av_realloc(void *ptr, unsigned int newsize)
+-  {
+-! #ifdef __APPLE__
+-! 	if (!ptr)
+-! 		return av_malloc(newsize);
+-! 
+-! 	if (!newsize)
+-! 	{
+-! 		av_free(ptr);
+-! 		return NULL;
+-! 	}
+-  
+-! 	return realloc(ptr, newsize);
+-  #else
+-! 	void *nalloc;
+-! 
+-! 	if (!ptr)
+-! 		return av_malloc(newsize);
+-! 
+-! 	if (!newsize) 
+-! 	{
+-! 		av_free(ptr);
+-! 		return NULL;
+-! 	}
+-! 
+-! 	// now we either shrink them or expand them
+-! 	// in case of shrink, we do nothing
+-! 	// in case of expand we have to copy
+-! 	// Do copy everytime (slower)
+-! 	uint32_t *backdoor;
+-! 	uint32_t size, offset;
+-! 	char *c = (char*)ptr;
+-! 
+-! 	backdoor = (uint32_t*)ptr;
+-! 	backdoor -= 2;
+-! 
+-! 	assert(((*backdoor) &gt;&gt; 16) == 0xdead);
+-! 
+-! 	offset = backdoor[0] &amp; 0xffff;
+-! 	size = backdoor[1];
+-! 
+-! 	if(size &gt;= newsize) // do nothing
+-! 		return ptr;
+-! 
+-! 	// Allocate a new one
+-! 	nalloc = av_malloc(newsize);
+-! 	memcpy(nalloc, ptr, size);
+-! 	av_free(ptr);
+-! 
+-! 	return nalloc;
+-  #endif
+-  }
+-  
+-  void av_free(void *ptr)
+-  {
+-! #ifdef __APPLE__
+-! 	if (!ptr)
+-! 		return;
+-! 
+-! 	free(ptr);
+-  #else
+-! 	uint32_t *backdoor;
+-! 	uint32_t size, offset;
+-! 	char *c = (char*)ptr;
+-! 
+-! 	if (!ptr)
+-! 		return;
+-! 
+-! 	backdoor = (uint32_t*)ptr;
+-! 	backdoor -= 2;
+-! 
+-! 	if (*backdoor == 0xbeefbeef)
+-! 		assert(0);
+-! 
+-! 	assert(((*backdoor) &gt;&gt; 16) == 0xdead);
+-! 
+-! 	offset = backdoor[0] &amp; 0xffff;
+-! 	size = backdoor[1];
+-! 	*backdoor = 0xbeefbeef; // Scratch sig
+-! 
+-! 	free(c - offset);
+-  #endif
+-  }
+-  
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002867.html">[Avidemux-svn-commit] r5660 - tags
+</A></li>
+	<LI>Next message: <A HREF="002869.html">[Avidemux-svn-commit] r5662 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/McDeint
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2868">[ date ]</a>
+              <a href="thread.html#2868">[ thread ]</a>
+              <a href="subject.html#2868">[ subject ]</a>
+              <a href="author.html#2868">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

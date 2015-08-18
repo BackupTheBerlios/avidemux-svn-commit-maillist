@@ -1,0 +1,126 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7263 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7263%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2%3A%0A%09include%20src&In-Reply-To=%3C20110609180419.37B264812F0%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004416.html">
+   <LINK REL="Next"  HREF="004418.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7263 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7263%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2%3A%0A%09include%20src&In-Reply-To=%3C20110609180419.37B264812F0%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7263 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jun  9 20:04:19 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004416.html">[Avidemux-svn-commit] r7262 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+        <LI>Next message: <A HREF="004418.html">[Avidemux-svn-commit] r7264 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4417">[ date ]</a>
+              <a href="thread.html#4417">[ thread ]</a>
+              <a href="subject.html#4417">[ subject ]</a>
+              <a href="author.html#4417">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-06-09 20:04:18 +0200 (Thu, 09 Jun 2011)
+New Revision: 7263
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_filterThread.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterThread.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilterBridge.cpp
+Log:
+[bridge/queue] When creating videoBridge and the associated image queue, keep them as hwRef as long as possible if they are not native image
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_filterThread.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_filterThread.h	2011-06-09 18:04:17 UTC (rev 7262)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_filterThread.h	2011-06-09 18:04:18 UTC (rev 7263)
+@@ -34,7 +34,8 @@
+        virtual bool         configure(void) {return true;}             /// Start graphical user interface
+ /**/
+        virtual bool         goToTime(uint64_t usSeek); 
+-       virtual bool         getNextFrame(uint32_t *frameNumber,ADMImage *image);     
++       virtual bool         getNextFrame(uint32_t *frameNumber,ADMImage *image);    
++       virtual bool         getNextFrameAs( ADM_HW_IMAGE type,uint32_t *frameNumber,ADMImage *image) ;
+        virtual FilterInfo  *getInfo(void)    ;
+ 
+ protected:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterThread.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterThread.cpp	2011-06-09 18:04:17 UTC (rev 7262)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterThread.cpp	2011-06-09 18:04:18 UTC (rev 7263)
+@@ -72,6 +72,11 @@
+ */
+ bool         ADM_videoFilterQueue::getNextFrame(uint32_t *frameNumber,ADMImage *image)
+ {
++    return getNextFrameAs(ADM_HW_NONE,frameNumber,image);
++}
++bool         ADM_videoFilterQueue::getNextFrameAs( ADM_HW_IMAGE type,uint32_t *frameNumber,ADMImage *image)
++{
++
+      if(false==started)
+         {
+             startThread();      
+@@ -148,7 +153,7 @@
+         freeList.erase(freeList.begin());
+         mutex-&gt;unlock();
+ 
+-        if(false==previousFilter-&gt;getNextFrame(&amp;fn,source))
++        if(false==previousFilter-&gt;getNextFrameAs(ADM_HW_ANY,&amp;fn,source))
+         {
+            
+             ADM_info(&quot;Video Thread, no more data\n&quot;);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilterBridge.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilterBridge.cpp	2011-06-09 18:04:17 UTC (rev 7262)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilterBridge.cpp	2011-06-09 18:04:18 UTC (rev 7263)
+@@ -121,6 +121,7 @@
+         return false;
+     }
+     // Check if image is 
++    if(ADM_HW_ANY==type) return true;
+     if(type!=image-&gt;refType)
+     {        
+         return image-&gt;hwDownloadFromRef(); // nope, revert to base type
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004416.html">[Avidemux-svn-commit] r7262 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+	<LI>Next message: <A HREF="004418.html">[Avidemux-svn-commit] r7264 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4417">[ date ]</a>
+              <a href="thread.html#4417">[ thread ]</a>
+              <a href="subject.html#4417">[ subject ]</a>
+              <a href="author.html#4417">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

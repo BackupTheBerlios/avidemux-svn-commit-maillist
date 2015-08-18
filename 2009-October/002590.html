@@ -1,0 +1,151 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5379 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5379%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core%3A%0A%09include%20src&In-Reply-To=%3C200910140546.n9E5kK8r004557%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002589.html">
+   <LINK REL="Next"  HREF="002591.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5379 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core:	include src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5379%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core%3A%0A%09include%20src&In-Reply-To=%3C200910140546.n9E5kK8r004557%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5379 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Oct 14 07:46:20 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002589.html">[Avidemux-svn-commit] r5378 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioDevices/Alsa
+</A></li>
+        <LI>Next message: <A HREF="002591.html">[Avidemux-svn-commit] r5380 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_editor ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2590">[ date ]</a>
+              <a href="thread.html#2590">[ thread ]</a>
+              <a href="subject.html#2590">[ subject ]</a>
+              <a href="author.html#2590">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-10-14 07:46:19 +0200 (Wed, 14 Oct 2009)
+New Revision: 5379
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_default.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_debug.cpp
+Log:
+[Core] Better log, automatic include of function name (gcc-ism)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_default.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_default.h	2009-10-10 09:41:12 UTC (rev 5378)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_default.h	2009-10-14 05:46:19 UTC (rev 5379)
+@@ -37,9 +37,13 @@
+ extern &quot;C&quot; 
+ {
+ #endif
+-void ADM_warning(const char *st, ...) ;
+-void ADM_info(const char *st, ...) ;
+-void ADM_error(const char *st, ...) ;
++void ADM_warning2(const char *f,const char *st, ...) ;
++void ADM_info2(const char *f,const char *st, ...) ;
++void ADM_error2(const char *f,const char *st, ...) ;
++
++#define ADM_warning(a,...)  ADM_warning2(__FUNCTION__,a, ##__VA_ARGS__)
++#define ADM_info(a,...)     ADM_info2(__FUNCTION__,a,    ##__VA_ARGS__)
++#define ADM_error(a,...)    ADM_error2(__FUNCTION__,a,   ##__VA_ARGS__)
+ #ifdef __cplusplus
+ }
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_debug.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_debug.cpp	2009-10-10 09:41:12 UTC (rev 5378)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_debug.cpp	2009-10-14 05:46:19 UTC (rev 5379)
+@@ -84,14 +84,14 @@
+ #define ADM_DEFAULT_COLOR &quot;\e[32m&quot;
+ 
+ 
+-static void ADM_prettyPrint(const char *color, const char *p)
++static void ADM_prettyPrint(const char *func,const char *color, const char *p)
+ {
+-    printf(&quot;%s %s %s&quot;,color,p,ADM_DEFAULT_COLOR);
++    printf(&quot;%s [%s]  %s %s&quot;,color,func,p,ADM_DEFAULT_COLOR);
+ 
+ }
+ 
+ 
+- void ADM_info( const char *prf, ...)
++ void ADM_info2(const char *func, const char *prf, ...)
+   {
+   static char print_buffer[1024];
+   	
+@@ -100,10 +100,10 @@
+ 		vsnprintf(print_buffer,1023,prf,list);
+ 		va_end(list);
+ 		print_buffer[1023]=0; // ensure the string is terminated
+-        ADM_prettyPrint(ADM_DEFAULT_COLOR,print_buffer);
++        ADM_prettyPrint(func,ADM_DEFAULT_COLOR,print_buffer);
+ 		
+   }
+- void ADM_warning( const char *prf, ...)
++ void ADM_warning2( const char *func, const char *prf, ...)
+   {
+   static char print_buffer[1024];
+   	
+@@ -112,10 +112,10 @@
+ 		vsnprintf(print_buffer,1023,prf,list);
+ 		va_end(list);
+ 		print_buffer[1023]=0; // ensure the string is terminated
+-        ADM_prettyPrint(ADM_COLOR_YELLOW,print_buffer);
++        ADM_prettyPrint(func,ADM_COLOR_YELLOW,print_buffer);
+ 		
+   }
+- void ADM_error( const char *prf, ...)
++ void ADM_error2( const char *func, const char *prf, ...)
+   {
+   static char print_buffer[1024];
+   	
+@@ -124,7 +124,7 @@
+ 		vsnprintf(print_buffer,1023,prf,list);
+ 		va_end(list);
+ 		print_buffer[1023]=0; // ensure the string is terminated
+-        ADM_prettyPrint(ADM_COLOR_RED,print_buffer);
++        ADM_prettyPrint(func,ADM_COLOR_RED,print_buffer);
+ 		
+   }
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002589.html">[Avidemux-svn-commit] r5378 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioDevices/Alsa
+</A></li>
+	<LI>Next message: <A HREF="002591.html">[Avidemux-svn-commit] r5380 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_editor ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2590">[ date ]</a>
+              <a href="thread.html#2590">[ thread ]</a>
+              <a href="subject.html#2590">[ subject ]</a>
+              <a href="author.html#2590">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,214 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6152 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6152%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C201005021432.o42EWP1r015072%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003354.html">
+   <LINK REL="Next"  HREF="003356.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6152 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6152%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C201005021432.o42EWP1r015072%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6152 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun May  2 16:32:25 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003354.html">[Avidemux-svn-commit] r6151 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="003356.html">[Avidemux-svn-commit] r6153 -	branches/avidemux_2.6_branch_mean/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3355">[ date ]</a>
+              <a href="thread.html#3355">[ thread ]</a>
+              <a href="subject.html#3355">[ subject ]</a>
+              <a href="author.html#3355">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-05-02 16:32:25 +0200 (Sun, 02 May 2010)
+New Revision: 6152
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+Log:
+[TsIndexer] progress bar + refresh for both mpeg2 and h264
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2010-05-02 14:32:23 UTC (rev 6151)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2010-05-02 14:32:25 UTC (rev 6152)
+@@ -28,7 +28,7 @@
+ #include &quot;ADM_tsPatPmt.h&quot;
+ #include &quot;ADM_videoInfoExtractor.h&quot;
+ #include &quot;ADM_h264_tag.h&quot;
+-
++#include &quot;ADM_clock.h&quot;
+ #include &quot;ADM_getbits.h&quot;
+ #if 0
+ extern &quot;C&quot;
+@@ -116,14 +116,16 @@
+         uint32_t        currentFrameType;
+         uint32_t        beginConsuming;
+         indexerState    currentIndexState;
++        uint64_t        fullSize;
++        Clock           ticktock;
+ protected:
+         FILE                    *index;
+         tsPacketLinearTracker   *pkt;
+         listOfTsAudioTracks     *audioTracks;
+         DIA_workingBase         *ui;
++        void                    updateUI(void);
++        bool                    decodeSEI(uint32_t nalSize, uint8_t *org,uint32_t *recoveryLength);
+ 
+-        bool    decodeSEI(uint32_t nalSize, uint8_t *org,uint32_t *recoveryLength);
+-
+ public:
+                 TsIndexer(listOfTsAudioTracks *tr);
+                 ~TsIndexer();
+@@ -199,6 +201,7 @@
+     audioTracks=NULL;
+     ui=createWorking (&quot;Indexing&quot;);
+     audioTracks=trk;
++    ticktock.reset();
+ }
+ 
+ /**
+@@ -212,6 +215,20 @@
+     ui=NULL;
+ }
+ /**
++    \fn updateUI
++*/
++void TsIndexer::updateUI(void)
++{
++        if(ticktock.getElapsedMS()&lt;1000) return;
++        ticktock.reset();
++        uint64_t p;
++        p=pkt-&gt;getPos();
++        float pos=p;
++        pos=pos/(float)fullSize;
++        pos*=100;
++        ui-&gt;update( (uint32_t)pos);
++}
++/**
+ 
+ */
+ static uint32_t unescapeH264(uint32_t len,uint8_t *in, uint8_t *out)
+@@ -279,7 +296,6 @@
+ 
+ PSVideo video;
+ indexerData  data;    
+-uint64_t fullSize;
+ dmxPacketInfo info;
+ TS_PESpacket SEI_nal(0);
+ bool result=false;
+@@ -349,16 +365,9 @@
+     //******************
+       while(1)
+       {
+-
+-        uint32_t code=0xffff+0xffff0000;
+-        while(((code&amp;0x00ffffff)!=1) &amp;&amp; pkt-&gt;stillOk())
+-        {
+-            code=(code&lt;&lt;8)+pkt-&gt;readi8();
+-        }
+-        // Cannot use pkt-&gt;findStartCode here!
++        int startCode=pkt-&gt;findStartCode();
+ resume:
+         if(!pkt-&gt;stillOk()) break;
+-        uint8_t startCode=pkt-&gt;readi8(); // Read 5 bytes so far
+ 
+ //  1:0 2:Nal ref idc 5:Nal Type
+         if(startCode&amp;0x80) 
+@@ -379,14 +388,14 @@
+            // aprintf(&quot;Still capturing, ignore\n&quot;);
+             continue;
+           }
+-                     
++                
+           switch(startCode)
+                   {
+                   case NAL_SEI:
+                     {
+                         // Load the whole NAL
+                             SEI_nal.empty();
+-                            code=0xffff+0xffff0000;
++                            uint32_t code=0xffff+0xffff0000;
+                             while((code!=1) &amp;&amp; pkt-&gt;stillOk())
+                             {
+                                 uint8_t r=pkt-&gt;readi8();
+@@ -399,7 +408,7 @@
+                                 decodeSEI(SEI_nal.payloadSize-4,SEI_nal.payload,&amp;recoveryCount);
+                             else printf(&quot;[SEI] Too short size+4=%d\n&quot;,*(SEI_nal.payload));
+                         
+-
++                            startCode=pkt-&gt;readi8();
+                             goto resume;
+                     }
+                             break;
+@@ -458,6 +467,7 @@
+                       if(data.state==idx_startAtGopOrSeq) 
+                       {
+                               currentFrameType=data.frameType;;
++                              updateUI();
+                               
+                       }else
+                       {
+@@ -494,7 +504,6 @@
+ bool TsIndexer::runMpeg2(const char *file,ADM_TS_TRACK *videoTrac)
+ {
+ uint32_t temporal_ref,val;
+-uint64_t fullSize;
+ uint8_t buffer[50*1024];
+ bool seq_found=false;
+ 
+@@ -571,12 +580,7 @@
+                   case 0xb8: // GOP
+                           // Update ui
+                             {
+-                                uint64_t p;
+-                                p=pkt-&gt;getPos();
+-                                float pos=p;
+-                                pos=pos/(float)fullSize;
+-                                pos*=100;
+-                                ui-&gt;update( (uint32_t)pos);
++                               updateUI();
+ 
+                             }
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003354.html">[Avidemux-svn-commit] r6151 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="003356.html">[Avidemux-svn-commit] r6153 -	branches/avidemux_2.6_branch_mean/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3355">[ date ]</a>
+              <a href="thread.html#3355">[ thread ]</a>
+              <a href="subject.html#3355">[ subject ]</a>
+              <a href="author.html#3355">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

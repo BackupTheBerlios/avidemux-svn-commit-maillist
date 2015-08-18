@@ -1,0 +1,123 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6173 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6173%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264&In-Reply-To=%3C201005111741.o4BHf1Bg008860%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003375.html">
+   <LINK REL="Next"  HREF="003377.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6173 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6173%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264&In-Reply-To=%3C201005111741.o4BHf1Bg008860%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6173 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue May 11 19:41:01 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003375.html">[Avidemux-svn-commit] r6172 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/src
+</A></li>
+        <LI>Next message: <A HREF="003377.html">[Avidemux-svn-commit] r6174 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3376">[ date ]</a>
+              <a href="thread.html#3376">[ thread ]</a>
+              <a href="subject.html#3376">[ subject ]</a>
+              <a href="author.html#3376">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-05-11 19:41:00 +0200 (Tue, 11 May 2010)
+New Revision: 6173
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp
+Log:
+[x264] Fix dts issue when there is a gap in pts, dts can be &gt; pts for the last bframe(s) before the hole
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp	2010-05-11 17:40:54 UTC (rev 6172)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp	2010-05-11 17:41:00 UTC (rev 6173)
+@@ -180,6 +180,7 @@
+         ADM_warning(&quot;[x264] Cannot get next image\n&quot;);
+         return false;
+     }
++    aprintf(&quot;x264 Incoming : %&quot;LLU&quot;us \n&quot;,image-&gt;Pts);
+     queueOfDts.push_back(image-&gt;Pts);
+     // 2-preamble
+     if(false==preAmble(image))
+@@ -265,6 +266,17 @@
+         queueOfDts.erase(queueOfDts.begin());
+         aprintf(&quot;pts = %&quot;LLU&quot;, dts=%&quot;LLU&quot;, pts+delay=%&quot;LLU&quot; delta=%&quot;LLU&quot;\n&quot;,picout-&gt;i_pts,out-&gt;dts,out-&gt;pts,
+                     out-&gt;pts-out-&gt;dts);
++        if(out-&gt;dts&gt;out-&gt;pts)
++        {
++            ADM_warning(&quot;DTS &gt; PTS, that can happen when there are holes in the source (%&quot;LLU&quot;/%&quot;LLU&quot;)\n&quot;,
++                        out-&gt;dts,out-&gt;pts);
++            if(picout-&gt;i_type!=X264_TYPE_B &amp;&amp; picout-&gt;i_type!=X264_TYPE_BREF)
++            {
++                ADM_warning(&quot;It is not a bframe, expect problems\n&quot;);
++                ADM_warning(&quot;It is not a bframe, expect problems\n&quot;);
++            }
++            out-&gt;dts=out-&gt;pts;
++        }
+         switch (picout-&gt;i_type)
+         {
+         case X264_TYPE_IDR:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp	2010-05-11 17:40:54 UTC (rev 6172)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp	2010-05-11 17:41:00 UTC (rev 6173)
+@@ -70,8 +70,13 @@
+     usSecondsToFrac(f,&amp;n,&amp;d);
+     param.i_fps_num = n;
+     param.i_fps_den = d;
+-    encoderDelay=f*x264Settings.MaxBFrame;
+-
++    if(!x264Settings.MaxBFrame)  encoderDelay=0;
++    else    
++    {
++        if(2&gt;=x264Settings.MaxRefFrames) encoderDelay=f*2;
++        else
++                encoderDelay=f*(x264Settings.MaxRefFrames-1);
++    }
+ #define MKPARAM(x,y) {param.x = x264Settings.y;printf(&quot;[x264] &quot;#x&quot; = %d\n&quot;,param.x);}
+ #define MKPARAMF(x,y) {param.x = (float)x264Settings.y / 100; printf(&quot;[x264] &quot;#x&quot; = %.2f\n&quot;,param.x);}
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003375.html">[Avidemux-svn-commit] r6172 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/src
+</A></li>
+	<LI>Next message: <A HREF="003377.html">[Avidemux-svn-commit] r6174 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3376">[ date ]</a>
+              <a href="thread.html#3376">[ thread ]</a>
+              <a href="subject.html#3376">[ subject ]</a>
+              <a href="author.html#3376">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

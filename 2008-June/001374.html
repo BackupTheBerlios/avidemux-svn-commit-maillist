@@ -1,0 +1,206 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4118 - in	branches/avidemux_2.4_branch/avidemux: ADM_osSupport ADM_toolkit
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4118%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_osSupport%20ADM_toolkit&In-Reply-To=%3C200806171627.m5HGR1oc014933%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001373.html">
+   <LINK REL="Next"  HREF="001375.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4118 - in	branches/avidemux_2.4_branch/avidemux: ADM_osSupport ADM_toolkit</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4118%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_osSupport%20ADM_toolkit&In-Reply-To=%3C200806171627.m5HGR1oc014933%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4118 - in	branches/avidemux_2.4_branch/avidemux: ADM_osSupport ADM_toolkit">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Jun 17 18:27:01 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001373.html">[Avidemux-svn-commit] r4117 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+        <LI>Next message: <A HREF="001375.html">[Avidemux-svn-commit] r4119 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_dialog ADM_toolkit_gtk
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1374">[ date ]</a>
+              <a href="thread.html#1374">[ thread ]</a>
+              <a href="subject.html#1374">[ subject ]</a>
+              <a href="author.html#1374">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-06-17 18:26:50 +0200 (Tue, 17 Jun 2008)
+New Revision: 4118
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_fileio.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_osSupport/win32.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_toolkit/automation.cpp
+Log:
+[Win32] handle loading unicode filenames from command line (FS#354) &amp; consolidate Win32 UTF-8 functions
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_fileio.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_fileio.cpp	2008-06-17 10:52:12 UTC (rev 4117)
++++ branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_fileio.cpp	2008-06-17 16:26:50 UTC (rev 4118)
+@@ -22,18 +22,12 @@
+ #include &lt;sys/stat.h&gt;
+ #include &lt;unistd.h&gt;
+ 
+-#ifdef __WIN32
+-#include &lt;windows.h&gt;
+-#endif
+-
+ #include &quot;default.h&quot;
+ #include &quot;ADM_misc.h&quot;
+-
+-
+ #include &quot;ADM_toolkit/filesel.h&quot;
+ #include &quot;ADM_toolkit/toolkit.hxx&quot;
+-
+ #include &quot;ADM_assert.h&quot;
++
+ #undef fread
+ #undef fwrite
+ #undef fopen
+@@ -41,6 +35,10 @@
+ 
+ extern char * actual_workbench_file;
+ 
++#ifdef __WIN32
++extern int utf8StringToWideChar(const char *utf8String, int utf8StringLength, wchar_t *wideCharString);
++#endif
++
+ size_t ADM_fread (void *ptr, size_t size, size_t n, FILE *sstream)
+ {
+   return fread(ptr,size,n,sstream); 
+@@ -55,15 +53,16 @@
+ FILE  *ADM_fopen (const char *file, const char *mode)
+ {
+ #ifdef __MINGW32__
+-	int nFileLen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, file, -1, NULL, 0);
+-	int nModeLen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, mode, -1, NULL, 0);
+-	wchar_t wFile[nFileLen + 1];
+-	wchar_t wMode[nModeLen + 1];
++	int fileNameLength = utf8StringToWideChar(file, -1, NULL);
++	int modeLength = utf8StringToWideChar(mode, -1, NULL);
+ 
+-	MultiByteToWideChar(CP_UTF8, 0, mode, -1, wMode, nModeLen + 1);
+-	MultiByteToWideChar(CP_UTF8, 0, file, -1, wFile, nFileLen + 1);
++	wchar_t wcFile[fileNameLength];
++	wchar_t wcMode[modeLength];
+ 
+-	return _wfopen(wFile, wMode);
++	utf8StringToWideChar(file, -1, wcFile);
++	utf8StringToWideChar(mode, -1, wcMode);
++
++	return _wfopen(wcFile, wcMode);
+ #else
+ 	return fopen(file, mode);
+ #endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_osSupport/win32.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_osSupport/win32.cpp	2008-06-17 10:52:12 UTC (rev 4117)
++++ branches/avidemux_2.4_branch/avidemux/ADM_osSupport/win32.cpp	2008-06-17 16:26:50 UTC (rev 4118)
+@@ -447,4 +447,31 @@
+ 	delete[] logPath;
+ #endif
+ }
++
++// Convert string from ANSI code page to UTF-8
++int ansiStringToUtf8(const char *ansiString, int ansiStringLength, char *utf8String)
++{
++	int wideCharStringLen = MultiByteToWideChar(CP_ACP, 0, ansiString, ansiStringLength, NULL, 0);
++	wchar_t wideCharString[wideCharStringLen];
++
++	MultiByteToWideChar(CP_ACP, 0, ansiString, ansiStringLength, wideCharString, wideCharStringLen);
++
++	int multiByteStringLen = WideCharToMultiByte(CP_UTF8, 0, wideCharString, wideCharStringLen, NULL, 0, NULL, NULL);
++
++	if (utf8String)
++		WideCharToMultiByte(CP_UTF8, 0, wideCharString, wideCharStringLen, utf8String, multiByteStringLen, NULL, NULL);
++
++	return multiByteStringLen;
++}
++
++// Convert UTF-8 string to wide char
++int utf8StringToWideChar(const char *utf8String, int utf8StringLength, wchar_t *wideCharString)
++{
++	int wideCharStringLength = MultiByteToWideChar(CP_UTF8, 0, utf8String, utf8StringLength, NULL, 0);
++
++	if (wideCharString)
++		MultiByteToWideChar(CP_UTF8, 0, utf8String, utf8StringLength, wideCharString, wideCharStringLength);
++
++	return wideCharStringLength;
++}
+ #endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_toolkit/automation.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_toolkit/automation.cpp	2008-06-17 10:52:12 UTC (rev 4117)
++++ branches/avidemux_2.4_branch/avidemux/ADM_toolkit/automation.cpp	2008-06-17 16:26:50 UTC (rev 4118)
+@@ -105,7 +105,11 @@
+ extern uint8_t A_setContainer(const char *cont);
+ uint8_t scriptAddVar(char *var,char *value);
+ extern uint8_t ADM_vob2vobsub(char *nameVob, char *nameVobSub, char *nameIfo);
+-//
++
++#ifdef __WIN32
++	extern int ansiStringToUtf8(const char *ansiString, int ansiStringLength, char *utf8String);
++#endif
++
+ static int call_bframe(void);
+ static int call_x264(void);
+ static int call_packedvop(void);
+@@ -238,7 +242,17 @@
+                       {
+                             if(cur==1) 
+                             {
+-                                A_openAvi(argv[cur]);
++#ifdef __WIN32
++								int utf8StringLength = ansiStringToUtf8(argv[cur], -1, NULL);
++								char utf8FileName[utf8StringLength];
++
++								ansiStringToUtf8(argv[cur], -1, utf8FileName);
++
++								A_openAvi(utf8FileName);
++#else
++								A_openAvi(argv[cur]);
++#endif
++	
+                             }
+                             else
+                                 printf(&quot;\n Found garbage %s\n&quot;,argv[cur]);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001373.html">[Avidemux-svn-commit] r4117 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+	<LI>Next message: <A HREF="001375.html">[Avidemux-svn-commit] r4119 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_dialog ADM_toolkit_gtk
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1374">[ date ]</a>
+              <a href="thread.html#1374">[ thread ]</a>
+              <a href="subject.html#1374">[ subject ]</a>
+              <a href="author.html#1374">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

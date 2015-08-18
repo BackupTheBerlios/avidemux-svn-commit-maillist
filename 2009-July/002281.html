@@ -1,0 +1,201 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5066 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/common/ADM_editor	avidemux/gtk/ADM_userInterfaces/ADM_gui2	avidemux_core/ADM_coreUtils/src avidemux_plugins/ADM_demuxers/MpegPS	avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5066%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux/common/ADM_editor%0A%09avidemux/gtk/ADM_userInterfaces/ADM_gui2%0A%09avidemux_core/ADM_coreUtils/src%20avidemux_plugins/ADM_demuxers/MpegPS%0A%09avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200907121809.n6CI9GuN003773%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002280.html">
+   <LINK REL="Next"  HREF="002282.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5066 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/common/ADM_editor	avidemux/gtk/ADM_userInterfaces/ADM_gui2	avidemux_core/ADM_coreUtils/src avidemux_plugins/ADM_demuxers/MpegPS	avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5066%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux/common/ADM_editor%0A%09avidemux/gtk/ADM_userInterfaces/ADM_gui2%0A%09avidemux_core/ADM_coreUtils/src%20avidemux_plugins/ADM_demuxers/MpegPS%0A%09avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200907121809.n6CI9GuN003773%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5066 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/common/ADM_editor	avidemux/gtk/ADM_userInterfaces/ADM_gui2	avidemux_core/ADM_coreUtils/src avidemux_plugins/ADM_demuxers/MpegPS	avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jul 12 20:09:16 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002280.html">[Avidemux-svn-commit] r5065 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src
+</A></li>
+        <LI>Next message: <A HREF="002282.html">[Avidemux-svn-commit] r5067 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2281">[ date ]</a>
+              <a href="thread.html#2281">[ thread ]</a>
+              <a href="subject.html#2281">[ subject ]</a>
+              <a href="author.html#2281">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-07-12 20:09:15 +0200 (Sun, 12 Jul 2009)
+New Revision: 5066
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edFrameType.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/GUI_jobs.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2/GUI_bindings.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psPlugin.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp
+Log:
+[all] memleak fix, thanks valgrind
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edFrameType.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edFrameType.cpp	2009-07-12 10:08:00 UTC (rev 5065)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edFrameType.cpp	2009-07-12 18:09:15 UTC (rev 5066)
+@@ -62,7 +62,12 @@
+             else nbKo++;
+     }
+     printf(&quot;[Editor] Muxer has %d frames right, %d frames wrong\n&quot;,nbOk,nbKo);
+-    if(!nbKo)     return true;
++    if(!nbKo)  
++    {
++        delete [] buffer;
++        buffer=NULL;
++        return true;
++    }
+     // Demuxer is wrong, rederive all frames...
+     DIA_workingBase *work=createWorking(&quot;Updating frametype&quot;);
+     for(int i=0;i&lt;info.nb_frames;i++)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/GUI_jobs.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/GUI_jobs.cpp	2009-07-12 10:08:00 UTC (rev 5065)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/GUI_jobs.cpp	2009-07-12 18:09:15 UTC (rev 5066)
+@@ -31,12 +31,14 @@
+ uint32_t nb;
+ char     *name;
+         memset(jobName,0,sizeof(jobName));
+-
++char *jobDir=ADM_getJobDir();
+         if(!buildDirectoryContent(&amp;nb,ADM_getJobDir(),jobName,MAX_JOBS,&quot;.js&quot;))
+         {
++          delete [] jobDir;
+           GUI_Error_HIG(QT_TR_NOOP(&quot;Oops&quot;),QT_TR_NOOP(&quot;Something very wrong happened when building joblist.&quot;));
+                 return 0;
+         }
++        delete [] jobDir;
+         if(!nb)
+         {
+           GUI_Info_HIG(ADM_LOG_IMPORTANT,QT_TR_NOOP(&quot;There are no jobs stored&quot;), NULL);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp	2009-07-12 10:08:00 UTC (rev 5065)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp	2009-07-12 18:09:15 UTC (rev 5066)
+@@ -1547,7 +1547,8 @@
+           GUI_Error_HIG(QT_TR_NOOP(&quot;Saving failed&quot;),QT_TR_NOOP(&quot;Saving the job failed. Maybe you have permission issue with ~/.avidemux&quot;));
+         }
+ 
+-        delete fullname;
++        delete [] fullname;
++        delete [] base;
+         ADM_dealloc(name);
+         ADM_dealloc(final);
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2/GUI_bindings.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2/GUI_bindings.cpp	2009-07-12 10:08:00 UTC (rev 5065)
++++ branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2/GUI_bindings.cpp	2009-07-12 18:09:15 UTC (rev 5066)
+@@ -612,6 +612,7 @@
+   if(!menuEntry)
+   {
+       printf(&quot;No custom menu...\n&quot;);
++      delete [] customdir;
+       return;
+   }
+   if(!customdir)
+@@ -620,11 +621,13 @@
+       return;
+   }
+   /* Collect the name */
+-   if(! buildDirectoryContent(&amp;ADM_nbCustom,customdir, customNames,ADM_MAC_CUSTOM_SCRIPT,&quot;.js&quot;))
++   if(! buildDirectoryContent(&amp;ADM_nbCustom,customdir,   customNames,ADM_MAC_CUSTOM_SCRIPT,&quot;.js&quot;))
+     {
+       printf(&quot;Failed to build custom dir content&quot;);
++      delete [] customdir;
+       return;
+     }
++  delete [] customdir;
+   if(!ADM_nbCustom)
+   {
+       printf(&quot;No custom script\n&quot;);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs.cpp	2009-07-12 10:08:00 UTC (rev 5065)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs.cpp	2009-07-12 18:09:15 UTC (rev 5066)
+@@ -261,7 +261,7 @@
+         strcpy(rcfile,dir_adm);
+         strcat(rcfile,&quot;/&quot;);
+         strcat(rcfile,CONFIG);
+-
++        delete [] dir_adm;
+         
+         // Now build the filename
+ 	if( access(rcfile,R_OK) == -1 ){
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psPlugin.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psPlugin.cpp	2009-07-12 10:08:00 UTC (rev 5065)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psPlugin.cpp	2009-07-12 18:09:15 UTC (rev 5066)
+@@ -94,7 +94,7 @@
+ */
+ bool detectPs(const char *file)
+ {
+-    uint8_t *buffer=new uint8_t [PROBE_SIZE];
++    uint8_t buffer[PROBE_SIZE];
+     uint32_t bufferSize;
+     uint32_t nbPacket,nbMatch=0;
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp	2009-07-12 10:08:00 UTC (rev 5065)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp	2009-07-12 18:09:15 UTC (rev 5066)
+@@ -99,7 +99,7 @@
+ */
+ bool detectTs(const char *file)
+ {
+-    uint8_t *buffer=new uint8_t [PROBE_SIZE];
++    uint8_t buffer[PROBE_SIZE];
+     uint32_t bufferSize;
+     uint32_t nbPacket,nbMatch=0;
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002280.html">[Avidemux-svn-commit] r5065 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src
+</A></li>
+	<LI>Next message: <A HREF="002282.html">[Avidemux-svn-commit] r5067 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2281">[ date ]</a>
+              <a href="thread.html#2281">[ thread ]</a>
+              <a href="subject.html#2281">[ subject ]</a>
+              <a href="author.html#2281">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

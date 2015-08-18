@@ -1,0 +1,222 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6580 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6580%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml&In-Reply-To=%3C20100904090602.5694E48100F%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003765.html">
+   <LINK REL="Next"  HREF="003767.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6580 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6580%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml&In-Reply-To=%3C20100904090602.5694E48100F%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6580 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Sep  4 11:06:02 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003765.html">[Avidemux-svn-commit] r6579 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml
+</A></li>
+        <LI>Next message: <A HREF="003767.html">[Avidemux-svn-commit] r6581 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_openDML
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3766">[ date ]</a>
+              <a href="thread.html#3766">[ thread ]</a>
+              <a href="subject.html#3766">[ subject ]</a>
+              <a href="author.html#3766">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-09-04 11:06:02 +0200 (Sat, 04 Sep 2010)
+New Revision: 6580
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml/ADM_odml_audio.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml/ADM_odml_audio.h
+Log:
+[odml] Split PCM chunk into smaller ones if needed
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml/ADM_odml_audio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml/ADM_odml_audio.cpp	2010-09-04 09:06:01 UTC (rev 6579)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml/ADM_odml_audio.cpp	2010-09-04 09:06:02 UTC (rev 6580)
+@@ -37,8 +37,9 @@
+     \fn ADM_aviAudioAccess
+ 
+ */
++#define ODML_MAX_AUDIO_CHUNK (10*1024)
+ ADM_aviAudioAccess::ADM_aviAudioAccess(odmlIndex *idx,WAVHeader *hdr,
+-						uint32_t nbchunk,
++						uint32_t nbChunk,
+ 						const char *name,
+ 						uint32_t extraLen,
+ 						uint8_t  *extraData)
+@@ -46,15 +47,50 @@
+     this-&gt;extraData=new uint8_t[extraLen];
+     memcpy(this-&gt;extraData,extraData,extraLen);
+     this-&gt;extraDataLen=extraLen;
+-    index=idx;
+-    nbIndex=nbchunk;
+     length=0;
+-    for(int i=0;i&lt;nbIndex;i++) length+=idx[i].size;
++    uint32_t mx=0;
++    for(int i=0;i&lt;nbChunk;i++) 
++    {
++        length+=idx[i].size;    
++        if(idx[i].size&gt;mx) mx=idx[i].size;
++    }
++    if((hdr-&gt;encoding==WAV_PCM || hdr-&gt;encoding==WAV_LPCM)&amp;&amp; mx&gt;ODML_MAX_AUDIO_CHUNK)
++    {
++        // Split the huge chunk into smaller ones
++        for(int i=0;i&lt;nbChunk;i++)
++        {
++            uint64_t start=idx[i].offset;
++            uint32_t size=idx[i].size;      
++            uint32_t ONE_CHUNK=(ODML_MAX_AUDIO_CHUNK)/(2*hdr-&gt;channels);
++            ONE_CHUNK*=2*hdr-&gt;channels;
++            while(size&gt;ONE_CHUNK)
++            {
++                odmlIndex current;
++                current.offset=start;
++                current.size=ONE_CHUNK;
++                current.dts=ADM_NO_PTS;
++                myIndex.push_back(current);
++                start+=ONE_CHUNK;
++                size-=ONE_CHUNK;
++            }
++                odmlIndex current;
++                current.offset=start;
++                current.size=size;
++                current.dts=ADM_NO_PTS;
++                myIndex.push_back(current);
++        }
++
++    }else
++    {       // Duplicate index as is
++        for(int i=0;i&lt;nbChunk;i++)
++          myIndex.push_back(idx[i]);
++    }
+     fd=ADM_fopen(name,&quot;r&quot;);
+     ADM_assert(fd);
+     pos=0;
+     currentIndex=0;
+     wavHeader=hdr;
++    nbIndex=myIndex.size(); // will not change
+ }
+ /**
+     \fn isCBR
+@@ -77,7 +113,7 @@
+     if(currentIndex&gt;=nbIndex) return length;
+     for(int i=0;i&lt;currentIndex;i++)
+     {
+-        total+=index[i].size;
++        total+=myIndex[i].size;
+     }
+     return total;
+ }
+@@ -91,6 +127,7 @@
+     fd=NULL;
+     if(extraData) delete[] extraData;
+     extraData=NULL;
++    myIndex.clear();
+ }
+ /**
+     \fn setPos
+@@ -101,13 +138,13 @@
+     uint64_t total=0;
+     for(int i=0;i&lt;nbIndex-1;i++)
+     {
+-        if(pos&gt;=total &amp;&amp; pos&lt;=total+index[i].size)
++        if(pos&gt;=total &amp;&amp; pos&lt;=total+myIndex[i].size)
+         {
+-            fseeko(fd,index[i].offset,SEEK_SET);
++            fseeko(fd,myIndex[i].offset,SEEK_SET);
+             currentIndex=i;
+             return 1;
+         }
+-        total+=index[i].size;
++        total+=myIndex[i].size;
+     }
+     printf(&quot;[aviAudioAccess] Seek to pos %&quot;LLU&quot; failed\n&quot;,pos);
+     return 0;
+@@ -123,19 +160,19 @@
+             printf(&quot;[OpenDmlDemuxer] Index Exceeded %d/%d\n&quot;,currentIndex,nbIndex);
+             return 0;
+         }
+-        fseeko(fd,index[currentIndex].offset,SEEK_SET);
+-        if(index[currentIndex].size&gt;maxSize) 
++        fseeko(fd,myIndex[currentIndex].offset,SEEK_SET);
++        if(myIndex[currentIndex].size&gt;maxSize) 
+         {
+-            ADM_error(&quot;Packet too large %d, maximum is %d\n&quot;,index[currentIndex].size,maxSize);
++            ADM_error(&quot;Packet too large %d, maximum is %d\n&quot;,myIndex[currentIndex].size,maxSize);
+             *size=0;
+             return false;
+          }
+-        fread(buffer,1,index[currentIndex].size,fd);
++        fread(buffer,1,myIndex[currentIndex].size,fd);
+         if(!currentIndex) 
+             *dts=0;
+         else
+             *dts=ADM_AUDIO_NO_DTS;
+-        *size=index[currentIndex].size;
++        *size=myIndex[currentIndex].size;
+         currentIndex++;
+         return 1;
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml/ADM_odml_audio.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml/ADM_odml_audio.h	2010-09-04 09:06:01 UTC (rev 6579)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml/ADM_odml_audio.h	2010-09-04 09:06:02 UTC (rev 6580)
+@@ -1,5 +1,7 @@
+ #ifndef ADM_ODML_AUDIO_H
+ #define ADM_ODML_AUDIO_H
++#include &lt;vector&gt;
++using std::vector;
+ #include &quot;ADM_audioStream.h&quot;
+ class odmlIndex;
+ /**
+@@ -14,7 +16,7 @@
+                 uint32_t pos;
+                 FILE     *fd;
+                 uint32_t currentIndex;
+-                odmlIndex *index;
++                vector &lt;odmlIndex&gt; myIndex;
+                 uint32_t   nbIndex;
+                 WAVHeader *wavHeader;
+ public: 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003765.html">[Avidemux-svn-commit] r6579 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml
+</A></li>
+	<LI>Next message: <A HREF="003767.html">[Avidemux-svn-commit] r6581 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_openDML
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3766">[ date ]</a>
+              <a href="thread.html#3766">[ thread ]</a>
+              <a href="subject.html#3766">[ subject ]</a>
+              <a href="author.html#3766">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

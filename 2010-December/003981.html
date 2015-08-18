@@ -1,0 +1,124 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6802 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6802%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20101204105452.5D5B148071A%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003980.html">
+   <LINK REL="Next"  HREF="003982.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6802 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6802%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20101204105452.5D5B148071A%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6802 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Dec  4 11:54:52 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003980.html">[Avidemux-svn-commit] r6801 - in	branches/avidemux_2.6_branch_mean/foreignBuilds: . mswin	mswin/avidemux mswin/avidemux/Tools mswin/x264
+</A></li>
+        <LI>Next message: <A HREF="003982.html">[Avidemux-svn-commit] r6803 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg:	libavcodec patches/avcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3981">[ date ]</a>
+              <a href="thread.html#3981">[ thread ]</a>
+              <a href="subject.html#3981">[ subject ]</a>
+              <a href="author.html#3981">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-12-04 11:54:51 +0100 (Sat, 04 Dec 2010)
+New Revision: 6802
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexH264.cpp
+Log:
+[h264/TS] Read just enough to get SPS
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexH264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexH264.cpp	2010-12-02 17:59:43 UTC (rev 6801)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexH264.cpp	2010-12-04 10:54:51 UTC (rev 6802)
+@@ -138,7 +138,6 @@
+     //******************
+     // 1 search SPS
+     //******************
+-#define SPS_READ_AHEAD 32
+       while(1)
+       {
+         int startCode=pkt-&gt;findStartCode();
+@@ -148,14 +147,24 @@
+         if(startCode!=NAL_SPS) continue;
+ 
+           // Got SPS!
+-          uint8_t buffer[60] ; // should be enough
++          
+           uint32_t xA,xR;
+           // Get info
+           pkt-&gt;getInfo(&amp;tmpInfo);
+-          pkt-&gt;read(SPS_READ_AHEAD,buffer);
+-          if (extractSPSInfo(buffer, SPS_READ_AHEAD,&amp;spsInfo))
++          // Read just enough...
+           {
+-              
++            SEI_nal.empty();
++            uint32_t code=0xffff+0xffff0000;
++            while((code!=1) &amp;&amp; pkt-&gt;stillOk())
++            {
++                    uint8_t r=pkt-&gt;readi8();
++                    code=(code&lt;&lt;8)+r;
++                    SEI_nal.pushByte(r);
++            }
++            if(!pkt-&gt;stillOk()) break;;
++            pkt-&gt;seek(tmpInfo.startAt,tmpInfo.offset-5);
++            if (extractSPSInfo(SEI_nal.payload, SEI_nal.payloadSize-4,&amp;spsInfo))
++            {
+               printf(&quot;[TsIndexer] Found video %&quot;LU&quot;x%&quot;LU&quot;, fps=%&quot;LU&quot;\n&quot;,video.w,video.h,video.fps);
+               seq_found=1;
+               video.w=spsInfo.width;
+@@ -167,9 +176,10 @@
+               writeAudio();
+               qfprintf(index,&quot;[Data]&quot;);
+               // Rewind
+-              pkt-&gt;seek(tmpInfo.startAt,tmpInfo.offset-5);
++              
+               break;              
+           };
++        }
+       }
+       
+         if(!seq_found) goto the_end;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003980.html">[Avidemux-svn-commit] r6801 - in	branches/avidemux_2.6_branch_mean/foreignBuilds: . mswin	mswin/avidemux mswin/avidemux/Tools mswin/x264
+</A></li>
+	<LI>Next message: <A HREF="003982.html">[Avidemux-svn-commit] r6803 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg:	libavcodec patches/avcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3981">[ date ]</a>
+              <a href="thread.html#3981">[ thread ]</a>
+              <a href="subject.html#3981">[ subject ]</a>
+              <a href="author.html#3981">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

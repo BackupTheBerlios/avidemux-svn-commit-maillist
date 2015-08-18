@@ -1,0 +1,208 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3005 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3005%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp&In-Reply-To=%3C200705021808.l42I8oQd024089%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000316.html">
+   <LINK REL="Next"  HREF="000318.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3005 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3005%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp&In-Reply-To=%3C200705021808.l42I8oQd024089%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3005 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed May  2 20:08:50 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000316.html">[Avidemux-svn-commit] r3004 - in	branches/avidemux_2.4_branch/avidemux: ADM_editor ADM_encoder	ADM_inputs/ADM_matroska
+</A></li>
+        <LI>Next message: <A HREF="000318.html">[Avidemux-svn-commit] r3006 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#317">[ date ]</a>
+              <a href="thread.html#317">[ thread ]</a>
+              <a href="subject.html#317">[ subject ]</a>
+              <a href="author.html#317">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-05-02 20:08:50 +0200 (Wed, 02 May 2007)
+New Revision: 3005
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.h
+Log:
+partially working ctts info for mp4
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.cpp	2007-05-02 17:27:18 UTC (rev 3004)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.cpp	2007-05-02 18:08:50 UTC (rev 3005)
+@@ -97,6 +97,7 @@
+     nbIndex=0;
+     id=0;
+     memset(&amp;_rdWav,0,sizeof(_rdWav));
++
+ }
+ _3gpTrack::~_3gpTrack()
+ {
+@@ -183,7 +184,7 @@
+         nbAudioTrack=0;
+         _currentAudioTrack=0;
+         _reordered=0;
+-
++        _videoScale=1;
+ }
+ uint8_t	_3GPHeader::getAudioStream(AVDMGenericAudioStream **audio)
+ {  
+@@ -358,11 +359,40 @@
+         {
+             uint32_t scope=nbCtts;
+             if(scope&gt;_videostream.dwLength) scope=_videostream.dwLength;
++            
++            // Search floor value
++            uint32_t  flor=0xFFFFFFFFF;
++            uint32_t  cel=0;
+             for(uint32_t i=0;i&lt;scope;i++)
+             {
+-                if( _tracks[0].index[i].intra!=AVI_KEY_FRAME &amp;&amp; 
+-                    (10&gt;Ctts[i] )) //|| Ctts[i]&gt;0xfffff000))
+-                    _tracks[0].index[i].intra=AVI_B_FRAME;
++              if(Ctts[i]&gt;4294967290) 
++              {
++                if(i)
++                  Ctts[i]=Ctts[0];
++                else
++                  Ctts[i]=Ctts[1];
++              }
++              if(Ctts[i] &gt;cel) cel=Ctts[i];
++              if(Ctts[i]&lt;flor) flor=Ctts[i];
++            }
++            printf(&quot;[3GP] Ctts min %u max %u\n&quot;,flor,cel);
++            for(uint32_t i=0;i&lt;scope;i++)
++            {
++              int floops=Ctts[i]-flor;
++               float f=floops;
++               aprintf(&quot;Frame %u ctts %u scale:%u\n&quot;,i,floops,_videoScale);
++                uint32_t delta;
++                f*=_videostream.dwRate;
++                f/=1000. ;; // in frame
++                f/=_videoScale;
++                floops=1+(uint32_t)floor(f+0.49);
++                aprintf(&quot;&gt;Frame :%u delta=%d\n&quot;,i,floops);
++              if(floops&lt;0)
++              {
++                printf(&quot;[3GPP] CTTS negative for frame %u : %d\n&quot;,i,floops); 
++                floops=0;
++              }
++              _tracks[0].index[i].deltaPtsDts=floops;
+                 
+             }
+             
+@@ -695,12 +725,14 @@
+                                     {
+                                         j=tom.read32();
+                                         v=tom.read32();
++#if 0
+                                         if(j&gt;10)
+                                         {
+-                                            printf(&quot;Too much element %u\n&quot;,j);
++                                          //  printf(&quot;Too much element %u\n&quot;,j);
+                                             nbCtts=0;
+                                             break;
+                                         }
++#endif
+                                         if(i&lt;20)
+                                         {
+                                             printf(&quot;Ctts: nb: %u (%x) val:%u (%x)\n&quot;,j,j,v,v);   
+@@ -776,7 +808,7 @@
+ 					{
+                                         // If we already built video track, ignore
+ 					if(_tracks[0].nbIndex) break;
+-
++                                        _videoScale=myScale;
+ 					buildIndex(&amp;_tracks[0],myScale,
+ 							nbSz,Sz,SzIndentical,nbCo,Co,nbSc,Sc,nbStts,SttsN,SttsC,
+ 							Sn,&amp;nbo,0);
+@@ -1561,7 +1593,11 @@
+ 	return 1;
+ 
+ }
+-
++uint32_t              _3GPHeader::ptsDtsDelta(uint32_t frame)
++{
++   if(frame &gt;= _videostream.dwLength) return 0;
++   return VDEO.index[frame].deltaPtsDts;
++}
+ uint8_t _3GPHeader::getFrameSize (uint32_t frame, uint32_t * size){
+   if(frame &gt;= _videostream.dwLength) return 0;
+   *size = VDEO.index[frame].size;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.h	2007-05-02 17:27:18 UTC (rev 3004)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.h	2007-05-02 18:08:50 UTC (rev 3005)
+@@ -32,6 +32,7 @@
+ 	uint64_t size;
+ 	uint32_t intra;
+ 	uint64_t time;
++        uint32_t deltaPtsDts;
+ 
+ }_3gpIndex;
+ class _3gpTrack
+@@ -99,8 +100,8 @@
+ 	 uint32_t *Sz,*Co,*Sc;
+ 	 uint32_t *Sn,*Sync;
+ 	 uint32_t *SttsN,*SttsC,*Ctts,nbCtts;
++         uint32_t _videoScale;
+ 
+-
+ 	uint8_t		buildIndex(	_3gpTrack *track,
+ 					uint32_t scale,
+ 					uint32_t nbSz,		uint32_t *Sz, uint32_t szIndentical,
+@@ -113,7 +114,8 @@
+ 	uint32_t 		readPackedLen(adm_atom *tom );
+ 	
+ public:
+-
++        uint8_t               hasPtsDts(void) {return 1;} // Return 1 if the container gives PTS &amp; DTS info
++        uint32_t              ptsDtsDelta(uint32_t framenum);
+ virtual   void 				Dump(void) {};
+ virtual   uint32_t 			getNbStream(void) ;
+ virtual   uint8_t 			needDecompress(void) { return 1;};
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000316.html">[Avidemux-svn-commit] r3004 - in	branches/avidemux_2.4_branch/avidemux: ADM_editor ADM_encoder	ADM_inputs/ADM_matroska
+</A></li>
+	<LI>Next message: <A HREF="000318.html">[Avidemux-svn-commit] r3006 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#317">[ date ]</a>
+              <a href="thread.html#317">[ thread ]</a>
+              <a href="subject.html#317">[ subject ]</a>
+              <a href="author.html#317">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

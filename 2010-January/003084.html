@@ -1,0 +1,220 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5879 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_muxerGate/src	avidemux_core/ADM_coreMuxer/include	avidemux_core/ADM_coreVideoEncoder/include	avidemux_core/ADM_coreVideoEncoder/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5879%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_muxerGate/src%0A%09avidemux_core/ADM_coreMuxer/include%0A%09avidemux_core/ADM_coreVideoEncoder/include%0A%09avidemux_core/ADM_coreVideoEncoder/src&In-Reply-To=%3C201001271852.o0RIqO04010641%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003083.html">
+   <LINK REL="Next"  HREF="003085.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5879 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_muxerGate/src	avidemux_core/ADM_coreMuxer/include	avidemux_core/ADM_coreVideoEncoder/include	avidemux_core/ADM_coreVideoEncoder/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5879%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_muxerGate/src%0A%09avidemux_core/ADM_coreMuxer/include%0A%09avidemux_core/ADM_coreVideoEncoder/include%0A%09avidemux_core/ADM_coreVideoEncoder/src&In-Reply-To=%3C201001271852.o0RIqO04010641%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5879 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_muxerGate/src	avidemux_core/ADM_coreMuxer/include	avidemux_core/ADM_coreVideoEncoder/include	avidemux_core/ADM_coreVideoEncoder/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Jan 27 19:52:24 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003083.html">[Avidemux-svn-commit] r5878 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder:	include src
+</A></li>
+        <LI>Next message: <A HREF="003085.html">[Avidemux-svn-commit] r5880 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3084">[ date ]</a>
+              <a href="thread.html#3084">[ thread ]</a>
+              <a href="subject.html#3084">[ subject ]</a>
+              <a href="author.html#3084">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-01-27 19:52:23 +0100 (Wed, 27 Jan 2010)
+New Revision: 5879
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoProcess.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/include/ADM_muxer.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoder.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoderFFmpeg.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoderInternal.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoder.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp
+Log:
+[muxer/Encoder] Make changes so that videoEncoder can declare the delay they are introducing and so that it is propagated to the videoStream. Finally the information is available at muxer level so that they can compensate by delaying the audio in the same amount
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoProcess.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoProcess.cpp	2010-01-27 06:42:09 UTC (rev 5878)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoProcess.cpp	2010-01-27 18:52:23 UTC (rev 5879)
+@@ -39,6 +39,8 @@
+     bitstream=new ADMBitstream(width*height*4);
+     data=new uint8_t [width*height*4];
+     bitstream-&gt;data=data;
++    videoDelay=encoder-&gt;getEncoderDelay();
++    printf(&quot;[StreamProcess] Video Encoder Delay=%&quot;LLU&quot;ms\n&quot;,videoDelay/1000);
+ }
+ /**
+     \fn ADM_videoStreamProcess
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/include/ADM_muxer.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/include/ADM_muxer.h	2010-01-27 06:42:09 UTC (rev 5878)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/include/ADM_muxer.h	2010-01-27 18:52:23 UTC (rev 5879)
+@@ -22,17 +22,19 @@
+             uint32_t width,height,averageFps1000;
+             uint32_t fourCC;
+             bool     isCFR;
++            uint64_t videoDelay;
+ 
+ 
+             DIA_workingBase *encoding;
+ public:
+-                      ADM_videoStream() {};
++                      ADM_videoStream() {videoDelay=0;} ;
+             virtual ~ADM_videoStream() {};
+             uint32_t getWidth(void) {return width;}
+             uint32_t getHeight(void) {return height;}
+             uint32_t getFCC(void) {return fourCC;}
+             bool     getIsCfr(void) {return isCFR;}
+             uint32_t getAvgFps1000(void) {return averageFps1000;}
++            uint64_t getVideoDelay(void) {return videoDelay;}
+ 
+ virtual     bool     getPacket(uint32_t *len, uint8_t *data, uint32_t maxLen,uint64_t *pts,uint64_t *dts,
+                                         uint32_t *flags)=0;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoder.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoder.h	2010-01-27 06:42:09 UTC (rev 5878)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoder.h	2010-01-27 18:52:23 UTC (rev 5879)
+@@ -37,6 +37,7 @@
+ protected:
+                             ADM_coreVideoFilter *source;
+                             ADMImage            *image;
++                            uint64_t            encoderDelay;
+ public:
+                             ADM_coreVideoEncoder(ADM_coreVideoFilter *src);
+ virtual                     ~ADM_coreVideoEncoder();
+@@ -52,6 +53,7 @@
+                uint32_t    getFrameIncrement(void) {return source-&gt;getInfo()-&gt;frameIncrement;}
+                uint64_t    getTotalDuration(void) {return source-&gt;getInfo()-&gt;totalDuration;}
+ virtual        bool        setPassAndLogFile(int pass,const char *name) {return false;}
++               uint64_t    getEncoderDelay(void){return encoderDelay;}
+ };
+ 
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoderFFmpeg.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoderFFmpeg.h	2010-01-27 06:42:09 UTC (rev 5878)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoderFFmpeg.h	2010-01-27 18:52:23 UTC (rev 5879)
+@@ -117,7 +117,6 @@
+ public:
+                                             ADM_coreVideoEncoderFFmpeg(ADM_coreVideoFilter *src,FFcodecSetting *settings=NULL);
+ virtual                                     ~ADM_coreVideoEncoderFFmpeg();
+-virtual                   uint64_t          getDelayUs(void);
+ 
+ };
+ #endif
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoderInternal.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoderInternal.h	2010-01-27 06:42:09 UTC (rev 5878)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoderInternal.h	2010-01-27 18:52:23 UTC (rev 5879)
+@@ -15,7 +15,7 @@
+ #ifndef VIDEOENCODERINTERNAL_H
+ #define VIDEOENCODERINTERNAL_H
+ 
+-#define ADM_VIDEO_ENCODER_API_VERSION 2
++#define ADM_VIDEO_ENCODER_API_VERSION 3
+ #include &quot;ADM_coreVideoEncoder.h&quot;
+ #include &quot;DIA_uiTypes.h&quot;
+ #include &quot;ADM_paramList.h&quot;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoder.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoder.cpp	2010-01-27 06:42:09 UTC (rev 5878)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoder.cpp	2010-01-27 18:52:23 UTC (rev 5879)
+@@ -25,7 +25,7 @@
+ {
+     source=src;
+     image=NULL;
+-
++    encoderDelay=0;
+ }
+ 
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp	2010-01-27 06:42:09 UTC (rev 5878)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp	2010-01-27 18:52:23 UTC (rev 5879)
+@@ -83,16 +83,6 @@
+     return true;
+ }
+ /**
+-    \fn getDelayUs
+-*/
+-uint64_t          ADM_coreVideoEncoderFFmpeg::getDelayUs(void)
+-{
+-    ADM_assert(_context);
+-    ADM_assert(source);
+-uint64_t d=source-&gt;getInfo()-&gt;frameIncrement;
+-        return d*_context-&gt;max_b_frames;
+-}
+-/**
+     \fn ADM_coreVideoEncoderFFmpeg
+     \brief Constructor
+ 
+@@ -121,7 +111,8 @@
+     statFileName=NULL;
+     statFile=NULL;
+     _isMT=false;
+-
++    encoderDelay=source-&gt;getInfo()-&gt;frameIncrement*Settings.max_b_frames;
++    ADM_info(&quot;[Lavcodec] Using a video encoder delay of %d ms\n&quot;,(int)(encoderDelay/1000));
+ }
+ /**
+     \fn ADM_coreVideoEncoderFFmpeg
+@@ -371,7 +362,7 @@
+     
+     // Update PTS/Dts
+ 
+-    out-&gt;pts=getDelayUs();
++    out-&gt;pts=getEncoderDelay();
+     out-&gt;pts+= _context-&gt;coded_frame-&gt;pts * 1000000.*av_q2d(_context-&gt;time_base);
+     out-&gt;dts=nextDts; // FIXME
+     aprintf(&quot;Out pts=%&quot;LLU&quot; us\n&quot;,out-&gt;pts);    
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003083.html">[Avidemux-svn-commit] r5878 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder:	include src
+</A></li>
+	<LI>Next message: <A HREF="003085.html">[Avidemux-svn-commit] r5880 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3084">[ date ]</a>
+              <a href="thread.html#3084">[ thread ]</a>
+              <a href="subject.html#3084">[ subject ]</a>
+              <a href="author.html#3084">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

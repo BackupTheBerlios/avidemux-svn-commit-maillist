@@ -1,0 +1,174 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3870 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_audiocodec ADM_core/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3870%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%0A%09ADM_audiocodec%20ADM_core/src&In-Reply-To=%3C200803111852.m2BIqt3G030599%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001132.html">
+   <LINK REL="Next"  HREF="001134.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3870 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_audiocodec ADM_core/src</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3870%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%0A%09ADM_audiocodec%20ADM_core/src&In-Reply-To=%3C200803111852.m2BIqt3G030599%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3870 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_audiocodec ADM_core/src">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Mar 11 19:52:55 CET 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001132.html">[Avidemux-svn-commit] r3869 - in	branches/avidemux_2.5_branch_gruntster: . avidemux	avidemux/ADM_core/src avidemux/plugins/ADM_audiodecoder/ADM_ad_ac3	avidemux/plugins/ADM_audiodecoder/ADM_ad_ac3/ADM_liba52	avidemux/plugins/ADM_audiodecoder/ADM_ad_faad cmake
+</A></li>
+        <LI>Next message: <A HREF="001134.html">[Avidemux-svn-commit] r3871 - in	branches/avidemux_2.5_branch_gruntster/avidemux: .	ADM_audiocodec ADM_core/src ADM_libraries/ADM_utilities
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1133">[ date ]</a>
+              <a href="thread.html#1133">[ thread ]</a>
+              <a href="subject.html#1133">[ subject ]</a>
+              <a href="author.html#1133">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-03-11 19:52:53 +0100 (Tue, 11 Mar 2008)
+New Revision: 3870
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiocodec/ADM_pluginLoad.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_fileio.cpp
+Log:
+[AudioDec] load plugins on Win32
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiocodec/ADM_pluginLoad.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiocodec/ADM_pluginLoad.cpp	2008-03-11 18:21:46 UTC (rev 3869)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiocodec/ADM_pluginLoad.cpp	2008-03-11 18:52:53 UTC (rev 3870)
+@@ -94,24 +94,33 @@
+ uint8_t ADM_ad_loadPlugins(const char *path)
+ {
+ #define MAX_EXTERNAL_FILTER 50
+-	  char *files[MAX_EXTERNAL_FILTER];
+-	  uint32_t nbFile;
+-	  
+-	  
+-	  memset(files,0,sizeof(char *)*MAX_EXTERNAL_FILTER);
+-	  printf(&quot;[ADM_ad_plugin] Scanning directory %s\n&quot;,path);
+-	  if(!buildDirectoryContent(&amp;nbFile,path,
+-			  files,MAX_EXTERNAL_FILTER,&quot;so&quot;))
+-	  {
+-		  printf(&quot;[AudioPlugin] Cannot Parse plugin&quot;);
+-		  return 0;
+-	  }
+-	  for(int i=0;i&lt;nbFile;i++)
+-	   {
+-	     tryLoadingAudioPlugin(files[i]);
+-	   }
+-	   printf(&quot;[ADM_ad_plugin] Scanning done,found %d codec \n&quot;,ADM_audioPlugins.size());
+-	   return 1;
++
++#ifdef __WIN32
++#define SHARED_LIB_EXT &quot;dll&quot;
++#elif defined(__APPLE__)
++#define SHARED_LIB_EXT &quot;dylib&quot;
++#else
++#define SHARED_LIB_EXT &quot;so&quot;
++#endif
++
++	char *files[MAX_EXTERNAL_FILTER];
++	uint32_t nbFile;
++
++	memset(files,0,sizeof(char *)*MAX_EXTERNAL_FILTER);
++	printf(&quot;[ADM_ad_plugin] Scanning directory %s\n&quot;,path);
++
++	if(!buildDirectoryContent(&amp;nbFile, path, files, MAX_EXTERNAL_FILTER, SHARED_LIB_EXT))
++	{
++		printf(&quot;[ADM_ad_plugin] Cannot parse plugin&quot;);
++		return 0;
++	}
++
++	for(int i=0;i&lt;nbFile;i++)
++		tryLoadingAudioPlugin(files[i]);
++
++	printf(&quot;[ADM_ad_plugin] Scanning done, found %d codec\n&quot;, ADM_audioPlugins.size());
++
++	return 1;
+ }
+ /**
+  * 	\fn ADM_ad_searchCodec
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_fileio.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_fileio.cpp	2008-03-11 18:21:46 UTC (rev 3869)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_fileio.cpp	2008-03-11 18:52:53 UTC (rev 3870)
+@@ -21,6 +21,10 @@
+ #include &lt;sys/stat.h&gt;
+ #include &lt;unistd.h&gt;
+ 
++#ifdef __WIN32
++#include &lt;windows.h&gt;
++#endif
++
+ #ifdef __MINGW32__
+ #include &lt;glib.h&gt;
+ #endif
+@@ -163,7 +167,20 @@
+ 
+ char *ADM_getInstallRelativePath(const char *base1, const char *base2,const char *base3)
+ {
++#ifdef __WIN32
++	char moduleName[256];
++
++	GetModuleFileName(0, moduleName, sizeof(moduleName) / sizeof(char));
++
++	char *slash = strrchr(moduleName, '\\');
++		
++	if (slash)
++		*slash = '\0';
++
++	return ADM_getRelativePath(moduleName, base1, base2, base3);
++#else
+ 	return ADM_getRelativePath(ADM_INSTALL_DIR, base1, base2, base3);
++#endif
+ }
+ 
+ /*
+@@ -287,7 +304,7 @@
+ 		if (memcmp(direntry-&gt;d_name + xbase, ext, extlen))
+ 			//if (direntry-&gt;d_name[len-1]!='s' || direntry-&gt;d_name[len-2]!='j' || direntry-&gt;d_name[len-3]!='.')
+ 		{
+-			printf(&quot;ignored:%s\n&quot;, direntry-&gt;d_name);
++			printf(&quot;ignored: %s\n&quot;, direntry-&gt;d_name);
+ 			continue;
+ 		}
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001132.html">[Avidemux-svn-commit] r3869 - in	branches/avidemux_2.5_branch_gruntster: . avidemux	avidemux/ADM_core/src avidemux/plugins/ADM_audiodecoder/ADM_ad_ac3	avidemux/plugins/ADM_audiodecoder/ADM_ad_ac3/ADM_liba52	avidemux/plugins/ADM_audiodecoder/ADM_ad_faad cmake
+</A></li>
+	<LI>Next message: <A HREF="001134.html">[Avidemux-svn-commit] r3871 - in	branches/avidemux_2.5_branch_gruntster/avidemux: .	ADM_audiocodec ADM_core/src ADM_libraries/ADM_utilities
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1133">[ date ]</a>
+              <a href="thread.html#1133">[ thread ]</a>
+              <a href="subject.html#1133">[ subject ]</a>
+              <a href="author.html#1133">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

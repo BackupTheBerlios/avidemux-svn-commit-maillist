@@ -1,0 +1,206 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6151 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6151%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C201005021432.o42EWNwr015061%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003353.html">
+   <LINK REL="Next"  HREF="003355.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6151 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6151%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C201005021432.o42EWNwr015061%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6151 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun May  2 16:32:23 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003353.html">[Avidemux-svn-commit] r6150 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+        <LI>Next message: <A HREF="003355.html">[Avidemux-svn-commit] r6152 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3354">[ date ]</a>
+              <a href="thread.html#3354">[ thread ]</a>
+              <a href="subject.html#3354">[ subject ]</a>
+              <a href="author.html#3354">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-05-02 16:32:23 +0200 (Sun, 02 May 2010)
+New Revision: 6151
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+Log:
+[mpegIndexer] Factorize findStartCode
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2010-05-02 14:32:20 UTC (rev 6150)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2010-05-02 14:32:23 UTC (rev 6151)
+@@ -101,7 +101,7 @@
+     markNow
+ }markType;
+ 
+-#if 1
++#if 0
+ #define aprintf printf
+ #else
+ #define aprintf(...) {}
+@@ -318,14 +318,8 @@
+ #define SPS_READ_AHEAD 32
+       while(1)
+       {
+-        uint32_t code=0xffff+0xffff0000;
+-        while(((code&amp;0x00ffffff)!=1) &amp;&amp; pkt-&gt;stillOk())
+-        {
+-            code=(code&lt;&lt;8)+pkt-&gt;readi8();
+-        }
+-        if(!pkt-&gt;stillOk()) break;
+-        
+-        uint8_t startCode=pkt-&gt;readi8(); // Read 5 bytes so far
++        int startCode=pkt-&gt;findStartCode();
++
+         if(startCode&amp;0x80) continue; // Marker missing
+         startCode&amp;=0x1f;
+         if(startCode!=NAL_SPS) continue;
+@@ -361,9 +355,11 @@
+         {
+             code=(code&lt;&lt;8)+pkt-&gt;readi8();
+         }
++        // Cannot use pkt-&gt;findStartCode here!
+ resume:
+         if(!pkt-&gt;stillOk()) break;
+         uint8_t startCode=pkt-&gt;readi8(); // Read 5 bytes so far
++
+ //  1:0 2:Nal ref idc 5:Nal Type
+         if(startCode&amp;0x80) 
+         {
+@@ -537,30 +533,7 @@
+ #define unlikely(x) x
+       while(1)
+       {
+-        int last=0xffff,cur=0xffff;
+-        
+-        while(pkt-&gt;stillOk())
+-        {
+-            last=cur;
+-            cur=pkt-&gt;readi16();
+-            if(likely(last&amp;0xff)) continue;
+-            if(unlikely(!last)) // 00 00 , need 01 xx
+-            {
+-                if((cur&gt;&gt;8)==1) 
+-                {
+-                        startCode=cur&amp;0xff;
+-                        break;
+-                }
+-            }
+-            if(unlikely(!(last&amp;0xff))) // xx 00 need 00 01
+-            {
+-                if(cur==1)
+-                {
+-                        startCode=pkt-&gt;readi8();
+-                        break;
+-                }
+-            }
+-        }
++        startCode=pkt-&gt;findStartCode();
+         if(!pkt-&gt;stillOk()) break;
+ 
+           switch(startCode)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2010-05-02 14:32:20 UTC (rev 6150)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2010-05-02 14:32:23 UTC (rev 6151)
+@@ -787,6 +787,41 @@
+     }
+ }
+ /**
++    \fn findStartCode
++    \brief Must check stillOk after calling this
++*/
++int tsPacketLinearTracker::findStartCode(void)
++{
++#define likely(x) x
++#define unlikely(x) x
++        unsigned int last=0xfffff;
++        unsigned int cur=0xffff;
++        int startCode=0;
++        while(this-&gt;stillOk())
++        {
++            last=cur;
++            cur=this-&gt;readi16();
++            if(likely(last&amp;0xff)) continue;
++            if(unlikely(!last)) // 00 00 , need 01 xx
++            {
++                if((cur&gt;&gt;8)==1) 
++                {
++                        startCode=cur&amp;0xff;
++                        break;
++                }
++            }
++            if(unlikely(!(last&amp;0xff))) // xx 00 need 00 01
++            {
++                if(cur==1)
++                {
++                        startCode=this-&gt;readi8();
++                        break;
++                }
++            }
++        }
++        return startCode;
++}
++/**
+     \fn ~tsPacketLinearTracker
+ */
+ tsPacketLinearTracker::~tsPacketLinearTracker()
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2010-05-02 14:32:20 UTC (rev 6150)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2010-05-02 14:32:23 UTC (rev 6151)
+@@ -241,5 +241,6 @@
+                 ~tsPacketLinearTracker();
+         bool    getStats(uint32_t *nb,packetTSStats **stats);
+ virtual bool    updateStats(uint8_t *data);
++        int     findStartCode(void);
+ };
+ #endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003353.html">[Avidemux-svn-commit] r6150 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+	<LI>Next message: <A HREF="003355.html">[Avidemux-svn-commit] r6152 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3354">[ date ]</a>
+              <a href="thread.html#3354">[ thread ]</a>
+              <a href="subject.html#3354">[ subject ]</a>
+              <a href="author.html#3354">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

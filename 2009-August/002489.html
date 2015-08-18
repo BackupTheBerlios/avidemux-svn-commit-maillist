@@ -1,0 +1,459 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5276 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_coreImage/include ADM_filter	ADM_userInterfaces/ADM_GTK/ADM_filters	ADM_userInterfaces/ADM_QT4/ADM_filters
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5276%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%0A%09ADM_coreImage/include%20ADM_filter%0A%09ADM_userInterfaces/ADM_GTK/ADM_filters%0A%09ADM_userInterfaces/ADM_QT4/ADM_filters&In-Reply-To=%3C200908282107.n7SL79xQ022622%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002488.html">
+   <LINK REL="Next"  HREF="002490.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5276 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_coreImage/include ADM_filter	ADM_userInterfaces/ADM_GTK/ADM_filters	ADM_userInterfaces/ADM_QT4/ADM_filters</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5276%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%0A%09ADM_coreImage/include%20ADM_filter%0A%09ADM_userInterfaces/ADM_GTK/ADM_filters%0A%09ADM_userInterfaces/ADM_QT4/ADM_filters&In-Reply-To=%3C200908282107.n7SL79xQ022622%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5276 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_coreImage/include ADM_filter	ADM_userInterfaces/ADM_GTK/ADM_filters	ADM_userInterfaces/ADM_QT4/ADM_filters">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Fri Aug 28 23:07:09 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002488.html">[Avidemux-svn-commit] r5275 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv
+</A></li>
+        <LI>Next message: <A HREF="002490.html">[Avidemux-svn-commit] r5277 -	branches/avidemux_2.5_branch_gruntster/avidemux
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2489">[ date ]</a>
+              <a href="thread.html#2489">[ thread ]</a>
+              <a href="subject.html#2489">[ subject ]</a>
+              <a href="author.html#2489">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-08-28 23:07:03 +0200 (Fri, 28 Aug 2009)
+New Revision: 5276
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreImage/include/ADM_videoFilter_internal.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_filter/filter.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_filter/filter_declaration.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters/gui_filtermanager.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp
+Log:
+[filter] reinstate partial filter support (fixes #28)
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreImage/include/ADM_videoFilter_internal.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreImage/include/ADM_videoFilter_internal.h	2009-08-28 09:31:46 UTC (rev 5275)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreImage/include/ADM_videoFilter_internal.h	2009-08-28 21:07:03 UTC (rev 5276)
+@@ -21,14 +21,15 @@
+ 
+ typedef enum
+ {
+-	VF_TRANSFORM=0,
+-	VF_INTERLACING=1,
+-	VF_COLORS=2,
+-	VF_NOISE=3,
+-	VF_SHARPNESS=4,
+-	VF_SUBTITLE=5,
+-	VF_MISC=6,
+-	VF_MAX=7
++	VF_TRANSFORM,
++	VF_INTERLACING,
++	VF_COLORS,
++	VF_NOISE,
++	VF_SHARPNESS,
++	VF_SUBTITLE,
++	VF_MISC,
++	VF_INTERNAL,
++	VF_MAX
+ }VF_CATEGORY;
+ #define VF_INVALID 		  0
+ 
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_filter/filter.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_filter/filter.cpp	2009-08-28 09:31:46 UTC (rev 5275)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_filter/filter.cpp	2009-08-28 21:07:03 UTC (rev 5276)
+@@ -121,63 +121,69 @@
+  */
+ VF_FILTERS filterGetTagFromName(const char *inname)
+ {
+-const char *name;
+-int max=allfilters.size();
+-	VF_FILTERS filter=VF_INVALID;
+-	for(uint32_t i=0;i&lt;max;i++)
++	const char *name;
++	int max = allfilters.size();
++	VF_FILTERS filter = VF_INVALID;
++
++	for (uint32_t i = 0; i &lt; max; i++)
+ 	{
+-		name=allfilters[ i]-&gt;filterName;
+-		if(1) // allfilters[i]-&gt;tag==VF_PARTIAL_FILTER)
++		name = allfilters[i]-&gt;filterName;
++
++		if (name &amp;&amp; strlen(name) &amp;&amp; !strcasecmp(name, inname))
+ 		{
+-			if(name)
+-			{
+-				if(strlen(name))
+-				{
+-					if(!strcasecmp(name,inname))
+-						return allfilters[ i]-&gt;tag;
+-				}
+-			}
++			filter = allfilters[i]-&gt;tag;
++			break;
+ 		}
+ 	}
++
+ 	return filter;
+ }
++
+ /**
+  * 	\fn tryLoadingFilterPlugin
+  *  \brief try to load the plugin given as argument..
+  */
+ 
+ #define Fail(x) {printf(&quot;%s:&quot;#x&quot;\n&quot;,file);goto er;}
++
+ static bool tryLoadingFilterPlugin(const char *file)
+ {
+-	ADM_vf_pluginLoader *dll=new ADM_vf_pluginLoader(file);
++	ADM_vf_pluginLoader *dll = new ADM_vf_pluginLoader(file);
++	FilterDescriptor *desc = NULL;
++	FilterDescriptor *myDesc = NULL;
+ 
+-	FilterDescriptor *desc=NULL;
+-	FilterDescriptor *myDesc=NULL;
+-	if(!dll-&gt;getDesc) Fail(nogetdesc);
++	if (!dll-&gt;getDesc)
++		Fail(nogetdesc);
+ 
+-	desc=dll-&gt;getDesc();
+-	if(!desc) Fail(GetDescriptor);
+-	// Check the API version
+-	if(desc-&gt;apiVersion!=ADM_FILTER_API_VERSION) Fail(WrongAPI);
+-	if(!(desc-&gt;uiFlags &amp; UI_GetCurrentUI())) Fail(WrongUI);
++	desc = dll-&gt;getDesc();
++
++	if (!desc)
++		Fail(GetDescriptor);
++
++	if (desc-&gt;apiVersion != ADM_FILTER_API_VERSION)
++		Fail(WrongAPI);
++
++	if (!(desc-&gt;uiFlags &amp; UI_GetCurrentUI()))
++		Fail(WrongUI);
++
+ 	// Duplicate it, just in case...
+-	myDesc=new FilterDescriptor();
+-	memcpy(myDesc,desc,sizeof(*myDesc));
+-	// push it !
+-	myDesc-&gt;tag=tagCount++;
+-	ADM_assert(myDesc-&gt;category&lt;VF_MAX);
++	myDesc = new FilterDescriptor();
+ 
+-    allfilters.push_back (myDesc);
+-    filterCategories[myDesc-&gt;category].push_back(myDesc);
+-    pluginLoaderQueue.push_back(dll); // Needed for cleanup. FIXME TODO Delete it.
+-    printf(&quot;[Filters] Registered filter %s as  %s\n&quot;,file,desc-&gt;name);
+-    return true;
+-	// Tag it
+-	// Fail!
++	memcpy(myDesc, desc, sizeof(*myDesc));
++	myDesc-&gt;tag = tagCount++;
++	ADM_assert(myDesc-&gt;category &lt; VF_MAX);
++
++	allfilters.push_back(myDesc);
++	filterCategories[myDesc-&gt;category].push_back(myDesc);
++	pluginLoaderQueue.push_back(dll); // Needed for cleanup. FIXME TODO Delete it.
++	printf(&quot;[Filters] Registered filter %s as %s\n&quot;, file, desc-&gt;name);
++
++	return true;
++
+ er:
+ 	delete dll;
++
+ 	return false;
+-
+ }
+ /**
+  * 	\fn ADM_vf_loadPlugins
+@@ -198,16 +204,16 @@
+ 	char *files[MAX_EXTERNAL_FILTER];
+ 	uint32_t nbFile;
+ 
+-	memset(files,0,sizeof(char *)*MAX_EXTERNAL_FILTER);
+-	printf(&quot;[ADM_vf_plugin] Scanning directory %s\n&quot;,path);
++	memset(files, 0, sizeof(char *)*MAX_EXTERNAL_FILTER);
++	printf(&quot;[ADM_vf_plugin] Scanning directory %s\n&quot;, path);
+ 
+-	if(!buildDirectoryContent(&amp;nbFile, path, files, MAX_EXTERNAL_FILTER, SHARED_LIB_EXT))
++	if (!buildDirectoryContent(&amp;nbFile, path, files, MAX_EXTERNAL_FILTER, SHARED_LIB_EXT))
+ 	{
+ 		printf(&quot;[ADM_vf_plugin] Cannot parse plugin\n&quot;);
+ 		return 0;
+ 	}
+ 
+-	for(int i=0;i&lt;nbFile;i++)
++	for (int i = 0; i &lt; nbFile; i++)
+ 	{
+ 		tryLoadingFilterPlugin(files[i]);
+ 		ADM_dealloc(files[i]);
+@@ -226,8 +232,14 @@
+ 		AVDMGenericVideoStream *(*create_from_script) (AVDMGenericVideoStream *in, int n,Arg *args),
+ 		const char *descText)
+ {
++	int tag;
+ 
+-	FilterDescriptor *desc=new FilterDescriptor(tagCount++,filtername,name,
++	if (strcmp(name, &quot;partial&quot;) == 0)
++		tag = VF_PARTIAL_FILTER;
++	else
++		tag = tagCount++;
++
++	FilterDescriptor *desc=new FilterDescriptor(tag,filtername,name,
+ 												descText,
+ 												category,
+ 												create,
+@@ -360,25 +372,25 @@
+ //
+ //	Create a filter from : its tag, its config and an input stream
+ //
+-
+ AVDMGenericVideoStream *filterCreateFromTag(VF_FILTERS tag,CONFcouple *couple, AVDMGenericVideoStream *in)
+ {
+-	 AVDMGenericVideoStream *filter;
++	ADM_assert(tag != VF_INVALID);
+ 
+-			ADM_assert(tag!=VF_INVALID);
++	AVDMGenericVideoStream *filter = VF_INVALID;
+ 
+-                        {
+-                          for(unsigned int i=0;i&lt;allfilters.size();i++)
+-                                  {
+-                                          if(tag==allfilters[i]-&gt;tag)
+-                                                  {
+-                                                          filter=allfilters[i]-&gt;create( in, couple);
+-                                                          return filter;
+-                                                  }
+-                                  }
+-                        }
+-			ADM_assert(0);
+-			return NULL;
++	for (unsigned int i = 0; i &lt; allfilters.size(); i++)
++	{
++		if (tag == allfilters[i]-&gt;tag)
++		{
++			filter = allfilters[i]-&gt;create(in, couple);
++
++			break;
++		}
++	}
++
++	ADM_assert(filter != VF_INVALID);
++
++	return filter;
+ }
+ 
+ /*
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_filter/filter_declaration.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_filter/filter_declaration.cpp	2009-08-28 09:31:46 UTC (rev 5275)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_filter/filter_declaration.cpp	2009-08-28 21:07:03 UTC (rev 5276)
+@@ -54,7 +54,7 @@
+ 	REGISTERX(&quot;swissarmyknife&quot;,QT_TR_NOOP(&quot;Swiss Army Knife&quot;),QT_TR_NOOP(&quot;Apply operation like P'=P*A, P-A, P+A, etc. using a convolution, rolling average, image from file, or constant&quot;),VF_SWISSARMYKNIFE,1,swissarmyknife_create,swissarmyknife_script);
+ #endif
+ // Misc filter, internal only
+-	REGISTERX(VF_MISC,&quot;partial&quot;,QT_TR_NOOP(&quot;Partial&quot;),&quot;&quot;,VF_PARTIAL,0,partial_create,partial_script);
++	REGISTERX(VF_INTERNAL,&quot;partial&quot;,QT_TR_NOOP(&quot;Partial&quot;),&quot;&quot;,VF_PARTIAL,0,partial_create,partial_script);
+ 	REGISTERX(VF_MISC,&quot;framenum&quot;,QT_TR_NOOP(&quot;Add Framenumber&quot;),QT_TR_NOOP(&quot;Print frame number directly in image&quot;),VF_FRAMENUM,1,number_create,number_script);
+  printf(&quot;\n&quot;);
+ }
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters/gui_filtermanager.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters/gui_filtermanager.cpp	2009-08-28 09:31:46 UTC (rev 5275)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters/gui_filtermanager.cpp	2009-08-28 21:07:03 UTC (rev 5276)
+@@ -543,52 +543,57 @@
+     gtk_list_store_clear (stores[0]);
+     for (uint32_t i = 1; i &lt; nb_active_filter; i++)
+     {
+-        gtk_list_store_append (stores[0], &amp;iter);
+-        fil=videofilters[i].tag;
+-         const char * name = filterGetNameFromTag(fil);
+-         const char * conf = videofilters[i].filter-&gt;printConf ();
+-         int namelen = strlen (name);
+-         while (*conf == ' ')
+-             ++conf;
+-         if (strncasecmp (name, conf, namelen) == 0)
+-         {
+-             conf += namelen;
+-             while (*conf == ' ' || *conf == ':')
+-                 ++conf;
+-         }
+-         const char * smallstart = &quot;&quot;;
+-         const char * smallend = &quot;&quot;;
+-         const char * namesmallstart = &quot;&quot;;
+-         const char * namesmallend = &quot;&quot;;
+-         int conflen = strlen (conf);
+-         if (conflen &gt; 120)
+-         {
+-             smallstart = &quot;&lt;small&gt;&quot;;
+-             smallend = &quot;&lt;/small&gt;&quot;;
+-             if (conflen &gt; 180)
+-             {
+-                 namesmallstart = smallstart;
+-                 namesmallend = smallend;
+-             }
+-         }
++		fil = videofilters[i].tag;
+ 
+-        str = g_strconcat(&quot;&lt;span  weight=\&quot;bold\&quot;&gt;&quot;,
+-                            namesmallstart,
+-                            name,
+-                            namesmallend,
+-                            &quot;&lt;/span&gt;\n&quot;,
+-                             &quot;&lt;span size=\&quot;smaller\&quot;&gt;&quot;,
+-                             smallstart,
+-                             conf,
+-                             smallend,
+-                             &quot;&lt;/span&gt;&quot;,  NULL);
++		if (fil != VF_INTERNAL)
++		{
++			gtk_list_store_append (stores[0], &amp;iter);
+ 
+-        gtk_list_store_set (stores[0], &amp;iter,
+-                            0, str,
+-                            1, videofilters[i].tag,
+-                            2, videofilters[i].conf,
+-                            -1);
+-        g_free(str);
++			const char * name = filterGetNameFromTag(fil);
++			const char * conf = videofilters[i].filter-&gt;printConf ();
++			int namelen = strlen (name);
++			while (*conf == ' ')
++				++conf;
++			if (strncasecmp (name, conf, namelen) == 0)
++			{
++				conf += namelen;
++				while (*conf == ' ' || *conf == ':')
++					++conf;
++			}
++			const char * smallstart = &quot;&quot;;
++			const char * smallend = &quot;&quot;;
++			const char * namesmallstart = &quot;&quot;;
++			const char * namesmallend = &quot;&quot;;
++			int conflen = strlen (conf);
++			if (conflen &gt; 120)
++			{
++				smallstart = &quot;&lt;small&gt;&quot;;
++				smallend = &quot;&lt;/small&gt;&quot;;
++				if (conflen &gt; 180)
++				{
++					namesmallstart = smallstart;
++					namesmallend = smallend;
++				}
++			}
++
++			str = g_strconcat(&quot;&lt;span  weight=\&quot;bold\&quot;&gt;&quot;,
++				namesmallstart,
++				name,
++				namesmallend,
++				&quot;&lt;/span&gt;\n&quot;,
++				&quot;&lt;span size=\&quot;smaller\&quot;&gt;&quot;,
++				smallstart,
++				conf,
++				smallend,
++				&quot;&lt;/span&gt;&quot;,  NULL);
++
++			gtk_list_store_set (stores[0], &amp;iter,
++				0, str,
++				1, videofilters[i].tag,
++				2, videofilters[i].conf,
++				-1);
++			g_free(str);
++		}
+     }
+     g_signal_handler_unblock(stores[0], row_inserted_id);
+     g_signal_handler_unblock(stores[0], row_deleted_id);
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp	2009-08-28 09:31:46 UTC (rev 5275)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp	2009-08-28 21:07:03 UTC (rev 5276)
+@@ -598,23 +598,26 @@
+ 
+ 	for (uint32_t i = 1; i &lt; nb_active_filter; i++)
+ 	{
+-		const char *name = filterGetNameFromTag(videofilters[i].tag);
+-		const char *conf = videofilters[i].filter-&gt;printConf ();
+-		int namelen = strlen (name);
++		if (videofilters[i].tag != VF_INTERNAL)
++		{
++			const char *name = filterGetNameFromTag(videofilters[i].tag);
++			const char *conf = videofilters[i].filter-&gt;printConf ();
++			int namelen = strlen (name);
+ 
+-		while (*conf == ' ')
+-			++conf;
++			while (*conf == ' ')
++				++conf;
+ 
+-		if (strncasecmp (name, conf, namelen) == 0)
+-		{
+-			conf += namelen;
+-			while (*conf == ' ' || *conf == ':')
+-				++conf;
++			if (strncasecmp (name, conf, namelen) == 0)
++			{
++				conf += namelen;
++				while (*conf == ' ' || *conf == ':')
++					++conf;
++			}
++
++			QString str = QString(&quot;&lt;b&gt;&quot;) + QString::fromUtf8(name) + QString(&quot;&lt;/b&gt;&lt;br&gt;\n&lt;small&gt;&quot;) + QString::fromUtf8(conf) + QString(&quot;&lt;/small&gt;&quot;);
++			QListWidgetItem *item=new QListWidgetItem(str,activeList,ACTIVE_FILTER_BASE+i);
++			activeList-&gt;addItem(item);
+ 		}
+-
+-		QString str = QString(&quot;&lt;b&gt;&quot;) + QString::fromUtf8(name) + QString(&quot;&lt;/b&gt;&lt;br&gt;\n&lt;small&gt;&quot;) + QString::fromUtf8(conf) + QString(&quot;&lt;/small&gt;&quot;);
+-		QListWidgetItem *item=new QListWidgetItem(str,activeList,ACTIVE_FILTER_BASE+i);
+-		activeList-&gt;addItem(item);
+ 	}
+ }
+   /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002488.html">[Avidemux-svn-commit] r5275 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_flv
+</A></li>
+	<LI>Next message: <A HREF="002490.html">[Avidemux-svn-commit] r5277 -	branches/avidemux_2.5_branch_gruntster/avidemux
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2489">[ date ]</a>
+              <a href="thread.html#2489">[ thread ]</a>
+              <a href="subject.html#2489">[ subject ]</a>
+              <a href="author.html#2489">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

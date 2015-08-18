@@ -1,0 +1,867 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4824 - in	branches/avidemux_2.6_branch_mean/avidemux: . ADM_codecs	ADM_coreUtils/src ADM_userInterfaces/ADM_commonUI
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4824%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20.%20ADM_codecs%0A%09ADM_coreUtils/src%20ADM_userInterfaces/ADM_commonUI&In-Reply-To=%3C200905140850.n4E8oah7011785%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002046.html">
+   <LINK REL="Next"  HREF="002048.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4824 - in	branches/avidemux_2.6_branch_mean/avidemux: . ADM_codecs	ADM_coreUtils/src ADM_userInterfaces/ADM_commonUI</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4824%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20.%20ADM_codecs%0A%09ADM_coreUtils/src%20ADM_userInterfaces/ADM_commonUI&In-Reply-To=%3C200905140850.n4E8oah7011785%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4824 - in	branches/avidemux_2.6_branch_mean/avidemux: . ADM_codecs	ADM_coreUtils/src ADM_userInterfaces/ADM_commonUI">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu May 14 10:50:36 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002046.html">[Avidemux-svn-commit] r4823 - in	branches/avidemux_2.6_branch_mean/avidemux: ADM_codecs	ADM_coreImage/include
+</A></li>
+        <LI>Next message: <A HREF="002048.html">[Avidemux-svn-commit] r4825 -	branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2047">[ date ]</a>
+              <a href="thread.html#2047">[ thread ]</a>
+              <a href="subject.html#2047">[ subject ]</a>
+              <a href="author.html#2047">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-05-14 10:50:35 +0200 (Thu, 14 May 2009)
+New Revision: 4824
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau_internal.h
+   branches/avidemux_2.6_branch_mean/avidemux/prefs.in
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.h
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_coreUtils/src/prefs.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/prefs.h
+   branches/avidemux_2.6_branch_mean/avidemux/prefs_gen.pl
+Log:
+[VDPAU] Working VDPAU for H264, slow!
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp	2009-05-13 15:21:46 UTC (rev 4823)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp	2009-05-14 08:50:35 UTC (rev 4824)
+@@ -794,7 +794,7 @@
+ }
+ void adm_lavLogCallback(void  *instance, int level, const char* fmt, va_list list)
+ {
+-    if(level&gt;1) return;
++   // if(level&gt;1) return;
+     char buf[256];
+   
+     vsnprintf(buf, sizeof(buf), fmt, list);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.h	2009-05-13 15:21:46 UTC (rev 4823)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.h	2009-05-14 08:50:35 UTC (rev 4824)
+@@ -351,11 +351,22 @@
+ class decoderFFVDPAU:public decoderFF
+ {
+ protected:
+-        
+-       
++                    int b_age;
++                    int ip_age[2];
++
++                    void     *vdpau;
+                     ADMImage *scratch;
++                    ADMImage *vdpau_copy;
++                    uint64_t vdpau_pts;
++                    bool     decode_status;
++public:     // Callbacks
++                    int     getBuffer(AVCodecContext *avctx, AVFrame *pic);
++                    void    releaseBuffer(struct AVCodecContext *avctx, AVFrame *pic);
++                    void    goOn( const AVFrame *d);            
+ public:
++            // public API
+                     decoderFFVDPAU (uint32_t w, uint32_t h, uint32_t l, uint8_t * d);
++                    ~decoderFFVDPAU();
+     virtual uint8_t uncompress (ADMCompressedImage * in, ADMImage * out);
+     virtual uint8_t dontcopy (void)
+                       {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau.cpp	2009-05-13 15:21:46 UTC (rev 4823)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau.cpp	2009-05-14 08:50:35 UTC (rev 4824)
+@@ -6,6 +6,8 @@
+     VDPAU is loaded dynamically to be able to make a binary
+         and have something working even if the target machine
+         does not have vdpau
++    Some part, especially get/buffer and ip_age borrowed from xbmc
++        as the api from ffmpeg is far from clean....
+ 
+ 
+  ***************************************************************************/
+@@ -33,7 +35,10 @@
+ #include &quot;DIA_coreToolkit.h&quot;
+ #include &quot;ADM_dynamicLoading.h&quot;
+ #include &quot;ADM_userInterfaces/ADM_render/GUI_render.h&quot;
++#include &quot;ADM_ffmpeg_vdpau_internal.h&quot;
++#include &quot;prefs.h&quot;
+ 
++static VdpFunctions funcs;
+ 
+ static bool vdpauWorking=false;
+ 
+@@ -41,61 +46,23 @@
+ static VdpDeviceCreateX11    *ADM_createVdpX11;
+ static VdpDevice             vdpDevice;
+ static VdpGetProcAddress     *vdpProcAddress;
+-static VdpDecoder            vdpDecoder;
+ 
+-// VDPAU internal linker
++#define aprintf(...) {}
+ 
+-typedef struct 
+-{
+-    VdpGetErrorString       *getErrorString;
+-    VdpGetApiVersion        *getApiVersion;
+-    VdpGetInformationString *getInformationString;
+-
+-    VdpVideoSurfaceCreate   *createSurface;
+-    VdpVideoSurfaceDestroy  *destroySurface;
+-    VdpVideoSurfaceGetBitsYCbCr *getDataSurface;
+-
+-    VdpDecoderCreate        *decoderCreate;
+-    VdpDecoderDestroy       *decoderDestroy;
+-    VdpDecoderRender        *decoderRender;
+-
+-}VdpFunctions;
+-
+-static VdpFunctions funcs;
+-
+-#define WRAP_Open_Template(funcz,argz,display,codecid) \
+-{\
+-AVCodec *codec=funcz(argz);\
+-if(!codec) {GUI_Error_HIG(&quot;Codec&quot;,QT_TR_NOOP(&quot;Internal error finding codec&quot;display));ADM_assert(0);} \
+-  codecId=codecid; \
+-  _context-&gt;workaround_bugs=1*FF_BUG_AUTODETECT +0*FF_BUG_NO_PADDING; \
+-  _context-&gt;error_concealment=3; \
+-  if (avcodec_open(_context, codec) &lt; 0)  \
+-                      { \
+-                                        printf(&quot;[lavc] Decoder init: &quot;display&quot; video decoder failed!\n&quot;); \
+-                                        GUI_Error_HIG(&quot;Codec&quot;,&quot;Internal error opening &quot;display); \
+-                                        ADM_assert(0); \
+-                                } \
+-                                else \
+-                                { \
+-                                        printf(&quot;[lavc] Decoder init: &quot;display&quot; video decoder initialized! (%s)\n&quot;,codec-&gt;long_name); \
+-                                } \
+-}
+-
+-#define WRAP_Open(x)            {WRAP_Open_Template(avcodec_find_decoder,x,#x,x);}
+-#define WRAP_OpenByName(x,y)    {WRAP_Open_Template(avcodec_find_decoder_by_name,#x,#x,y);}
+-
+-
+ /**
+     \fn vdpauUsable
+     \brief Return true if  vdpau can be used...
+ */
+ bool vdpauUsable(void)
+ {
+-    return vdpauWorking;
++    uint32_t v=false;
++    if(!vdpauWorking) return false;
++    if(!prefs-&gt;get(FEATURE_VDPAU,&amp;v)) v=false;
++    return v;
+ }
+ /**
+-
++    \fn getFunc
++    \brief vdpau function pointers from ID
+ */
+ static void *getFunc(uint32_t id)
+ {
+@@ -155,104 +122,179 @@
+     return true;
+ }
+ /**
+-
++    \fn ADM_VDPAUgetBuffer
++    \brief trampoline to get a VDPAU surface
+ */
+-int ADM_getBuffer(AVCodecContext *avctx, AVFrame *pic)
++int ADM_VDPAUgetBuffer(AVCodecContext *avctx, AVFrame *pic)
+ {
+-    uint32_t w= avctx-&gt;width;
+-    uint32_t h= avctx-&gt;height;
++    decoderFFVDPAU *dec=(decoderFFVDPAU *)avctx-&gt;opaque;
++    return dec-&gt;getBuffer(avctx,pic);
++}
++/**
++    \fn getBuffer
++    \brief returns a VDPAU render masquerading as a AVFrame
++*/
++int decoderFFVDPAU::getBuffer(AVCodecContext *avctx, AVFrame *pic)
++{
++    vdpau_render_state * render;
++    if(VDPAU-&gt;freeQueue.size()==0)
++    {
++        printf(&quot;[VDPAU] No more available surface\n&quot;);
++        return -1;
++    }
++    // Get an image   
++    render=VDPAU-&gt;freeQueue.back();
++    VDPAU-&gt;freeQueue.pop_back();
++    render-&gt;state=0;
++    pic-&gt;data[0]=(uint8_t *)render;
++    pic-&gt;data[1]=(uint8_t *)render;
++    pic-&gt;data[2]=(uint8_t *)render;
++    pic-&gt;linesize[0]=0;
++    pic-&gt;linesize[1]=0;
++    pic-&gt;linesize[2]=0;
++    pic-&gt;type=FF_BUFFER_TYPE_USER;
++    render-&gt;state |= FF_VDPAU_STATE_USED_FOR_REFERENCE;
++    pic-&gt;reordered_opaque= avctx-&gt;reordered_opaque;
++    if(pic-&gt;reference)
++    {
++        pic-&gt;age=ip_age[0];
++        ip_age[0]=ip_age[1]+1;
++        ip_age[1]=1;
++        b_age++;
++    }else
++    {
++        pic-&gt;age=b_age;
++        ip_age[0]++;
++        ip_age[1]++;
++        b_age=1;
++    }
++    return 0;
++}
++/**
++    \fn releaseBuffer
++*/
++void decoderFFVDPAU::releaseBuffer(AVCodecContext *avctx, AVFrame *pic)
++{
++  vdpau_render_state * render;
++  int i;
+ 
+-    uint32_t rounded_w=(w+63)&amp;~63;
+-    uint32_t rounded_h=(h+63)&amp;~63;
+-    uint32_t page=rounded_w*rounded_h;
++  render=(vdpau_render_state*)pic-&gt;data[0];
++  ADM_assert(render);
+ 
+-    pic-&gt;data[0]=new uint8_t [page];
+-    pic-&gt;data[1]=new uint8_t [page/4];
+-    pic-&gt;data[2]=new uint8_t [page/4];
+-
+-    pic-&gt;linesize[0]=rounded_w;
+-    pic-&gt;linesize[1]=rounded_w/2;
+-    pic-&gt;linesize[2]=rounded_w/2;
+-    pic-&gt;type= FF_BUFFER_TYPE_USER;
+-    pic-&gt;age=1;
+-    return 0;
++  render-&gt;state &amp;= ~FF_VDPAU_STATE_USED_FOR_REFERENCE;
++  for(i=0; i&lt;4; i++){
++    pic-&gt;data[i]= NULL;
++  }
++  VDPAU-&gt;freeQueue.push_back(render);
+ }
+ /**
+-
++    \fn ADM_VDPAUreleaseBuffer
+ */
+- void ADM_releaseBuffer(struct AVCodecContext *avctx, AVFrame *pic)
++ void ADM_VDPAUreleaseBuffer(struct AVCodecContext *avctx, AVFrame *pic)
+ {
+-    #define F(x) if(pic-&gt;x) delete [] pic-&gt;x;pic-&gt;x=NULL;
+-    F(data[0]);
+-    F(data[1]);
+-    F(data[2]);
+-    return;
++    decoderFFVDPAU *dec=(decoderFFVDPAU *)avctx-&gt;opaque;
++    dec-&gt;releaseBuffer(avctx,pic);
+ }
+-#define NB_SURFACE 12
+-static VdpVideoSurface surface[NB_SURFACE];
+ /**
+     \fn decoderFFVDPAU
+ */
+ decoderFFVDPAU::decoderFFVDPAU(uint32_t w, uint32_t h, uint32_t l, uint8_t * d):decoderFF (w,	   h)
+ {
+-        _context-&gt;get_buffer      = ADM_getBuffer;
+-        _context-&gt;release_buffer  = ADM_releaseBuffer;
+-        _context-&gt;reget_buffer    = ADM_getBuffer;
++        _context-&gt;opaque          = this;
++        _context-&gt;get_buffer      = ADM_VDPAUgetBuffer;
++        _context-&gt;release_buffer  = ADM_VDPAUreleaseBuffer;
++        _context-&gt;draw_horiz_band = draw;
++        _context-&gt;slice_flags     = SLICE_FLAG_CODED_ORDER|SLICE_FLAG_ALLOW_FIELD;
+ 
++        vdpau=(void *)new vdpauContext;
++        VDPAU-&gt;vdpDecoder=VDP_INVALID_HANDLE;
+         WRAP_OpenByName(h264_vdpau,CODEC_ID_H264);
+-
++        
+         // Now instantiate our VDPAU surface &amp; decoder
+-        ADM_assert(VDP_STATUS_OK==funcs.decoderCreate(vdpDevice,VDP_DECODER_PROFILE_H264_HIGH,w,h,16,&amp;vdpDecoder));
++        ADM_assert(VDP_STATUS_OK==funcs.decoderCreate(vdpDevice,VDP_DECODER_PROFILE_H264_HIGH,w,h,15,&amp;(VDPAU-&gt;vdpDecoder)));
+         // Create our surfaces...
+         for(int i=0;i&lt;NB_SURFACE;i++)
+         {
+-            ADM_assert(VDP_STATUS_OK==funcs.createSurface(vdpDevice,VDP_CHROMA_TYPE_420,w,h,&amp;(surface[i])));
++            VDPAU-&gt;renders[i]=new vdpau_render_state;
++            ADM_assert(VDP_STATUS_OK==funcs.createSurface(vdpDevice,VDP_CHROMA_TYPE_420,w,h,&amp;(VDPAU-&gt;renders[i]-&gt;surface)));
++            VDPAU-&gt;freeQueue.push_back(VDPAU-&gt;renders[i]);
+         }
+         scratch=new ADMImage(w,h,1);
++        b_age = ip_age[0] = ip_age[1] = 256*256*256*64;
++
+ }
+ /**
++    \fn ~            void    goOn( const AVFrame *d);
++*/
++decoderFFVDPAU::~decoderFFVDPAU()
++{
++        printf(&quot;[VDPAU] Cleaning up\n&quot;);
++        for(int i=0;i&lt;NB_SURFACE;i++)
++        {
++            ADM_assert(VDP_STATUS_OK==funcs.destroySurface((VDPAU-&gt;renders[i]-&gt;surface)));
++            delete VDPAU-&gt;renders[i];
++        }
++         ADM_assert(VDP_STATUS_OK==funcs.decoderDestroy(VDPAU-&gt;vdpDecoder));
++         delete VDPAU;
++         vdpau=NULL;
++}
++/**
+     \fn uncompress
+ */
+ uint8_t decoderFFVDPAU::uncompress (ADMCompressedImage * in, ADMImage * out)
+ {
+ VdpStatus status;
+-    static int ping=0;
++    
+     // First let ffmpeg prepare datas...
++    vdpau_copy=out;
++    decode_status=false;
+     if(!decoderFF::uncompress (in, scratch))
+     {
+         printf(&quot;[VDPAU] No data from libavcodec\n&quot;);
+         return 0;
+     }
+-    printf(&quot;[VDPAU] OK*0***\n&quot;);
+-    
+-    // Borrowed from mplayer
+-    struct vdpau_render_state *rndr = (struct vdpau_render_state *)scratch-&gt;_planes[0];
+-    
+-    status=funcs.decoderRender(vdpDecoder,surface[ping],
++    // other part will be done in goOn
++    out-&gt;Pts=vdpau_pts;
++    return (uint8_t)decode_status;
++}
++/**
++    \fn goOn
++    \brief Callback from ffmpeg when a pic is ready to be decoded
++*/
++void decoderFFVDPAU::goOn( const AVFrame *d)
++{
++   VdpStatus status;
++   struct vdpau_render_state *rndr = (struct vdpau_render_state *)d-&gt;data[0];
++   VdpVideoSurface  surface;
++
++    surface=rndr-&gt;surface;
++    vdpau_pts=d-&gt;reordered_opaque; // Retrieve our PTS
++
++     aprintf(&quot;[VDPAU] Decoding Using surface %d\n&quot;, surface);
++    status=funcs.decoderRender(VDPAU-&gt;vdpDecoder, surface,
+                             (void * const *)&amp;rndr-&gt;info, rndr-&gt;bitstream_buffers_used, rndr-&gt;bitstream_buffers);
+     if(VDP_STATUS_OK!=status)
+     {
+-        
+         printf(&quot;[VDPAU] No data after decoderRender &lt;%s&gt;\n&quot;,funcs.getErrorString(status));
+-        return 0;
++        return ;
+     }
+-    printf(&quot;[VDPAU] OK*1***\n&quot;);
+-    
+-    out-&gt;_colorspace=ADM_COLOR_YV12;
+-    // Now get back our image...
+-    // Copy back from decompressed stuff to our own
+- 
+-    void *planes[3];
+-            planes[0]=out-&gt;GetWritePtr(PLANAR_Y);
+-            planes[1]=out-&gt;GetWritePtr(PLANAR_U);
+-            planes[2]=out-&gt;GetWritePtr(PLANAR_V);
++    aprintf(&quot;[VDPAU] DecodeRender Ok***\n&quot;);
++  
++  
++  void *planes[3];
++            planes[0]=vdpau_copy-&gt;GetWritePtr(PLANAR_Y);
++            planes[1]=vdpau_copy-&gt;GetWritePtr(PLANAR_U);
++            planes[2]=vdpau_copy-&gt;GetWritePtr(PLANAR_V);
+     uint32_t stride[3];
+-            stride[0]=out-&gt;GetPitch(PLANAR_Y);
+-            stride[1]=out-&gt;GetPitch(PLANAR_U);
+-            stride[2]=out-&gt;GetPitch(PLANAR_V);
++            stride[0]=vdpau_copy-&gt;GetPitch(PLANAR_Y);
++            stride[1]=vdpau_copy-&gt;GetPitch(PLANAR_U);
++            stride[2]=vdpau_copy-&gt;GetPitch(PLANAR_V);
+ 
++    
++   // Copy back the decoded image to our output ADM_image
++   aprintf(&quot;[VDPAU] Getting datas from surface %d\n&quot;,surface);
+     status=funcs.getDataSurface(
+-                surface[ping],
++                surface,
+                 VDP_YCBCR_FORMAT_YV12, //VdpYCbCrFormat   destination_ycbcr_format,
+                 planes, //void * const *   destination_data,
+                 stride //destination_pitches
+@@ -261,14 +303,25 @@
+     {
+         
+         printf(&quot;[VDPAU] Cannot get data from surface &lt;%s&gt;\n&quot;,funcs.getErrorString(status));
+-        return 0;
++        decode_status=false;
++        return ;
+     }
+-    ping++;
+-    ping%=NB_SURFACE;
+-    printf(&quot;[VDPAU] OK*2***\n&quot;);
+-    out-&gt;Pts=in-&gt;demuxerPts;
+-    return 1;
++    
++    aprintf(&quot;[VDPAU] Success\n&quot;);
++    decode_status=true;
++    return;
+ }
+ 
++
++/**
++    \fn draw
++    \brief callback invoked by lavcodec when a pic is ready to be decoded
++*/
++void draw(struct AVCodecContext *s,    const AVFrame *src, int offset[4],    int y, int type, int height)
++{
++    decoderFFVDPAU *dec=(decoderFFVDPAU *)s-&gt;opaque;
++    dec-&gt;goOn(src);
++}
++
+ #endif
+ // EOF
+\ No newline at end of file
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau_internal.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau_internal.h	2009-05-13 15:21:46 UTC (rev 4823)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau_internal.h	2009-05-14 08:50:35 UTC (rev 4824)
+@@ -0,0 +1,82 @@
++/***************************************************************************
++            \file              ADM_ffmpeg_vdpau.cpp  
++            \brief Decoder using half ffmpeg/half VDPAU
++
++    The ffmpeg part is to preformat inputs for VDPAU
++    VDPAU is loaded dynamically to be able to make a binary
++        and have something working even if the target machine
++        does not have vdpau
++
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#ifndef ADM_ffmpeg_vdpa_internal_H
++#define ADM_ffmpeg_vdpa_internal_H
++#include &lt;vector&gt;
++extern &quot;C&quot; {
++static void draw(struct AVCodecContext *s,    const AVFrame *src, int offset[4],    int y, int type, int height);
++static int ADM_VDPAUgetBuffer(AVCodecContext *avctx, AVFrame *pic);
++static void ADM_VDPAUreleaseBuffer(struct AVCodecContext *avctx, AVFrame *pic);
++}
++
++
++#define NB_SURFACE 50
++typedef struct 
++{
++        VdpDecoder            vdpDecoder;
++        vdpau_render_state *renders[NB_SURFACE];
++        std::vector &lt;vdpau_render_state *&gt;freeQueue;
++
++}vdpauContext;
++
++#define VDPAU ((vdpauContext *)vdpau)
++
++// VDPAU internal linker
++
++typedef struct 
++{
++    VdpGetErrorString       *getErrorString;
++    VdpGetApiVersion        *getApiVersion;
++    VdpGetInformationString *getInformationString;
++
++    VdpVideoSurfaceCreate   *createSurface;
++    VdpVideoSurfaceDestroy  *destroySurface;
++    VdpVideoSurfaceGetBitsYCbCr *getDataSurface;
++
++    VdpDecoderCreate        *decoderCreate;
++    VdpDecoderDestroy       *decoderDestroy;
++    VdpDecoderRender        *decoderRender;
++
++}VdpFunctions;
++
++#define WRAP_Open_Template(funcz,argz,display,codecid) \
++{\
++AVCodec *codec=funcz(argz);\
++if(!codec) {GUI_Error_HIG(&quot;Codec&quot;,QT_TR_NOOP(&quot;Internal error finding codec&quot;display));ADM_assert(0);} \
++  codecId=codecid; \
++  _context-&gt;workaround_bugs=1*FF_BUG_AUTODETECT +0*FF_BUG_NO_PADDING; \
++  _context-&gt;error_concealment=3; \
++  if (avcodec_open(_context, codec) &lt; 0)  \
++                      { \
++                                        printf(&quot;[lavc] Decoder init: &quot;display&quot; video decoder failed!\n&quot;); \
++                                        GUI_Error_HIG(&quot;Codec&quot;,&quot;Internal error opening &quot;display); \
++                                        ADM_assert(0); \
++                                } \
++                                else \
++                                { \
++                                        printf(&quot;[lavc] Decoder init: &quot;display&quot; video decoder initialized! (%s)\n&quot;,codec-&gt;long_name); \
++                                } \
++}
++
++#define WRAP_Open(x)            {WRAP_Open_Template(avcodec_find_decoder,x,#x,x);}
++#define WRAP_OpenByName(x,y)    {WRAP_Open_Template(avcodec_find_decoder_by_name,#x,#x,y);}
++
++#endif
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_coreUtils/src/prefs.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_coreUtils/src/prefs.cpp	2009-05-13 15:21:46 UTC (rev 4823)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_coreUtils/src/prefs.cpp	2009-05-14 08:50:35 UTC (rev 4824)
+@@ -76,11 +76,7 @@
+ 	{&quot;codecs.xvid.bitrate&quot;,		UINT,	&quot;1500000&quot;,NULL,	&quot;17&quot;,	&quot;5900000&quot;},
+ 	{&quot;codecs.xvid.finalsize&quot;,	UINT,	&quot;700&quot;,	NULL,	&quot;0&quot;,	&quot;3999&quot;	},
+ 	{&quot;codecs.preferredcodec&quot;,		STRING,&quot;FFmpeg4&quot;,NULL, NULL, NULL },
+-#ifdef __WIN32
+-	{&quot;filters.subtitle.fontname&quot;,		FILENAME,&quot;C:\\Windows\\Fonts\\arial.ttf&quot;,NULL, NULL, NULL },
+-#else
+ 	{&quot;filters.subtitle.fontname&quot;,		FILENAME,&quot;/usr/share/fonts/truetype/DejaVuSans.ttf&quot;,NULL, NULL, NULL },
+-#endif
+ 	{&quot;filters.subtitle.charset&quot;,		STRING,&quot;ISO-8859-1&quot;,NULL, NULL, NULL },
+ 	{&quot;filters.subtitle.fontsize&quot;,		UINT,	&quot;24&quot;,	NULL,	&quot;1&quot;,	&quot;576&quot;	},
+ 	{&quot;filters.subtitle.ypercent&quot;,	INT,	&quot;255&quot;,	NULL,	&quot;0&quot;,	&quot;255&quot;	},
+@@ -89,11 +85,7 @@
+ 	{&quot;filters.subtitle.selfadjustable&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+ 	{&quot;filters.subtitle.usebackgroundcolor&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+ 	{&quot;settings.mpegsplit&quot;,	UINT,	&quot;790&quot;,	NULL,	&quot;400&quot;,	&quot;5000&quot;	},
+-#ifdef __WIN32
+-	{&quot;device.audiodevice&quot;,		STRING,&quot;WIN32&quot;,NULL, NULL, NULL },
+-#else
+ 	{&quot;device.audiodevice&quot;,		STRING,&quot;ALSA&quot;,	NULL, NULL, NULL },
+-#endif
+ 	{&quot;device.audio.alsa_device&quot;,		STRING,&quot;dmix&quot;,	NULL, NULL, NULL },
+ 	{&quot;device.videodevice&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;10&quot;	},
+ 	{&quot;default.postproc_type&quot;,		UINT,	&quot;3&quot;,	NULL,	&quot;0&quot;,	&quot;7&quot;	},
+@@ -123,8 +115,6 @@
+ 	{&quot;feature.reuse_2pass_log&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+ 	{&quot;feature.audiobar_uses_master&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+ 	{&quot;feature.threading.lavc&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;32&quot;	},
+-	{&quot;feature.threading.x264&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;32&quot;	},
+-	{&quot;feature.threading.xvid&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;32&quot;	},
+ 	{&quot;feature.cpu_caps&quot;,		UINT,	&quot;4294967295&quot;,NULL,	&quot;0&quot;,	&quot;4294967295&quot;},
+ 	{&quot;feature.mpeg_no_limit&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+ 	{&quot;feature.auto_buildmap&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+@@ -134,6 +124,7 @@
+ 	{&quot;filters.autoload.path&quot;,		STRING,&quot;/tmp/&quot;,NULL, NULL, NULL },
+ 	{&quot;filters.autoload.active&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+ 	{&quot;feature.alternate_mp3_tag&quot;,		UINT,	&quot;1&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
++	{&quot;feature.vdpau&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+ 	{&quot;feature.global_glyph.active&quot;,		UINT,	&quot;1&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+ 	{&quot;feature.global_glyph.name&quot;,		STRING,&quot;&quot;,	NULL, NULL, NULL },
+ 	{&quot;priority.encoding&quot;,		UINT,	&quot;3&quot;,	NULL,	&quot;0&quot;,	&quot;4&quot;	},
+@@ -141,7 +132,7 @@
+ 	{&quot;priority.playback&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;4&quot;	}
+ };
+ 
+-int num_opts = 80;
++int num_opts = 79;
+ // &lt;/prefs_gen&gt;
+ 
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp	2009-05-13 15:21:46 UTC (rev 4823)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp	2009-05-14 08:50:35 UTC (rev 4824)
+@@ -49,7 +49,7 @@
+ uint32_t useAutoIndex=0;
+ uint32_t useSwap=0;
+ uint32_t useNuv=0;
+-uint32_t lavcThreads=0,x264Threads=0,xvidThreads=0;
++uint32_t lavcThreads=0;
+ uint32_t encodePriority=2;
+ uint32_t indexPriority=2;
+ uint32_t playbackPriority=0;
+@@ -66,6 +66,7 @@
+ uint32_t alternate_mp3_tag=1;
+ uint32_t pp_type=3;
+ uint32_t pp_value=5;
++uint32_t vdpau=0;
+ uint32_t hzd,vzd,dring;
+ uint32_t capsMMX,capsMMXEXT,caps3DNOW,caps3DNOWEXT,capsSSE,capsSSE2,capsSSE3,capsSSSE3,capsAll;
+ 
+@@ -103,6 +104,8 @@
+ #endif
+         // autovbr
+         prefs-&gt;get(FEATURE_AUTO_BUILDMAP,&amp;autovbr);
++        // vdpau
++        prefs-&gt;get(FEATURE_VDPAU,&amp;vdpau);
+         // autoindex
+         prefs-&gt;get(FEATURE_AUTO_REBUILDINDEX,&amp;autoindex);
+         // Global glyph
+@@ -126,9 +129,8 @@
+ 
+         // Multithreads
+         prefs-&gt;get(FEATURE_THREADING_LAVC, &amp;lavcThreads);
+-        prefs-&gt;get(FEATURE_THREADING_X264, &amp;x264Threads);
+-        prefs-&gt;get(FEATURE_THREADING_XVID, &amp;xvidThreads);
+ 
++
+ 		// Encoding priority
+ 		if(!prefs-&gt;get(PRIORITY_ENCODING, &amp;encodePriority))
+                 encodePriority=2;
+@@ -173,6 +175,7 @@
+         olddevice=newdevice=AVDM_getCurrentDevice();
+         // Audio device
+         /************************ Build diaelems ****************************************/
++        diaElemToggle useVdpau(&amp;vdpau,QT_TR_NOOP(&quot;_Use VDPAU for decoding H264&quot;));
+         diaElemToggle useSysTray(&amp;useTray,QT_TR_NOOP(&quot;_Use systray while encoding&quot;));
+         diaElemToggle allowAnyMpeg(&amp;mpeg_no_limit,QT_TR_NOOP(&quot;_Accept non-standard audio frequency for DVD&quot;));
+         diaElemToggle openDml(&amp;use_odml,QT_TR_NOOP(&quot;Create _OpenDML files&quot;));
+@@ -216,13 +219,9 @@
+ 		frameSimd.swallow(&amp;capsToggleSSSE3);
+ 
+ 		diaElemThreadCount lavcThreadCount(&amp;lavcThreads, QT_TR_NOOP(&quot;_lavc threads:&quot;));
+-		diaElemThreadCount x264ThreadCount(&amp;x264Threads, QT_TR_NOOP(&quot;_x264 threads:&quot;));
+-		diaElemThreadCount xvidThreadCount(&amp;xvidThreads, QT_TR_NOOP(&quot;X_vid threads:&quot;));
+ 
+ 		diaElemFrame frameThread(QT_TR_NOOP(&quot;Multi-threading&quot;));
+ 		frameThread.swallow(&amp;lavcThreadCount);
+-		frameThread.swallow(&amp;x264ThreadCount);
+-		frameThread.swallow(&amp;xvidThreadCount);
+ 
+ 		diaMenuEntry priorityEntries[] = {
+                              {0,       QT_TR_NOOP(&quot;High&quot;),NULL}
+@@ -360,8 +359,8 @@
+ 
+         
+         /* Video */
+-        diaElem *diaVideo[]={&amp;menuVideoMode,&amp;framePP};
+-        diaElemTabs tabVideo(QT_TR_NOOP(&quot;Video&quot;),2,(diaElem **)diaVideo);
++        diaElem *diaVideo[]={&amp;menuVideoMode,&amp;framePP,&amp;useVdpau};
++        diaElemTabs tabVideo(QT_TR_NOOP(&quot;Video&quot;),3,(diaElem **)diaVideo);
+         
+         /* CPU tab */
+ 		diaElem *diaCpu[]={&amp;frameSimd};
+@@ -454,8 +453,6 @@
+                 
+                 // number of threads
+                 prefs-&gt;set(FEATURE_THREADING_LAVC, lavcThreads);
+-				prefs-&gt;set(FEATURE_THREADING_X264, x264Threads);
+-				prefs-&gt;set(FEATURE_THREADING_XVID, xvidThreads);
+ 
+ 				// Encoding priority
+ 				prefs-&gt;set(PRIORITY_ENCODING, encodePriority);
+@@ -475,7 +472,8 @@
+                 prefs-&gt;set(FEATURE_USE_SYSTRAY,useTray);
+                 // Filter directory
+ 				prefs-&gt;set(FILTERS_AUTOLOAD_ACTIVE, activeXfilter);
+-
++                // VDPAU
++                prefs-&gt;set(FEATURE_VDPAU,vdpau);
+                 if(filterPath)
+                   prefs-&gt;set(FILTERS_AUTOLOAD_PATH, filterPath);
+                 // Alternate mp3 tag (haali)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/prefs.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/prefs.h	2009-05-13 15:21:46 UTC (rev 4823)
++++ branches/avidemux_2.6_branch_mean/avidemux/prefs.h	2009-05-14 08:50:35 UTC (rev 4824)
+@@ -72,8 +72,6 @@
+ 	FEATURE_REUSE_2PASS_LOG,
+ 	FEATURE_AUDIOBAR_USES_MASTER,
+ 	FEATURE_THREADING_LAVC,
+-	FEATURE_THREADING_X264,
+-	FEATURE_THREADING_XVID,
+ 	FEATURE_CPU_CAPS,
+ 	FEATURE_MPEG_NO_LIMIT,
+ 	FEATURE_AUTO_BUILDMAP,
+@@ -83,6 +81,7 @@
+ 	FILTERS_AUTOLOAD_PATH,
+ 	FILTERS_AUTOLOAD_ACTIVE,
+ 	FEATURE_ALTERNATE_MP3_TAG,
++	FEATURE_VDPAU,
+ 	FEATURE_GLOBAL_GLYPH_ACTIVE,
+ 	FEATURE_GLOBAL_GLYPH_NAME,
+ 	PRIORITY_ENCODING,
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/prefs.in
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/prefs.in	2009-05-13 15:21:46 UTC (rev 4823)
++++ branches/avidemux_2.6_branch_mean/avidemux/prefs.in	2009-05-14 08:50:35 UTC (rev 4824)
+@@ -0,0 +1,102 @@
++#
++# this file will be used as input for pref.h and pref.cpp
++#
++
++# option_name :: name without '-'; the dot is the separator used for the xml tree
++#		 '.' will be changed to '_'
++#		 all letters will be changed to there upper case equivalents
++# type        :: ( UINT | INT | ULONG | LONG | FLOAT | STRING )
++# value       :: default value; used if no xml value available
++# minimum     :: the smallest value this option can have (ignored for STRING)
++# maximum     :: the largest  value this option can have (ignored for STRING)
++
++# option name				type	value	minimum	maximum (incl.)
++codecs.svcd.enctype,			UINT,	0,	0,	99999
++codecs.svcd.bitrate,			UINT,	1500000,16000,	2748000
++codecs.svcd.quantizer,			UINT,	4,	2,	31
++codecs.svcd.finalsize,			UINT,	700,	0,	99999
++codecs.svcd.interlaced,			UINT,	0,	0,	1
++codecs.svcd.bff,			UINT,	0,	0,	1
++codecs.svcd.widescreen,			UINT,	0,	0,	1
++codecs.svcd.matrix,			UINT,	0,	0,	99999
++codecs.svcd.gopsize,			UINT,	12,	0,	99999
++codecs.svcd.maxbitrate,			UINT,	2500,	0,	2748
++codecs.dvd.enctype,			UINT,	0,	0,	99999
++codecs.dvd.bitrate,			UINT,	1500000,16000,	9900000
++codecs.dvd.quantizer,			UINT,	4,	2,	31
++codecs.dvd.finalsize,			UINT,	700,	0,	99999
++codecs.dvd.interlaced,			UINT,	0,	0,	1
++codecs.dvd.bff,				UINT,	0,	0,	1
++codecs.dvd.widescreen,			UINT,	0,	0,	1
++codecs.dvd.matrix,			UINT,	0,	0,	99999
++codecs.dvd.gopsize,			UINT,	12,	0,	99999
++codecs.dvd.maxbitrate,			UINT,	9000,	0,	9900
++codecs.xvid.enctype,			UINT,	0,	0,	99999
++codecs.xvid.quantizer,			UINT,	4,	2,	32
++codecs.xvid.bitrate,			UINT,	1500000,17,	5900000
++codecs.xvid.finalsize,			UINT,	700,	0,	3999
++codecs.preferredcodec,			STRING,	FFmpeg4
++filters.subtitle.fontname,		FILENAME, &quot;/usr/share/fonts/truetype/DejaVuSans.ttf&quot;
++filters.subtitle.charset,		STRING, &quot;ISO-8859-1&quot;
++filters.subtitle.fontsize,		UINT,	24,	1,	576
++filters.subtitle.ypercent,		INT,	255,	0,	255
++filters.subtitle.upercent,		INT,	0,	0,	255
++filters.subtitle.vpercent,		INT,	0,	0,	255
++filters.subtitle.selfadjustable,	UINT,	0,	0,	1
++filters.subtitle.usebackgroundcolor,	UINT,	0,	0,	1
++# codec metasettings for mpeg2enc based
++settings.mpegsplit, 			UINT,	790,	400,	5000
++device.audiodevice,			STRING,	ALSA
++device.audio.alsa_device,               STRING, &quot;dmix&quot;
++device.videodevice,			UINT,	0,	0,	10
++# Posproc
++default.postproc_type,			UINT,	3,	0,	7
++default.postproc_value,			UINT,	3,	0,	5
++# lastfiles
++lastfiles.file1,			FILENAME,	&quot;&quot;
++lastfiles.file2,			FILENAME,	&quot;&quot;
++lastfiles.file3,			FILENAME,	&quot;&quot;
++lastfiles.file4,			FILENAME,	&quot;&quot;
++lastdir_read,				FILENAME,	&quot;&quot;
++lastdir_write,				FILENAME,	&quot;&quot;
++# lame
++lame_cli,				STRING, &quot;&quot;
++pipe_cmd,				STRING, &quot;&quot;
++pipe_param,				STRING, &quot;&quot;
++lame_path,				STRING, &quot;&quot;
++toolame_path,				STRING, &quot;&quot;
++lvemux_path,				STRING, &quot;&quot;
++requant_path,				STRING, &quot;&quot;
++# 0 - no messages, 1 - only error messages, 2 - all messages
++message_level,				UINT,	2,	0,	2
++# feature
++feature.swap_if_A_greater_than_B,	UINT,   1,      0,      1
++feature.svcdres.preferedsourceratio,	STRING, &quot;1:1&quot;
++feature.saveprefsonexit,		UINT,	1,	0,	1
++feature.ignoresavedmarkers,		UINT,	0,	0,	1
++feature.disable_nuv_resync,		UINT,	0,	0,	1
++feature.tryautoidx,			UINT,	0,	0,	1
++feature.use_odml,                       UINT,   0,      0,      1
++feature.use_systray,                    UINT,   0,      0,      1
++feature.reuse_2pass_log,                UINT,   0,      0,      1
++feature.audiobar_uses_master,           UINT,   0,      0,      1
++feature.threading.lavc,                 UINT,   0,      0,      32
++feature.cpu_caps,  		                UINT,   4294967295,      0,      4294967295
++feature.mpeg_no_limit,                  UINT,   0,      0,      1
++feature.auto_buildmap,                  UINT,   0,      0,      1
++feature.auto_rebuildindex,              UINT,   0,      0,      1
++feature.auto_unpack,                    UINT,   0,      0,      1
++# prologic 1/2
++downmixing.prologic,			UINT,	2,	0,	2
++filters.autoload.path,                  STRING, &quot;/tmp/&quot;
++filters.autoload.active,                UINT,   0,      0,      1
++feature.alternate_mp3_tag,              UINT,   1,      0,      1
++#
++feature.vdpau,                          UINT,   0,      0,      1
++# Global glyphset file
++feature.global_glyph.active,            UINT,   1,      0,      1
++feature.global_glyph.name,              STRING, &quot;&quot;
++# priority
++priority.encoding,          UINT,   3,      0,      4
++priority.indexing,          UINT,   3,      0,      4
++priority.playback,          UINT,   0,      0,      4
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/prefs_gen.pl
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/prefs_gen.pl	2009-05-13 15:21:46 UTC (rev 4823)
++++ branches/avidemux_2.6_branch_mean/avidemux/prefs_gen.pl	2009-05-14 08:50:35 UTC (rev 4824)
+@@ -6,7 +6,7 @@
+ my $srcdir=&quot;.&quot;;
+ my $in  = &quot;$srcdir/prefs.in&quot;;
+ my $h   = &quot;$srcdir/prefs.h&quot;;
+-my $cpp = &quot;$srcdir/ADM_libraries/ADM_utilities/prefs.cpp&quot;;
++my $cpp = &quot;$srcdir/ADM_coreUtils/src/prefs.cpp&quot;;
+ #print &quot;In:$in\n&quot;;
+ my $h_str = &quot;typedef enum {\n&quot;;
+ my $cpp_str = &quot;typedef enum {\n&quot;.
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002046.html">[Avidemux-svn-commit] r4823 - in	branches/avidemux_2.6_branch_mean/avidemux: ADM_codecs	ADM_coreImage/include
+</A></li>
+	<LI>Next message: <A HREF="002048.html">[Avidemux-svn-commit] r4825 -	branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2047">[ date ]</a>
+              <a href="thread.html#2047">[ thread ]</a>
+              <a href="subject.html#2047">[ subject ]</a>
+              <a href="author.html#2047">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

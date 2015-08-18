@@ -1,0 +1,224 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6625 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6625%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20100919073538.2BBC7481091%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003808.html">
+   <LINK REL="Next"  HREF="003810.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6625 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6625%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20100919073538.2BBC7481091%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6625 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Sep 19 09:35:38 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003808.html">[Avidemux-svn-commit] r6624 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils:	include src
+</A></li>
+        <LI>Next message: <A HREF="003810.html">[Avidemux-svn-commit] r6626 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3809">[ date ]</a>
+              <a href="thread.html#3809">[ thread ]</a>
+              <a href="subject.html#3809">[ subject ]</a>
+              <a href="author.html#3809">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-09-19 09:35:38 +0200 (Sun, 19 Sep 2010)
+New Revision: 6625
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+Log:
+[TS/index] Try to get field info when indexing h264
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2010-09-19 07:35:36 UTC (rev 6624)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2010-09-19 07:35:38 UTC (rev 6625)
+@@ -150,7 +150,7 @@
+         DIA_workingBase         *ui;
+         ADM_SPSInfo             spsInfo;
+         void                    updateUI(void);
+-        bool                    decodeSEI(uint32_t nalSize, uint8_t *org,uint32_t *recoveryLength);
++        bool                    decodeSEI(uint32_t nalSize, uint8_t *org,uint32_t *recoveryLength,pictureStructure *nextpicstruct);
+         bool                    decodeVC1Seq(tsGetBits &amp;bits,TSVideo &amp;video);
+         bool                    decodeVC1Pic(tsGetBits &amp;bits,uint32_t &amp;frameType,uint32_t &amp;frameStructure);
+ public:
+@@ -312,28 +312,69 @@
+         @param recoveryLength # of recovery frame
+         \return true if recovery found
+ */
+-bool TsIndexer::decodeSEI(uint32_t nalSize, uint8_t *org,uint32_t *recoveryLength)
++bool TsIndexer::decodeSEI(uint32_t nalSize, uint8_t *org,uint32_t *recoveryLength,
++                pictureStructure *picStruct)
+ {
+     
+     uint8_t *payload=(uint8_t *)alloca(nalSize+16);
++    bool r=false;
+     nalSize=TS_unescapeH264(nalSize,org,payload);
+-    getBits bits(nalSize,payload);
+-    
+-    while( bits.getConsumedBits()&lt;(nalSize-4)*8)
++    uint8_t *tail=payload+nalSize;
++    *picStruct=pictureFrame; // frame
++    while( payload&lt;tail-2)
+     {
+-        uint32_t sei_type=bits.get(8);
+-        uint32_t sei_size=bits.get(8);
+-                if(sei_size==0xff) sei_size=0xff00+bits.get(8);; // should be enough
++                uint32_t sei_type=0,sei_size=0;
++                while(payload[0]==0xff) {sei_type+=0xff;payload++;};
++                sei_type+=payload[0];payload++;
++                while(payload[0]==0xff) {sei_size+=0xff;payload++;};
++                sei_size+=payload[0];payload++;
+                 zprintf(&quot;  [SEI] Type : 0x%x size:%d\n&quot;,sei_type,sei_size);
+-                if(sei_type==6) // Recovery point
++                switch(sei_type) // Recovery point
+                 {
+-                        *recoveryLength=bits.getUEG();
+-                        zprintf(&quot;[SEI] Recovery :%&quot;LU&quot;\n&quot;,*recoveryLength);
+-                        return true;
++
++                       case 1:
++                            {
++                                if(spsInfo.hasStructInfo)
++                                {
++                                    getBits bits(sei_size,payload);
++                                    payload+=sei_size;
++                                    if(spsInfo.CpbDpbToSkip)
++                                    {
++                                            bits.get(spsInfo.CpbDpbToSkip);
++                                    }
++                                    //printf(&quot;Consumed: %d,\n&quot;,bits.getConsumedBits());
++                                    int pic=bits.get(4);
++                                    printf(&quot;Pic struct: %d,\n&quot;,pic);
++                                    switch(pic) 
++                                    {
++                                        case 0: *picStruct=pictureFrame; break;
++                                        case 3:
++                                        case 4: *picStruct=pictureFrame;
++                                        case 1: *picStruct=pictureTopField;break;
++                                        case 2: *picStruct=pictureBottomField;break;
++                                        default:*picStruct=pictureFrame;
++                                    }
++                                    
++                                }else
++                                        payload+=sei_size;
++                            }
++                            break;
++
++                       case 6:
++                        {
++                            getBits bits(sei_size,payload);
++                            payload+=sei_size;
++                            *recoveryLength=bits.getUEG();
++                            zprintf(&quot;[SEI] Recovery :%&quot;LU&quot;\n&quot;,*recoveryLength);
++                            r=true;
++                        }
++                        default:
++                            payload+=sei_size;
++                            break;
+                 }
+-                bits.skip(sei_size*8);
+     }
+-    return false;
++    if(payload!=tail) ADM_warning(&quot;Bytes left in SEI %d\n&quot;,(int)(tail-payload));
++    return r;
+ }
+ 
+ /**
+@@ -363,7 +404,7 @@
+ 
+     memset(&amp;data,0,sizeof(data));
+     data.picStructure=pictureFrame;
+-
++    pictureStructure nextPicStruct=pictureFrame;
+     string indexName=string(file);
+     indexName=indexName+string(&quot;.idx2&quot;);
+     index=qfopen(indexName,(const char*)&quot;wt&quot;);
+@@ -418,10 +459,12 @@
+               break;              
+           };
+       }
++      
+         if(!seq_found) goto the_end;
+     //******************
+     // 2 Index
+     //******************
++
+       while(1)
+       {
+         int startCode=pkt-&gt;findStartCode();
+@@ -464,7 +507,7 @@
+                             if(!pkt-&gt;stillOk()) goto resume;
+                             zprintf(&quot;[SEI] Nal size :%d\n&quot;,SEI_nal.payloadSize);
+                             if(SEI_nal.payloadSize&gt;=7)
+-                                decodeSEI(SEI_nal.payloadSize-4,SEI_nal.payload,&amp;recoveryCount);
++                                decodeSEI(SEI_nal.payloadSize-4,SEI_nal.payload,&amp;recoveryCount,&amp;nextPicStruct);
+                             else printf(&quot;[SEI] Too short size+4=%d\n&quot;,*(SEI_nal.payload));
+                         
+                             startCode=pkt-&gt;readi8();
+@@ -473,6 +516,8 @@
+                             break;
+                   case NAL_AU_DELIMITER:
+                           pic_started = false;
++                          nextPicStruct=pictureFrame;  
++                          printf(&quot;AU DELIMITER\n&quot;);
+                           break;
+ 
+                   case NAL_SPS:
+@@ -491,7 +536,7 @@
+                   case NAL_NON_IDR:
+                     {
+ #define NON_IDR_PRE_READ 8
+-                      zprintf(&quot;Pic start last ref:%d cur ref:%d nb=%d\n&quot;,lastRefIdc,ref,data.nbPics);
++                      printf(&quot;Pic start last ref:%d cur ref:%d nb=%d\n&quot;,lastRefIdc,ref,data.nbPics);
+                       lastRefIdc=ref;
+                         
+                       uint8_t bufr[NON_IDR_PRE_READ+4];
+@@ -523,6 +568,7 @@
+                       if(startCode==NAL_IDR) data.frameType=4; // IDR
+                       zprintf(&quot;[&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;] Pic Type %&quot;LU&quot; Recovery %&quot;LU&quot;\n&quot;,data.frameType,recoveryCount);
+                       if(data.frameType==1 &amp;&amp; !recoveryCount) data.frameType=4; //I  + Recovery=0 = IDR!
++                      data.picStructure=nextPicStruct;
+                       if(data.state==idx_startAtGopOrSeq) 
+                       {
+                               currentFrameType=data.frameType;;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003808.html">[Avidemux-svn-commit] r6624 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils:	include src
+</A></li>
+	<LI>Next message: <A HREF="003810.html">[Avidemux-svn-commit] r6626 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3809">[ date ]</a>
+              <a href="thread.html#3809">[ thread ]</a>
+              <a href="subject.html#3809">[ subject ]</a>
+              <a href="author.html#3809">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

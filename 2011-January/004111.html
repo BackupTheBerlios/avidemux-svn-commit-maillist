@@ -1,0 +1,138 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6937 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6937%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2&In-Reply-To=%3C20110117074322.478D948128D%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004110.html">
+   <LINK REL="Next"  HREF="004112.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6937 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6937%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2&In-Reply-To=%3C20110117074322.478D948128D%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6937 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Jan 17 08:43:22 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004110.html">[Avidemux-svn-commit] r6936 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils:	include src
+</A></li>
+        <LI>Next message: <A HREF="004112.html">[Avidemux-svn-commit] r6938 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4111">[ date ]</a>
+              <a href="thread.html#4111">[ thread ]</a>
+              <a href="subject.html#4111">[ subject ]</a>
+              <a href="author.html#4111">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-01-17 08:43:22 +0100 (Mon, 17 Jan 2011)
+New Revision: 6937
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Video.cpp
+Log:
+[mp4v2] Exctract VOL from first frame if not extraData
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h	2011-01-17 07:43:21 UTC (rev 6936)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h	2011-01-17 07:43:22 UTC (rev 6937)
+@@ -77,6 +77,7 @@
+         virtual bool open(const char *file, ADM_videoStream *s,uint32_t nbAudioTrack,ADM_audioStream **a);
+         virtual bool save(void) ;
+         virtual bool close(void) ;
++        virtual bool useGlobalHeader(void) {return true;}
+ 
+ };
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Video.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Video.cpp	2011-01-17 07:43:21 UTC (rev 6936)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Video.cpp	2011-01-17 07:43:22 UTC (rev 6937)
+@@ -23,6 +23,7 @@
+ #include &quot;muxerMp4v2.h&quot;
+ #include &quot;ADM_codecType.h&quot;
+ #include &quot;ADM_imageFlags.h&quot;
++#include &quot;ADM_videoInfoExtractor.h&quot;
+ #if 1
+ #define aprintf(...) {}
+ #else
+@@ -45,16 +46,39 @@
+      uint32_t esdsLen=0;
+         if(false==vStream-&gt;getExtraData(&amp;esdsLen,&amp;esdsData))
+         {
+-            ADM_info(&quot;No extradata, geting ESDS from first frame...&quot;);
++            ADM_info(&quot;No extradata, geting ESDS from first frame...\n&quot;);
+         }else
+         {
+             ADM_info(&quot;Got esds from extradata\n&quot;);
+         }
++        if(!esdsLen) // We dont have extraData, look into the 1st frame
++        {
++            ADM_info(&quot;Trying to get VOL header from first frame...\n&quot;);
++            if(!extractVolHeader(in[0].data,in[0].len,&amp;esdsData,&amp;esdsLen))
++            {
++                ADM_error(&quot;Cannot get ESDS, aborting\n&quot;);
++                return false;
++            }
++           
++        }
++        //
+         if(!esdsLen)
+         {
+             ADM_error(&quot;ESDS not found, aborting\n&quot;);
+             return false;
+         }
++        if(!esdsData[0] &amp;&amp; !esdsData[1] &amp;&amp; esdsData[2]==1)
++        {
++            // Remove startcode
++            if(esdsLen&lt;4)
++            {
++                ADM_error(&quot;ESDS too short\n&quot;);
++                return false;
++            }
++            esdsData+=4;
++            esdsLen-=4;
++        }
++
+         ADM_info(&quot;Esds:\n&quot;); mixDump(esdsData,esdsLen);ADM_info(&quot;\n&quot;);            
+         if(false==MP4SetTrackESConfiguration(handle,videoTrackId,esdsData,esdsLen))
+         {
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004110.html">[Avidemux-svn-commit] r6936 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils:	include src
+</A></li>
+	<LI>Next message: <A HREF="004112.html">[Avidemux-svn-commit] r6938 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4111">[ date ]</a>
+              <a href="thread.html#4111">[ thread ]</a>
+              <a href="subject.html#4111">[ subject ]</a>
+              <a href="author.html#4111">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,495 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4395 - in	branches/avidemux_2.4_branch/avidemux: . ADM_editor ADM_osSupport
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4395%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%20ADM_editor%20ADM_osSupport&In-Reply-To=%3C200809220252.m8M2qAwQ006875%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001634.html">
+   <LINK REL="Next"  HREF="001636.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4395 - in	branches/avidemux_2.4_branch/avidemux: . ADM_editor ADM_osSupport</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4395%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%20ADM_editor%20ADM_osSupport&In-Reply-To=%3C200809220252.m8M2qAwQ006875%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4395 - in	branches/avidemux_2.4_branch/avidemux: . ADM_editor ADM_osSupport">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Mon Sep 22 04:52:10 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001634.html">[Avidemux-svn-commit] r4394 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+        <LI>Next message: <A HREF="001636.html">[Avidemux-svn-commit] r4396 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4:	ADM_dialog ADM_filters ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1635">[ date ]</a>
+              <a href="thread.html#1635">[ thread ]</a>
+              <a href="subject.html#1635">[ subject ]</a>
+              <a href="author.html#1635">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-09-22 04:52:00 +0200 (Mon, 22 Sep 2008)
+New Revision: 4395
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_assert.h
+   branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edLoadSave.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_misc.cpp
+   branches/avidemux_2.4_branch/avidemux/button_mapping
+   branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp
+   branches/avidemux_2.4_branch/avidemux/gui_action.names
+   branches/avidemux_2.4_branch/avidemux/gui_savenew.cpp
+Log:
+[Win32] convert path separator from JavaScript and command line
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_assert.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_assert.h	2008-09-22 01:11:20 UTC (rev 4394)
++++ branches/avidemux_2.4_branch/avidemux/ADM_assert.h	2008-09-22 02:52:00 UTC (rev 4395)
+@@ -26,7 +26,8 @@
+ extern void *ADM_realloc(void *in,size_t size);
+ extern void ADM_dezalloc(void *ptr);
+ extern char *ADM_strdup( const char *in);
+-extern char *slashToBackSlash(const char *in);
++extern char *backSlashToForward(const char *in);
++extern char *forwardSlashToBack(const char *in);
+ typedef void *(* adm_fast_memcpy)(void *to, const void *from, size_t len);
+ extern adm_fast_memcpy myAdmMemcpy;
+ 
+@@ -72,11 +73,13 @@
+         #define LLX &quot;I64x&quot;
+         #define LLU &quot;I64u&quot;
+         
+-        #define cleanupPath(x) slashToBackSlash(x)
++        #define cleanupPath(x) backSlashToForward(x)
++		#define fixupPath(x) forwardSlashToBack(x)
+ #else
+         #define LLX &quot;llx&quot;
+         #define LLU &quot;llu&quot;
+         #define cleanupPath(x) ADM_strdup(x)
++		#define fixupPath(x) ADM_strdup(x)
+ #endif
+ 
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edLoadSave.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edLoadSave.cpp	2008-09-22 01:11:20 UTC (rev 4394)
++++ branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edLoadSave.cpp	2008-09-22 02:52:00 UTC (rev 4395)
+@@ -171,13 +171,11 @@
+ //___________________________
+ uint8_t  *extraData ;
+ uint32_t extraDataSize;
+-char *pth;
++
+         qfprintf(fd,&quot;\n//** Video Codec conf **\n&quot;);
+         videoCodecGetConf(&amp;extraDataSize,&amp;extraData);
+-        
+-        pth= cleanupPath(name );
+         qfprintf(fd,&quot;app.video.codec(\&quot;%s\&quot;,\&quot;%s\&quot;,\&quot;&quot;,videoCodecGetName(),videoCodecGetMode());
+-        ADM_dealloc(pth);
++
+         // Now deal with extra data
+         qfprintf(fd,&quot;%d &quot;,extraDataSize);
+         if(extraDataSize)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_misc.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_misc.cpp	2008-09-22 01:11:20 UTC (rev 4394)
++++ branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_misc.cpp	2008-09-22 02:52:00 UTC (rev 4395)
+@@ -263,7 +263,7 @@
+     This function convert the later to the former
+ 
+ */
+-extern char *slashToBackSlash(const char *in)
++char *backSlashToForward(const char *in)
+ {
+     char *out,*cout;
+     int n;
+@@ -278,6 +278,22 @@
+     return cout;
+     
+ }
++
++char *forwardSlashToBack(const char *in)
++{
++    char *out,*cout;
++    int n;
++    n=strlen(in);
++    cout=out=(char *)ADM_alloc(n+1);   
++    for(int i=0;i&lt;n+1;i++)
++    {
++        if(   in[i]=='/') out[i]='\\';
++        else    out[i]=in[i];
++        
++    }
++    return cout;
++    
++}
+ /*
+     
+ */
+
+Modified: branches/avidemux_2.4_branch/avidemux/button_mapping
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/button_mapping	2008-09-22 01:11:20 UTC (rev 4394)
++++ branches/avidemux_2.4_branch/avidemux/button_mapping	2008-09-22 02:52:00 UTC (rev 4395)
+@@ -45,7 +45,6 @@
+ #     Begin
+ #     Bitrate
+ #     BitRate
+-#     BrokenAvi
+ #     BUILT_IN
+ #     ChangeFPS
+ #     CLOSE
+
+Modified: branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp	2008-09-22 01:11:20 UTC (rev 4394)
++++ branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp	2008-09-22 02:52:00 UTC (rev 4395)
+@@ -82,7 +82,6 @@
+ int A_loadMP3 (char *name);
+ int A_loadNone( void );
+ void A_saveAudioDecodedTest (char *name);
+-void A_openBrokenAvi (const char *name);
+ int A_openAvi2 (const char *name, uint8_t mode);
+ int A_appendAvi (const char *name);
+ void A_externalAudioTrack( void );
+@@ -372,15 +371,6 @@
+ 	case ACT_OpenAvi:
+           GUI_FileSelRead (QT_TR_NOOP(&quot;Select AVI File...&quot;), (SELFILE_CB *)A_openAvi);
+ 	  break;
+-
+-	case ACT_BrokenAvi:
+-	  printf (&quot;\n Opening in broken mode...\n&quot;);
+-          GUI_FileSelRead (QT_TR_NOOP(&quot;Select AVI File...&quot;), A_openBrokenAvi);
+-	  break;
+-
+-
+-	default:
+-	  ;
+ 	}
+       return;
+     }
+@@ -498,9 +488,6 @@
+     case ACT_OpenAvi:
+       GUI_FileSelRead (QT_TR_NOOP(&quot;Select AVI File...&quot;),(SELFILE_CB *) A_openAvi);
+       break;
+-    case ACT_BrokenAvi:
+-      GUI_FileSelRead (QT_TR_NOOP(&quot;Select AVI File...&quot;), A_openBrokenAvi);
+-      break;
+     case ACT_AppendAvi:
+       GUI_FileSelRead (QT_TR_NOOP(&quot;Select AVI File to Append...&quot;),(SELFILE_CB *) A_appendAvi);
+       break;
+@@ -883,12 +870,6 @@
+ //    mode 1: Suspicious
+ //_____________________________________________________________
+ 
+-void
+-A_openBrokenAvi (const char *name)
+-{
+-  A_openAvi2 (name, 1);
+-}
+-
+ int
+ A_openAvi (const char *name)
+ {
+@@ -897,6 +878,7 @@
+ extern void GUI_PreviewEnd (void);
+ int A_openAvi2 (const char *name, uint8_t mode)
+ {
++	char *path = fixupPath(name);
+   uint8_t res;
+   char *longname;
+   uint32_t magic[4];
+@@ -906,16 +888,26 @@
+     return 0;
+   /// check if name exists
+   FILE *fd;
+-  fd = fopen (name, &quot;rb&quot;);
+-  if (!fd){
+-    if( errno == EACCES ){
+-      GUI_Error_HIG(QT_TR_NOOP(&quot;Permission error&quot;), QT_TR_NOOP(&quot;Cannot open \&quot;%s\&quot;.&quot;), name);
+-    }
+-    if( errno == ENOENT ){
+-      GUI_Error_HIG(QT_TR_NOOP(&quot;File error&quot;), QT_TR_NOOP(&quot;\&quot;%s\&quot; does not exist.&quot;), name);
+-    }
+-    return 0;
++  fd = fopen (path, &quot;rb&quot;);
++
++  if (!fd)
++  {
++	  switch (errno)
++	  {
++		  case EACCES:
++			  GUI_Error_HIG(QT_TR_NOOP(&quot;Permission error&quot;), QT_TR_NOOP(&quot;Cannot open \&quot;%s\&quot;.&quot;), path);
++			  break;
++		  case ENOENT:
++			  GUI_Error_HIG(QT_TR_NOOP(&quot;File error&quot;), QT_TR_NOOP(&quot;\&quot;%s\&quot; does not exist.&quot;), path);
++			  break;
++		  default:
++			  GUI_Error_HIG(QT_TR_NOOP(&quot;Error opening file&quot;), QT_TR_NOOP(&quot;Error opening \&quot;%s\&quot;.&quot;), path);
++	  }
++
++	  delete [] path;
++	  return 0;
+   }
++
+   if( 4 == fread(magic,4,4,fd) )
+      id=R32(magic[0]);
+   fclose (fd);
+@@ -927,7 +919,9 @@
+   /*
+   ** we may get a relative path by cmdline
+   */
+-  longname = PathCanonize(name);
++  longname = PathCanonize(path);
++  delete [] path;
++
+   if (mode)
+     res = video_body-&gt;addFile (longname, 1);
+   else
+@@ -1094,17 +1088,19 @@
+ int
+ A_appendAvi (const char *name)
+ {
++	char *path = fixupPath(name);
+ 
+-
+   if (playing)
+     return 0;
+   DIA_StartBusy ();
+-  if (!video_body-&gt;addFile (name))
++  if (!video_body-&gt;addFile (path))
+     {
+       DIA_StopBusy ();
+       GUI_Error_HIG (QT_TR_NOOP(&quot;Something failed when appending&quot;), NULL);
++	  delete [] path;
+       return 0;
+     }
++  delete [] path;
+   DIA_StopBusy ();
+ 
+ 
+@@ -1357,22 +1353,26 @@
+ int
+ A_loadAC3 (char *name)
+ {
++	char *path = fixupPath(name);
++
+   if (!avifileinfo)
+     return 0;
+ 
+ 
+   AVDMAC3AudioStream *ac3 = new AVDMAC3AudioStream ();
+ 
+-  if (ac3-&gt;open (name) == 0)
++  if (ac3-&gt;open (path) == 0)
+     {
+       GUI_Error_HIG (QT_TR_NOOP(&quot;Failed to open the file&quot;), QT_TR_NOOP(&quot;Not a WAV file?&quot;));
+       printf (QT_TR_NOOP(&quot;WAV open file failed...&quot;));
+       delete ac3;
++	  delete [] path;
+       return 0;
+     }
+   //currentaudiostream=wav;
+-  A_changeAudioStream (ac3, AudioAC3,name);
++  A_changeAudioStream (ac3, AudioAC3,path);
+   wavinfo = currentaudiostream-&gt;getInfo ();
++  delete [] path;
+   return 1;
+ }
+ int A_loadNone( void )
+@@ -1388,19 +1388,24 @@
+ //_____________________________________________________________
+ int A_loadMP3(char *name)
+ {
++	char *path = fixupPath(name);
++
+     if (!avifileinfo)
+         return 0;
+     AVDMMP3AudioStream *mp3 = new AVDMMP3AudioStream();
+ 
+-    if (mp3-&gt;open(name) == 0)
++    if (mp3-&gt;open(path) == 0)
+       {
+           printf(&quot;MP3 open file failed...&quot;);
+           delete mp3;
++		  delete [] path;
+           return 0;
+       }
++
+     //currentaudiostream=mp3;
+-    A_changeAudioStream(mp3, AudioMP3,name);
++    A_changeAudioStream(mp3, AudioMP3,path);
+     wavinfo = currentaudiostream-&gt;getInfo();
++	delete [] path;
+     return 1;
+ }
+ //_____________________________________________________________
+@@ -1413,6 +1418,8 @@
+ int
+ A_loadWave (char *name)
+ {
++	char *path = fixupPath(name);
++
+   if (!avifileinfo)
+   {
+         printf(&quot;No video loaded\n&quot;);
+@@ -1420,16 +1427,18 @@
+    }
+   AVDMWavAudioStream *wav = new AVDMWavAudioStream ();
+ 
+-  if (wav-&gt;open (name) == 0)
++  if (wav-&gt;open (path) == 0)
+     {
+       GUI_Error_HIG (QT_TR_NOOP(&quot;Failed to open the file&quot;), QT_TR_NOOP(&quot;Not a WAV file?&quot;));
+       printf (&quot;WAV open file failed...&quot;);
+       delete wav;
++	  delete [] path;
+       return 0;
+     }
+   //currentaudiostream=wav;
+-  A_changeAudioStream (wav, AudioWav,name);
++  A_changeAudioStream (wav, AudioWav,path);
+   wavinfo = currentaudiostream-&gt;getInfo ();
++  delete [] path;
+   return 1;
+ }
+ AudioSource getCurrentAudioSource(char **name)
+
+Modified: branches/avidemux_2.4_branch/avidemux/gui_action.names
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/gui_action.names	2008-09-22 01:11:20 UTC (rev 4394)
++++ branches/avidemux_2.4_branch/avidemux/gui_action.names	2008-09-22 02:52:00 UTC (rev 4395)
+@@ -1,6 +1,5 @@
+ ACT(OpenAvi)
+ ACT(AppendAvi)
+-ACT(BrokenAvi)
+ ACT(AviInfo)
+ ACT(CLOSE)
+ ACT(Exit)
+
+Modified: branches/avidemux_2.4_branch/avidemux/gui_savenew.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/gui_savenew.cpp	2008-09-22 01:11:20 UTC (rev 4394)
++++ branches/avidemux_2.4_branch/avidemux/gui_savenew.cpp	2008-09-22 02:52:00 UTC (rev 4395)
+@@ -166,6 +166,8 @@
+ 		
+ 	}
+         printf(&quot;Output format:%d\n&quot;,UI_GetCurrentFormat());
++		char *path = fixupPath(name);
++
+ 	switch(family)
+ 	{
+ 		case CodecFamilyAVI:
+@@ -173,35 +175,35 @@
+ 					switch(UI_GetCurrentFormat())
+ 					{
+ 						case ADM_DUMMY:
+-					                            			ret=oplug_dummy(name);
++					                            			ret=oplug_dummy(path);
+ 					                            			break;
+ 						case ADM_FLV:
+-                            			ret=oplug_flv(name);
++                            			ret=oplug_flv(path);
+                             			break;
+                         case ADM_MP4:
+                         case ADM_PSP:
+                         case ADM_MATROSKA:
+                         
+-                                                    ret=oplug_mp4(name,UI_GetCurrentFormat());
++                                                    ret=oplug_mp4(path,UI_GetCurrentFormat());
+                                                     break;
+ 						case ADM_AVI:
+-								ret=A_SaveAudioNVideo(name);
++								ret=A_SaveAudioNVideo(path);
+ 								break;
+ 						case ADM_OGM:
+-								ret=ogmSave(name);
++								ret=ogmSave(path);
+ 								break;
+ 						case ADM_ES:
+-								ret=ADM_saveRaw(name);
++								ret=ADM_saveRaw(path);
+ 								break;
+ 						case ADM_AVI_DUAL:
+-								ret=A_SaveAudioDualAudio(name);
++								ret=A_SaveAudioDualAudio(path);
+ 								break;
+                                                 case ADM_AVI_PAK:
+-								ret=A_SavePackedVop(name);
++								ret=A_SavePackedVop(path);
+ 								break;
+ 
+ 						case ADM_AVI_UNP:
+-								ret=A_SaveUnpackedVop(name);
++								ret=A_SaveUnpackedVop(path);
+ 								break;
+ 						default:
+                                                   GUI_Error_HIG(QT_TR_NOOP(&quot;Incompatible output format&quot;), NULL);
+@@ -217,7 +219,7 @@
+                                                 {
+                                                   case ADM_PS:
+                                                   case ADM_TS:
+-						          ret=mpeg_passthrough(name,UI_GetCurrentFormat());
++						          ret=mpeg_passthrough(path,UI_GetCurrentFormat());
+                                                           break;
+                                                   default:
+                                                     GUI_Error_HIG(QT_TR_NOOP(&quot;Incompatible output format&quot;), NULL);
+@@ -230,7 +232,7 @@
+                         case ADM_TS:
+                         case ADM_PS:
+                         case ADM_ES:
+-                                ret=oplug_mpegff(name,UI_GetCurrentFormat());;
++                                ret=oplug_mpegff(path,UI_GetCurrentFormat());;
+                                 break;
+                         default:
+                           GUI_Error_HIG(QT_TR_NOOP(&quot;Incompatible output format&quot;), NULL);
+@@ -238,9 +240,12 @@
+                     break;
+                 default:
+                             ADM_assert(0);
+-                            return 0;
++							delete [] path;
++							return 0;
+         }
+         getFirstVideoFilter(0,avifileinfo-&gt;nb_frames);
++		delete [] path;
++
+         return ret;
+ }
+ uint8_t  A_SaveAudioDualAudio(const char *inname)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001634.html">[Avidemux-svn-commit] r4394 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+	<LI>Next message: <A HREF="001636.html">[Avidemux-svn-commit] r4396 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4:	ADM_dialog ADM_filters ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1635">[ date ]</a>
+              <a href="thread.html#1635">[ thread ]</a>
+              <a href="subject.html#1635">[ subject ]</a>
+              <a href="author.html#1635">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,120 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7655 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_videoEncoder/x264
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7655%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreUtils/src%0A%09avidemux_plugins/ADM_videoEncoder/x264&In-Reply-To=%3C20111106181617.D630A4815BA%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004798.html">
+   <LINK REL="Next"  HREF="004800.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7655 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_videoEncoder/x264</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7655%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreUtils/src%0A%09avidemux_plugins/ADM_videoEncoder/x264&In-Reply-To=%3C20111106181617.D630A4815BA%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7655 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_videoEncoder/x264">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Nov  6 19:16:17 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004798.html">[Avidemux-svn-commit] r7654 -	branches/avidemux_2.5_branch_gruntster/avidemux
+</A></li>
+        <LI>Next message: <A HREF="004800.html">[Avidemux-svn-commit] r7656 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4799">[ date ]</a>
+              <a href="thread.html#4799">[ thread ]</a>
+              <a href="subject.html#4799">[ subject ]</a>
+              <a href="author.html#4799">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-11-06 19:16:17 +0100 (Sun, 06 Nov 2011)
+New Revision: 7655
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/avidemutils.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp
+Log:
+[2pass/X264] Fix average birate, was off by *1000 + be more verbose (x264)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/avidemutils.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/avidemutils.cpp	2011-11-05 17:15:07 UTC (rev 7654)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/avidemutils.cpp	2011-11-06 18:16:17 UTC (rev 7655)
+@@ -310,6 +310,11 @@
+ bool ADM_computeAverageBitrateFromDuration(uint64_t duration, uint32_t sizeInMB, uint32_t *avgInKbits)
+ {
+     float f;
++    if(duration==ADM_NO_PTS)
++    {
++        ADM_error(&quot;[ADM_computeBitrateFromDuration] No source duration!\n&quot;);
++        return false;
++    }
+     if(!duration) 
+     {
+         ADM_error(&quot;[ADM_computeBitrateFromDuration] No source duration!\n&quot;);
+@@ -318,7 +323,8 @@
+     f=sizeInMB; 
+     f=f*1024*1024*8; // in bits
+     f*=1000*1000;
+-    f/=duration;
++    f/=duration; // bit/s
++    f/=1000; // in kbps
+     *avgInKbits=(uint32_t)f;
+     return true;
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp	2011-11-05 17:15:07 UTC (rev 7654)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp	2011-11-06 18:16:17 UTC (rev 7655)
+@@ -21,6 +21,7 @@
+ #undef ADM_MINIMAL_UI_INTERFACE // we need the full UI
+ #include &quot;DIA_factory.h&quot;
+ #include &quot;DIA_coreToolkit.h&quot;
++#include &quot;ADM_vidMisc.h&quot;
+ #if 1
+     #define aprintf(...) {}
+     #define avsnprintf(...) {}
+@@ -159,6 +160,8 @@
+                         if(x264Settings.general.params.mode==COMPRESS_2PASS)
+                         {
+                             uint64_t duration=source-&gt;getInfo()-&gt;totalDuration; // in us
++                            ADM_info(&quot;Source duration :%s\n&quot;,ADM_us2plain(duration));
++                            ADM_info(&quot;Target size     :%d\n&quot;,(int)x264Settings.general.params.finalsize);
+                             uint32_t avg;
+                             if(false==ADM_computeAverageBitrateFromDuration(duration, 
+                                             x264Settings.general.params.finalsize,
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004798.html">[Avidemux-svn-commit] r7654 -	branches/avidemux_2.5_branch_gruntster/avidemux
+</A></li>
+	<LI>Next message: <A HREF="004800.html">[Avidemux-svn-commit] r7656 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4799">[ date ]</a>
+              <a href="thread.html#4799">[ thread ]</a>
+              <a href="subject.html#4799">[ subject ]</a>
+              <a href="author.html#4799">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

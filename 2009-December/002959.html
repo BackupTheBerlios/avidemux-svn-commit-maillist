@@ -1,0 +1,1118 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5752 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_codecs	ADM_encoder ADM_outputs/oplug_mpegFF
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5752%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%20ADM_codecs%0A%09ADM_encoder%20ADM_outputs/oplug_mpegFF&In-Reply-To=%3C200912282154.nBSLs5Db009255%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002958.html">
+   <LINK REL="Next"  HREF="002960.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5752 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_codecs	ADM_encoder ADM_outputs/oplug_mpegFF</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5752%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%20ADM_codecs%0A%09ADM_encoder%20ADM_outputs/oplug_mpegFF&In-Reply-To=%3C200912282154.nBSLs5Db009255%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5752 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_codecs	ADM_encoder ADM_outputs/oplug_mpegFF">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Mon Dec 28 22:54:05 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002958.html">[Avidemux-svn-commit] r5751 - in	branches/avidemux_2.5_branch_gruntster: avidemux	platforms/windows/installer
+</A></li>
+        <LI>Next message: <A HREF="002960.html">[Avidemux-svn-commit] r5753 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_UIs/ADM_GTK/src ADM_UIs/ADM_QT4/src ADM_codecs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2959">[ date ]</a>
+              <a href="thread.html#2959">[ thread ]</a>
+              <a href="subject.html#2959">[ subject ]</a>
+              <a href="author.html#2959">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-12-28 22:53:58 +0100 (Mon, 28 Dec 2009)
+New Revision: 5752
+
+Removed:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encffmpeg1.cpp
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmpeg.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_encCodecDesc.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_vidEncode.hxx
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/CMakeLists.txt
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encffmpeg.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp
+Log:
+[moeg] remove old avcodec mpeg-1 and mpeg-2 logic
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2009-12-28 21:28:33 UTC (rev 5751)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2009-12-28 21:53:58 UTC (rev 5752)
+@@ -194,128 +194,11 @@
+ 
+ }
+ 
+-/*
+-	This is called for mpeg1/2 initContext
+-	Set some specific stuff.
+-
+-*/
+ uint8_t
+-ffmpegEncoder::gopMpeg1 (void)
+-{
+-  // small gop, 2 b frames allowed
+-  // min bitrate 500 max bitrate 2200
+-  int rate;
+-
+-  rate = _context-&gt;time_base.den;
+-  rate = rate * 1000;
+-  rate /= _context-&gt;time_base.num;
+-
+-  _context-&gt;me_range = 255;	// Fix motion vector for picky players (pioneer)
+-
+-  if (_id == FF_MPEG2)
+-    {
+-      if (FRAME_FILM == identMovieType (rate))
+-	{
+-	  printf (&quot;[LAVCODEC]Pulldown activated...\n&quot;);
+-	  _context-&gt;flags2 |= CODEC_FLAG2_32_PULLDOWN;
+-	}
+-    }
+-#ifdef  TEST_NOB		// disable B frames
+-  _context-&gt;max_b_frames = 0;
+-#else
+-  _context-&gt;max_b_frames = 2;
+-#endif
+-  printf (&quot;[LAVCODEC]Using 2 b frames\n&quot;);
+-  if (_id == FF_MPEG2)
+-    {
+-      _context-&gt;mpeg_quant = 1;	//1; // Should be mpeg quant 
+-    }
+-  else
+-    {
+-      _context-&gt;mpeg_quant = 0;	//1; // Should be mpeg quant 
+-    }
+-  if (_settingsPresence)
+-    {
+-      if (_settings.widescreen)
+-	{
+-          printf(&quot;[LAVCODEC]WideScreen\n&quot;);
+-	  _context-&gt;sample_aspect_ratio.num = 16;
+-	  _context-&gt;sample_aspect_ratio.den = 9;
+-	}
+-      else
+-	{
+-	  _context-&gt;sample_aspect_ratio.num = 4;
+-	  _context-&gt;sample_aspect_ratio.den = 3;
+-	}
+-
+-      _context-&gt;rc_max_rate_header = _settings.maxBitrate * 1000;//1800*1000;// 2400 max, 700 min
+-      _context-&gt;rc_buffer_size_header = _settings.bufferSize * 8 * 1024;
+-      // If we don't have a maxrate, don't set buffer_size
+-      if (1 &amp;&amp; !_settings.override_ratecontrol)	// FIXME
+-
+-	{
+-	  _context-&gt;rc_buffer_size = _context-&gt;rc_buffer_size_header;
+-	  _context-&gt;rc_max_rate = _context-&gt;rc_max_rate_header;
+-	}
+-      else
+-	{
+-	  _context-&gt;rc_buffer_size = 0;	// for xvid, no VBV so no ratecontrol
+-	  _context-&gt;rc_max_rate = 0;
+-	}
+-      _context-&gt;gop_size = _settings.gop_size;
+-
+-    }
+-  else
+-    {
+-      _context-&gt;rc_buffer_size = 200 * 8 * 1024;	// 40 for VCD  &amp; 200 for SVCD
+-      _context-&gt;gop_size = _settings.gop_size;
+-
+-    }
+-  _context-&gt;rc_buffer_aggressivity = 1.0;
+-  _context-&gt;rc_initial_cplx = 3;
+-  _context-&gt;qmin = 2;
+-  _context-&gt;qmax = 31;
+-
+-  _context-&gt;scenechange_threshold = 0xfffffff;	// Don't insert I frame out of order
+-
+-  _frame.interlaced_frame = _settings.interlaced;
+-  if (_settings.interlaced)
+-    _frame.top_field_first = !_settings.bff;
+-
+-#if defined(CODEC_FLAG_INTERLACED_DCT)
+-  _context-&gt;flags |= _settings.interlaced ? CODEC_FLAG_INTERLACED_DCT : 0;
+-#endif
+-#if defined(CODEC_FLAG_INTERLACED_ME)
+-  _context-&gt;flags |= _settings.interlaced ? CODEC_FLAG_INTERLACED_ME : 0;
+-#endif
+-
+-  //
+-  //_context-&gt;dsp_mask= FF_MM_FORCE;
+-  printf (&quot;[LAVCODEC]Mpeg12 settings:\n____________\n&quot;);
+-  printf (&quot;[LAVCODEC]FF Max rate   (header) : %lu kbps\n&quot;,
+-	  (_context-&gt;rc_max_rate_header) / 1000);
+-  printf (&quot;[LAVCODEC]FF Buffer Size(header) : %lu bits / %lu kB\n&quot;,
+-	  (_context-&gt;rc_buffer_size_header),
+-	  _context-&gt;rc_buffer_size_header / (8 * 1024));
+-  printf (&quot;[LAVCODEC]FF Max rate   (rc) : %lu kbps\n&quot;, (_context-&gt;rc_max_rate) / 1000);
+-  printf (&quot;[LAVCODEC]FF Buffer Size(rc) : %lu bits / %lu kB\n&quot;,
+-	  (_context-&gt;rc_buffer_size), _context-&gt;rc_buffer_size / (8 * 1024));
+-
+-  printf (&quot;[LAVCODEC]FF GOP Size    : %lu\n&quot;, _context-&gt;gop_size);
+-  printf (&quot;[LAVCODEC]FF Bitrate    : %lu (kb/s)\n&quot;, _context-&gt;bit_rate/1000);
+-  
+-  return 1;
+-}
+-
+-uint8_t
+ ffmpegEncoder::initContext (void)
+ {
+   int res = 0;
+ 
+-  // set a gop size close to what's requested for most
+-  // player compatiblity               
+-  if (_id == FF_MPEG1 || _id == FF_MPEG2)
+-    gopMpeg1 ();
+   // if (_id == FF_HUFF || _id == FF_FFV1)
+   _context-&gt;strict_std_compliance = -1;
+   
+@@ -328,14 +211,6 @@
+     case FF_MSMP4V3:
+       WRAP_Open (CODEC_ID_MSMPEG4V3);
+       break;
+-    case FF_MPEG1:
+-      encoderMT ();
+-      WRAP_Open (CODEC_ID_MPEG1VIDEO);
+-      break;
+-    case FF_MPEG2:
+-      encoderMT ();
+-      WRAP_Open (CODEC_ID_MPEG2VIDEO);
+-      break;
+     case FF_H263:
+       WRAP_Open (CODEC_ID_H263);
+       break;
+@@ -663,7 +538,7 @@
+     }
+   else
+     {
+-      if (_id == FF_MPEG1 || _id == FF_MPEG2 || _id == FF_FLV1)
++      if (_id == FF_FLV1)
+ 	{
+ 	  _context-&gt;gop_size = _settings.gop_size;
+ 	}
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmpeg.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmpeg.h	2009-12-28 21:28:33 UTC (rev 5751)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs/ADM_ffmpeg.h	2009-12-28 21:53:58 UTC (rev 5752)
+@@ -26,11 +26,9 @@
+ {
+   FF_MSMP4V3 = 1,
+   FF_MPEG4 = 2,
+-  FF_MPEG1 = 3,
+   FF_H263 = 4,
+   FF_H263P = 5,
+   FF_MJPEG = 8,
+-  FF_MPEG2 = 9,
+   FF_FLV1=13,
+ } FF_CODEC_ID;
+ 
+@@ -56,7 +54,6 @@
+   FFcodecSetting _settings;
+   void mplayer_init (void);
+   uint8_t initContext (void);
+-  uint8_t gopMpeg1 (void);
+   uint32_t frameType (void);
+   uint8_t encodePreamble (uint8_t * in);
+   PixelFormat _targetColorSpace;
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_encCodecDesc.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_encCodecDesc.h	2009-12-28 21:28:33 UTC (rev 5751)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_encCodecDesc.h	2009-12-28 21:53:58 UTC (rev 5752)
+@@ -7,7 +7,6 @@
+ #include &quot;ADM_vidEncode.hxx&quot;
+ // Yv12
+ extern uint8_t DIA_requant(COMPRES_PARAMS *incoming);
+-#define FF_TRELLIS 0		// use treillis for mpeg1 encoding
+ 
+ COMPRES_PARAMS yv12codec = {
+   CodecYV12,
+@@ -189,184 +188,6 @@
+   &amp;DIA_mjpegCodecSetting
+ };
+ 
+-//************************* FFMpeg mpeg1 **********************
+-FFcodecSetting ffmpeg1Extra = {
+-  ME_EPZS,			//     ME
+-  0,				//          GMC
+-  0,				//           _4MV;
+-  0,				//           _QPEL;
+-  0,				//           _TREILLIS_QUANT
+-  2,				//           qmin;
+-  31,				//          qmax;
+-  3,				//           max_qdiff;
+-  0,				//           max_b_frames;
+-  1,				//          mpeg_quant;
+-  1,				//
+-  -2,				//                 luma_elim_threshold;
+-  1,				//
+-  -5,				//                 chroma_elim_threshold;
+-  0.05,				//                lumi_masking;
+-  1,
+-  0.01,				//                dark_masking;
+-  1,
+-  0.5,				//         qcompress;  /* amount of qscale change between easy &amp; hard scenes (0.0-1.0)*/
+-  0.5,				//         qblur;      /* amount of qscale smoothing over time (0.0-1.0) */
+-  600 ,   		// min bitrate in kB/S
+-  2200 ,		// max bitrate
+-  0,				// user_matrix 0-&gt;default, 1 tmpg, 2 anim&#65533;, 3 kvcd
+-  12,				// Safe gop size limit
+-  NULL,				// inter &amp; intra matrix, will be set depending on user_matrix
+-  NULL,
+-  0,				// interlaced
+-  0,				// WLA: bottom-field-first
+-  0,				// wide screen
+-  2,				// mb eval = distortion
+-  8000,				// vratetol
+-  0,
+-  0.5,				// temporal masking
+-  0,
+-  0.5,				// spatial masking
+-  0,				// NAQ
+-  0,				// Use xvid ratecontrol
+-  40,				// buffersize VCD like
+-  0				// DUMMY                
+-};
+-
+-COMPRES_PARAMS ffmpeg1Codec = {
+-  CodecXVCD,
+-  QT_TR_NOOP(&quot;VCD (lavc)&quot;),
+-  &quot;XVCD&quot;,
+-  &quot;Lavcodec Mpeg1&quot;,
+-  COMPRESS_CQ,
+-  4,
+-  1500,
+-  700,
+-  1000, // AVG
+-  ADM_ENC_CAP_CQ + ADM_ENC_CAP_2PASS+ADM_ENC_CAP_2PASS_BR,
+-  ADM_EXTRA_PARAM,
+-  &amp;ffmpeg1Extra,
+-  sizeof (ffmpeg1Extra),
+-  DIA_DVDffParam
+-};
+-//************ ffmpeg mpeg2 DVD **********
+-
+-FFcodecSetting ffmpeg2DVDExtra = {
+-  ME_EPZS,			//     ME
+-  0,				//          GMC
+-  0,				//           _4MV;
+-  0,				//           _QPEL;
+-  FF_TRELLIS,			//          _TREILLIS_QUANT
+-  2,				//           qmin;
+-  31,				//          qmax;
+-  3,				//           max_qdiff;
+-  2,				//           max_b_frames;
+-  1,				//          mpeg_quant;
+-  1,				//
+-  -2,				//                 luma_elim_threshold;
+-  1,				//
+-  -5,				//                 chroma_elim_threshold;
+-  0.05,				//                lumi_masking;
+-  1,
+-  0.01,				//                dark_masking;
+-  1,
+-  0.5,				//         qcompress;  /* amount of qscale change between easy &amp; hard scenes (0.0-1.0)*/
+-  0.5,				//         qblur;      /* amount of qscale smoothing over time (0.0-1.0) */
+-  0,				// min bitrate in kB/S
+-  8000 ,		// max bitrate
+-  0,				// user_matrix 0-&gt;default, 1 tmpg, 2 anim&#65533;, 3 kvcd
+-  12,				// Safe gop size limit
+-  NULL,				// inter &amp; intra matrix, will be set depending on user_matrix
+-  NULL,
+-  0,				// interlaced
+-  0,				// WLA: bottom-field-first
+-  0,				// wide screen
+-  2,				// mb eval = distortion
+-  8000,				// vratetol
+-  0,
+-  0.5,				// temporal masking
+-  0,
+-  0.5,				// spatial masking
+-  0,				// NAQ
+-  1,				// Use xvid ratecontrol
+-  224,				// buffersize 240 KB for Mpeg2 /
+-  0				// DUMMY        
+-};
+-
+-COMPRES_PARAMS ffmpeg2DVDCodec = {
+-  CodecXDVD,
+-  QT_TR_NOOP(&quot;DVD (lavc)&quot;),
+-  &quot;XDVD&quot;,
+-  &quot;Lavcodec Mpeg2 (DVD)&quot;,
+-  COMPRESS_CQ,
+-  4,
+-  1500,
+-  700,
+-  1000, // AVG
+-  ADM_ENC_CAP_CQ + ADM_ENC_CAP_2PASS+ADM_ENC_CAP_2PASS_BR,
+-  ADM_EXTRA_PARAM,
+-  &amp;ffmpeg2DVDExtra,
+-  sizeof (ffmpeg2DVDExtra),
+-  DIA_DVDffParam
+-};
+-//************ ffmpeg mpeg2 SVCD **********
+-
+-FFcodecSetting ffmpeg2SVCDExtra = {
+-  ME_EPZS,			//     ME
+-  0,				//          GMC
+-  0,				//           _4MV;
+-  0,				//           _QPEL;
+-  FF_TRELLIS,			//          _TREILLIS_QUANT
+-  2,				//           qmin;
+-  31,				//          qmax;
+-  3,				//           max_qdiff;
+-  2,				//           max_b_frames;
+-  1,				//          mpeg_quant;
+-  1,				//
+-  -2,				//                 luma_elim_threshold;
+-  1,				//
+-  -5,				//                 chroma_elim_threshold;
+-  0.05,				//                lumi_masking;
+-  1,
+-  0.01,				//                dark_masking;
+-  1,
+-  0.5,				//         qcompress;  /* amount of qscale change between easy &amp; hard scenes (0.0-1.0)*/
+-  0.5,				//         qblur;      /* amount of qscale smoothing over time (0.0-1.0) */
+-  0,				// min bitrate in kB/S
+-  2400          ,		// max bitrate
+-  0,				// user_matrix 0-&gt;default, 1 tmpg, 2 anim&#65533;, 3 kvcd
+-  12,				// Safe gop size limit
+-  NULL,				// inter &amp; intra matrix, will be set depending on user_matrix
+-  NULL,
+-  0,				// interlaced
+-  0,				// WLA: bottom-field-first
+-  0,				// wide screen
+-  2,				// mb eval = distortion
+-  2400,				// vratetol
+-  0,
+-  0.5,				// temporal masking
+-  0,
+-  0.5,				// spatial masking
+-  0,				// NAQ
+-  1,				// Use xvid ratecontrol
+-  112,				// buffersize 240 KB for Mpeg2 /
+-  0				// DUMMY        
+-};
+-
+-COMPRES_PARAMS ffmpeg2SVCDCodec = {
+-  CodecXSVCD,
+-  QT_TR_NOOP(&quot;SVCD (lavc)&quot;),
+-  &quot;XSVCD&quot;,
+-  &quot;Lavcodec Mpeg2 (SVCD)&quot;,
+-  COMPRESS_CQ,
+-  4,
+-  1500,
+-  700,1000, // AVG
+-  ADM_ENC_CAP_CBR + ADM_ENC_CAP_CQ + ADM_ENC_CAP_2PASS+ADM_ENC_CAP_2PASS_BR,
+-  ADM_EXTRA_PARAM,
+-  &amp;ffmpeg2SVCDExtra,
+-  sizeof (ffmpeg2SVCDExtra),
+-  DIA_DVDffParam
+-};
+ #include &quot;ADM_libraries/ADM_libmpeg2enc/ADM_mpeg2enc.h&quot;
+ // ************ Mpeg2enc VCD *************
+ Mpeg2encParam VCDExtra = {
+@@ -484,9 +305,6 @@
+ COMPRES_PARAMS *internalVideoCodec[] = {
+   &amp;CopyCodec,
+   &amp;ffmpegMpeg4,
+-  &amp;ffmpeg1Codec,
+-  &amp;ffmpeg2DVDCodec,
+-  &amp;ffmpeg2SVCDCodec,
+   &amp;VCDCodec,
+   &amp;SVCDCodec,
+   &amp;DVDCodec,
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_vidEncode.hxx
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_vidEncode.hxx	2009-12-28 21:28:33 UTC (rev 5751)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_vidEncode.hxx	2009-12-28 21:53:58 UTC (rev 5752)
+@@ -27,9 +27,6 @@
+   CodecVCD,
+   CodecSVCD,
+   CodecDVD,
+-  CodecXVCD,
+-  CodecXSVCD,
+-  CodecXDVD,
+   CodecYV12,
+   CodecRequant,
+   CodecFLV1,
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/CMakeLists.txt	2009-12-28 21:28:33 UTC (rev 5751)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/CMakeLists.txt	2009-12-28 21:53:58 UTC (rev 5752)
+@@ -1,5 +1,5 @@
+ SET(ADM_encoder_SRCS 
+-	adm_encConfig.cpp  adm_encffmpeg1.cpp  adm_encmjpeg.cpp     adm_encoder.cpp
++	adm_encConfig.cpp  adm_encmjpeg.cpp     adm_encoder.cpp
+ 	adm_encCopy.cpp    adm_encffmpeg.cpp   adm_encmpeg2enc.cpp  adm_encRequant.cpp  adm_encyv12.cpp
+ 	ADM_pluginLoad.cpp ADM_externalEncoder.cpp)
+ 
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp	2009-12-28 21:28:33 UTC (rev 5751)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp	2009-12-28 21:53:58 UTC (rev 5752)
+@@ -87,8 +87,7 @@
+ }
+ CodecFamilty videoCodecGetFamily(void)
+ {
+-	if (currentCodecType == CodecXVCD || currentCodecType == CodecXSVCD || currentCodecType == CodecXDVD ||
+-		(currentCodecType == CodecExternal &amp;&amp; strcmp(videoCodecPluginGetGuid(), &quot;85FC9CAC-CE6C-4aa6-9D5F-352D6349BA3E&quot;) == 0) ||
++	if ((currentCodecType == CodecExternal &amp;&amp; strcmp(videoCodecPluginGetGuid(), &quot;85FC9CAC-CE6C-4aa6-9D5F-352D6349BA3E&quot;) == 0) ||
+ 		(currentCodecType == CodecExternal &amp;&amp; strcmp(videoCodecPluginGetGuid(), &quot;DBAECD8B-CF29-4846-AF57-B596427FE7D3&quot;) == 0))
+ 		return CodecFamilyXVCD;
+ 	if (currentCodecType == CodecVCD || currentCodecType == CodecSVCD || currentCodecType == CodecDVD || currentCodecType == CodecRequant)
+@@ -614,18 +613,6 @@
+ 
+ 		e = new EncoderFFMPEG (FF_H263, desc);
+ 		break;
+-	case CodecXVCD:
+-		e=new EncoderFFMPEGMpeg1(FF_MPEG1, desc);
+-		printf(&quot;\n Using ffmpeg mpeg1 encoder\n&quot;);
+-		break;
+-	case CodecXSVCD:
+-		e=new EncoderFFMPEGMpeg1(FF_MPEG2, desc);
+-		printf(&quot;\n Using ffmpeg mpeg2 encoder\n&quot;);
+-		break;
+-	case CodecXDVD:
+-		e=new EncoderFFMPEGMpeg1(FF_MPEG2, desc);
+-		printf(&quot;\n Using ffmpeg mpeg2 encoder (DVD)\n&quot;);
+-		break;
+ 	case CodecDVD:
+ 		e=new EncoderMpeg2enc(MPEG2ENC_DVD, desc);
+ 		printf(&quot;\n Using mpeg2enc encoder (DVD)\n&quot;);
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encffmpeg.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encffmpeg.h	2009-12-28 21:28:33 UTC (rev 5751)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encffmpeg.h	2009-12-28 21:53:58 UTC (rev 5752)
+@@ -56,34 +56,6 @@
+ 
+ };
+ 
+-class EncoderFFMPEGMpeg1:public EncoderFFMPEG
+-{
+-private:
+-  uint8_t setMatrix (void);
+-  uint8_t _lastQz;
+-  uint32_t _lastBitrate;
+-
+-public:
+-
+-
+-    uint32_t _totalframe;
+-  uint32_t _pass1Done;
+-  uint8_t _use_xvid_ratecontrol;
+-
+-public:
+-    EncoderFFMPEGMpeg1 (FF_CODEC_ID id, COMPRES_PARAMS * config);
+-    virtual ~ EncoderFFMPEGMpeg1 ();	// can be called twice if needed ..
+-  virtual int getRequirements (void);
+-  virtual uint8_t isDualPass (void);
+-  virtual uint8_t configure (AVDMGenericVideoStream * instream, int useExistingLogFile);
+-  virtual uint8_t encode (uint32_t frame, ADMBitstream *out);
+-  virtual uint8_t setLogFile (const char *p, uint32_t fr);
+-  virtual uint8_t stop (void);
+-  virtual uint8_t startPass2 (void);
+-  virtual uint8_t startPass1 (void);
+-          uint8_t verifyLog(const char *name,uint32_t nbFrame);
+-};
+-
+ class EncoderFFMPEGFLV1:public EncoderFFMPEG
+ {
+ 
+
+Deleted: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encffmpeg1.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encffmpeg1.cpp	2009-12-28 21:28:33 UTC (rev 5751)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encffmpeg1.cpp	2009-12-28 21:53:58 UTC (rev 5752)
+@@ -1,511 +0,0 @@
+-/***************************************************************************
+-                          adm_encffmpeg.cpp  -  description
+-                             -------------------
+-    begin                : Tue Sep 10 2002
+-    copyright            : (C) 2002 by mean
+-    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+- ***************************************************************************/
+-
+-/***************************************************************************
+- *                                                                         *
+- *   This program is free software; you can redistribute it and/or modify  *
+- *   it under the terms of the GNU General Public License as published by  *
+- *   the Free Software Foundation; either version 2 of the License, or     *
+- *   (at your option) any later version.                                   *
+- *                                                                         *
+- ***************************************************************************/
+-#include &quot;config.h&quot;
+-
+-#include &lt;unistd.h&gt;
+-
+-#include &lt;time.h&gt;
+-#include &lt;sys/time.h&gt;
+-
+-
+-#ifdef USE_FFMPEG
+-#include &quot;ADM_lavcodec.h&quot;
+-
+-#include &quot;fourcc.h&quot;
+-#include &quot;avi_vars.h&quot;
+-#include &quot;DIA_coreToolkit.h&quot;
+-#include &quot;ADM_assert.h&quot;
+-
+-#include &quot;ADM_encoder/ADM_vidEncode.hxx&quot;
+-
+-#include &quot;ADM_videoFilter.h&quot;
+-
+-#include &quot;ADM_codecs/ADM_ffmpeg.h&quot;
+-#include &quot;ADM_encoder/adm_encoder.h&quot;
+-#include &quot;ADM_encoder/adm_encffmpeg.h&quot;
+-
+-#include &quot;ADM_osSupport/ADM_debugID.h&quot;
+-#define MODULE_NAME MODULE_ENCODER
+-#include &quot;ADM_osSupport/ADM_debug.h&quot;
+-
+-#include &quot;adm_encffmatrix.h&quot;
+-
+-#define FIRST_PASS_QUANTIZER 2
+-
+-
+-#include &quot;ADM_libraries/ADM_xvidratectl/ADM_ratecontrol.h&quot;
+-
+-static ADM_newXvidRcVBV *_xrc = NULL;
+-
+-/*_________________________________________________*/
+-EncoderFFMPEGMpeg1::EncoderFFMPEGMpeg1 (FF_CODEC_ID id, COMPRES_PARAMS * config):EncoderFFMPEG (id,
+-	       config)
+-{
+-  _frametogo = 0;
+-  _pass1Done = 0;
+-  _lastQz = 0;
+-  _lastBitrate = 0;
+-  _totalframe = 0;
+-
+-
+-  memcpy (&amp;_param, config, sizeof (_param));
+-  ADM_assert (config-&gt;extraSettingsLen == sizeof (_settings));
+-  memcpy (&amp;_settings, config-&gt;extraSettings, sizeof (_settings));
+-  _use_xvid_ratecontrol = 0;
+-
+-};
+-uint8_t     EncoderFFMPEGMpeg1::encode (uint32_t frame, ADMBitstream *out)
+-{
+-  uint32_t l, f;
+-  ADM_assert (_codec);
+-  ADM_assert (_in);
+-  ADM_rframe rf;
+-
+-  if (!_in-&gt;getFrameNumberNoAlloc (frame, &amp;l, _vbuffer, &amp;f))
+-    {
+-      printf (&quot;\n Error : Cannot read incoming frame !&quot;);
+-      return 0;
+-    }
+-  switch (_state)
+-    {
+-    case enc_CQ:
+-    case enc_CBR:
+-      return _codec-&gt;encode (_vbuffer, out );
+-      break;
+-    case enc_Pass1:
+-      // collect result
+-      if (!_codec-&gt;encode (_vbuffer, out))
+-	{
+-	  printf (&quot;\n codec error on 1st pass !&quot;);
+-	  return 0;
+-	}
+-      if (_use_xvid_ratecontrol)
+-	{
+-	  if (!out-&gt;len)
+-	    {
+-	      printf (&quot;Skipping delay\n&quot;);
+-	      return 1;
+-	    }
+-	  switch (out-&gt;flags)
+-	    {
+-	    case AVI_KEY_FRAME:
+-	      rf = RF_I;
+-	      break;
+-	    case AVI_B_FRAME:
+-	      rf = RF_B;
+-	      break;
+-	    case 0:
+-	      rf = RF_P;
+-	      break;
+-	    default:
+-	      ADM_assert (0);
+-
+-	    }
+-	  _xrc-&gt;logPass1 (out-&gt;out_quantizer, rf, out-&gt;len);
+-
+-	}
+-      _frametogo++;
+-      return 1;
+-      break;
+-    case enc_Pass2:
+-      if (!_use_xvid_ratecontrol)
+-	{
+-	  if (!_codec-&gt;encode (_vbuffer, out))
+-	    return 0;
+-	  return 1;
+-	}
+-
+-      uint32_t nq;
+-      uint32_t nf;
+-      ADM_rframe f;
+-
+-      _xrc-&gt;getQz (&amp;nq, &amp;f);
+-
+-      switch (f)
+-	{
+-	case RF_I:
+-	  nf = AVI_KEY_FRAME;
+-	  break;
+-	default:
+-	  nf = 0;
+-	}
+-
+-#define MPEG1_MIN_Q 2
+-#define MPEG1_MAX_Q 28
+-      if (nq &lt; MPEG1_MIN_Q)
+-	nq = MPEG1_MIN_Q;
+-      if (nq &gt; MPEG1_MAX_Q)
+-	nq = MPEG1_MAX_Q;
+-
+-      //printf(&quot;asked :%d &quot;,nq);
+-      out-&gt;in_quantizer=nq;
+-      out-&gt;flags=nf;
+-      if (!_codec-&gt;encode (_vbuffer, out))
+-	return 0;
+-      if (!out-&gt;len)
+-	{
+-	  printf (&quot;Skipping delay\n&quot;);
+-	  return 1;
+-	}
+-      {
+-	switch (out-&gt;flags)
+-	  {
+-	  case AVI_KEY_FRAME:
+-	    f = RF_I;
+-	    break;
+-	  case AVI_B_FRAME:
+-	    f = RF_B;
+-	    break;
+-	  case 0:
+-	    f = RF_P;
+-	    break;
+-	  default:
+-	    ADM_assert (0);
+-
+-	  }
+-	_xrc-&gt;logPass2 (out-&gt;out_quantizer, f, out-&gt;len);
+-      }
+-
+-      return 1;
+-
+-      break;
+-    default:
+-      ADM_assert (0);
+-      break;
+-    }
+-  ADM_assert (0);
+-  return 0;
+-
+-}
+-EncoderFFMPEGMpeg1::~EncoderFFMPEGMpeg1 ()
+-{
+-  stop ();
+-};
+-
+-
+-
+-//--------------------------------
+-uint8_t
+-EncoderFFMPEGMpeg1::configure (AVDMGenericVideoStream * instream, int useExistingLogFile)
+-{
+-
+-  ADM_assert (instream);
+-  ADV_Info *info;
+-  fd = NULL;
+-
+-  uint32_t flag1, flag2, flag3;
+-  flag1 = flag2 = flag3 = 0;
+-
+-  info = instream-&gt;getInfo ();
+-  _fps = info-&gt;fps1000;
+-  _w = info-&gt;width;
+-  _h = info-&gt;height;
+-  //_vbuffer = new uint8_t[_w * _h * 3];
+-  _vbuffer = new ADMImage (_w, _h);
+-  ADM_assert (_vbuffer);
+-  _in = instream;
+-  _use_xvid_ratecontrol = _settings.use_xvid_ratecontrol;
+-
+-  switch (_param.mode)
+-    {
+-    case COMPRESS_CQ:
+-      printf (&quot;ffmpeg mpeg1 cq mode: %ld\n&quot;, _param.qz);
+-      _state = enc_CQ;
+-      setMatrix ();		//_settings.user_matrix,_settings.gop_size);
+-      _codec = new ffmpegEncoderCQ (_w, _h, _id);
+-      _settings.override_ratecontrol = 0;
+-      _codec-&gt;setConfig (&amp;_settings);
+-      _codec-&gt;init (_param.qz, _fps, 0);
+-      break;
+-    case COMPRESS_CBR:
+-      printf (&quot;ffmpeg mpeg1 cbr mode: %ld\n&quot;, _param.bitrate);
+-      _state = enc_CBR;
+-      setMatrix ();
+-      _codec = new ffmpegEncoderCBR (_w, _h, _id);
+-      _settings.override_ratecontrol = 0;
+-      _codec-&gt;setConfig (&amp;_settings);
+-      flag1 = 1;
+-      _codec-&gt;init (_param.bitrate * 1000, _fps, flag1);
+-
+-      break;
+-    case COMPRESS_2PASS:
+-    case COMPRESS_2PASS_BITRATE:
+-      {
+-	_settings.override_ratecontrol = 1;
+-	ffmpegEncoderCQ *cdec = NULL;
+-	if (_use_xvid_ratecontrol)
+-	  {
+-	    {
+-	      char dummy[strlen (_logname) + 10];
+-	      strcpy (dummy, _logname);
+-	      strcat (dummy, &quot;.fake&quot;);
+-
+-	      cdec-&gt;setLogFile (dummy);
+-	    }
+-	    _xrc = new ADM_newXvidRcVBV (_fps, _logname);
+-
+-	    _state = enc_Pass1;
+-	    printf (&quot;\n ffmpeg dual size: %lu MB, using xvid rc&quot;,
+-		    _param.finalsize &gt;&gt; 10);
+-	    setMatrix ();
+-	    cdec = new ffmpegEncoderCQ (_w, _h, _id);	// Pass1
+-
+-	    cdec-&gt;setConfig (&amp;_settings);
+-
+-	    cdec-&gt;init (FIRST_PASS_QUANTIZER, _fps, 1);
+-	    _codec = cdec;
+-	  }
+-	else
+-	  {
+-	    _state = enc_Pass1;
+-	    printf (&quot;\n ffmpeg dual size: %lu&quot;, _param.finalsize);
+-	    setMatrix ();
+-	    cdec = new ffmpegEncoderCQ (_w, _h, _id);	// Pass1
+-
+-	    cdec-&gt;setConfig (&amp;_settings);
+-	    cdec-&gt;setLogFile (_logname);
+-	    cdec-&gt;init (FIRST_PASS_QUANTIZER, _fps, 1);
+-	    _codec = cdec;
+-	  }
+-      }
+-      break;
+-    default:
+-      ADM_assert (0);
+-      break;
+-
+-    }
+-  _in = instream;
+-  printf (&quot;\n ffmpeg Encoder , w: %lu h:%lu mode:%d&quot;, _w, _h, _state);
+-  return 1;
+-
+-}
+-uint8_t EncoderFFMPEGMpeg1::verifyLog(const char *file,uint32_t nbFrame)
+-{
+-  
+-  if(_use_xvid_ratecontrol)
+-  {
+-      return ADM_newXvidRcVBV::verifyLog(file,nbFrame);
+-  }else
+-  {
+-    return 0; // For now assume it is corrupted 
+-  }
+-  
+-}
+-
+-
+-uint8_t
+-EncoderFFMPEGMpeg1::startPass1 (void)
+-{
+-  ADM_assert (_state == enc_Pass1);
+-  _frametogo = 0;
+-  printf (&quot;\n Starting pass 1\n&quot;);
+-  printf (&quot; Creating logfile :%s\n&quot;, _logname);
+-  _pass1Done = 1;
+-  if (_use_xvid_ratecontrol)
+-    {
+-      printf (&quot;Using Xvid 2 pass rate control (%s)\n&quot;, _logname);
+-      _xrc-&gt;startPass1 ();
+-
+-    }
+-  return 1;
+-}
+-
+-int EncoderFFMPEGMpeg1::getRequirements (void) { return _codec-&gt;capabilities; }
+-
+-uint8_t
+-EncoderFFMPEGMpeg1::isDualPass (void)
+-{
+-  if ((_state == enc_Pass1) || (_state == enc_Pass2))
+-    {
+-      return 1;
+-    }
+-  return 0;
+-}
+-
+-uint8_t
+-EncoderFFMPEGMpeg1::setLogFile (const char *lofile, uint32_t nbframe)
+-{
+-  strcpy (_logname, lofile);
+-  _frametogo = nbframe;
+-  _totalframe = nbframe;
+-  return 1;
+-
+-}
+-
+-//_______________________________
+-uint8_t
+-EncoderFFMPEGMpeg1::stop (void)
+-{
+-  printf (&quot;Stopping encoder\n&quot;);
+-  if (_codec)
+-    delete _codec;
+-  _codec = NULL;
+-  if (_use_xvid_ratecontrol)
+-    {
+-      if (_state == enc_Pass1 || _state == enc_Pass2)
+-	{
+-	  if (_xrc)
+-	    {
+-	      delete _xrc;
+-	      _xrc = NULL;
+-	    }
+-
+-	}
+-    }
+-
+-  return 1;
+-}
+-//_______________________________
+-extern uint32_t ADM_computeBitrate(uint32_t fps1000, uint32_t nbFrame, uint32_t sizeInMB);
+-uint8_t
+-EncoderFFMPEGMpeg1::startPass2 (void)
+-{
+-  uint32_t br,avg_bitrate;
+-  double d;
+-
+-  ADM_assert (_state == enc_Pass1);
+-  printf (&quot;\n-------* Starting pass 2*-------------\n&quot;);
+-
+- if(_param.mode==COMPRESS_2PASS)
+-  {
+-    br=ADM_computeBitrate( _fps,_totalframe,_param.finalsize);
+-    printf(&quot;[FFmpeg Mpeg1/2] Final Size: %u MB, avg bitrate %u kb/s \n&quot;,_param.finalsize,br/1000);
+-  }else if(_param.mode==COMPRESS_2PASS_BITRATE)
+-  {
+-    br=_param.avg_bitrate*1000;
+-    printf(&quot;[FFmpeg Mpeg1/2] 2pass avg bitrate %u kb/s\n&quot;,br/1000);
+-  }else ADM_assert(0);
+- 
+-  printf(&quot;[FFmpeg Mpeg1/2] Max bitrate :%u\n&quot;, (_settings.maxBitrate));
+-  avg_bitrate = br;
+-  if(_param.mode==COMPRESS_2PASS)
+-      printf (&quot;\n ** Total size     : %lu MBytes \n&quot;, _param.finalsize);
+-  printf (&quot; ** Total frame    : %lu  \n&quot;, _totalframe);
+-
+-  printf (&quot;\n VBR parameters computed\n&quot;);
+-  _state = enc_Pass2;
+-  // Delete codec and start new one
+-  if (_codec)
+-    {
+-      delete _codec;
+-      _codec = NULL;
+-    }
+-
+-  if (!_use_xvid_ratecontrol)
+-    {
+-      _codec = new ffmpegEncoderVBR (_w, _h, 0, _id);	//0 -&gt; external 1 -&gt; internal
+-      _settings.override_ratecontrol = 0;
+-      _codec-&gt;setConfig (&amp;_settings);
+-
+-      setMatrix ();
+-      _codec-&gt;setLogFile (_logname);
+-      //_codec-&gt;setLogFile(&quot;/tmp/dummylog.txt&quot;);
+-      if (_settings.maxBitrate)
+-	if (avg_bitrate &gt; _settings.maxBitrate*1000)
+-	  avg_bitrate = _settings.maxBitrate*1000;
+-      _codec-&gt;init (avg_bitrate, _fps);
+-      printf (&quot;\n FF:ready to encode in 2pass (%s)\n&quot;, _logname);
+-      _frametogo = 0;
+-      return 1;
+-    }
+-  // ******************************************
+-  // If we use Xvid...
+-  // ******************************************
+-    uint32_t f;
+-
+-   
+-     f=_param.finalsize;
+-  // Checking against max bitrate
+-    uint32_t maxb=_settings.maxBitrate*1000;
+-
+-    printf(&quot;[FFmpeg1/2] : %u kbps average, %u max\n&quot;,br/1000,maxb/1000);
+-    if(br&gt;maxb)
+-    {
+-        printf(&quot;[FFmpeg1/2] Max bitrate exceeded, clipping\n&quot;);
+-        br=maxb;
+-    }
+-      
+-      d=_totalframe;
+-      d*=1000.;
+-      d/=_fps;            // D is a duration in second
+-      d*=br;              // * bitrate = total bits
+-      d/=8;               // Byte
+-      d/=1024*1024;       // MB
+-      
+-      f=(uint32_t)d;
+-   
+-  
+-  _xrc-&gt;setVBVInfo (_settings.maxBitrate, _settings.minBitrate,
+-		    _settings.bufferSize);
+-  printf(&quot;Average bitrate :%u finale size %u\n&quot;,br,f);
+-  _xrc-&gt;startPass2 (f, _totalframe);
+-
+-
+-  _codec = new ffmpegEncoderVBRExternal (_w, _h, _id);	//0 -&gt; external 1 -&gt; internal (_w, _h);
+-
+-  _settings.override_ratecontrol = 1;
+-  _codec-&gt;setConfig (&amp;_settings);
+-
+-  setMatrix ();
+-  _codec-&gt;setLogFile (&quot;/tmp/dummylog.txt&quot;);
+-  _codec-&gt;init (_param.qz, _fps);
+-  printf (&quot;\n XV:ready to encode in 2pass(%s)\n&quot;, _logname);
+-  _frametogo = 0;
+-  return 1;
+-
+-
+-}
+-
+-//
+-//      Allow the user to set a custom matrix
+-//     The size parameter is not used
+-//
+-// *intra_matrix;
+-//      uint16_t *inter_matrix;
+-uint8_t
+-EncoderFFMPEGMpeg1::setMatrix (void)
+-{
+-  switch (_settings.user_matrix)
+-    {
+-    case ADM_MATRIX_DEFAULT:
+-      break;
+-    case ADM_MATRIX_TMP:
+-      printf (&quot;\n using custom matrix : Tmpg\n&quot;);
+-      _settings.intra_matrix = tmpgenc_intra;
+-      _settings.inter_matrix = tmpgenc_inter;
+-      break;
+-    case ADM_MATRIX_ANIME:
+-      printf (&quot;\n using custom matrix : anim\n&quot;);
+-      _settings.intra_matrix = anime_intra;
+-      _settings.inter_matrix = anime_inter;
+-
+-      break;
+-    case ADM_MATRIX_KVCD:
+-      printf (&quot;\n using custom matrix : kvcd\n&quot;);
+-      _settings.intra_matrix = kvcd_intra;
+-      _settings.inter_matrix = kvcd_inter;
+-      break;
+-    case ADM_MATRIX_HRTMP:
+-      printf (&quot;\n using custom matrix : HR-Tmpgenc\n&quot;);
+-      _settings.intra_matrix = hrtmpgenc_intra;
+-      _settings.inter_matrix = hrtmpgenc_inter;
+-      break;
+-    }
+-  return 1;
+-}
+-
+-#endif
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp	2009-12-28 21:28:33 UTC (rev 5751)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp	2009-12-28 21:53:58 UTC (rev 5752)
+@@ -134,7 +134,7 @@
+                 WAVHeader *hdr=audio-&gt;getInfo();	
+                 audio_encoding=hdr-&gt;encoding;
+ 
+-                if (videoCodecGetType() == CodecXVCD || videoCodecGetType() == CodecVCD ||
++                if (videoCodecGetType() == CodecVCD ||
+ 					(videoCodecGetType() == CodecExternal &amp;&amp; strcmp(videoCodecPluginGetGuid(), &quot;85FC9CAC-CE6C-4aa6-9D5F-352D6349BA3E&quot;) == 0) || // avcodec MPEG-1 plugin
+ 					(videoCodecGetType() == CodecExternal &amp;&amp; strcmp(videoCodecPluginGetGuid(), &quot;DBAECD8B-CF29-4846-AF57-B596427FE7D3&quot;) == 0)) // avcodec MPEG-2 plugin
+                 {
+@@ -206,15 +206,6 @@
+           case CodecDVD:
+             encoding-&gt;setCodec(QT_TR_NOOP(&quot;libmpeg2enc DVD&quot;));
+             break;
+-          case CodecXVCD:
+-            encoding-&gt;setCodec(QT_TR_NOOP(&quot;FFmpeg MPEG-1 VBR&quot;));
+-            break;
+-          case CodecXSVCD:
+-            encoding-&gt;setCodec(QT_TR_NOOP(&quot;FFmpeg MPEG-2 SVCD VBR&quot;));
+-            break;
+-          case CodecXDVD:
+-            encoding-&gt;setCodec(QT_TR_NOOP(&quot;FFmpeg MPEG-2 DVD VBR&quot;));
+-            break;
+           case CodecRequant:
+             encoding-&gt;setCodec(QT_TR_NOOP(&quot;MPEG Requantizer&quot;));
+             break;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002958.html">[Avidemux-svn-commit] r5751 - in	branches/avidemux_2.5_branch_gruntster: avidemux	platforms/windows/installer
+</A></li>
+	<LI>Next message: <A HREF="002960.html">[Avidemux-svn-commit] r5753 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_UIs/ADM_GTK/src ADM_UIs/ADM_QT4/src ADM_codecs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2959">[ date ]</a>
+              <a href="thread.html#2959">[ thread ]</a>
+              <a href="subject.html#2959">[ subject ]</a>
+              <a href="author.html#2959">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

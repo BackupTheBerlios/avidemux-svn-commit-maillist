@@ -1,0 +1,369 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3436 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_utilities ADM_userInterfaces/ADM_commonUI	ADM_videoFilter
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3436%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%0A%09ADM_libraries/ADM_utilities%20ADM_userInterfaces/ADM_commonUI%0A%09ADM_videoFilter&In-Reply-To=%3C200707230621.l6N6Lhba021713%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000710.html">
+   <LINK REL="Next"  HREF="000712.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3436 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_utilities ADM_userInterfaces/ADM_commonUI	ADM_videoFilter</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3436%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%0A%09ADM_libraries/ADM_utilities%20ADM_userInterfaces/ADM_commonUI%0A%09ADM_videoFilter&In-Reply-To=%3C200707230621.l6N6Lhba021713%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3436 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_utilities ADM_userInterfaces/ADM_commonUI	ADM_videoFilter">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Jul 23 08:21:43 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000710.html">[Avidemux-svn-commit] r3435 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+        <LI>Next message: <A HREF="000712.html">[Avidemux-svn-commit] r3437 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#711">[ date ]</a>
+              <a href="thread.html#711">[ thread ]</a>
+              <a href="subject.html#711">[ subject ]</a>
+              <a href="author.html#711">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-07-23 08:21:42 +0200 (Mon, 23 Jul 2007)
+New Revision: 3436
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_tsSub.cpp
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_image.h
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_imageUtils.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/CMakeLists.txt
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidDvbSub.cpp
+Log:
+[DVBSUB] Handle chroma, add reduceby2 to image
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_image.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_image.h	2007-07-23 01:54:10 UTC (rev 3435)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_image.h	2007-07-23 06:21:42 UTC (rev 3436)
+@@ -112,7 +112,7 @@
+ 		ADMImage(uint32_t width, uint32_t height);
+                 ADMImage(uint32_t width, uint32_t height,uint32_t dummy); /// To create linked datas image        
+ 
+-                
++                uint8_t   LumaReduceBy2(void);
+ 		~ADMImage();
+         uint8_t getWidthHeight(uint32_t *w,uint32_t *h)
+                     {
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_imageUtils.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_imageUtils.cpp	2007-07-23 01:54:10 UTC (rev 3435)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_imageUtils.cpp	2007-07-23 06:21:42 UTC (rev 3436)
+@@ -487,4 +487,31 @@
+         delete [] buffer;
+         return 1;
+ }
++/**
++      \fn LumaReduceBy2
++      \brief Very simple reduce by 2 both hz &amp; vz for luma plane only.
++*/
++ uint8_t   ADMImage::LumaReduceBy2(void)
++{
++  uint8_t *ptr1,*ptr2,*outptr;
++  for(int y=0;y&lt;_height&gt;&gt;1;y++)
++  {
++    
++    ptr1=data+y*_width*2;
++    ptr2=ptr1+_width;
++    outptr=data+(_width&gt;&gt;1)*y;
++    for(int x=0;x&lt;_width&gt;&gt;1;x++)
++    {
++      uint32_t a,b,c,d;  
++          a=ptr1[0]+ptr1[1];
++          b=ptr2[0]+ptr2[1];
++          ptr1+=2;
++          ptr2+=2;
++          a=(a+b)&gt;&gt;2;
++          *outptr++=a;
++    }
++  }
++  return 1;
++  
++}
+ //EOF
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/CMakeLists.txt	2007-07-23 01:54:10 UTC (rev 3435)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/CMakeLists.txt	2007-07-23 06:21:42 UTC (rev 3436)
+@@ -9,7 +9,7 @@
+ DIA_audioFilter.cpp   DIA_enter.cpp           DIA_flyCrop.cpp      DIA_gototime.cpp    DIA_postproc.cpp  DIA_srt.cpp        GUI_render.cpp
+ DIA_bitrateHisto.cpp  DIA_flyAsharp.cpp       DIA_flyDialog.cpp    DIA_lavcodec.cpp    DIA_prefs.cpp     DIA_SVCD.cpp       GUI_sdlRender.cpp
+ DIA_builtin.cpp       DIA_flyChromaShift.cpp  DIA_flyHue.cpp       DIA_lavDecoder.cpp  DIA_requant.cpp   DIA_tdeint.cpp     GUI_xvRender.cpp
+-DIA_animated.cpp      DIA_ocr.cpp
++DIA_animated.cpp      DIA_ocr.cpp DIA_tsSub.cpp
+ )
+ ADD_LIBRARY(${ADM_LIB} STATIC ${${ADM_LIB}_SRCS})
+ ADD_ADM_LIB(${ADM_LIB} ADM_userInterfaces)
+
+Copied: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_tsSub.cpp (from rev 3422, branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_v2v.cpp)
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_v2v.cpp	2007-07-21 03:38:04 UTC (rev 3422)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_tsSub.cpp	2007-07-23 06:21:42 UTC (rev 3436)
+@@ -0,0 +1,102 @@
++/***************************************************************************
++                          GUI_mux.h  -  description
++                             -------------------
++    begin                : Wed Jul 3 2002
++    copyright            : (C) 2002 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++# include &quot;config.h&quot;
++
++#include &lt;sys/types.h&gt;
++#include &lt;sys/stat.h&gt;
++#include &lt;unistd.h&gt;
++#include &lt;string.h&gt;
++#include &lt;stdio.h&gt;
++
++# include &lt;math.h&gt;
++#include &quot;ADM_lavcodec.h&quot;
++#include &quot;default.h&quot;
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
++#include &quot;ADM_toolkit/filesel.h&quot;
++#include &quot;DIA_factory.h&quot;
++#include &quot;ADM_mpegdemuxer/dmx_mpegstartcode.h&quot;
++#include &quot;ADM_mpegdemuxer/dmx_demuxerTS.h&quot;
++
++#include &quot;ADM_colorspace/colorspace.h&quot;
++#include &quot;ADM_codecs/ADM_codec.h&quot;
++#include &quot;ADM_codecs/ADM_ffmp43.h&quot;
++
++
++/**
++      \fn DIA_tsSubs
++      \brief  Convert TS subs to something different
++*/
++uint8_t  DIA_tsSub(void)
++{
++uint8_t ret=0;
++const char  *tsFileName=&quot;/capture/grey/Grey_anatomy_2007_05_22_Avec_Le_Temp.mpg&quot;;
++uint32_t pid=0x96;
++uint8_t  packetBuffer[64*1024];
++uint32_t packetLen;
++uint32_t pts,dts;
++
++    // Prepare our decoder
++    decoderFFSubs *decoder=new decoderFFSubs(1);
++
++    //
++    ADMCompressedImage *binary=new ADMCompressedImage;
++    AVSubtitle  sub;
++    
++    // 
++    MPEG_TRACK track;
++    track.pid=pid;
++    // First create our demuxer
++     dmx_demuxerTS *demuxer=new dmx_demuxerTS(1,&amp;track,0,DMX_MPG_TS);
++     if(!demuxer-&gt;open(tsFileName)) goto nd;
++     binary-&gt;data=packetBuffer+2;
++     memset(&amp;sub,0,sizeof(sub));
++     while(demuxer-&gt;readPes(packetBuffer,&amp;packetLen, &amp;dts,&amp;pts))
++     {
++       printf(&quot;Found packet : %u \n&quot;,packetLen);
++       binary-&gt;dataLength=packetLen-3; // -2 for stream iD, -1 for ????
++       if(packetLen&gt;5)
++       {
++        decoder-&gt;uncompress(binary,&amp;sub);
++        
++        // And now cleanup the subs
++        printf(&quot;Found %d rects to process\n&quot;,sub.num_rects);
++        for(int i=0;i&lt;sub.num_rects;i++)
++        {
++          AVSubtitleRect *r=&amp;(sub.rects[i]); 
++              printf(&quot;x :%d\n&quot;,r-&gt;x);
++              printf(&quot;y :%d\n&quot;,r-&gt;y);
++              printf(&quot;w :%d\n&quot;,r-&gt;w);
++              printf(&quot;h :%d\n&quot;,r-&gt;h);
++              // rgba_palette
++              // Bitmap
++        }
++       }
++       
++     }
++// Inlined
++
++nd:
++      delete demuxer;
++      demuxer=NULL;
++      delete decoder;
++      decoder=NULL;
++      delete binary;
++      binary=NULL;
++      return ret;
++}
++//EOF
++
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidDvbSub.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidDvbSub.cpp	2007-07-23 01:54:10 UTC (rev 3435)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidDvbSub.cpp	2007-07-23 06:21:42 UTC (rev 3436)
+@@ -190,12 +190,14 @@
+               for(int col=0;col&lt;r-&gt;nb_colors;col++)
+               {
+                     // Color is RGB, convert to YUV
+-                    uint32_t y,a;
++                    uint32_t y,u,v,a;
+                     uint32_t rgb=r-&gt;rgba_palette[col];
+                 
+                           y=rgba2y(rgb);
++                          u=rgba2u(rgb)&amp;0xff;
++                          v=rgba2v(rgb)&amp;0xff;
+                           a=_a(rgb);
+-                          r-&gt;rgba_palette[col]=y+(a&lt;&lt;8);
++                          r-&gt;rgba_palette[col]=y+(u&lt;&lt;8)+(v&lt;&lt;16)+(a&lt;&lt;24);
+                           printf(&quot;Color %d, alpha %u luma %u rgb:%x\n&quot;,col,a,y,rgb);
+               }
+               // Palette is ready, display !
+@@ -216,24 +218,28 @@
+                       clipH=FFMIN(_info.height,r-&gt;y+r-&gt;h)-r-&gt;y;
+                       
+                       ADMImage image(r-&gt;w,r-&gt;h);
++                      ADMImage imageU(r-&gt;w,r-&gt;h);
++                      ADMImage imageV(r-&gt;w,r-&gt;h);
+                       ADMImage alphaImage(r-&gt;w,r-&gt;h);
+                       
+                       uint8_t *ptr=image.data;
++                      uint8_t *ptrU=imageU.data;
++                      uint8_t *ptrV=imageV.data;
+                       uint8_t *ptrAlpha=alphaImage.data;
+                       uint8_t *in=r-&gt;bitmap;
+                       for(int yy=0;yy&lt;r-&gt;h;yy++)
+                       {
+                           for(int xx=0;xx&lt;r-&gt;w;xx++)
+                           {
+-                            uint32_t alpha;
++                            uint32_t alpha,valout;
+                             uint32_t val=*in++;
+                             
+                                   val=r-&gt;rgba_palette[val];
+-                                  alpha=val&gt;&gt;8;
+-                                  val&amp;=0xff;
+                                   
+-                                  *ptr++=val;
+-                                  *ptrAlpha++=alpha;
++                                  *ptrAlpha++=(val&gt;&gt;24)&amp;0xff;
++                                  *ptr++=(val&amp;0xff);;
++                                  *ptrU++=(val&gt;&gt;8)&amp;0xff;
++                                  *ptrV++=(val&gt;&gt;16)&amp;0xff;
+                           }
+                       }
+               
+@@ -259,6 +265,55 @@
+                                   *org++=val;
+                           }
+                       }
++                      // Shrink alpha  &amp; u &amp; v
++                     alphaImage.LumaReduceBy2();
++                     imageU.LumaReduceBy2();
++                     imageV.LumaReduceBy2();
++                     r-&gt;x&gt;&gt;=1;
++                     r-&gt;y&gt;&gt;=1;
++                     r-&gt;w&gt;&gt;=1;
++                     r-&gt;h&gt;&gt;=1;
++                     clipH&gt;&gt;=1;
++                     clipW&gt;&gt;=1;
++                     
++                     
++                      uint8_t *orgU=(uint8_t *)(UPLANE(data)+(r-&gt;y)*(_info.width&gt;&gt;1)+(r-&gt;x));
++                      uint8_t *orgV=(uint8_t *)(VPLANE(data)+(r-&gt;y)*(_info.width&gt;&gt;1)+(r-&gt;x));
++#if 1
++                      // Merge
++                      for(int yy=0;yy&lt;clipH;yy++)
++                      {
++                          ptrAlpha=alphaImage.data+yy*(r-&gt;w);
++                          ptrU=imageU.data+yy*r-&gt;w;
++                          ptrV=imageV.data+yy*r-&gt;w;
++                        
++                          for(int xx=0;xx&lt;clipW;xx++)
++                          {
++                            uint32_t val,valU,valV,before,alpha;
++                            uint32_t newU,newV;
++                                  
++                                  newU=*ptrU++;
++                                  newV=*ptrV++;  // New color
++                                 
++                                   newU=(newU+newV)/2;
++                                   newV=newU;
++                                  
++                                  alpha=*ptrAlpha++;
++                                  
++                                  before=*orgU; // old color
++                                  valU=newU*alpha+(255-alpha)*before;
++                                  
++                                  before=*orgV;
++                                  valV=newV*alpha+(255-alpha)*before;
++                                  
++                                  valU=valU&gt;&gt;8;
++                                  valV=valV&gt;&gt;8;
++                                  
++                                  *orgU++=valU;
++                                  *orgV++=valV;
++                          }
++                      }
++#endif
+               }
+                // Delete palette &amp; data
+ _skip:
+@@ -273,7 +328,7 @@
+ uint8_t	ADMVideoSubDVB::getCoupledConf(CONFcouple **conf) 
+ {
+ 
+-        *conf=NULL; //new CONFcouple(0);
++        *conf=new CONFcouple(0);
+ #if 0
+ #define _COUPLE_SET(x) (*conf)-&gt;setCouple(#x, _params-&gt;x);
+         _COUPLE_SET(font_scale)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000710.html">[Avidemux-svn-commit] r3435 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+	<LI>Next message: <A HREF="000712.html">[Avidemux-svn-commit] r3437 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#711">[ date ]</a>
+              <a href="thread.html#711">[ thread ]</a>
+              <a href="subject.html#711">[ subject ]</a>
+              <a href="author.html#711">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

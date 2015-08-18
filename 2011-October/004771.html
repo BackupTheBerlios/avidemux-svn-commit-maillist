@@ -1,0 +1,262 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7626 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7626%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062903.E6BF9481404%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004770.html">
+   <LINK REL="Next"  HREF="004772.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7626 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7626%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062903.E6BF9481404%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7626 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Oct 28 08:29:03 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004770.html">[Avidemux-svn-commit] r7625 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+        <LI>Next message: <A HREF="004772.html">[Avidemux-svn-commit] r7627 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4771">[ date ]</a>
+              <a href="thread.html#4771">[ thread ]</a>
+              <a href="subject.html#4771">[ subject ]</a>
+              <a href="author.html#4771">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-10-28 08:29:03 +0200 (Fri, 28 Oct 2011)
+New Revision: 7626
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+Log:
+[Asf] revert previous one
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp	2011-10-28 06:29:02 UTC (rev 7625)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp	2011-10-28 06:29:03 UTC (rev 7626)
+@@ -134,6 +134,7 @@
+   memset(&amp;(_audioAccess[0]),0,sizeof(_audioAccess));
+   memset(&amp;(_audioStreams[0]),0,sizeof(_audioStreams));
+   _nbAudioTrack=0;
++  _videostream.dwRate=0;
+ 
+ }
+ /**
+@@ -258,6 +259,7 @@
+ {
+   img-&gt;dataLength=0;
+   img-&gt;flags=AVI_KEY_FRAME;
++  uint32_t len=0;
+   if(framenum&gt;=nbImage)
+   {
+     printf(&quot;[ASF] Going out of bound %u %u\n&quot;,framenum, nbImage);
+@@ -265,12 +267,12 @@
+   }
+   if(!_index[framenum].frameLen)
+   {
+-    return 1; // Empty frame 
++    goto gotcha;
+   }
+   // In case curSeq is stored as one byte..
+   curSeq&amp;=0xff;
+   //
+-  uint32_t len=0;
++  
+   aprintf(&quot;Framenum %u len: %u curSeq %u frameSeq=%u packetnb=%u \n&quot;,
+          framenum,_index[framenum].frameLen,curSeq,
+          _index[framenum].segNb,_index[framenum].packetNb);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h	2011-10-28 06:29:02 UTC (rev 7625)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h	2011-10-28 06:29:03 UTC (rev 7626)
+@@ -179,7 +179,7 @@
+     uint32_t                _videoStreamId;
+ 
+     uint8_t                 close(void);
+-
++    bool                    setFps(uint64_t usPerFrame);
+     
+   public: // Shared with audio track
+     char                    *myName;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-28 06:29:02 UTC (rev 7625)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-28 06:29:03 UTC (rev 7626)
+@@ -34,7 +34,21 @@
+ static const uint8_t asf_audio[16]={0x40,0x9e,0x69,0xf8,0x4d,0x5b,0xcf,0x11,0xa8,0xfd,0x00,0x80,0x5f,0x5c,0x44,0x2b};
+ static const uint8_t asf_video[16]={0xc0,0xef,0x19,0xbc,0x4d,0x5b,0xcf,0x11,0xa8,0xfd,0x00,0x80,0x5f,0x5c,0x44,0x2b};
+ 
++
+ /**
++    \fn setFps
++*/
++bool asfHeader::setFps(uint64_t usPerFrame)
++{
++    if(!usPerFrame) return false;
++    double f=usPerFrame;
++    if(f&lt;10) f=10;
++    f=1000000.*1000./f;
++    _videostream.dwRate=(uint32_t)f;
++    ADM_info(&quot;AverageFps=%d\n&quot;,(int)_videostream.dwRate);
++    return true;
++}
++/**
+     \fn decodeStreamHeader
+ */
+ bool asfHeader::decodeStreamHeader(asfChunk *s)
+@@ -79,7 +93,8 @@
+                     {
+                       return 0; 
+                     }
+-                }else printf(&quot;Already have a video track, skipping\n&quot;);
++                    ADM_info(&quot;Average fps available from ext header\n&quot;);
++                }
+               } 
+               break;
+           case 2: // audio
+@@ -96,6 +111,10 @@
+ */ 
+ bool asfHeader::decodeExtHeader(asfChunk *s)
+ {
++            int streamNumber=0xff;
++            int streamLangIndex=0xff;
++            uint64_t avgTimePerFrameUs=0;
++
+             s-&gt;read32();s-&gt;read32(); // start time
+             s-&gt;read32();s-&gt;read32(); // end time
+             s-&gt;read32(); // bitrate
+@@ -106,9 +125,14 @@
+             s-&gt;read32(); // alt Initial buffer fullness
+             s-&gt;read32(); // max object size
+             s-&gt;read32(); // flags
+-            s-&gt;read16(); // Stream #
+-            s-&gt;read16(); // stream lang index
+-            s-&gt;read32();;s-&gt;read32(); // avg time / frame
++            streamNumber=s-&gt;read16(); // Stream #
++            streamLangIndex=s-&gt;read16(); // stream lang index
++            printf(&quot;\tstream number     :%d\n&quot;,streamNumber);
++            printf(&quot;\tstream langIndex  :%d\n&quot;,streamLangIndex);
++            uint64_t avg=s-&gt;read64();
++            avg/=10.;
++            printf(&quot;\t avg time/frame  : %&quot;LLU&quot; us\n&quot;,avg);
++            avgTimePerFrameUs=avg;
+             int streamNameCount=s-&gt;read16(); // stream name count
+             int payloadExtCount=s-&gt;read16(); // payload ext system count
+             printf(&quot;\tName       count : %d\n&quot;,streamNameCount);
+@@ -182,6 +206,7 @@
+         // 128+16 reserved=
+         s-&gt;read32();s-&gt;read32();s-&gt;read32();s-&gt;read32();s-&gt;read16();
+         int x=s-&gt;read32();
++        uint64_t avgTimePerFrame;
+         printf(&quot;Dumping object ext : %d data bytes\n&quot;,x);
+         asfChunk *son=new asfChunk(_fd);
+         do
+@@ -301,8 +326,6 @@
+ 			Endian_BitMapInfo(&amp;_video_bih);
+ 		#endif
+ 
+-            _videostream.dwScale=1000;
+-            _videostream.dwRate=30000;
+ 
+             _videostream.fccHandler=_video_bih.biCompression;
+             printf(&quot;Codec : &lt;%s&gt; (%04x)\n&quot;,
+@@ -516,7 +539,20 @@
+   printf(&quot;[ASF] ******** End of buildindex *******\n&quot;);
+ 
+   nbImage=_index.size();;
+-
++  if(nbImage)
++    {
++        ADM_info(&quot;First image pts: %s, dts: %s\n&quot;,ADM_us2plain(_index[0].pts),
++                ADM_us2plain(_index[0].dts));
++        for(int i=0;i&lt;_nbAudioTrack;i++)
++        {
++            if(!audioSeekPoints[i].size())
++            {
++                ADM_info(&quot;audio track : %d, no seek\n&quot;,i);
++                continue;
++            }
++            ADM_info(&quot;audio track : %d, %s\n&quot;,i,ADM_us2plain(audioSeekPoints[i][0].pts));
++        }
++    }
+   _videostream.dwLength=_mainaviheader.dwTotalFrames=nbImage;
+   if(!nbImage) return 0;
+   _index[0].flags=AVI_KEY_FRAME;
+@@ -524,16 +560,25 @@
+   // Update fps
+   // In fact it is an average fps
+   //
+-  float f=_index[nbImage-1].dts;
+-   f/=nbImage; // average duration of 1 image in us
+-    if(f&lt;10) f=10;
+-   f=1000000.*1000./f;
+-  uint32_t avgFps=(uint32_t) f;
+-    printf(&quot;[Asf] Average fps=%d\n&quot;,avgFps);
+-  
+   _videostream.dwScale=1000;
+-  _videostream.dwRate=(uint32_t)avgFps;;
+-
++  if(!_videostream.dwRate)
++  {
++      ADM_info(&quot;Fps not provided, guessing it from nbFrame and duration\n&quot;);
++      uint32_t avgFps;
++      if(_index[nbImage-1].pts!=ADM_NO_PTS &amp;&amp; _index[0].pts!=ADM_NO_PTS)
++      {
++          float f=(_index[nbImage-1].pts-_index[0].pts);
++            f/=nbImage; // average duration of 1 image in us
++            setFps((uint64_t) f);
++      }else
++        {
++            printf(&quot;[Asf] No pts, setting 30 fps hardcoded\n&quot;);
++            _videostream.dwRate=(uint32_t)30000;;
++        }
++  }else
++    {
++        ADM_info(&quot;Already got fps (%d/1000)\n&quot;,_videostream.dwRate);
++    }
+   return 1;
+   
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004770.html">[Avidemux-svn-commit] r7625 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+	<LI>Next message: <A HREF="004772.html">[Avidemux-svn-commit] r7627 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4771">[ date ]</a>
+              <a href="thread.html#4771">[ thread ]</a>
+              <a href="subject.html#4771">[ subject ]</a>
+              <a href="author.html#4771">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,152 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6610 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6610%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C20100909051435.349FB480190%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003794.html">
+   <LINK REL="Next"  HREF="003796.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6610 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6610%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C20100909051435.349FB480190%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6610 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Sep  9 07:14:35 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003794.html">[Avidemux-svn-commit] r6609 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters:	. AvsFilter Yadif
+</A></li>
+        <LI>Next message: <A HREF="003796.html">[Avidemux-svn-commit] r6611 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins:	ADM_videoFilters/Ass ADM_videoFilters/Ass/ADM_libass	ADM_videoFilters/LumaOnly ADM_videoFilters6	ADM_videoFilters6/lumaOnly
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3795">[ date ]</a>
+              <a href="thread.html#3795">[ thread ]</a>
+              <a href="subject.html#3795">[ subject ]</a>
+              <a href="author.html#3795">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-09-09 07:14:34 +0200 (Thu, 09 Sep 2010)
+New Revision: 6610
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractorH264.cpp
+Log:
+[h264] Take into account crop parameter in sps decoding , patch by wigglebit
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractorH264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractorH264.cpp	2010-09-08 20:35:34 UTC (rev 6609)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractorH264.cpp	2010-09-09 05:14:34 UTC (rev 6610)
+@@ -178,6 +178,10 @@
+   *fps1000=0;
+   uint32_t profile, constraint, level, pic_order_cnt_type, w, h, mbh,
+     frame_mbs_only;
++  uint32_t frame_cropping_flag;
++  uint32_t chroma_format_idc = 1; // this defaults to 1 when it's missing
++  uint32_t separate_colour_plane_flag = 0;
++  uint32_t chroma_array_type = 0;
+   uint8_t buf[len];
+   uint32_t outlen;
+   uint32_t id, dum;
+@@ -194,8 +198,9 @@
+   if (profile &gt;= 100)		// ?? Borrowed from H264.C/FFMPEG
+     {
+       printf (&quot;[H264]Warning : High profile\n&quot;);
+-      if (bits.getUEG() == 3)	//chroma_format_idc
+-        bits.get(1);		//residual_color_transform_flag
++      chroma_format_idc = bits.getUEG();
++      if (chroma_format_idc == 3)	//chroma_format_idc
++        separate_colour_plane_flag = bits.get(1);		//residual_color_transform_flag
+       bits.getUEG();	//bit_depth_luma_minus8
+       bits.getUEG();	//bit_depth_chroma_minus8
+       bits.get(1);		// Transform bypass
+@@ -206,6 +211,8 @@
+ 	  }
+     }
+ 
++	if ( separate_colour_plane_flag == 0 )
++		chroma_array_type = chroma_format_idc;
+ 
+   dum = bits.getUEG();	// log2_max_frame_num_minus4
+   printf (&quot;[H264]Log2maxFrame-4:%u\n&quot;, dum);
+@@ -256,12 +263,38 @@
+ 
+   bits.get(1);
+ 
+-  if (bits.get(1))
+-    {
+-      bits.getUEG();
+-      bits.getUEG();
+-      bits.getUEG();
+-      bits.getUEG();
++	frame_cropping_flag = bits.get(1);
++ 	if (frame_cropping_flag)
++	{
++		// The tests could probably be done more simply but the following is per the spec.
++		uint32_t cl, cr, ct, cb;
++		int cux = 1; // x units
++		int cuy = 2 - frame_mbs_only; // y units
++		if ( chroma_array_type &gt; 0 ) {
++			switch( chroma_format_idc ) {
++			case 1:
++				cux = 2;
++				cuy = 2 * ( 2 - frame_mbs_only );
++				break;
++			case 2:
++				cux = 2;
++				cuy = 1 * ( 2 - frame_mbs_only );
++				break;
++			case 3:
++				cux = 1; 
++				cuy = 1 * ( 2 - frame_mbs_only );
++				break;
++			}
++		}
++		cl = bits.getUEG() * cux;
++		cr = bits.getUEG() * cux;
++		ct = bits.getUEG() * cuy;
++		cb = bits.getUEG() * cuy;
++		*wwidth -= cl; // reduce dims based on crop values
++		*wwidth -= cr;
++		*hheight -= ct;
++		*hheight -= cb;
++		printf (&quot;[H264] Has cropping of l:%d  r:%d  t:%d  b:%d\n&quot;, cl, cr, ct, cb);
+     }
+ 
+   if (bits.get(1))
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003794.html">[Avidemux-svn-commit] r6609 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters:	. AvsFilter Yadif
+</A></li>
+	<LI>Next message: <A HREF="003796.html">[Avidemux-svn-commit] r6611 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins:	ADM_videoFilters/Ass ADM_videoFilters/Ass/ADM_libass	ADM_videoFilters/LumaOnly ADM_videoFilters6	ADM_videoFilters6/lumaOnly
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3795">[ date ]</a>
+              <a href="thread.html#3795">[ thread ]</a>
+              <a href="subject.html#3795">[ subject ]</a>
+              <a href="author.html#3795">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

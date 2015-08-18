@@ -1,0 +1,289 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5426 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_editor avidemux/common/ADM_script	avidemux_core/ADM_coreMuxer/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5426%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_editor%20avidemux/common/ADM_script%0A%09avidemux_core/ADM_coreMuxer/src&In-Reply-To=%3C200910281910.n9SJAD3Y015473%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002636.html">
+   <LINK REL="Next"  HREF="002639.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5426 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_editor avidemux/common/ADM_script	avidemux_core/ADM_coreMuxer/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5426%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_editor%20avidemux/common/ADM_script%0A%09avidemux_core/ADM_coreMuxer/src&In-Reply-To=%3C200910281910.n9SJAD3Y015473%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5426 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_editor avidemux/common/ADM_script	avidemux_core/ADM_coreMuxer/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Oct 28 20:10:13 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002636.html">[Avidemux-svn-commit] r5425 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="002639.html">[Avidemux-svn-commit] r5427 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2637">[ date ]</a>
+              <a href="thread.html#2637">[ thread ]</a>
+              <a href="subject.html#2637">[ subject ]</a>
+              <a href="author.html#2637">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-10-28 20:10:13 +0100 (Wed, 28 Oct 2009)
+New Revision: 5426
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemux.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src/ADM_dynaMuxer.cpp
+Log:
+[Editor] Improved JS support (setContainer; marker,...)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp	2009-10-28 19:10:11 UTC (rev 5425)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp	2009-10-28 19:10:13 UTC (rev 5426)
+@@ -68,10 +68,10 @@
+   qfprintf (fd,&quot;// %02ld videos source \n&quot;, _segments.getNbRefVideos());
+   char *nm;
+   uint32_t vop=!!(video_body-&gt;getSpecificMpeg4Info()&amp;ADM_VOP_ON);
+-#if 0
+-  for (uint32_t i = 0; i &lt; _videos.size(); i++)
++
++  for (uint32_t i = 0; i &lt; _segments.getNbRefVideos(); i++)
+     {
+-        nm=ADM_cleanupPath(_videos[i]._aviheader-&gt;getMyName() );
++        nm=ADM_cleanupPath(_segments.getRefVideo(i)-&gt;_aviheader-&gt;getMyName() );
+         if(vop)
+         {
+           qfprintf(fd,&quot;app.forceUnpack();\n&quot;);
+@@ -86,30 +86,22 @@
+         }
+         ADM_dealloc(nm);
+     }
+-#endif  
++
+   qfprintf (fd,&quot;//%02ld segments\n&quot;, _segments.getNbSegments());
+   qfprintf (fd,&quot;app.clearSegments();\n&quot;);
+   
+  
+-#if 0
+-for (uint32_t i = 0; i &lt; _nb_segment; i++)
++
++    for (uint32_t i = 0; i &lt; _segments.getNbSegments(); i++)
+     {
+-        uint32_t src,start,nb;
+-                src=_segments[i]._reference;
+-                start=_segments[i]._start_frame;
+-                nb=_segments[i]._nb_frames;
+-                qfprintf (fd, &quot;app.addSegment(%lu,%lu,%lu);\n&quot;,src,start,nb);
++        _SEGMENT *seg=_segments.getSegment(i);
++        qfprintf (fd, &quot;app.addSegment(%&quot;LU&quot;,%&quot;LLU&quot;,%&quot;LLU&quot;);\n&quot;,seg-&gt;_reference,seg-&gt;_refStartTimeUs,seg-&gt;_durationUs);
+     }
+-#endif
++
+ // Markers
+ //
+-        qfprintf(fd,&quot;app.markerA=%d;\n&quot;,frameStart);
+-        qfprintf(fd,&quot;app.markerB=%d;\n&quot;,frameEnd);
+-// Reordering : Warning works only for video with one source video
+-//        if(video_body-&gt;isReordered(0) &amp;&amp; !vop)
+-        {
+- //           qfprintf(fd,&quot;app.rebuildIndex();\n&quot;);
+-        }
++        qfprintf(fd,&quot;app.markerA=%&quot;LLU&quot;;\n&quot;,getMarkerAPts());
++        qfprintf(fd,&quot;app.markerB=%&quot;LLU&quot;;\n&quot;,getMarkerBPts());
+         
+ // postproc
+ //___________________________
+@@ -120,12 +112,14 @@
+                 qfprintf(fd,&quot;app.video.setPostProc(%d,%d,%d);\n&quot;,pptype,ppstrength,ppswap);
+ 
+ // fps
+-	if( avifileinfo ){
++#if 0
++	if( avifileinfo )
++    {
+ 	  aviInfo info;
+ 		video_body-&gt;getVideoInfo(&amp;info);
+ 		qfprintf(fd,&quot;\napp.video.setFps1000(%u);\n&quot;,info.fps1000);
+ 	}
+-
++#endif
+ // Filter
+ //___________________________
+         qfprintf(fd,&quot;\n//** Filters **\n&quot;);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemux.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemux.cpp	2009-10-28 19:10:11 UTC (rev 5425)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemux.cpp	2009-10-28 19:10:13 UTC (rev 5426)
+@@ -17,8 +17,8 @@
+ #include &quot;avi_vars.h&quot;
+ #include &quot;DIA_coreToolkit.h&quot;
+ #include &quot;ADM_commonUI/GUI_ui.h&quot;
+-#include &quot;ADM_script/ADM_container.h&quot;
+ 
++
+ #include &quot;ADM_debugID.h&quot;
+ #define MODULE_NAME MODULE_SCRIPT
+ #include &quot;ADM_debug.h&quot;
+@@ -35,8 +35,9 @@
+ extern uint8_t A_jumpToTime(uint32_t hh,uint32_t mm,uint32_t ss,uint32_t ms);
+ extern uint8_t addFile(char *name);
+ 
+-uint8_t A_setContainer(const char *cont);
+-const char *getCurrentContainerAsString(void);
++bool           A_setContainer(const char *cont);
++const char     *getCurrentContainerAsString(void);
++extern int     ADM_MuxerIndexFromName(const char *name);
+ 
+ JSPropertySpec ADM_JSAvidemux::avidemux_properties[] = 
+ { 
+@@ -138,10 +139,10 @@
+                 {
+ 
+                         case markerA_prop:
+-                                *vp = INT_TO_JSVAL(frameStart);
++                                *vp = INT_TO_JSVAL(video_body-&gt;getMarkerAPts());
+                                 break;
+                         case markerB_prop:
+-                                *vp = INT_TO_JSVAL(frameEnd);
++                                *vp = INT_TO_JSVAL(video_body-&gt;getMarkerBPts());
+                                 break;
+                         case audio_prop:
+                                 *vp = OBJECT_TO_JSVAL(priv-&gt;getObject()-&gt;m_pAudio);
+@@ -196,11 +197,7 @@
+ 					{
+ 						return JS_FALSE;
+ 					} 
+-					if(f==-1)
+-						f=avifileinfo-&gt;nb_frames-1;
+-					if(f&lt;0 || f&gt;avifileinfo-&gt;nb_frames-1)
+-						return JS_FALSE;
+-					frameStart=f;
++                    video_body-&gt;setMarkerAPts(f);
+ 				}
+ 				break;
+ 			case markerB_prop:
+@@ -212,11 +209,7 @@
+ 					{
+ 						return JS_FALSE;
+ 					} 
+-					if(f==-1)
+-						f=avifileinfo-&gt;nb_frames-1;
+-					if(f&lt;0 || f&gt;avifileinfo-&gt;nb_frames-1)
+-						return JS_FALSE;
+-					frameEnd=f;
++                    video_body-&gt;setMarkerBPts(f);
+ 				}
+ 				break;
+ 			case audio_prop:
+@@ -541,19 +534,20 @@
+         leaveLock();
+         return JS_TRUE;
+ }
+-uint8_t A_setContainer(const char *cont)
++/**
++    \fn ADM_JSAvidemux
++    \brief Select the current container from a string
++*/
++bool A_setContainer(const char *cont)
+ {
+-       for(int i=0;i&lt;NB_CONT;i++)
+-       {
+-                printf(&quot;%s\n&quot;,container[i].name);
+-                if(!strcasecmp(cont,container[i].name))
+-                {
+-                        UI_SetCurrentFormat(container[i].type);
+-                        return 1;
+-                }
+-       }
+-       printf(&quot;Cannot set output format \&quot;%s\&quot;\n&quot;,cont);
+-       return 0;
++    int idx=ADM_MuxerIndexFromName(cont);
++    if(idx==-1)
++    {
++        ADM_error(&quot;Cannot find muxer for format=%s\n&quot;,cont);
++        return false;
++    }
++    UI_SetCurrentFormat(idx);
++    return true;
+ }
+ /**
+     \fn getCurrentContainerAsString
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src/ADM_dynaMuxer.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src/ADM_dynaMuxer.cpp	2009-10-28 19:10:11 UTC (rev 5425)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src/ADM_dynaMuxer.cpp	2009-10-28 19:10:13 UTC (rev 5426)
+@@ -131,7 +131,22 @@
+                         ListOfMuxers[i]=NULL;
+                 }
+ }
++
+ /**
++    \fn ADM_muxerIndexFromName
++    \brief return muxer index from name, -1 if error
++*/
++int ADM_MuxerIndexFromName(const char *name)
++{
++    int n=ListOfMuxers.size();
++    for(int i=0;i&lt;n;i++)
++    {
++        ADM_dynMuxer *mux=ListOfMuxers[i];
++        if(!strcasecmp(mux-&gt;name,name)) return i;
++    }
++    return -1;
++}
++/**
+     \fn ADM_MuxerSpawn
+     \brief Locate the correct demuxer and instantiate it
+ 
+@@ -141,13 +156,7 @@
+ int found=-1;
+ uint32_t score=0;
+ uint32_t mark;
+-    for(int i=0;i&lt;ListOfMuxers.size();i++)
+-    {
+-       
+-            score=1;
+-            found=i;
+-        
+-    }
++    found=ADM_MuxerIndexFromName(name);
+     if(score &amp;&amp; found!=-1)
+     {
+         return ListOfMuxers[found]-&gt;createmuxer();
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002636.html">[Avidemux-svn-commit] r5425 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="002639.html">[Avidemux-svn-commit] r5427 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2637">[ date ]</a>
+              <a href="thread.html#2637">[ thread ]</a>
+              <a href="subject.html#2637">[ subject ]</a>
+              <a href="author.html#2637">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

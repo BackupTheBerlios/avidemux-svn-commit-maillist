@@ -1,0 +1,373 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5780 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudio/src	avidemux_core/ADM_coreAudioParser/include	avidemux_core/ADM_coreAudioParser/src	avidemux_plugins/ADM_demuxers/Matroska	avidemux_plugins/ADM_demuxers/MpegPS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5780%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreAudio/src%0A%09avidemux_core/ADM_coreAudioParser/include%0A%09avidemux_core/ADM_coreAudioParser/src%0A%09avidemux_plugins/ADM_demuxers/Matroska%0A%09avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C200912301903.nBUJ3ZNY004230%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002986.html">
+   <LINK REL="Next"  HREF="002988.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5780 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudio/src	avidemux_core/ADM_coreAudioParser/include	avidemux_core/ADM_coreAudioParser/src	avidemux_plugins/ADM_demuxers/Matroska	avidemux_plugins/ADM_demuxers/MpegPS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5780%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreAudio/src%0A%09avidemux_core/ADM_coreAudioParser/include%0A%09avidemux_core/ADM_coreAudioParser/src%0A%09avidemux_plugins/ADM_demuxers/Matroska%0A%09avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C200912301903.nBUJ3ZNY004230%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5780 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudio/src	avidemux_core/ADM_coreAudioParser/include	avidemux_core/ADM_coreAudioParser/src	avidemux_plugins/ADM_demuxers/Matroska	avidemux_plugins/ADM_demuxers/MpegPS">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Dec 30 20:03:35 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002986.html">[Avidemux-svn-commit] r5779 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_lav
+</A></li>
+        <LI>Next message: <A HREF="002988.html">[Avidemux-svn-commit] r5781 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2987">[ date ]</a>
+              <a href="thread.html#2987">[ thread ]</a>
+              <a href="subject.html#2987">[ subject ]</a>
+              <a href="author.html#2987">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-12-30 20:03:34 +0100 (Wed, 30 Dec 2009)
+New Revision: 5780
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src/ADM_audioStream.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_dcainfo.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_dcainfo.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv_audio.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psAudioProbe.cpp
+Log:
+[DCA] Add and use audioParser for DTS/DCA
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src/ADM_audioStream.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src/ADM_audioStream.cpp	2009-12-30 19:03:32 UTC (rev 5779)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src/ADM_audioStream.cpp	2009-12-30 19:03:34 UTC (rev 5780)
+@@ -8,6 +8,7 @@
+ #include &quot;ADM_audioStreamMP3.h&quot;
+ #include &quot;ADM_audioStreamAC3.h&quot;
+ #include &quot;ADM_audioStreamEac3.h&quot;
++#include &quot;ADM_audioStreamDCA.h&quot;
+ #include &quot;ADM_audioStreamConstantChunk.h&quot;
+ 
+ /**
+@@ -142,6 +143,8 @@
+             return new ADM_audioStreamAC3(wavheader,access);
+         case WAV_MP3:
+             return new ADM_audioStreamMP3(wavheader,access);
++        case WAV_DTS:
++            return new ADM_audioStreamDCA(wavheader,access);
+ #if 0
+         case WAV_WMA:
+             return new ADM_audioStreamConstantChunk(wavheader,access);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_dcainfo.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_dcainfo.h	2009-12-30 19:03:32 UTC (rev 5779)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_dcainfo.h	2009-12-30 19:03:34 UTC (rev 5780)
+@@ -1,7 +1,38 @@
++/**
++    \file ADM_dcainfo
++    \brief Extracts and sync DTS/DCA frames
++    \author mean (C) 2009 <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++
++*/
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
+ #ifndef ADM_DCAINFO_H
+ #define ADM_DCAINFO_H
+-int ADM_DCAGetInfo(uint8_t *buf, uint32_t len, uint32_t *fq, uint32_t *br, uint32_t *chan,uint32_t *syncoff,uint32_t *flags,uint32_t *nbSample);
+ 
++/**
++    \struct ADM_DCA_INFO
++*/
++typedef struct
++{
++    uint32_t frequency;
++    uint32_t bitrate;   // in b/s
++    uint32_t channels;
++    uint32_t frameSizeInBytes;
++    uint32_t samples;
++    uint32_t flags;
++}ADM_DCA_INFO;
++/**
++    \fn ADM_DCAGetInfo
++*/
++bool ADM_DCAGetInfo(uint8_t *buf, uint32_t len,ADM_DCA_INFO *info,uint32_t *syncoff);
++
+ #define DTS_HEADER_SIZE (10)
+ #endif
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_dcainfo.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_dcainfo.cpp	2009-12-30 19:03:32 UTC (rev 5779)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_dcainfo.cpp	2009-12-30 19:03:34 UTC (rev 5780)
+@@ -6,6 +6,15 @@
+         Code very derived from libdca
+ 
+ */
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_dcainfo.h&quot;
+ #define ADM_NO_CONFIG_H
+@@ -43,10 +52,12 @@
+     1, 2, 2, 2, 2, 3, 3, 4, 4, 5, 6, 6, 6, 7, 8, 8
+ };
+ 
+-/*
+-    Return frame size
++/**
++    \fn ADM_DCAGetInfo
++    @param syncoff: # of dropped bytes from the begining
+ */
+-int  ADM_DCAGetInfo(uint8_t *buf, uint32_t len, uint32_t *fq, uint32_t *br, uint32_t *chan,uint32_t *syncoff,uint32_t *flagso,uint32_t *nbSample)
++bool ADM_DCAGetInfo(uint8_t *buf, uint32_t len,ADM_DCA_INFO *info,uint32_t *syncoff)
++//int  ADM_DCAGetInfo(uint8_t *buf, uint32_t len, uint32_t *fq, uint32_t *br, uint32_t *chan,uint32_t *syncoff,uint32_t *flagso,uint32_t *nbSample)
+ {
+ uint8_t *end=buf+len-4-DTS_HEADER_SIZE;
+ uint8_t *cur=buf-1;
+@@ -63,7 +74,7 @@
+                 if(cur[3]!=0x01) continue;
+                 // ok we got a starcode
+                 // State :      32 bits, already got them
+-                // Frame type   1 
++                // Frame type   1
+                 // Sample Deficit 5
+                 // CRC present  1
+                 // Frame length  7
+@@ -81,14 +92,14 @@
+                 len2=get_bits(&amp;s,14);
+                 framesize=len2+1;
+                 //
+-                //  
+                 //
++                //
+                 flags=get_bits(&amp;s,6);
+-                *flagso=flags;
+-                index=get_bits(&amp;s,4); 
+-                *fq=dts_sample_rates[index];
+-                index=get_bits(&amp;s,5); 
+-                *br=dts_bit_rates[index];
++                info-&gt;flags=flags;
++                index=get_bits(&amp;s,4);
++                info-&gt;frequency=dts_sample_rates[index];
++                index=get_bits(&amp;s,5);
++                info-&gt;bitrate=dts_bit_rates[index];
+ #if 0
+                 printf(&quot;[dts]Flags  :%u\n&quot;,flags);
+                 printf(&quot;[dts]Fq  :%u\n&quot;,*fq);
+@@ -97,19 +108,20 @@
+                 printf(&quot;[dts]len2  :%u\n&quot;,len2);
+ #endif
+                 *syncoff=cur-buf;
+-                if(*syncoff) printf(&quot;[dts] Dropped %u bytes\n&quot;,*syncoff);
++                if(*syncoff) ADM_warning(&quot;[dts] Dropped %u bytes\n&quot;,*syncoff);
+                 get_bits(&amp;s,10);
+                 int lfe=get_bits(&amp;s,2);
+                 int c;
+                 c=dts_channels[flags &amp; 0xf];
+                 if(c==5 &amp;&amp; lfe) c++; // LFE
+-                *chan=c;
+-                *nbSample=nbBlocks*32;
+-                return framesize;
+-                
+-                
++                info-&gt;channels=c;
++                info-&gt;samples=nbBlocks*32;
++                info-&gt;frameSizeInBytes=framesize;
++                return true;
++
++
+             }
+-            printf(&quot;[DTS] Cannot find sync\n&quot;);
+-	      return 0;
++            ADM_warning(&quot;[DTS] Cannot find sync\n&quot;);
++	      return false;
+ }
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv_audio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv_audio.cpp	2009-12-30 19:03:32 UTC (rev 5779)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv_audio.cpp	2009-12-30 19:03:34 UTC (rev 5780)
+@@ -60,12 +60,13 @@
+   {
+      if( getPacket(ac3Buffer, &amp;len, 20000,&amp;timecode))
+      {
+-       uint32_t fq,br,chan,syncoff,flags,nbsample;
+-        if( ADM_DCAGetInfo(ac3Buffer, len, &amp;fq, &amp;br, &amp;chan,&amp;syncoff,&amp;flags,&amp;nbsample) )
++       uint32_t syncoff,flags,nbsample;
++       ADM_DCA_INFO info;
++        if( true==ADM_DCAGetInfo(ac3Buffer, len,&amp;info,&amp;syncoff) )
+         {
+-            track-&gt;wavHeader.channels=chan;
+-            track-&gt;wavHeader.frequency=fq;
+-            track-&gt;wavHeader.byterate=br;
++            track-&gt;wavHeader.channels=info.channels;
++            track-&gt;wavHeader.frequency=info.frequency;
++            track-&gt;wavHeader.byterate=info.bitrate/8;
+         }
+      }
+      goToBlock(0);
+@@ -87,7 +88,7 @@
+ */
+ uint64_t  mkvAccess::getDurationInUs(void)
+ {
+-    
++
+     uint32_t limit=_track-&gt;index.size();
+     if(!limit) return 0;
+     return _track-&gt;index[limit-1].Dts;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psAudioProbe.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psAudioProbe.cpp	2009-12-30 19:03:32 UTC (rev 5779)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psAudioProbe.cpp	2009-12-30 19:03:34 UTC (rev 5780)
+@@ -3,7 +3,7 @@
+     \brief Handle index file reading
+     copyright            : (C) 2009 by mean
+     email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+-        
++
+  ***************************************************************************/
+ 
+ /***************************************************************************
+@@ -66,7 +66,7 @@
+                 break;
+     }
+     // Now synthetize
+-    for(int i=0x0;i&lt;0xFF;i++)   
++    for(int i=0x0;i&lt;0xFF;i++)
+     {
+         packetStats *stat=packet-&gt;getStat(i);
+         if(stat-&gt;count)
+@@ -76,7 +76,7 @@
+ 
+          if(stat-&gt;count&gt;=PROBE_MIN_PACKET &amp;&amp; stat-&gt;size&gt;PROBE_MIN_SIZE)
+          {
+-                packet-&gt;setPos(fileSize/2); 
++                packet-&gt;setPos(fileSize/2);
+                 addAudioTrack(i,tracks,packet);
+          }
+ 
+@@ -85,9 +85,9 @@
+ end:
+     printf(&quot;[PsDemux] Audio probe done, found %d tracks\n&quot;,(int)tracks-&gt;size());
+     delete packet;
+-    
+-    if(tracks-&gt;size()==0) 
+-    {   
++
++    if(tracks-&gt;size()==0)
++    {
+         delete tracks;
+         return NULL;
+     }
+@@ -113,7 +113,7 @@
+             ) return false;
+ 
+         // Go back where we were
+-        p-&gt;changePid(pid); 
++        p-&gt;changePid(pid);
+         p-&gt;getPacketOfType(pid,PROBE_ANALYZE_SIZE, &amp;packetSize,&amp;pts,&amp;dts,audioBuffer,&amp;startAt);
+         //Realign
+         p-&gt;seek(startAt,0);
+@@ -135,7 +135,7 @@
+                             {
+                                 if(! psCheckMp2Audio(&amp;(info-&gt;header),audioBuffer,rd))
+                                 {
+-                                    printf(&quot;[PsProbeAudio] Failed to get info on track :%x (MP2)\n&quot;,pid);
++                                    ADM_warning(&quot;[PsProbeAudio] Failed to get info on track :%x (MP2)\n&quot;,pid);
+                                     goto er;
+                                 }
+                             }
+@@ -144,22 +144,23 @@
+                             if(pid&gt;=0x8) // DTS
+                             {
+                                 info-&gt;header.encoding=WAV_DTS;
+-                                uint32_t flags,nbSample;
+-                                if(!ADM_DCAGetInfo(audioBuffer, rd, &amp;fq, &amp;br, &amp;chan,&amp;off,&amp;flags,&amp;nbSample))
++                                ADM_DCA_INFO dcainfo;
++
++                                if(false==ADM_DCAGetInfo(audioBuffer, rd, &amp;dcainfo,&amp;off))
+                                 {
+-                                        printf(&quot;[PsProbeAudio] Failed to get info on track :%x\n&quot;,pid);
++                                        ADM_warning(&quot;[PsProbeAudio] Failed to get info on track :%x\n&quot;,pid);
+                                         goto er;
+                                 }
+-                                info-&gt;header.frequency=fq;
+-                                info-&gt;header.channels=chan;
+-                                info-&gt;header.byterate=(br);
++                                info-&gt;header.frequency=dcainfo.frequency;
++                                info-&gt;header.channels=dcainfo.channels;
++                                info-&gt;header.byterate=dcainfo.bitrate/8;
+                                 break;
+                             }else // AC3
+                             {
+                                 info-&gt;header.encoding=WAV_AC3;
+                                 if(!ADM_AC3GetInfo(audioBuffer, rd, &amp;fq, &amp;br, &amp;chan,&amp;off))
+                                 {
+-                                        printf(&quot;[PsProbeAudio] Failed to get info on track :%x\n&quot;,pid);
++                                        ADM_warning(&quot;[PsProbeAudio] Failed to get info on track :%x\n&quot;,pid);
+                                         goto er;
+                                 }
+                                 info-&gt;header.frequency=fq;
+@@ -167,7 +168,7 @@
+                                 info-&gt;header.byterate=(br);
+                                 break;
+                             }
+-                            
++
+             default:
+                         ADM_assert(0);
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002986.html">[Avidemux-svn-commit] r5779 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_lav
+</A></li>
+	<LI>Next message: <A HREF="002988.html">[Avidemux-svn-commit] r5781 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2987">[ date ]</a>
+              <a href="thread.html#2987">[ thread ]</a>
+              <a href="subject.html#2987">[ subject ]</a>
+              <a href="author.html#2987">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

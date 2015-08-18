@@ -1,0 +1,428 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5435 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_toolkit
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5435%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20ADM_editor%0A%09ADM_toolkit&In-Reply-To=%3C200911040647.nA46ljhg018210%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002645.html">
+   <LINK REL="Next"  HREF="002646.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5435 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_toolkit</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5435%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20ADM_editor%0A%09ADM_toolkit&In-Reply-To=%3C200911040647.nA46ljhg018210%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5435 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_toolkit">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Nov  4 07:47:45 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002645.html">[Avidemux-svn-commit] r5434 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI
+</A></li>
+        <LI>Next message: <A HREF="002646.html">[Avidemux-svn-commit] r5436 - in	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces:	ADM_dialog ADM_gui2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2647">[ date ]</a>
+              <a href="thread.html#2647">[ thread ]</a>
+              <a href="subject.html#2647">[ subject ]</a>
+              <a href="author.html#2647">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-11-04 07:47:44 +0100 (Wed, 04 Nov 2009)
+New Revision: 5435
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_toolkit/automation.cpp
+Log:
+[editor] More on video copy
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-11-04 06:47:43 UTC (rev 5434)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-11-04 06:47:44 UTC (rev 5435)
+@@ -205,53 +205,7 @@
+         return true;
+ }
+ 
+-/**
+-        \fn getCompressedPicture
+-        \brief bypass decoder and directly get the source image
+ 
+-*/
+-bool        ADM_Composer::getCompressedPicture(ADMCompressedImage *img)
+-{
+-    uint64_t tail;
+-    //
+-    _SEGMENT *seg=_segments.getSegment(_currentSegment);
+-    ADM_assert(seg);
+-    _VIDEOS *vid=_segments.getRefVideo(seg-&gt;_reference);
+-    ADM_assert(vid);
+-    vidHeader *demuxer=vid-&gt;_aviheader;
+-    ADM_assert(demuxer);
+-
+-    // Get next pic?
+-    if(false==demuxer-&gt;getFrame (vid-&gt;lastSentFrame,img))
+-    {
+-        ADM_info(&quot;Failed to get next frame for ref %&quot;LU&quot;\n&quot;,seg-&gt;_reference);
+-        goto nextSeg;
+-    }
+-    vid-&gt;lastSentFrame++;
+-    // Need to switch seg ?
+-    tail=seg-&gt;_refStartTimeUs+seg-&gt;_durationUs;
+-    if(img-&gt;demuxerDts!= ADM_NO_PTS &amp;&amp; img-&gt;demuxerDts&gt;=tail) goto nextSeg;
+-    if(img-&gt;demuxerPts!= ADM_NO_PTS &amp;&amp; img-&gt;demuxerPts&gt;=tail) goto nextSeg;
+-    {
+-    // Recalibrate PTS &amp; DTS...
+-    int64_t offset=seg-&gt;_refStartTimeUs;
+-    offset=seg-&gt;_startTimeUs;
+-    recalibrate(&amp;(img-&gt;demuxerPts),seg);
+-    recalibrate(&amp;(img-&gt;demuxerDts),seg);
+-    }
+-    return true;
+-
+-nextSeg:
+-    if(false==switchToNextSegment())
+-    {
+-        ADM_warning(&quot;Cannot update to new segment\n&quot;);
+-        return false;
+-    }
+-    ADM_info(&quot;Retrying for next segment\n&quot;);
+-    return getCompressedPicture(img);
+-   
+-}
+-
+ /**
+         \fn dupe
+ */
+@@ -305,15 +259,15 @@
+     \fn switchToNextSegment
+     \brief Switch to the next segment
+ 
+-*/
+-bool        ADM_Composer::switchToNextSegment(void)
++*/  
++bool        ADM_Composer::switchToNextSegment(bool dontdecode)
+ {
+     if(_currentSegment==_segments.getNbSegments()-1)
+     {
+         ADM_warning(&quot;This is the last segment (%&quot;LU&quot;)\n&quot;,_currentSegment);
+         return false;
+     }
+-    if(true==switchToSegment(_currentSegment+1)) return true;
++    if(true==switchToSegment(_currentSegment+1,dontdecode)) return true;
+     return false;
+ }
+ /**
+@@ -321,7 +275,7 @@
+     \brief Switch to the segment given as argument
+ 
+ */
+-bool        ADM_Composer::switchToSegment(uint32_t s)
++bool        ADM_Composer::switchToSegment(uint32_t s,bool dontdecode)
+ {
+     if(s+1&gt;_segments.getNbSegments())
+     {
+@@ -349,13 +303,13 @@
+                 from=pts;
+         }
+     }
+-    if(false==seektoTime(seg-&gt;_reference,from))
++    if(false==seektoTime(seg-&gt;_reference,from,dontdecode))
+     {
+             ADM_warning(&quot;Cannot seek to beginning of segment %&quot;LU&quot; at  %&quot;LLU&quot; ms\n&quot;,s,from/1000);
+             return false;
+     }
+     _currentSegment=s;
+-    ADM_info(&quot;Switched ok to segment %&quot;LU&quot;\n&quot;,s);
++    ADM_info(&quot;Switched ok to segment %&quot;LU&quot; (dontdecode=%d)\n&quot;,s,dontdecode);
+     return true;
+ }
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2009-11-04 06:47:43 UTC (rev 5434)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2009-11-04 06:47:44 UTC (rev 5435)
+@@ -36,7 +36,7 @@
+     \brief Seek to frame with timestamp given as arg
+ 
+ */
+-bool ADM_Composer::seektoTime(uint32_t ref,uint64_t timeToSeek)
++bool ADM_Composer::seektoTime(uint32_t ref,uint64_t timeToSeek,bool dontdecode)
+ {
+    _VIDEOS *vid=_segments.getRefVideo(ref);
+     vidHeader *demuxer=vid-&gt;_aviheader;
+@@ -58,8 +58,15 @@
+             return false;
+         }
+     }
++    uint32_t frame=_segments.intraTimeToFrame(ref,seekTime);
++    if(dontdecode==true)
++    {
++        vid-&gt;lastSentFrame=frame;
++        ADM_info(&quot;Seek to time without decoding ok\n&quot;);
++        return true;
++    }
+     // ok now seek...
+-    uint32_t frame=_segments.intraTimeToFrame(ref,seekTime);
++    
+     if(false==DecodePictureUpToIntra(ref,frame))
+     {
+         ADM_warning(&quot;Cannot decode up to intra %&quot;LLU&quot; at %&quot;LLU&quot; ms\n&quot;,frame,seekTime/1000);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp	2009-11-04 06:47:43 UTC (rev 5434)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp	2009-11-04 06:47:44 UTC (rev 5435)
+@@ -17,7 +17,7 @@
+ #include &quot;ADM_default.h&quot;
+ #include &quot;fourcc.h&quot;
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+-
++#include &quot;ADM_vidMisc.h&quot;
+ /**
+     \fn getNKFramePTS
+ */
+@@ -52,6 +52,11 @@
+             return false;
+         }
+         // Go to the next segment
++        if(seg==_segments.getNbSegments()-1)
++        {
++            ADM_warning(&quot;Last segment\n&quot;);
++            return false;
++        }
+         seg++;
+         goto again;
+     }
+@@ -145,7 +150,10 @@
+         if(pts==ADM_NO_PTS) continue;
+         if(pts&gt;refTime)
+         {
+-            ADM_info(&quot;Found nextkeyframe %&quot;LLU&quot; at frame %&quot;LU&quot;\n&quot;,pts/1000,i);
++            uint32_t hh,mm,ss,ms,ms2;
++            ms=pts/1000;
++            ms2time(ms,&amp;hh,&amp;mm,&amp;ss,&amp;ms2);
++            ADM_info(&quot;Found nextkeyframe %&quot;LLU&quot; %u:%u:%u at frame %&quot;LU&quot;\n&quot;,ms,hh,mm,ss,i);
+             *nkTime=pts;
+             return true;
+         }
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp	2009-11-04 06:47:43 UTC (rev 5434)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp	2009-11-04 06:47:44 UTC (rev 5435)
+@@ -0,0 +1,100 @@
++/***************************************************************************
++    \file  ADM_edVideoCopy.cpp  
++    \brief handle direct stream copy for video
++    \author mean (c) 2002/2009 <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++
++    
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &lt;math.h&gt;
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_editor/ADM_edit.hxx&quot;
++
++#if defined(ADM_DEBUG) &amp;&amp; 0
++#define aprintf printf
++#else
++#define aprintf(...) {}// printf
++#endif
++
++/**
++        \fn getCompressedPicture
++        \brief bypass decoder and directly get the source image
++
++    The dropBframe is as follow :
++            0 : Dont drop b frame
++            1 : Follow the next bframes
++            2 : Drop
++
++
++*/
++bool        ADM_Composer::getCompressedPicture(ADMCompressedImage *img)
++{
++    uint64_t tail;
++    //
++againGet:
++    _SEGMENT *seg=_segments.getSegment(_currentSegment);
++    ADM_assert(seg);
++    _VIDEOS *vid=_segments.getRefVideo(seg-&gt;_reference);
++    ADM_assert(vid);
++    vidHeader *demuxer=vid-&gt;_aviheader;
++    ADM_assert(demuxer);
++
++    // Get next pic?
++    if(false==demuxer-&gt;getFrame (vid-&gt;lastSentFrame,img))
++    {
++        ADM_info(&quot;Failed to get next frame for ref %&quot;LU&quot;\n&quot;,seg-&gt;_reference);
++        goto nextSeg;
++    }
++    vid-&gt;lastSentFrame++;
++    //
++    if(img-&gt;flags &amp; AVI_B_FRAME)
++    {
++        if(seg-&gt;_dropBframes==2) 
++        {
++            ADM_warning(&quot;Dropping bframes\n&quot;);
++            goto againGet;
++        }
++    }else
++    { // not a bframe
++        switch(seg-&gt;_dropBframes)
++        {
++            case 2: seg-&gt;_dropBframes=0;break;
++            case 1: seg-&gt;_dropBframes=2;break;
++            default: break;
++        }
++    }
++    // Need to switch seg ?
++    tail=seg-&gt;_refStartTimeUs+seg-&gt;_durationUs;
++    ADM_info(&quot;Frame : Flags :%X, DTS:%&quot;LLD&quot; PTS=%&quot;LLD&quot; tail=%&quot;LLD&quot;\n&quot;,img-&gt;flags,img-&gt;demuxerDts/1000,img-&gt;demuxerPts/1000,tail);
++    if(img-&gt;demuxerDts!= ADM_NO_PTS &amp;&amp; img-&gt;demuxerDts&gt;=tail) goto nextSeg;
++    if(img-&gt;demuxerPts!= ADM_NO_PTS &amp;&amp; img-&gt;demuxerPts&gt;=tail) goto nextSeg;
++    {
++    // Recalibrate PTS &amp; DTS...
++    recalibrate(&amp;(img-&gt;demuxerPts),seg);
++    recalibrate(&amp;(img-&gt;demuxerDts),seg);
++    }
++    
++    return true;
++
++nextSeg:
++    if(false==switchToNextSegment(true))
++    {
++        ADM_warning(&quot;Cannot update to new segment\n&quot;);
++        return false;
++    }
++    // Mark it as drop b frames...
++    _SEGMENT *thisseg=_segments.getSegment(_currentSegment);
++    thisseg-&gt;_dropBframes=1;
++    ADM_info(&quot;Retrying for next segment\n&quot;);
++    return getCompressedPicture(img);
++   
++}
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-11-04 06:47:43 UTC (rev 5434)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-11-04 06:47:44 UTC (rev 5435)
+@@ -65,13 +65,13 @@
+   private:
+ //*********************************PRIVATE API *******************************************
+                     //bool		decodeCache(uint32_t ref, uint32_t frame,ADMImage *image);
+-                    bool        switchToNextSegment(void);
+-                    bool        switchToSegment(uint32_t s);
++                    bool        switchToNextSegment(bool dontdecode=false);
++                    bool        switchToSegment(uint32_t s,bool dontdecode=false);
+                     uint32_t    currentFrame;
+ 
+                     bool        nextPictureInternal(uint32_t ref,ADMImage *image);
+                     bool        samePictureInternal(uint32_t ref,ADMImage *image);
+-                    bool        seektoTime(uint32_t ref,uint64_t timeToSeek);
++                    bool        seektoTime(uint32_t ref,uint64_t timeToSeek,bool dontdecode=false);
+                     // Some useful functions...
+                     void        recalibrate(uint64_t *time,_SEGMENT *seg);
+                     bool        updateImageTiming(_SEGMENT *seg,ADMImage *image);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h	2009-11-04 06:47:43 UTC (rev 5434)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h	2009-11-04 06:47:44 UTC (rev 5435)
+@@ -80,6 +80,7 @@
+         uint64_t _refStartTimeUs; /// Starting time in reference
+         uint64_t _startTimeUs; /// Start time in current (=sum(_duration of previous seg))
+         uint64_t _durationUs; ///
++        uint32_t _dropBframes;
+         
+ } _SEGMENT;
+ /*
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/CMakeLists.txt	2009-11-04 06:47:43 UTC (rev 5434)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/CMakeLists.txt	2009-11-04 06:47:44 UTC (rev 5435)
+@@ -11,6 +11,7 @@
+ ADM_edMarker.cpp
+ ADM_edStub.cpp
+ ADM_edPtsDts.cpp
++ADM_edVideoCopy.cpp
+ ADM_segment.cpp
+ )
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_toolkit/automation.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_toolkit/automation.cpp	2009-11-04 06:47:43 UTC (rev 5434)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_toolkit/automation.cpp	2009-11-04 06:47:44 UTC (rev 5435)
+@@ -501,7 +501,7 @@
+    printf(&quot;   Number of frames: %d frames\n&quot;, avifileinfo-&gt;nb_frames);
+    printf(&quot;   Codec FourCC: %s\n&quot;, fourCC::tostring(avifileinfo-&gt;fcc));
+    if(avifileinfo-&gt;nb_frames){
+-     uint16_t hh, mm, ss, ms;
++     uint32_t hh, mm, ss, ms;
+       frame2time(avifileinfo-&gt;nb_frames, avifileinfo-&gt;fps1000,&amp;hh, &amp;mm, &amp;ss, &amp;ms);
+       printf(&quot;   Duration: %02d:%02d:%02d.%03d\n&quot;, hh, mm, ss, ms);
+    }else{
+@@ -526,7 +526,7 @@
+       printf(&quot;   Frequency: %u Hz\n&quot;, wavinfo-&gt;frequency);
+       {
+ double du = 0;// BAZOOKA video_body-&gt;getAudioLength();
+-        uint16_t hh, mm, ss, ms;
++        uint32_t hh, mm, ss, ms;
+          du*=1000;
+          du/=wavinfo-&gt;byterate;
+          ms2time((uint32_t)floor(du), &amp;hh, &amp;mm, &amp;ss, &amp;ms);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002645.html">[Avidemux-svn-commit] r5434 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI
+</A></li>
+	<LI>Next message: <A HREF="002646.html">[Avidemux-svn-commit] r5436 - in	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces:	ADM_dialog ADM_gui2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2647">[ date ]</a>
+              <a href="thread.html#2647">[ thread ]</a>
+              <a href="subject.html#2647">[ subject ]</a>
+              <a href="author.html#2647">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

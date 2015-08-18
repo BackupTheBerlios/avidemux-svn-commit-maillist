@@ -1,0 +1,390 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2973 - in	branches/avidemux_2.4_branch/avidemux: ADM_audiocodec	ADM_inputs/ADM_matroska ADM_inputs/ADM_openDML ADM_video
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2973%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_audiocodec%0A%09ADM_inputs/ADM_matroska%20ADM_inputs/ADM_openDML%20ADM_video&In-Reply-To=%3C200704261816.l3QIGwZA019824%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000289.html">
+   <LINK REL="Next"  HREF="000291.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2973 - in	branches/avidemux_2.4_branch/avidemux: ADM_audiocodec	ADM_inputs/ADM_matroska ADM_inputs/ADM_openDML ADM_video</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2973%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_audiocodec%0A%09ADM_inputs/ADM_matroska%20ADM_inputs/ADM_openDML%20ADM_video&In-Reply-To=%3C200704261816.l3QIGwZA019824%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2973 - in	branches/avidemux_2.4_branch/avidemux: ADM_audiocodec	ADM_inputs/ADM_matroska ADM_inputs/ADM_openDML ADM_video">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Apr 26 20:16:58 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000289.html">[Avidemux-svn-commit] r2972 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog
+</A></li>
+        <LI>Next message: <A HREF="000291.html">[Avidemux-svn-commit] r2974 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#290">[ date ]</a>
+              <a href="thread.html#290">[ thread ]</a>
+              <a href="subject.html#290">[ subject ]</a>
+              <a href="author.html#290">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-04-26 20:16:58 +0200 (Thu, 26 Apr 2007)
+New Revision: 2973
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_reorderTemplate.cpp
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_audiocodec/ADM_codecac3.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvTrackType.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_openDML/ADM_opendml_reorder.cpp
+Log:
+allow reorder for mkv, dont crash in ac3dec
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiocodec/ADM_codecac3.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiocodec/ADM_codecac3.cpp	2007-04-26 14:21:27 UTC (rev 2972)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiocodec/ADM_codecac3.cpp	2007-04-26 18:16:58 UTC (rev 2973)
+@@ -108,7 +108,7 @@
+         if(length==0)
+         {
+             printf(&quot;[a52] No startcode found\n&quot;);
+-            ADM_assert(0); 
++            break;
+         }
+         if(length&gt;nbIn)
+         {
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2007-04-26 14:21:27 UTC (rev 2972)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2007-04-26 18:16:58 UTC (rev 2973)
+@@ -93,6 +93,7 @@
+   
+   // Finaly update index with queue
+   readCue(&amp;ebml);
++    
+   printf(&quot;[MKV]Matroska successfully read\n&quot;);
+   
+   return 1;
+@@ -288,6 +289,7 @@
+   _nbAudioTrack=0;
+   _filename=NULL;
+   memset(_tracks,0,sizeof(_tracks));
++  _reordered=0;
+ }
+ /*
+     __________________________________________________________
+@@ -355,4 +357,29 @@
+                 *data=_tracks[0].extraData;
+                 return 1;            
+ }
++/*
++    __________________________________________________________
++*/
++uint8_t			mkvHeader::isReordered( void )
++{ 
++ 	return _reordered;
++}
++/*
++    __________________________________________________________
++*/
++uint8_t mkvHeader::reorder( void )
++{
++  
++#define INDEX_TMPL        mkvIndex
++#define INDEX_ARRAY_TMPL  (_tracks[0]._index)
++#define FRAMETYPE_TMPL    flags
++  
++#include &quot;ADM_video/ADM_reorderTemplate.cpp&quot;
++
++#undef INDEX_TMPL       
++#undef INDEX_ARRAY_TMPL 
++#undef FRAMETYPE_TMPL   
++     _tracks[0]._nbIndex=_videostream.dwLength;
++         return 1;
++}
+ //EOF
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h	2007-04-26 14:21:27 UTC (rev 2972)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.h	2007-04-26 18:16:58 UTC (rev 2973)
+@@ -79,8 +79,8 @@
+ 
+     
+     uint32_t                _nbAudioTrack;
++    uint32_t                _reordered;
+     
+-    
+     uint8_t                 checkHeader(void *head,uint32_t headlen);
+     uint8_t                 analyzeTracks(void *head,uint32_t headlen);
+     uint8_t                 analyzeOneTrack(void *head,uint32_t headlen);
+@@ -126,7 +126,9 @@
+     virtual uint8_t  getFrameNoAlloc(uint32_t framenum,ADMCompressedImage *img);
+ 
+             uint8_t  getExtraHeaderData(uint32_t *len, uint8_t **data);
+-    
++            uint8_t  isReordered( void );
++            uint8_t  reorder( void );
++
+ };
+ #endif
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp	2007-04-26 14:21:27 UTC (rev 2972)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp	2007-04-26 18:16:58 UTC (rev 2973)
+@@ -113,9 +113,25 @@
+         _video_bih.biWidth=_mainaviheader.dwWidth=entry.w;
+         _video_bih.biHeight=_mainaviheader.dwHeight=entry.h;
+         _videostream.fccHandler=_video_bih.biCompression=entry.fcc;
++        
++        // if it is vfw...
++        if(fourCC::check(entry.fcc,(uint8_t *)&quot;VFWX&quot;) &amp;&amp; entry.extraData &amp;&amp; entry.extraDataLen&gt;=sizeof(BITMAPINFOHEADER))
++        {
++          memcpy(&amp; _video_bih,entry.extraData,sizeof(BITMAPINFOHEADER));
++          delete [] _tracks[0].extraData;
++          entry.extraData=NULL;
++          entry.extraDataLen=0;
++          
++          _videostream.fccHandler=_video_bih.biCompression;
++          _mainaviheader.dwWidth=  _video_bih.biWidth;
++          _mainaviheader.dwHeight= _video_bih.biHeight;    
++          
++        } // FIXME there can be real extradata after bitmapinfoheader
++        
+         _tracks[0].extraData=entry.extraData; 
+         _tracks[0].extraDataLen=entry.extraDataLen;       
+         _tracks[0].streamIndex=entry.trackNo;
++        
+         return 1;
+       }
+       if(entry.trackType==2 &amp;&amp; _nbAudioTrack&lt;ADM_MKV_MAX_TRACKS)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvTrackType.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvTrackType.cpp	2007-04-26 14:21:27 UTC (rev 2972)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvTrackType.cpp	2007-04-26 18:16:58 UTC (rev 2973)
+@@ -46,7 +46,7 @@
+   
+   // Video
+   {&quot;V_MPEG4/ISO/AVC&quot;,1,0,&quot;AVC1&quot;}, //H264
+-  {&quot;V_MS/VFW/FOURCC&quot;,1,0,&quot;DIVX&quot;}, // Divx 2.
++  {&quot;V_MS/VFW/FOURCC&quot;,1,0,&quot;VFWX&quot;}, // Divx 2.
+   
+   
+   // Filler
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_openDML/ADM_opendml_reorder.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_openDML/ADM_opendml_reorder.cpp	2007-04-26 14:21:27 UTC (rev 2972)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_openDML/ADM_opendml_reorder.cpp	2007-04-26 18:16:58 UTC (rev 2973)
+@@ -44,73 +44,15 @@
+ 
+ uint8_t OpenDMLHeader::reorder( void )
+ {
+-odmlIndex *index;
+-uint8_t ret=1;
+-uint32_t nbFrame= _videostream.dwLength;
+-	// already done..
+-	if( _reordered) return 1;
+-	ADM_assert(_idx);
+-	
+-	index=new odmlIndex[nbFrame];
+-	// clear B frame flag for last frames
+-	_idx[nbFrame-1].intra &amp;=~AVI_B_FRAME;
++  
++#define INDEX_TMPL        odmlIndex
++#define INDEX_ARRAY_TMPL  _idx
++#define FRAMETYPE_TMPL    intra
++  
++#include &quot;ADM_video/ADM_reorderTemplate.cpp&quot;
+ 
+-			//__________________________________________
+-			// the direct index is in DTS time (i.e. decoder time)
+-			// we will now do the PTS index, so that frame numbering is done
+-			// according to the frame # as they are seen by editor / user
+-			// I1 P0 B0 B1 P1 B2 B3 I2 B7 B8
+-			// xx I1 B0 B1 P0 B2 B3 P1 B7 B8
+-			//__________________________________________
+-			uint32_t forward=0;
+-			uint32_t curPTS=0;
+-			uint32_t dropped=0;
+-
+-			for(uint32_t c=1;c&lt;nbFrame;c++)
+-			{
+-				if(!(_idx[c].intra &amp; AVI_B_FRAME))
+-					{
+-								memcpy(&amp;index[curPTS],
+-										&amp;_idx[forward],
+-										sizeof(odmlIndex));
+-								forward=c;
+-								curPTS++;
+-								dropped++;
+-					}
+-					else
+-					{// we need  at lest 2 i/P frames to start decoding B frames
+-						if(dropped&gt;=1)
+-						{
+-							memcpy(&amp;index[curPTS],
+-								&amp;_idx[c],
+-								sizeof(odmlIndex));
+-							curPTS++;
+-						}
+-						else
+-						{
+-						printf(&quot;We dropped a frame (%d/%d).\n&quot;,dropped,c);
+-						}
+-					}
+-			}
+-
+-			uint32_t last;
+-
+-
+-			// put back last I/P we had in store
+-			memcpy(&amp;index[curPTS],
+-				&amp;_idx[forward],
+-				sizeof(odmlIndex));
+-			last=curPTS;
+-
+-			_videostream.dwLength= _mainaviheader.dwTotalFrames=nbFrame=last+1;
+-			// last frame is always I
+-
+-			delete [] _idx;
+-
+-			_idx=index;;
+-			// last frame cannot be B frame
+-			_idx[last].intra&amp;=~AVI_B_FRAME;
+-			 _reordered=ret;
+-			return ret;
+-
++#undef INDEX_TMPL       
++#undef INDEX_ARRAY_TMPL 
++#undef FRAMETYPE_TMPL   
++             
+ }
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_reorderTemplate.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_reorderTemplate.cpp	2007-04-26 14:21:27 UTC (rev 2972)
++++ branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_reorderTemplate.cpp	2007-04-26 18:16:58 UTC (rev 2973)
+@@ -0,0 +1,82 @@
++/*
++ * INDEX_TMPL is the type of each index
++ * INDEX_ARRAY_TMPL is the attribute holding the index
++ * FRAMETYPE_TMPL is the field holding video flags
++ * */
++#ifndef INDEX_TMPL
++#error INDEX_TMPL
++#endif
++#ifndef INDEX_ARRAY_TMPL
++#error INDEX_ARRAY_TMPL
++#endif
++#ifndef FRAMETYPE_TMPL
++#error FRAMETYPE_TMPL
++#endif
++
++INDEX_TMPL *index;
++uint8_t ret=1;
++uint32_t nbFrame= _videostream.dwLength;
++	// already done..
++	if( _reordered) return 1;
++	ADM_assert(INDEX_ARRAY_TMPL);
++	
++	index=new INDEX_TMPL[nbFrame];
++	// clear B frame flag for last frames
++	INDEX_ARRAY_TMPL[nbFrame-1].FRAMETYPE_TMPL &amp;=~AVI_B_FRAME;
++
++			//__________________________________________
++			// the direct index is in DTS time (i.e. decoder time)
++			// we will now do the PTS index, so that frame numbering is done
++			// according to the frame # as they are seen by editor / user
++			// I1 P0 B0 B1 P1 B2 B3 I2 B7 B8
++			// xx I1 B0 B1 P0 B2 B3 P1 B7 B8
++			//__________________________________________
++			uint32_t forward=0;
++			uint32_t curPTS=0;
++			uint32_t dropped=0;
++
++			for(uint32_t c=1;c&lt;nbFrame;c++)
++			{
++				if(!(INDEX_ARRAY_TMPL[c].FRAMETYPE_TMPL &amp; AVI_B_FRAME))
++					{
++								memcpy(&amp;index[curPTS],
++										&amp;INDEX_ARRAY_TMPL[forward],
++										sizeof(INDEX_TMPL));
++								forward=c;
++								curPTS++;
++								dropped++;
++					}
++					else
++					{// we need  at lest 2 i/P frames to start decoding B frames
++						if(dropped&gt;=1)
++						{
++							memcpy(&amp;index[curPTS],
++								&amp;INDEX_ARRAY_TMPL[c],
++								sizeof(INDEX_TMPL));
++							curPTS++;
++						}
++						else
++						{
++						printf(&quot;We dropped a frame (%d/%d).\n&quot;,dropped,c);
++						}
++					}
++			}
++
++			uint32_t last;
++
++
++			// put back last I/P we had in store
++			memcpy(&amp;index[curPTS],
++				&amp;INDEX_ARRAY_TMPL[forward],
++				sizeof(INDEX_TMPL));
++			last=curPTS;
++
++			_videostream.dwLength= _mainaviheader.dwTotalFrames=nbFrame=last+1;
++			// last frame is always I
++
++			delete [] INDEX_ARRAY_TMPL;
++
++			INDEX_ARRAY_TMPL=index;;
++			// last frame cannot be B frame
++			INDEX_ARRAY_TMPL[last].FRAMETYPE_TMPL&amp;=~AVI_B_FRAME;
++			 _reordered=ret;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000289.html">[Avidemux-svn-commit] r2972 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog
+</A></li>
+	<LI>Next message: <A HREF="000291.html">[Avidemux-svn-commit] r2974 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#290">[ date ]</a>
+              <a href="thread.html#290">[ thread ]</a>
+              <a href="subject.html#290">[ subject ]</a>
+              <a href="author.html#290">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

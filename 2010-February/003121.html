@@ -1,0 +1,212 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5915 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5915%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska&In-Reply-To=%3C201002071838.o17Icim0023658%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003119.html">
+   <LINK REL="Next"  HREF="003120.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5915 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5915%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska&In-Reply-To=%3C201002071838.o17Icim0023658%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5915 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Feb  7 19:38:44 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003119.html">[Avidemux-svn-commit] r5914 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreMuxer/include avidemux_core/ADM_coreMuxer/src	avidemux_plugins/ADM_muxers/muxerFlv	avidemux_plugins/ADM_muxers/muxerMkv	avidemux_plugins/ADM_muxers/muxerMp4	avidemux_plugins/ADM_muxers/muxerffPS	avidemux_plugins/ADM_muxers/muxerffTS
+</A></li>
+        <LI>Next message: <A HREF="003120.html">[Avidemux-svn-commit] r5916 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/huff
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3121">[ date ]</a>
+              <a href="thread.html#3121">[ thread ]</a>
+              <a href="subject.html#3121">[ subject ]</a>
+              <a href="author.html#3121">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-02-07 19:38:44 +0100 (Sun, 07 Feb 2010)
+New Revision: 5915
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h
+Log:
+[mv] Better detect bframe and compute dts accordingly
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp	2010-02-07 18:38:41 UTC (rev 5914)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp	2010-02-07 18:38:44 UTC (rev 5915)
+@@ -94,30 +94,42 @@
+ 
+   // Delay frames + recompute frame duration
+ // now that we have a good frameduration and max pts dts difference, we can set a proper DTS for all video frame
+-  uint64_t ptsdtsdelta=delayFrameIfBFrames();
++    uint32_t ptsdtsdelta, mindelta;
++    bool hasBframe;
++  ComputeDeltaAndCheckBFrames(&amp;mindelta, &amp;ptsdtsdelta,&amp;hasBframe);
+   
++  
+   int last=_tracks[0].index.size();
+   uint64_t increment=_tracks[0]._defaultFrameDuration;
+   uint64_t lastDts=0;
+   _tracks[0].index[0].Dts=0;
+   mkvTrak                 *vid=_tracks;
+-  for(int i=1;i&lt;last;i++)
+-  {
+-        uint64_t pts,dts;
+-        pts=vid-&gt;index[i].Pts;
+-        lastDts+=increment; // This frame dts with no correction
+-        if(pts==ADM_NO_PTS)
+-        {
++  if(hasBframe==true) // Try to compute a sane DTS knowing the PTS and the DTS/PTS delay
++    {
++      for(int i=1;i&lt;last;i++)
++      {
++            uint64_t pts,dts;
++            pts=vid-&gt;index[i].Pts;
++            lastDts+=increment; // This frame dts with no correction
++            if(pts==ADM_NO_PTS)
++            {
++                vid-&gt;index[i].Dts=lastDts;
++                continue;
++            }
++            uint64_t limitDts=vid-&gt;index[i].Pts-ptsdtsdelta;
++            if(  lastDts&lt;limitDts)
++            {
++                lastDts=limitDts;
++            }
+             vid-&gt;index[i].Dts=lastDts;
+-            continue;
+-        }
+-        uint64_t limitDts=vid-&gt;index[i].Pts-ptsdtsdelta;
+-        if(  lastDts&lt;limitDts)
+-        {
+-            lastDts=limitDts;
+-        }
+-        vid-&gt;index[i].Dts=lastDts;
+-  }
++      }
++    }else
++    {       // No bframe, DTS=PTS
++      for(int i=0;i&lt;last;i++)
++      {
++            vid-&gt;index[i].Dts=vid-&gt;index[i].Pts;
++      }
++    }
+ 
+ 
+   if(last)
+@@ -169,15 +181,40 @@
+     we dont want a negative dts.
+     \return maxdelta in us
+ */
+-uint32_t mkvHeader::delayFrameIfBFrames(void)
++bool mkvHeader::ComputeDeltaAndCheckBFrames(uint32_t *minDeltaX, uint32_t *maxDeltaX, bool *bFramePresent)
+ {
+     mkvTrak *track=_tracks;
+     int nb=track-&gt;index.size();
+     int nbBFrame=0;
+     int64_t delta,maxDelta=0;
+     int64_t minDelta=100000000;
++    *bFramePresent=false;
+     if(nb&gt;1)
+     {
++        bool monotone=true;
++        uint64_t pts=track-&gt;index[0].Pts;
++        for(int i=1;i&lt;nb;i++)
++        {
++            if(track-&gt;index[i].Pts&lt;pts) 
++            {
++                monotone=false;
++                break;
++            }
++            pts=track-&gt;index[i].Pts;
++        }
++        if(monotone==true)
++        {
++            ADM_info(&quot;PTS is monotonous, probably no bframe\n&quot;);        
++            *bFramePresent=false;
++        }else
++        {
++            ADM_info(&quot;PTS is monotonous, probably no bframe\n&quot;);
++            *bFramePresent=true;
++        }
++    }
++
++    if(nb&gt;1)
++    {
+         // Search minimum and maximum between 2 frames
+         // the minimum will give us the maximum fps
+         // the maximum will give us the max PTS-DTS delta so that we can compute DTS
+@@ -191,6 +228,7 @@
+             //printf(&quot;\/=%&quot;LLD&quot; Min %&quot;LLD&quot; MAX %&quot;LLD&quot;\n&quot;,delta,minDelta,maxDelta);
+         }
+     }
++    if(nbBFrame) *bFramePresent=true;
+     ADM_info(&quot;Minimum delta found %&quot;LLD&quot; us\n&quot;,minDelta);
+     ADM_info(&quot;Maximum delta found %&quot;LLD&quot; us\n&quot;,maxDelta);
+     if(minDelta)
+@@ -227,7 +265,9 @@
+         for(int i=0;i&lt;_nbAudioTrack+1;i++)
+             delayTrack(&amp;(_tracks[i]),adj);
+     }
+-    return (uint32_t)maxDelta;
++    *maxDeltaX=maxDelta;
++    *minDeltaX=minDelta;
++    return true;
+ }
+ /**
+     \fn rescaleTrack
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h	2010-02-07 18:38:41 UTC (rev 5914)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h	2010-02-07 18:38:44 UTC (rev 5915)
+@@ -146,7 +146,8 @@
+     uint8_t                 rescaleTrack(mkvTrak *track,uint32_t durationMs);
+ 
+     bool                    delayTrack(mkvTrak *track, uint64_t value);
+-    uint32_t                delayFrameIfBFrames(void);
++    
++    bool                    ComputeDeltaAndCheckBFrames(uint32_t *minDeltaX, uint32_t *maxDeltaX, bool *bFramePresent);
+ 
+   public:
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003119.html">[Avidemux-svn-commit] r5914 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreMuxer/include avidemux_core/ADM_coreMuxer/src	avidemux_plugins/ADM_muxers/muxerFlv	avidemux_plugins/ADM_muxers/muxerMkv	avidemux_plugins/ADM_muxers/muxerMp4	avidemux_plugins/ADM_muxers/muxerffPS	avidemux_plugins/ADM_muxers/muxerffTS
+</A></li>
+	<LI>Next message: <A HREF="003120.html">[Avidemux-svn-commit] r5916 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/huff
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3121">[ date ]</a>
+              <a href="thread.html#3121">[ thread ]</a>
+              <a href="subject.html#3121">[ subject ]</a>
+              <a href="author.html#3121">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

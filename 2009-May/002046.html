@@ -1,0 +1,367 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4823 - in	branches/avidemux_2.6_branch_mean/avidemux: ADM_codecs	ADM_coreImage/include
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4823%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20ADM_codecs%0A%09ADM_coreImage/include&In-Reply-To=%3C200905131521.n4DFLmJm027482%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002045.html">
+   <LINK REL="Next"  HREF="002047.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4823 - in	branches/avidemux_2.6_branch_mean/avidemux: ADM_codecs	ADM_coreImage/include</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4823%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20ADM_codecs%0A%09ADM_coreImage/include&In-Reply-To=%3C200905131521.n4DFLmJm027482%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4823 - in	branches/avidemux_2.6_branch_mean/avidemux: ADM_codecs	ADM_coreImage/include">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed May 13 17:21:48 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002045.html">[Avidemux-svn-commit] r4822 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/ADM_codecs avidemux/ADM_core/include	avidemux/ADM_userInterfaces/ADM_render cmake
+</A></li>
+        <LI>Next message: <A HREF="002047.html">[Avidemux-svn-commit] r4824 - in	branches/avidemux_2.6_branch_mean/avidemux: . ADM_codecs	ADM_coreUtils/src ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2046">[ date ]</a>
+              <a href="thread.html#2046">[ thread ]</a>
+              <a href="subject.html#2046">[ subject ]</a>
+              <a href="author.html#2046">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-05-13 17:21:46 +0200 (Wed, 13 May 2009)
+New Revision: 4823
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_codecs.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.h
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_coreImage/include/ADM_rgb.h
+Log:
+[VDPAU] not working VDPAU h264, only display pink stuff
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_codecs.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_codecs.cpp	2009-05-13 10:40:21 UTC (rev 4822)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_codecs.cpp	2009-05-13 15:21:46 UTC (rev 4823)
+@@ -60,8 +60,8 @@
+ 
+ extern uint8_t GUI_Question (char *);
+ extern uint8_t use_fast_ffmpeg;
++extern bool vdpauUsable(void);
+ 
+-
+ uint8_t
+   decoders::uncompress (ADMCompressedImage * in, ADMImage * out)
+ {
+@@ -199,8 +199,12 @@
+     }
+   if (isH264Compatible (fcc))
+     {
+-
+-      return (decoders *) (new decoderFFH264 (w, h, extraLen, extraData,1));
++#ifdef USE_VDPAU
++        if(vdpauUsable()==true)
++            return (decoders *) (new decoderFFVDPAU (w, h, extraLen, extraData));
++        else
++#endif
++            return (decoders *) (new decoderFFH264 (w, h, extraLen, extraData,1));
+     }
+ #endif
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp	2009-05-13 10:40:21 UTC (rev 4822)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp	2009-05-13 15:21:46 UTC (rev 4823)
+@@ -457,6 +457,9 @@
+     case PIX_FMT_RGB555:
+       out-&gt;_colorspace = ADM_COLOR_RGB555;
+       break;
++    case PIX_FMT_VDPAU_H264:
++        out-&gt;_colorspace=ADM_COLOR_VDPAU;
++        break;
+     default:
+       printf (&quot;[lavc] Unhandled colorspace: %d\n&quot;, _context-&gt;pix_fmt);
+       return 0;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.h	2009-05-13 10:40:21 UTC (rev 4822)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.h	2009-05-13 15:21:46 UTC (rev 4823)
+@@ -351,8 +351,16 @@
+ class decoderFFVDPAU:public decoderFF
+ {
+ protected:
++        
++       
++                    ADMImage *scratch;
+ public:
+-  decoderFFVDPAU (uint32_t w, uint32_t h, uint32_t l, uint8_t * d);
++                    decoderFFVDPAU (uint32_t w, uint32_t h, uint32_t l, uint8_t * d);
++    virtual uint8_t uncompress (ADMCompressedImage * in, ADMImage * out);
++    virtual uint8_t dontcopy (void)
++                      {
++                        return 0;
++                      }
+ };
+ 
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau.cpp	2009-05-13 10:40:21 UTC (rev 4822)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau.cpp	2009-05-13 15:21:46 UTC (rev 4823)
+@@ -21,6 +21,7 @@
+ 
+ extern &quot;C&quot; {
+ #include &quot;ADM_lavcodec.h&quot;
++ #include &quot;ADM_libraries/ADM_ffmpeg/libavcodec/vdpau.h&quot;
+ }
+ 
+ #include &quot;ADM_default.h&quot;
+@@ -36,11 +37,32 @@
+ 
+ static bool vdpauWorking=false;
+ 
+-static ADM_LibWrapper vdpauDynaLoader;
+-static VdpDeviceCreateX11 *ADM_createVdpX11;
++static ADM_LibWrapper        vdpauDynaLoader;
++static VdpDeviceCreateX11    *ADM_createVdpX11;
+ static VdpDevice             vdpDevice;
+ static VdpGetProcAddress     *vdpProcAddress;
++static VdpDecoder            vdpDecoder;
+ 
++// VDPAU internal linker
++
++typedef struct 
++{
++    VdpGetErrorString       *getErrorString;
++    VdpGetApiVersion        *getApiVersion;
++    VdpGetInformationString *getInformationString;
++
++    VdpVideoSurfaceCreate   *createSurface;
++    VdpVideoSurfaceDestroy  *destroySurface;
++    VdpVideoSurfaceGetBitsYCbCr *getDataSurface;
++
++    VdpDecoderCreate        *decoderCreate;
++    VdpDecoderDestroy       *decoderDestroy;
++    VdpDecoderRender        *decoderRender;
++
++}VdpFunctions;
++
++static VdpFunctions funcs;
++
+ #define WRAP_Open_Template(funcz,argz,display,codecid) \
+ {\
+ AVCodec *codec=funcz(argz);\
+@@ -65,11 +87,29 @@
+ 
+ 
+ /**
++    \fn vdpauUsable
++    \brief Return true if  vdpau can be used...
++*/
++bool vdpauUsable(void)
++{
++    return vdpauWorking;
++}
++/**
++
++*/
++static void *getFunc(uint32_t id)
++{
++    void *f;
++    if(VDP_STATUS_OK!=vdpProcAddress(vdpDevice,id,&amp;f)) return NULL;
++    return (void *)f;
++}
++/**
+     \fn vdpauProbe
+     \brief Try loading vdpau...
+ */
+ bool vdpauProbe(void)
+ {
++    memset(&amp;funcs,0,sizeof(funcs));
+     if(false==vdpauDynaLoader.loadLibrary(&quot;/usr/lib/libvdpau.so&quot;))
+     {
+         return false;
+@@ -89,9 +129,29 @@
+         return false;
+     }
+     // Now that we have the vdpProcAddress, time to get the functions....
+-    
++#define GetMe(fun,id)         funcs.fun= (typeof(funcs.fun))getFunc(id);ADM_assert(funcs.fun); 
++        
++    GetMe(getErrorString,VDP_FUNC_ID_GET_ERROR_STRING);
++    GetMe(getApiVersion,VDP_FUNC_ID_GET_API_VERSION);
++    GetMe(getInformationString,VDP_FUNC_ID_GET_INFORMATION_STRING);
+ 
++    GetMe(createSurface,VDP_FUNC_ID_VIDEO_SURFACE_CREATE);
++    GetMe(destroySurface,VDP_FUNC_ID_VIDEO_SURFACE_DESTROY);
++    GetMe(getDataSurface,VDP_FUNC_ID_VIDEO_SURFACE_GET_BITS_Y_CB_CR);
+ 
++    GetMe(decoderCreate,VDP_FUNC_ID_DECODER_CREATE);
++    GetMe(decoderDestroy,VDP_FUNC_ID_DECODER_DESTROY);
++    GetMe(decoderRender,VDP_FUNC_ID_DECODER_RENDER);
++
++
++
++    const char *versionString=NULL;
++    uint32_t version=0xff;
++        funcs.getInformationString(&amp;versionString);
++        funcs.getApiVersion(&amp;version);
++        printf(&quot;[VDPAU] API : 0x%x, info : %s\n&quot;,version,versionString);
++
++    vdpauWorking=true;
+     return true;
+ }
+ /**
+@@ -117,7 +177,9 @@
+     pic-&gt;age=1;
+     return 0;
+ }
++/**
+ 
++*/
+  void ADM_releaseBuffer(struct AVCodecContext *avctx, AVFrame *pic)
+ {
+     #define F(x) if(pic-&gt;x) delete [] pic-&gt;x;pic-&gt;x=NULL;
+@@ -126,8 +188,11 @@
+     F(data[2]);
+     return;
+ }
+-//***************************
+-
++#define NB_SURFACE 12
++static VdpVideoSurface surface[NB_SURFACE];
++/**
++    \fn decoderFFVDPAU
++*/
+ decoderFFVDPAU::decoderFFVDPAU(uint32_t w, uint32_t h, uint32_t l, uint8_t * d):decoderFF (w,	   h)
+ {
+         _context-&gt;get_buffer      = ADM_getBuffer;
+@@ -135,8 +200,75 @@
+         _context-&gt;reget_buffer    = ADM_getBuffer;
+ 
+         WRAP_OpenByName(h264_vdpau,CODEC_ID_H264);
++
++        // Now instantiate our VDPAU surface &amp; decoder
++        ADM_assert(VDP_STATUS_OK==funcs.decoderCreate(vdpDevice,VDP_DECODER_PROFILE_H264_HIGH,w,h,16,&amp;vdpDecoder));
++        // Create our surfaces...
++        for(int i=0;i&lt;NB_SURFACE;i++)
++        {
++            ADM_assert(VDP_STATUS_OK==funcs.createSurface(vdpDevice,VDP_CHROMA_TYPE_420,w,h,&amp;(surface[i])));
++        }
++        scratch=new ADMImage(w,h,1);
+ }
++/**
++    \fn uncompress
++*/
++uint8_t decoderFFVDPAU::uncompress (ADMCompressedImage * in, ADMImage * out)
++{
++VdpStatus status;
++    static int ping=0;
++    // First let ffmpeg prepare datas...
++    if(!decoderFF::uncompress (in, scratch))
++    {
++        printf(&quot;[VDPAU] No data from libavcodec\n&quot;);
++        return 0;
++    }
++    printf(&quot;[VDPAU] OK*0***\n&quot;);
++    
++    // Borrowed from mplayer
++    struct vdpau_render_state *rndr = (struct vdpau_render_state *)scratch-&gt;_planes[0];
++    
++    status=funcs.decoderRender(vdpDecoder,surface[ping],
++                            (void * const *)&amp;rndr-&gt;info, rndr-&gt;bitstream_buffers_used, rndr-&gt;bitstream_buffers);
++    if(VDP_STATUS_OK!=status)
++    {
++        
++        printf(&quot;[VDPAU] No data after decoderRender &lt;%s&gt;\n&quot;,funcs.getErrorString(status));
++        return 0;
++    }
++    printf(&quot;[VDPAU] OK*1***\n&quot;);
++    
++    out-&gt;_colorspace=ADM_COLOR_YV12;
++    // Now get back our image...
++    // Copy back from decompressed stuff to our own
++ 
++    void *planes[3];
++            planes[0]=out-&gt;GetWritePtr(PLANAR_Y);
++            planes[1]=out-&gt;GetWritePtr(PLANAR_U);
++            planes[2]=out-&gt;GetWritePtr(PLANAR_V);
++    uint32_t stride[3];
++            stride[0]=out-&gt;GetPitch(PLANAR_Y);
++            stride[1]=out-&gt;GetPitch(PLANAR_U);
++            stride[2]=out-&gt;GetPitch(PLANAR_V);
+ 
++    status=funcs.getDataSurface(
++                surface[ping],
++                VDP_YCBCR_FORMAT_YV12, //VdpYCbCrFormat   destination_ycbcr_format,
++                planes, //void * const *   destination_data,
++                stride //destination_pitches
++                );
++    if(VDP_STATUS_OK!=status)
++    {
++        
++        printf(&quot;[VDPAU] Cannot get data from surface &lt;%s&gt;\n&quot;,funcs.getErrorString(status));
++        return 0;
++    }
++    ping++;
++    ping%=NB_SURFACE;
++    printf(&quot;[VDPAU] OK*2***\n&quot;);
++    out-&gt;Pts=in-&gt;demuxerPts;
++    return 1;
++}
+ 
+ #endif
+ // EOF
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_coreImage/include/ADM_rgb.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_coreImage/include/ADM_rgb.h	2009-05-13 10:40:21 UTC (rev 4822)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_coreImage/include/ADM_rgb.h	2009-05-13 15:21:46 UTC (rev 4823)
+@@ -33,7 +33,8 @@
+     ADM_COLOR_YUV422,
+     ADM_COLOR_YUV422P,
+ 	ADM_COLOR_YUV411,
+-	ADM_COLOR_YUV444
++	ADM_COLOR_YUV444,
++    ADM_COLOR_VDPAU
+  } ADM_colorspace;
+ #define ADM_COLOR_BACKWARD 0x8000
+ #define ADM_COLOR_MASK     0x7FFF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002045.html">[Avidemux-svn-commit] r4822 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/ADM_codecs avidemux/ADM_core/include	avidemux/ADM_userInterfaces/ADM_render cmake
+</A></li>
+	<LI>Next message: <A HREF="002047.html">[Avidemux-svn-commit] r4824 - in	branches/avidemux_2.6_branch_mean/avidemux: . ADM_codecs	ADM_coreUtils/src ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2046">[ date ]</a>
+              <a href="thread.html#2046">[ thread ]</a>
+              <a href="subject.html#2046">[ subject ]</a>
+              <a href="author.html#2046">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

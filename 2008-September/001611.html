@@ -1,0 +1,294 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4371 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4371%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_encoder&In-Reply-To=%3C200809191603.m8JG3v0F006706%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001610.html">
+   <LINK REL="Next"  HREF="001612.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4371 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4371%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_encoder&In-Reply-To=%3C200809191603.m8JG3v0F006706%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4371 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Fri Sep 19 18:03:57 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001610.html">[Avidemux-svn-commit] r4370 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi
+</A></li>
+        <LI>Next message: <A HREF="001612.html">[Avidemux-svn-commit] r4372 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1611">[ date ]</a>
+              <a href="thread.html#1611">[ thread ]</a>
+              <a href="subject.html#1611">[ subject ]</a>
+              <a href="author.html#1611">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-09-19 18:03:49 +0200 (Fri, 19 Sep 2008)
+New Revision: 4371
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_xvid4.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encXvid4.cpp
+Log:
+[xvid] support flushing using null frames
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_xvid4.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_xvid4.cpp	2008-09-19 15:56:00 UTC (rev 4370)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_xvid4.cpp	2008-09-19 16:03:49 UTC (rev 4371)
+@@ -86,30 +86,27 @@
+ 
+   return 0;
+ }
++
+ uint8_t xvid4Encoder::encode(ADMImage * in,ADMBitstream * out)
+ {
+-    int  ret=0;
+     /* Encode the frame */
+     xvid_enc_frame.bitstream = out-&gt;data;
+-    preAmble (in-&gt;data);
+-    ret = xvid_encore (_handle, XVID_ENC_ENCODE, &amp;xvid_enc_frame,
+-                       &amp;xvid_enc_stats);
++	preAmble (in ? in-&gt;data : NULL);
++
++    int ret = xvid_encore (_handle, XVID_ENC_ENCODE, &amp;xvid_enc_frame, &amp;xvid_enc_stats);
++
+     if (ret &lt; 0)
+     {
+         printf (&quot;[xvid] Error calling xvid4 %d\n&quot;, ret);
+         return 0;
++    }
+ 
+-    }
+     postAmble (out);
++    out-&gt;len = ret;
+ 
+-    out-&gt;len = ret;
+-    if (!ret)
+-        printf (&quot;[xvid] Skipped\n&quot;);
+     return 1;
+-
+ }
+ 
+-
+ void xvid4_init (void);
+ /*
+ 	System wide init, do it once for all
+@@ -287,9 +284,6 @@
+   xvid_enc_frame.version = XVID_VERSION;
+   xvid_enc_stats.version = XVID_VERSION;
+ 
+-  /* Bind output buffer */
+-
+-  xvid_enc_frame.length = 0;
+   if (_param.mpegQuantizer || _param.useCustomIntra || _param.useCustomInter)
+     xvid_enc_frame.vol_flags |= XVID_VOL_MPEGQUANT;
+   if (_param.interlaced)
+@@ -368,27 +362,37 @@
+     }
+ 
+   xvid_enc_frame.bframe_threshold = _param.bframe_threshold;
+-
+-  xvid_enc_frame.input.csp = XVID_CSP_YV12;
+-  xvid_enc_frame.input.stride[0] = _w;
+-  xvid_enc_frame.input.stride[1] = _w &gt;&gt; 1;
+-  xvid_enc_frame.input.stride[2] = _w &gt;&gt; 1;
+   xvid_enc_frame.type = XVID_TYPE_AUTO;
+ 
++  if (in)
++  {
++	  xvid_enc_frame.length = 0;
++	  xvid_enc_frame.input.csp = XVID_CSP_YV12;
++	  xvid_enc_frame.input.stride[0] = _w;
++	  xvid_enc_frame.input.stride[1] = _w &gt;&gt; 1;
++	  xvid_enc_frame.input.stride[2] = _w &gt;&gt; 1;
+ 
+-  /* Set up motion estimation flags */
+-  xvid_enc_frame.input.plane[0] = in;
+-  xvid_enc_frame.input.plane[1] = in + (_w * _h);
+-  xvid_enc_frame.input.plane[2] = in + ((_w * _h * 5) &gt;&gt; 2);
++	  /* Set up motion estimation flags */
++	  xvid_enc_frame.input.plane[0] = in;
++	  xvid_enc_frame.input.plane[1] = in + (_w * _h);
++	  xvid_enc_frame.input.plane[2] = in + ((_w * _h * 5) &gt;&gt; 2);
+ 
+-  xvid_enc_frame.par_width = _param.par_width;
+-  xvid_enc_frame.par_height = _param.par_height;
+-  //printf(&quot;Using AR : %u x %u\n&quot;,xvid_enc_frame.par_width,xvid_enc_frame.par_height );
+-  if (xvid_enc_frame.par_width != xvid_enc_frame.par_height)
+-      xvid_enc_frame.par = XVID_PAR_EXT;
++	  xvid_enc_frame.par_width = _param.par_width;
++	  xvid_enc_frame.par_height = _param.par_height;
++
++	  if (xvid_enc_frame.par_width != xvid_enc_frame.par_height)
++		  xvid_enc_frame.par = XVID_PAR_EXT;
++	  else
++		  xvid_enc_frame.par = XVID_PAR_11_VGA;
++  }
+   else
+-      xvid_enc_frame.par = XVID_PAR_11_VGA;
++  {
++	  xvid_enc_frame.length = -1;
++	  xvid_enc_frame.input.csp = XVID_CSP_NULL;
++  }
+ 
++  //printf(&quot;Using AR : %u x %u\n&quot;,xvid_enc_frame.par_width,xvid_enc_frame.par_height );
++
+   /* Custome matrices */
+   if(_param.useCustomIntra)
+   {
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encXvid4.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encXvid4.cpp	2008-09-19 15:56:00 UTC (rev 4370)
++++ branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encXvid4.cpp	2008-09-19 16:03:49 UTC (rev 4371)
+@@ -15,8 +15,11 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
+-#include &lt;config.h&gt;
+ 
++#define __STDC_LIMIT_MACROS
++
++#include &quot;config.h&quot;
++
+ #include &lt;stdio.h&gt;
+ #include &lt;stdlib.h&gt;
+ #include &lt;math.h&gt;
+@@ -31,7 +34,7 @@
+ #include &quot;fourcc.h&quot;
+ #include &quot;avi_vars.h&quot;
+ #include &quot;ADM_toolkit/toolkit.hxx&quot;
+-#include &lt;ADM_assert.h&gt;
++#include &quot;ADM_assert.h&quot;
+ 
+ #include &quot;ADM_encoder/ADM_vidEncode.hxx&quot;
+ 
+@@ -187,53 +190,61 @@
+ uint8_t
+   EncoderXvid4::encode (uint32_t frame, ADMBitstream *out)
+ {
+-  uint32_t l, f, q;
+-  uint8_t r;
+-  //ENC_RESULT enc;
++  uint32_t l, f;
+ 
+   ADM_assert (_codec);
+   ADM_assert (_in);
+-  if (!_in-&gt;getFrameNumberNoAlloc (frame, &amp;l, _vbuffer, &amp;f))
+-    {
+-      printf (&quot;[xvid] Error: Cannot read incoming frame!\n&quot;);
+-      return 0;
+-    }
+ 
++  if (frame != UINT32_MAX)
++  {
++	  if (!_in-&gt;getFrameNumberNoAlloc (frame, &amp;l, _vbuffer, &amp;f))
++	  {
++		  printf (&quot;[xvid] Error: Cannot read incoming frame!\n&quot;);
++		  return 0;
++	  }
++  }
++
+   switch (_state)
+     {
+     case enc_Same:
+-      
+-      out-&gt;flags=0;
+-      if (frame &lt; (encparam.bframes + 1))
+ 	{
+-	  out-&gt;flags = AVI_KEY_FRAME;
+-	  printf (&quot;[xvid] Forcing keyframe for B frame\n&quot;);
++		if (frame != UINT32_MAX)
++		{
++			out-&gt;flags = 0;
++
++			if (frame &lt; (encparam.bframes + 1))
++			{
++				out-&gt;flags = AVI_KEY_FRAME;
++				printf (&quot;[xvid] Forcing keyframe for B frame\n&quot;);
++			}
++
++			int q = _vbuffer-&gt;_Qp;
++
++			if (q &lt; 2 || q &gt; 31)
++			{
++				printf (&quot;[xvid] Out of bound incoming q: %d\n&quot;, q);
++
++				if (q &lt; 2)
++					q = 2;
++				if (q &gt; 31)
++					q = 31;
++			}
++
++			out-&gt;in_quantizer = q;
++		}
+ 	}
+-      q = _vbuffer-&gt;_Qp;
+-      if (q &lt; 2 || q &gt; 31)
+-	{
+-	  printf (&quot;[xvid] Out of bound incoming q: %d\n&quot;, q);
+-	  if (q &lt; 2)
+-	    q = 2;
+-	  if (q &gt; 31)
+-	    q = 31;
+-	}
+-        out-&gt;in_quantizer =q;
+-
+     case enc_CBR:
+     case enc_CQ:
+     case enc_Pass1:
+     case enc_Pass2:
+-      r = _codec-&gt;encode (_vbuffer, out);
+-      return r;
++		return _codec-&gt;encode (frame == UINT32_MAX ? NULL : _vbuffer, out);
+       break;
+ 
+     default:
+       ADM_assert (0);
+     }
+ 
+-  return 1;
+-
++  return 0;
+ }
+ 
+ //_______________________________
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001610.html">[Avidemux-svn-commit] r4370 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi
+</A></li>
+	<LI>Next message: <A HREF="001612.html">[Avidemux-svn-commit] r4372 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1611">[ date ]</a>
+              <a href="thread.html#1611">[ thread ]</a>
+              <a href="subject.html#1611">[ subject ]</a>
+              <a href="author.html#1611">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,227 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3066 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3066%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI&In-Reply-To=%3C200705111432.l4BEWRhM020587%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000367.html">
+   <LINK REL="Next"  HREF="000369.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3066 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3066%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI&In-Reply-To=%3C200705111432.l4BEWRhM020587%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3066 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri May 11 16:32:27 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000367.html">[Avidemux-svn-commit] r3064 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces:	ADM_NONE/ADM_dialog ADM_QT4/ADM_dialog ADM_QT4/ADM_gui
+</A></li>
+        <LI>Next message: <A HREF="000369.html">[Avidemux-svn-commit] r3068 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#368">[ date ]</a>
+              <a href="thread.html#368">[ thread ]</a>
+              <a href="subject.html#368">[ subject ]</a>
+              <a href="author.html#368">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-05-11 16:32:27 +0200 (Fri, 11 May 2007)
+New Revision: 3066
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_audioFilter.cpp
+Log:
+the actual file
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_audioFilter.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_audioFilter.cpp	2007-05-11 13:53:18 UTC (rev 3065)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_audioFilter.cpp	2007-05-11 14:32:27 UTC (rev 3066)
+@@ -0,0 +1,151 @@
++//
++// C++ Implementation: ADM_vidForcedPP
++//
++// Description: 
++//
++//	Force postprocessing assuming constant quant &amp; image type
++//	Uselefull on some badly authored DVD for example
++//
++// Author: mean &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>&gt;, (C) 2004
++//
++// Copyright: See COPYING file that comes with this distribution
++//
++//
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++#include &lt;string.h&gt;
++#include &lt;ADM_assert.h&gt;
++#include &lt;math.h&gt;
++#include &lt;math.h&gt;
++#include &lt;iconv.h&gt;
++#include &quot;config.h&quot;
++
++
++#include &quot;fourcc.h&quot;
++#include &quot;avio.hxx&quot;
++
++#include &quot;avi_vars.h&quot;
++
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
++
++#include &quot;ADM_userInterfaces/ADM_commonUI/DIA_factory.h&quot;
++#include &quot;ADM_assert.h&quot; 
++#include &quot;ADM_audiofilter/audiofilter_normalize_param.h&quot;
++#include &quot;ADM_audiofilter/audioeng_buildfilters.h&quot;
++/**
++    \fn DIA_getAudioFilter
++    \brief Dialog to manage audio filters
++*/
++int DIA_getAudioFilter(GAINparam *gain,
++                        RESAMPLING *downsamplingmethod, 
++                        int *tshifted,
++                        int *shiftvalue, 
++                        int *drc,
++                        int *freqvalue,
++                        FILMCONV *filmconv,
++                        CHANNEL_CONF *channel)
++{
++  
++  uint32_t vDRC=*drc;
++  uint32_t vTshift=*tshifted;
++  int32_t vTshiftValue=*shiftvalue;
++  uint32_t vFreq=*freqvalue;
++  uint32_t vChan=(uint32_t)*channel;
++  uint32_t vDownsample=(uint32_t )*downsamplingmethod;
++  uint32_t vFilm=(uint32_t )*filmconv;
++  uint32_t vGainMode=(uint32_t)gain-&gt;mode;
++  ELEM_TYPE_FLOAT vGainValue=gain-&gt;gain10;
++  vGainValue/=10.;
++  //**********************************
++  diaMenuEntry menuTimeShift[]={
++  {0,_(&quot;No Timeshift&quot;)},
++  {1,_(&quot;TimeShift activated&quot;)}};
++       
++   diaElemToggle    eDRC(&amp;vDRC,_(&quot;_Dynamic Range Compression:&quot;));
++   diaElemMenu      eTimeShift(&amp;vTshift,_(&quot;_TimeShift:&quot;),2,menuTimeShift);
++   diaElemInteger  eShift(&amp;vTshiftValue,_(&quot;TimeShift _Value:&quot;),-10000,10000);
++   
++   eTimeShift.link(&amp;(menuTimeShift[1]),1,&amp;eShift);
++  
++    diaElemFrame frameMisc(_(&quot;Misc&quot;));
++    frameMisc.swallow(&amp;eDRC);
++    frameMisc.swallow(&amp;eTimeShift);
++    frameMisc.swallow(&amp;eShift);
++    //**********************************
++    diaMenuEntry menuResample[]={
++  {0,_(&quot;No Resampling&quot;)},
++  {1,_(&quot;Resampling activated&quot;)}};
++    diaElemMenu      eResample(&amp;vDownsample,_(&quot;_Resampling:&quot;),2,menuResample);
++    diaElemUInteger  eResampleValue(&amp;vFreq,_(&quot;New Frequency:&quot;),6000,64000);
++  
++    eResample.link(&amp;(menuResample[1]),1,&amp;eResampleValue);
++    
++       diaElemFrame frameResampling(_(&quot;Resampling&quot;));
++    frameResampling.swallow(&amp;eResample);
++    frameResampling.swallow(&amp;eResampleValue);
++    //**********************************
++    diaMenuEntry menuFPS[]={
++  {FILMCONV_NONE,     _(&quot;None&quot;)},
++  {FILMCONV_FILM2PAL, _(&quot;Film to Pal&quot;)},
++  {FILMCONV_PAL2FILM, _(&quot;Pal to Film&quot;)}
++    };
++  
++   diaElemMenu      eFPS(&amp;vFilm,_(&quot;_Fps convert:&quot;),3,menuFPS);
++      diaElemFrame frameFPS(_(&quot;Framerate Change&quot;));
++    frameFPS.swallow(&amp;eFPS);
++   //**********************************
++    diaMenuEntry menuGain[]={
++  {ADM_NO_GAIN,       _(&quot;None&quot;)},
++  {ADM_GAIN_AUTOMATIC,_(&quot;Automatic (max -3 dB&quot;)},
++  {ADM_GAIN_MANUAL,   _(&quot;Manual&quot;)}};
++  
++   diaElemMenu      eGain(&amp;vGainMode,_(&quot;_Fps convert:&quot;),3,menuGain);
++   
++    diaElemFloat  eGainValue(&amp;vGainValue,_(&quot;_Gain Value:&quot;),-10,10);
++     eGain.link(&amp;(menuGain[2]),1,&amp;eGainValue);
++   diaElemFrame frameGain(_(&quot;Gain&quot;));   
++    frameGain.swallow(&amp;eGain);
++    frameGain.swallow(&amp;eGainValue);
++  //********************************
++    diaMenuEntry menuMixer[]={
++  {CHANNEL_INVALID,     _(&quot;No Change&quot;)},
++  {CHANNEL_MONO,        _(&quot;Mono&quot;)},
++  {CHANNEL_STEREO,      _(&quot;Stereo&quot;)},
++  {CHANNEL_2F_1R,       _(&quot;Stereo+Surround&quot;)},
++  {CHANNEL_3F,          _(&quot;Stereo+Center&quot;)},
++  {CHANNEL_3F_1R,           _(&quot;Stereo+Center+Surround&quot;)},
++  {CHANNEL_2F_2R,           _(&quot;Stereo front+Stereo Rear&quot;)},
++  {CHANNEL_3F_2R,           _(&quot;5 Channels&quot;)},
++  {CHANNEL_3F_2R_LFE,       _(&quot;5.1 &quot;)},
++  {CHANNEL_DOLBY_PROLOGIC,  _(&quot;Dolby Prologic&quot;)},
++  {CHANNEL_DOLBY_PROLOGIC2, _(&quot;Dolby Prologic II&quot;)}
++    };
++
++ diaElemMenu      eMixer(&amp;vChan,_(&quot;Mixer:&quot;),11,menuMixer);
++diaElemFrame frameMixer(_(&quot;Mixer&quot;));   
++    frameMixer.swallow(&amp;eMixer);
++ 
++ /************************************/
++   diaElem *elems[]={&amp;frameMisc,&amp;frameResampling,&amp;frameFPS,&amp;frameGain,&amp;frameMixer};
++  if( diaFactoryRun(_(&quot;Audio Filter Configuration&quot;),5,elems))
++    {
++        *drc=vDRC;
++        *tshifted=vTshift;
++        *shiftvalue=vTshiftValue;
++        *freqvalue=vFreq;
++        *channel=(CHANNEL_CONF)vChan;
++        *downsamplingmethod=(RESAMPLING)vDownsample;
++        *filmconv=(FILMCONV)vFilm;
++        gain-&gt;mode=(ADM_GAINMode)vGainMode;
++        gain-&gt;gain10=(uint32_t)(10.*vGainValue);
++      return 1;
++    }
++    
++    return 0;
++ 
++}
++
++
++
++// EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000367.html">[Avidemux-svn-commit] r3064 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces:	ADM_NONE/ADM_dialog ADM_QT4/ADM_dialog ADM_QT4/ADM_gui
+</A></li>
+	<LI>Next message: <A HREF="000369.html">[Avidemux-svn-commit] r3068 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#368">[ date ]</a>
+              <a href="thread.html#368">[ thread ]</a>
+              <a href="subject.html#368">[ subject ]</a>
+              <a href="author.html#368">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

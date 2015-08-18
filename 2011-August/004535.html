@@ -1,0 +1,318 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7384 - in branches/avidemux_2.6_branch_mean:	avidemux/qt4/ADM_UIs/include avidemux/qt4/ADM_UIs/src	avidemux_plugins/ADM_videoFilters6_openGl/sample_fragment2
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7384%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/qt4/ADM_UIs/include%20avidemux/qt4/ADM_UIs/src%0A%09avidemux_plugins/ADM_videoFilters6_openGl/sample_fragment2&In-Reply-To=%3C20110804055426.0578F481364%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004534.html">
+   <LINK REL="Next"  HREF="004536.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7384 - in branches/avidemux_2.6_branch_mean:	avidemux/qt4/ADM_UIs/include avidemux/qt4/ADM_UIs/src	avidemux_plugins/ADM_videoFilters6_openGl/sample_fragment2</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7384%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/qt4/ADM_UIs/include%20avidemux/qt4/ADM_UIs/src%0A%09avidemux_plugins/ADM_videoFilters6_openGl/sample_fragment2&In-Reply-To=%3C20110804055426.0578F481364%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7384 - in branches/avidemux_2.6_branch_mean:	avidemux/qt4/ADM_UIs/include avidemux/qt4/ADM_UIs/src	avidemux_plugins/ADM_videoFilters6_openGl/sample_fragment2">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Aug  4 07:54:25 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004534.html">[Avidemux-svn-commit] r7383 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+        <LI>Next message: <A HREF="004536.html">[Avidemux-svn-commit] r7385 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_commonUI avidemux/qt4/ADM_UIs/include	avidemux/qt4/ADM_UIs/src avidemux/qt4/ADM_userInterfaces/ADM_gui	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4535">[ date ]</a>
+              <a href="thread.html#4535">[ thread ]</a>
+              <a href="subject.html#4535">[ subject ]</a>
+              <a href="author.html#4535">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-08-04 07:54:25 +0200 (Thu, 04 Aug 2011)
+New Revision: 7384
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGLFilter.h
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample_fragment2/sampleGl.cpp
+Log:
+[qtGl Filter] Move allocation of texture name to base class
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGLFilter.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGLFilter.h	2011-08-04 05:54:24 UTC (rev 7383)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGLFilter.h	2011-08-04 05:54:25 UTC (rev 7384)
+@@ -34,7 +34,11 @@
+                             QGLShaderProgram     *glProgramUV;
+                             int                   firstRun;
+                             GlActiveTexture_Type *myGlActiveTexture;
++                            GLuint                texName[3];
+ protected:
++                            // image &lt;--&gt; texture
++                            void uploadAllPlanes(ADMImage *image);
++                            void uploadOnePlane(ADMImage *image, ADM_PLANE plane, GLuint tex,int texNum );
+                             bool downloadTexture(ADMImage *target, ADM_PLANE plane,QGLFramebufferObject *fbo);
+                             bool downloadTextures(ADMImage *target, QGLFramebufferObject *fbo);
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp	2011-08-04 05:54:24 UTC (rev 7383)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp	2011-08-04 05:54:25 UTC (rev 7384)
+@@ -71,6 +71,7 @@
+         GUI_Error_HIG(&quot;&quot;,&quot;Cannot get glActiveTexture&quot;);
+         ADM_assert(0);
+     }
++    glGenTextures(3,texName);
+     widget-&gt;doneCurrent();
+     // glTexture TODO
+ 
+@@ -81,6 +82,7 @@
+ ADM_coreVideoFilterQtGl::~ADM_coreVideoFilterQtGl()
+ {
+     ADM_info(&quot;Gl filter : Destroying..\n&quot;);
++    glDeleteTextures(3,texName);
+     if(glProgramY) delete glProgramY;
+     glProgramY=NULL;
+     if(glProgramUV) delete glProgramUV;
+@@ -224,4 +226,66 @@
+     }
+     return true;
+ }
++/**
++    \fn uploadTexture
++*/
++void ADM_coreVideoFilterQtGl::uploadOnePlane(ADMImage *image, ADM_PLANE plane, GLuint tex,int texNum )
++{
++        myGlActiveTexture(tex);  // Activate texture unit &quot;tex&quot;
++        glBindTexture(GL_TEXTURE_RECTANGLE_NV, texNum); // Use texture &quot;texNum&quot;
++
++        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
++        if(!firstRun)
++        {
++            glTexImage2D(GL_TEXTURE_RECTANGLE_NV, 0, GL_LUMINANCE, 
++                            image-&gt;GetPitch(plane),
++                            image-&gt;GetHeight(plane), 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, 
++                            image-&gt;GetReadPtr(plane));
++        }else
++        {
++            glTexSubImage2D(GL_TEXTURE_RECTANGLE_NV, 0, 0, 0, 
++                image-&gt;GetPitch(plane),
++                image-&gt;GetHeight(plane),
++                GL_LUMINANCE, GL_UNSIGNED_BYTE, 
++                image-&gt;GetReadPtr(plane));
++        }
++}
++/**
++    \fn uploadTexture
++*/
++void ADM_coreVideoFilterQtGl::uploadAllPlanes(ADMImage *image)
++{
++          // Activate texture unit &quot;tex&quot;
++        for(int xplane=2;xplane&gt;=0;xplane--)
++        {
++            myGlActiveTexture(GL_TEXTURE0+xplane);
++            ADM_PLANE plane=(ADM_PLANE)xplane;
++            glBindTexture(GL_TEXTURE_RECTANGLE_NV, texName[xplane]); // Use tex engine &quot;texNum&quot;
++            glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++            glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++            glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++            glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
++
++                if(!firstRun)
++                {
++                    glTexImage2D(GL_TEXTURE_RECTANGLE_NV, 0, GL_LUMINANCE, 
++                                    image-&gt;GetPitch(plane),
++                                    image-&gt;GetHeight(plane), 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, 
++                                    image-&gt;GetReadPtr(plane));
++                }else
++                {
++                    glTexSubImage2D(GL_TEXTURE_RECTANGLE_NV, 0, 0, 0, 
++                        image-&gt;GetPitch(plane),
++                        image-&gt;GetHeight(plane),
++                        GL_LUMINANCE, GL_UNSIGNED_BYTE, 
++                        image-&gt;GetReadPtr(plane));
++                }
++        }
++}
++
+ // EOF
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample_fragment2/sampleGl.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample_fragment2/sampleGl.cpp	2011-08-04 05:54:24 UTC (rev 7383)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample_fragment2/sampleGl.cpp	2011-08-04 05:54:25 UTC (rev 7384)
+@@ -61,21 +61,15 @@
+ class openGlSample : public  ADM_coreVideoFilterQtGl
+ {
+ protected:
+-                        uint8_t *uBuffer;
+-                        uint8_t *vBuffer;
+-                        GLuint  texName[3];
++
+ protected:
+-                        //bool uploadTexture(ADMImage *image, ADM_PLANE plane);
+                         bool render(ADMImage *image,ADM_PLANE plane,QGLFramebufferObject *fbo);
+-                        void tinyUploadTex(ADMImage *img, ADM_PLANE plane, GLuint tex,int texNum );
+-                        void multiUploadTex(ADMImage *image);
+ public:
+                              openGlSample(ADM_coreVideoFilter *previous,CONFcouple *conf);
+                             ~openGlSample();
+ 
+         virtual const char   *getConfiguration(void);                   /// Return  current configuration as a human readable string
+         virtual bool         getNextFrame(uint32_t *fn,ADMImage *image);    /// Return the next image
+-	 //  virtual FilterInfo  *getInfo(void);                             /// Return picture parameters after this filter
+         virtual bool         getCoupledConf(CONFcouple **couples) ;   /// Return the current filter configuration
+         virtual bool         configure(void) {return true;}             /// Start graphical user interface
+ };
+@@ -119,9 +113,7 @@
+                 ADM_error(&quot;[GL Render] Binding FAILED\n&quot;);
+                 ADM_assert(0);
+         }
+-        uBuffer=new uint8_t[info.width*info.height];
+-        vBuffer=new uint8_t[info.width*info.height];
+-        glGenTextures(3,texName);
++
+         fboY-&gt;release();
+         widget-&gt;doneCurrent();
+ 
+@@ -132,11 +124,6 @@
+ */
+ openGlSample::~openGlSample()
+ {
+-    delete [] uBuffer;
+-    delete [] vBuffer;
+-    glDeleteTextures(3,texName);
+-    uBuffer=NULL;
+-    vBuffer=NULL;
+ 
+ }
+ 
+@@ -166,15 +153,12 @@
+     glProgramY-&gt;setUniformValue(&quot;myWidth&quot;, image-&gt;GetWidth(PLANAR_Y)); 
+     glProgramY-&gt;setUniformValue(&quot;myHeight&quot;, image-&gt;GetHeight(PLANAR_Y)); 
+ 
+-#if 0
+-    tinyUploadTex(image,PLANAR_V,GL_TEXTURE2,texName[2]);
+-    tinyUploadTex(image,PLANAR_U,GL_TEXTURE1,texName[1]);
+-    tinyUploadTex(image,PLANAR_Y,GL_TEXTURE0,texName[0]);
+-#else
+-    multiUploadTex(image);
+-#endif
++    uploadAllPlanes(image);
++
+     render(image,PLANAR_Y,fboY);
++
+     downloadTextures(image,fboY);
++
+     fboY-&gt;release();
+     firstRun=false;
+     glPopMatrix();
+@@ -200,68 +184,7 @@
+     
+     return &quot;openGl Sample.&quot;;
+ }
+-/**
+-    \fn uploadTexture
+-*/
+-void openGlSample::tinyUploadTex(ADMImage *image, ADM_PLANE plane, GLuint tex,int texNum )
+-{
+-        myGlActiveTexture(tex);  // Activate texture unit &quot;tex&quot;
+-        glBindTexture(GL_TEXTURE_RECTANGLE_NV, texNum); // Use texture &quot;texNum&quot;
+ 
+-        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+-        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+-        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+-        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+-        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+-        if(!firstRun)
+-        {
+-            glTexImage2D(GL_TEXTURE_RECTANGLE_NV, 0, GL_LUMINANCE, 
+-                            image-&gt;GetPitch(plane),
+-                            image-&gt;GetHeight(plane), 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, 
+-                            image-&gt;GetReadPtr(plane));
+-        }else
+-        {
+-            glTexSubImage2D(GL_TEXTURE_RECTANGLE_NV, 0, 0, 0, 
+-                image-&gt;GetPitch(plane),
+-                image-&gt;GetHeight(plane),
+-                GL_LUMINANCE, GL_UNSIGNED_BYTE, 
+-                image-&gt;GetReadPtr(plane));
+-        }
+-}
+-/**
+-    \fn uploadTexture
+-*/
+-void openGlSample::multiUploadTex(ADMImage *image)
+-{
+-          // Activate texture unit &quot;tex&quot;
+-        for(int xplane=2;xplane&gt;=0;xplane--)
+-        {
+-            myGlActiveTexture(GL_TEXTURE0+xplane);
+-            ADM_PLANE plane=(ADM_PLANE)xplane;
+-            glBindTexture(GL_TEXTURE_RECTANGLE_NV, texName[xplane]); // Use tex engine &quot;texNum&quot;
+-            glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+-            glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+-            glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+-            glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+-            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+-
+-                if(!firstRun)
+-                {
+-                    glTexImage2D(GL_TEXTURE_RECTANGLE_NV, 0, GL_LUMINANCE, 
+-                                    image-&gt;GetPitch(plane),
+-                                    image-&gt;GetHeight(plane), 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, 
+-                                    image-&gt;GetReadPtr(plane));
+-                }else
+-                {
+-                    glTexSubImage2D(GL_TEXTURE_RECTANGLE_NV, 0, 0, 0, 
+-                        image-&gt;GetPitch(plane),
+-                        image-&gt;GetHeight(plane),
+-                        GL_LUMINANCE, GL_UNSIGNED_BYTE, 
+-                        image-&gt;GetReadPtr(plane));
+-                }
+-        }
+-}
+-
+ 
+ /**
+     \fn render
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004534.html">[Avidemux-svn-commit] r7383 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+	<LI>Next message: <A HREF="004536.html">[Avidemux-svn-commit] r7385 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_commonUI avidemux/qt4/ADM_UIs/include	avidemux/qt4/ADM_UIs/src avidemux/qt4/ADM_userInterfaces/ADM_gui	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4535">[ date ]</a>
+              <a href="thread.html#4535">[ thread ]</a>
+              <a href="subject.html#4535">[ subject ]</a>
+              <a href="author.html#4535">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

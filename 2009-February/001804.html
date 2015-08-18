@@ -1,0 +1,341 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4574 - in	branches/avidemux_2.6_branch_mean/avidemux: ADM_editor	ADM_userInterfaces/ADM_QT4/ADM_gui
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4574%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20ADM_editor%0A%09ADM_userInterfaces/ADM_QT4/ADM_gui&In-Reply-To=%3C200902060656.n166uAMd016560%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001803.html">
+   <LINK REL="Next"  HREF="001805.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4574 - in	branches/avidemux_2.6_branch_mean/avidemux: ADM_editor	ADM_userInterfaces/ADM_QT4/ADM_gui</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4574%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20ADM_editor%0A%09ADM_userInterfaces/ADM_QT4/ADM_gui&In-Reply-To=%3C200902060656.n166uAMd016560%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4574 - in	branches/avidemux_2.6_branch_mean/avidemux: ADM_editor	ADM_userInterfaces/ADM_QT4/ADM_gui">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Feb  6 07:56:10 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001803.html">[Avidemux-svn-commit] r4573 - in	branches/avidemux_2.5_branch_gruntster: avidemux	avidemux/ADM_editor avidemux/ADM_outputs/oplug_mp4	avidemux/ADM_toolkit	avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog po
+</A></li>
+        <LI>Next message: <A HREF="001805.html">[Avidemux-svn-commit] r4575 - tags
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1804">[ date ]</a>
+              <a href="thread.html#1804">[ thread ]</a>
+              <a href="subject.html#1804">[ subject ]</a>
+              <a href="author.html#1804">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-02-06 07:56:08 +0100 (Fri, 06 Feb 2009)
+New Revision: 4574
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.hxx
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADMedAVIAUD.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp
+Log:
+[Audio] Better handling of holes
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp	2009-02-05 20:04:06 UTC (rev 4573)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp	2009-02-06 06:56:08 UTC (rev 4574)
+@@ -80,8 +80,10 @@
+ ADM_Composer::ADM_Composer (void) : ADM_audioStream(NULL,NULL)
+ {
+ uint32_t type,value;
+-   audioBufferStart=0;
+-   audioBufferEnd=0;
++
++   packetBufferSize=0;
++   packetBufferDts=ADM_NO_PTS;
++
+   _nb_segment = 0;
+   _nb_video = 0;
+   _total_frames = 0;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.hxx	2009-02-05 20:04:06 UTC (rev 4573)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.hxx	2009-02-06 06:56:08 UTC (rev 4574)
+@@ -111,15 +111,15 @@
+  	uint32_t  							_audio_start;
+ }_SEGMENT;
+ /**
+-        
++            \class ADM_Composer
+ */
+ class ADM_Composer : public ADM_audioStream
+ {
+   private:
+                 
+-    uint8_t                             audioBuffer[ADM_EDITOR_AUDIO_BUFFER_SIZE];
+-    uint32_t                            audioBufferStart;
+-    uint32_t                            audioBufferEnd;
++//    uint8_t                             audioBuffer[ADM_EDITOR_AUDIO_BUFFER_SIZE];
++//    uint32_t                            audioBufferStart;
++//    uint32_t                            audioBufferEnd;
+ 
+                     uint8_t dupe(ADMImage *src,ADMImage *dst,_VIDEOS *vid); 
+                                                             // Duplicate img, do colorspace
+@@ -254,7 +254,15 @@
+ 					//______________________________
+ 					//   audioStream
+ 					//______________________________
++protected:
++#define ADM_EDITOR_PACKET_BUFFER_SIZE (20*1024)
++                        uint8_t  packetBuffer[ADM_EDITOR_PACKET_BUFFER_SIZE];
++                        uint32_t packetBufferSize;
++                        uint64_t packetBufferDts;
++                        uint32_t packetBufferSamples;
++                        bool     refillPacketBuffer(void);
+   
++public:
+         
+ virtual uint8_t         getPacket(uint8_t *buffer,uint32_t *size, uint32_t sizeMax,uint32_t *nbSample,uint64_t *dts);
+         uint8_t         getPCMPacket(float  *dest, uint32_t sizeMax, uint32_t *samples,uint64_t *odts);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADMedAVIAUD.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADMedAVIAUD.cpp	2009-02-05 20:04:06 UTC (rev 4573)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADMedAVIAUD.cpp	2009-02-06 06:56:08 UTC (rev 4574)
+@@ -53,6 +53,25 @@
+ #define MYAUDIO (_videos[0].audioTracks[_videos[0].currentAudioStream])
+ 
+ /**
++    \fn refillPacketBuffer
++    \brief Fetch a new packet
++*/
++bool ADM_Composer::refillPacketBuffer(void)
++{
++   packetBufferSize=0; 
++   ADM_audioStreamTrack *trk=getTrack(0);
++    if(!trk) return false;    
++   if(!trk-&gt;stream-&gt;getPacket(packetBuffer,&amp;packetBufferSize,ADM_EDITOR_PACKET_BUFFER_SIZE,
++                        &amp;packetBufferSamples,&amp;packetBufferDts))
++    {
++            adm_printf(ADM_PRINT_ERROR,&quot;[Composer::getPCMPacket] Read failed\n&quot;);
++            return false;
++    }
++    return true;
++}
++
++
++/**
+     \fn     getPCMPacket
+     \brief  Get audio packet
+ 
+@@ -60,93 +79,100 @@
+ 
+ uint8_t ADM_Composer::getPCMPacket(float  *dest, uint32_t sizeMax, uint32_t *samples,uint64_t *odts)
+ {
+-uint32_t nbSamples,fillerSample=0;   // FIXME : Store &amp; fix the DTS error correctly!!!!
+-uint64_t dts;
+-uint32_t inSize,nbOut;
++uint32_t fillerSample=0;   // FIXME : Store &amp; fix the DTS error correctly!!!!
++uint32_t inSize;
+ bool drop=false;
+ 
++
++again:
+     *samples=0;
+     ADM_audioStreamTrack *trk=getTrack(0);
+-    if(!trk) return 0;    
+-
+-    // Read a packet from stream 0
+-again:
+-    drop=false;
+-    fillerSample=0;
+-    if(!trk-&gt;stream-&gt;getPacket(audioBuffer,&amp;inSize,ADM_EDITOR_AUDIO_BUFFER_SIZE,&amp;nbSamples,&amp;dts))
++    if(!trk) return false;
++    // Do we already have a packet ?
++    if(!packetBufferSize)
+     {
+-            adm_printf(ADM_PRINT_ERROR,&quot;[Composer::getPCMPacket] Read failed\n&quot;);
+-            return 0;
++        if(!refillPacketBuffer())
++        {
++            printf(&quot;[Editor] Cannot refill audio\n&quot;);
++        }
+     }
+-    vprintf(&quot;[PCMPacket]  Got %d samples, time code %08lu  lastDts=%08lu delta =%08ld\n&quot;,nbSamples,dts,lastDts,dts-lastDts);
++    // We do now
++    vprintf(&quot;[PCMPacket]  Got %d samples, time code %08lu  lastDts=%08lu delta =%08ld\n&quot;,packetBufferSamples,packetBufferDts,lastDts,packetBufferDts-lastDts);
++
++
+     // Check if the Dts matches
+-    if(lastDts!=ADM_AUDIO_NO_DTS &amp;&amp; dts!=ADM_AUDIO_NO_DTS)
++    if(lastDts!=ADM_AUDIO_NO_DTS &amp;&amp;packetBufferDts!=ADM_AUDIO_NO_DTS)
+     {
+-        if(abs(lastDts-dts)&gt;ADM_ALLOWED_DRIFT_US)
++        if(abs(lastDts-packetBufferDts)&gt;ADM_ALLOWED_DRIFT_US)
+         {
+-        printf(&quot;[Composer::getPCMPacket] drift %d, computed :%lu got %lu\n&quot;,(int)(lastDts-dts),lastDts,dts);
+-        if(dts&lt;lastDts)
+-        {
+-            printf(&quot;[Composer::getPCMPacket] Dropping packet\n&quot;);
+-            drop=true;
+-        }else 
+-        {
+-            // Else add filler 
+-            // Compute filler size
+-            float f=dts-lastDts; // in us
+-            f*=wavHeader.frequency;
+-            f/=1000000.;
+-            // in samples!
+-            uint32_t fillerSample=(uint32_t )(f+0.49);
+-            uint32_t mx=sizeMax/trk-&gt;wavheader.channels;
+-            
+-            if(mx&lt;fillerSample) fillerSample=mx;
+-            // arbitrary cap, max 4kSample in one go
+-            // about 100 ms
+-            if(fillerSample&gt;4*1024) 
++            printf(&quot;[Composer::getPCMPacket] drift %d, computed :%lu got %lu\n&quot;,(int)(lastDts-packetBufferDts),lastDts,packetBufferDts);
++            if(packetBufferDts&lt;lastDts)
+             {
+-                fillerSample=4*1024;
+-            }
+-            uint32_t start=fillerSample*sizeof(float)*trk-&gt;wavheader.channels;
+-            memset(dest,0,start);
++                printf(&quot;[Composer::getPCMPacket] Dropping packet %&quot;LU&quot; last =%&quot;LU&quot;\n&quot;,lastDts/1000,packetBufferDts/1000);
++                drop=true;
++            }else 
++            {
++                // There is a &quot;hole&quot; in audio
++                // Let's add some filler
++                // Compute filler size
++                float f=packetBufferDts-lastDts; // in us
++                f*=wavHeader.frequency;
++                f/=1000000.;
++                // in samples!
++                uint32_t fillerSample=(uint32_t )(f+0.49);
++                uint32_t mx=sizeMax/trk-&gt;wavheader.channels;
++                
++                if(mx&lt;fillerSample) fillerSample=mx;
++                // arbitrary cap, max 4kSample in one go
++                // about 100 ms
++                if(fillerSample&gt;4*1024) 
++                {
++                    fillerSample=4*1024;
++                }
++                uint32_t start=fillerSample*sizeof(float)*trk-&gt;wavheader.channels;
++                memset(dest,0,start);
+ 
+-            advanceDtsBySample(fillerSample);
+-            dest+=fillerSample*trk-&gt;wavheader.channels;
+-            vprintf(&quot;[Composer::getPCMPacket] Adding %u padding samples, dts is now %lu\n&quot;,fillerSample,lastDts);
++                advanceDtsBySample(fillerSample);
++                dest+=fillerSample*trk-&gt;wavheader.channels;
++                vprintf(&quot;[Composer::getPCMPacket] Adding %u padding samples, dts is now %lu\n&quot;,fillerSample,lastDts);
++                return true;
+        }
+       }
+-    }else
+-    {
+-        // If lastDts is not initialized....
+-        if(lastDts==ADM_AUDIO_NO_DTS) lastDts=dts;
+     }
+-    // Call codec...
+-    if(!trk-&gt;codec-&gt;run(audioBuffer, inSize, dest, &amp;nbOut))
++    // If lastDts is not initialized....
++    if(lastDts==ADM_AUDIO_NO_DTS) lastDts=packetBufferDts;
++    
++    //
++    //  The packet is ok, decode it...
++    //
++    uint32_t nbOut=0; // Nb sample as seen by codec
++    if(!trk-&gt;codec-&gt;run(packetBuffer, packetBufferSize, dest, &amp;nbOut))
+     {
++            packetBufferSize=0; // consume
+             adm_printf(ADM_PRINT_ERROR,&quot;[Composer::getPCMPacket] codec failed failed\n&quot;);
+-            return 0;
++            return false;
+     }
+-    
+-    //
+-    //
++    packetBufferSize=0; // consume
++
++    // Compute how much decoded sample to compare with what demuxer said
+     uint32_t decodedSample=nbOut;
+     decodedSample/=trk-&gt;wavheader.channels;
+-    if(!decodedSample &amp;&amp; !fillerSample) goto again;
+-#define ADM_MAX_JITTER 5000  // in samples
+-    if(abs(nbSamples-decodedSample)&gt;ADM_MAX_JITTER)
++    if(!decodedSample) goto again;
++#define ADM_MAX_JITTER 5000  // in samples, due to clock accuracy, it can be +er, -er, + er, -er etc etc
++    if(abs(decodedSample-packetBufferSamples)&gt;ADM_MAX_JITTER)
+     {
+-        printf(&quot;[Composer::getPCMPacket] Demuxer was wrong %d vs %d samples!\n&quot;,nbSamples,decodedSample);
++        printf(&quot;[Composer::getPCMPacket] Demuxer was wrong %d vs %d samples!\n&quot;,packetBufferSamples,decodedSample);
+     }
+     
+-    // This packet has been dropped, try the next one
+-    if(drop==true &amp;&amp; !fillerSample) goto again;
++    // This packet has been dropped (too early packt), try the next one
++    if(drop==true) goto again;
+     // Update infos
+-    *samples=(decodedSample+fillerSample);
++    *samples=(decodedSample);
+     *odts=lastDts;
+     advanceDtsBySample(decodedSample);
+     vprintf(&quot;[Composer::getPCMPacket] Adding %u decodedSample, dts is not %lu\n&quot;,fillerSample,lastDts);
+     ADM_assert(sizeMax&gt;=(fillerSample+decodedSample)*trk-&gt;wavheader.channels);
+-    return 1;
++    return true;
+ }
+ /**
+         \fn getPacket
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp	2009-02-05 20:04:06 UTC (rev 4573)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp	2009-02-06 06:56:08 UTC (rev 4574)
+@@ -49,9 +49,9 @@
+ 	ADM_assert(frame &lt;= videoStream-&gt;getInfo()-&gt;nb_frames);
+ 
+ 	printf(&quot;** DIA_filterPreview %i **\n&quot;, frame);
+-//	Ui_seekablePreviewWindow previewDialog(videoStream, frame);
++	Ui_seekablePreviewWindow previewDialog(NULL,videoStream, frame);
+ 
+-//	previewDialog.exec();
++	previewDialog.exec();
+ }
+ 
+ //****************************************************************************************************
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001803.html">[Avidemux-svn-commit] r4573 - in	branches/avidemux_2.5_branch_gruntster: avidemux	avidemux/ADM_editor avidemux/ADM_outputs/oplug_mp4	avidemux/ADM_toolkit	avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog po
+</A></li>
+	<LI>Next message: <A HREF="001805.html">[Avidemux-svn-commit] r4575 - tags
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1804">[ date ]</a>
+              <a href="thread.html#1804">[ thread ]</a>
+              <a href="subject.html#1804">[ subject ]</a>
+              <a href="author.html#1804">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

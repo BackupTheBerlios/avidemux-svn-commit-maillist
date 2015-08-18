@@ -1,0 +1,561 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5871 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5871%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%20ADM_editor&In-Reply-To=%3C201001231930.o0NJUP2C020535%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003075.html">
+   <LINK REL="Next"  HREF="003077.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5871 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5871%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%20ADM_editor&In-Reply-To=%3C201001231930.o0NJUP2C020535%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5871 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jan 23 20:30:25 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003075.html">[Avidemux-svn-commit] r5870 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+        <LI>Next message: <A HREF="003077.html">[Avidemux-svn-commit] r5872 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3076">[ date ]</a>
+              <a href="thread.html#3076">[ thread ]</a>
+              <a href="subject.html#3076">[ subject ]</a>
+              <a href="author.html#3076">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-01-23 20:30:19 +0100 (Sat, 23 Jan 2010)
+New Revision: 5871
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/gui_navigate.cpp
+Log:
+[Editor] Previous picture, part 1
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.cpp	2010-01-23 15:56:08 UTC (rev 5870)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.cpp	2010-01-23 19:30:19 UTC (rev 5871)
+@@ -17,7 +17,7 @@
+ #include &quot;ADM_image.h&quot;
+ #include &quot;ADM_editor/ADM_edCache.h&quot;
+ #define ADM_NO_PTS 0xffffffffffffffffLL
+-#if 1
++#if 0
+ #define aprintf(...) {}
+ #else
+ #define aprintf printf
+@@ -85,9 +85,11 @@
+     int r,w;
+     r=readIndex%_nbImage;
+     w=(writeIndex)%_nbImage;
++    aprintf(&quot;Read: %&quot;LU&quot; write :%&quot;LU&quot;\n&quot;,readIndex,writeIndex);
+     if(r==w &amp;&amp; readIndex!=writeIndex) //full
+     {
+         readIndex++; // free older
++        aprintf(&quot;Erasing read\n&quot;);
+     }
+     found=writeIndex%_nbImage;
+     
+@@ -95,6 +97,7 @@
+     if(found==-1) ADM_assert(0);
+ 	_elem[found].pts=ADM_NO_PTS;;
+     writeIndex++;
++    aprintf(&quot;Using free image at index %d\n&quot;,found);
+ 	return _elem[found].image;
+ 
+ }
+@@ -125,6 +128,7 @@
+                 uint32_t prev=(writeIndex+_nbImage-1)%_nbImage;
+                  ADM_assert(i==prev);
+                  ADM_assert(_elem[i].pts==ADM_NO_PTS);
++                 aprintf(&quot;Invalidate writeIndex %&quot;LU&quot;\n&quot;,writeIndex);
+                  writeIndex--;
+                  return;
+             }
+@@ -145,6 +149,7 @@
+ 		{
+             ADM_assert(_elem[i].pts==ADM_NO_PTS);
+ 			_elem[i].pts=image-&gt;Pts;
++            aprintf(&quot;validate Index %&quot;LU&quot; with pts=%&quot;LLU&quot;ms\n&quot;,i,image-&gt;Pts);
+ 			return true;
+ 		}
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2010-01-23 15:56:08 UTC (rev 5870)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2010-01-23 19:30:19 UTC (rev 5871)
+@@ -124,10 +124,22 @@
+         return false;
+     }
+     _SEGMENT *seg=_segments.getSegment(_currentSegment);
++    // Ok, we have switched to a new segment
++    // Flush the cache
++    _VIDEOS *vid= _segments.getRefVideo(seg-&gt;_reference);
+     if(false== DecodePictureUpToIntra(seg-&gt;_reference,frame))
+     {
+         return false;
+     }
++    // Get the last decoded PTS and it is our current PTS
++    _currentPts=vid-&gt;lastDecodedPts+seg-&gt;_startTimeUs;
++    _currentPts-=seg-&gt;_refStartTimeUs;
++#if 0
++    ADM_info(&quot;decodec DTS=%&quot;LLU&quot; ms\n&quot;,vid-&gt;lastDecodedPts/1000);
++    ADM_info(&quot;startTime DTS=%&quot;LLU&quot; ms\n&quot;,seg-&gt;_startTimeUs/1000);
++    ADM_info(&quot;refstart DTS=%&quot;LLU&quot; ms\n&quot;,seg-&gt;_refStartTimeUs/1000);
++    ADM_info(&quot;Current DTS=%&quot;LLU&quot; ms\n&quot;,_currentPts/1000);
++#endif
+     return true;
+ }
+ /**
+@@ -146,9 +158,9 @@
+     
+     // Try to seek...
+     _SEGMENT *s=_segments.getSegment(seg);
++    _VIDEOS *v=_segments.getRefVideo(s-&gt;_reference);
+     if(!s-&gt;_reference &amp;&amp; !segTime)
+     {
+-        _VIDEOS *v=_segments.getRefVideo(s-&gt;_reference);
+         segTime=v-&gt;firstFramePts;
+         ADM_warning(&quot;Fixating start time to %&quot;LLU&quot; ms\n&quot;,segTime/1000);
+     }
+@@ -159,9 +171,11 @@
+             return false;
+     }
+     _currentSegment=seg;
++    _currentPts=v-&gt;lastDecodedPts;
+     return true;
+ 
+ }
++
+ /**
+     \fn NextPicture
+     \brief decode &amp; returns the next picture
+@@ -170,15 +184,31 @@
+ {
+ uint64_t pts;
+ uint64_t tail;
+-
+-    // Decode image...
+-    _SEGMENT *seg=_segments.getSegment(_currentSegment);
+-    if(false== nextPictureInternal(seg-&gt;_reference,image))
+-    {
+-        goto np_nextSeg;
+-    }
+-        // Refresh in case we switched....
+-        seg=_segments.getSegment(_currentSegment);
++    
++        // Decode image...
++        _SEGMENT *seg=_segments.getSegment(_currentSegment);
++        // Search it in the cache...
++        _VIDEOS *vid=_segments.getRefVideo(seg-&gt;_reference);
++        
++        uint64_t refPts=_currentPts-seg-&gt;_startTimeUs+seg-&gt;_refStartTimeUs; // time in the ref video
++        ADMImage *cached=vid-&gt;_videoCache-&gt;getAfter(refPts);
++        if(cached)
++        {
++            uint64_t delta=cached-&gt;Pts-seg-&gt;_refStartTimeUs;
++            if(delta&lt;seg-&gt;_durationUs)
++            {
++                // Got it
++                image-&gt;duplicate(cached);
++            }else
++                goto np_nextSeg;
++        }else 
++        { // Not in cache, decode next one
++            if(false== nextPictureInternal(seg-&gt;_reference,image))
++            {
++                goto np_nextSeg;
++            }
++        }
++        // Got it, update timing
+         updateImageTiming(seg,image);
+         // no we have our image, let's check it is within this segment range..
+         pts=image-&gt;Pts;
+@@ -190,8 +220,7 @@
+                 _segments.dump();
+                 goto np_nextSeg;
+         }
+-        
+-
++        _currentPts=pts;
+         return true;
+ 
+ // Try to get an image for the following segment....
+@@ -207,12 +236,41 @@
+             seg=_segments.getSegment(_currentSegment);
+             samePictureInternal(seg-&gt;_reference,image);
+             updateImageTiming(seg,image);
++            _currentPts=pts;
+             return true;
+-        } else  
++        } 
++        ADM_warning(&quot;Cannot get next picture. Last segment\n&quot;);
++        return false;
++}
++
++/**
++    \fn NextPicture
++    \brief decode &amp; returns the next picture
++*/
++bool        ADM_Composer::previousPicture(ADMImage *image)
++{
++uint64_t pts;
++uint64_t tail;
++    
++        // Decode image...
++        _SEGMENT *seg=_segments.getSegment(_currentSegment);
++        // Search it in the cache...
++        _VIDEOS *vid=_segments.getRefVideo(seg-&gt;_reference);
++        
++        uint64_t refPts=_currentPts-seg-&gt;_startTimeUs+seg-&gt;_refStartTimeUs; // time in the ref video
++        ADMImage *cached=vid-&gt;_videoCache-&gt;getBefore(refPts);
++        if(cached)
+         {
+-                ADM_warning(&quot;Cannot get next picture. Last segment\n&quot;);
+-                return false;
++            if(cached-&gt;Pts&gt;=seg-&gt;_refStartTimeUs)
++            {
++                // Got it
++                image-&gt;duplicate(cached);
++                updateImageTiming(seg,image);
++                _currentPts=pts;
++                return true;
++            }
+         }
++
+         return false;
+ }
+ /**
+@@ -222,13 +280,31 @@
+ bool        ADM_Composer::samePicture(ADMImage *image)
+ {
+       _SEGMENT *seg=_segments.getSegment(_currentSegment);
+-        if(false== samePictureInternal(seg-&gt;_reference,image))
+-        {
+-            ADM_warning(&quot;SamePicture failed\n&quot;);
+-            return false;
+-        }
+-         updateImageTiming(seg,image);
+-        return true;
++      _VIDEOS  *ref=_segments.getRefVideo(seg-&gt;_reference);
++
++        // Do Pts-&gt;ref PTs
++uint64_t refPts;
++uint64_t segTime;
++uint32_t segNo;
++    if(false==_segments.convertLinearTimeToSeg(_currentPts,&amp;segNo,&amp;segTime))
++    {
++          ADM_error(&quot;Cannot convert time in samePicture\n&quot;);         
++          return false;
++    }
++      ADM_assert(_currentSegment==segNo);
++      refPts=segTime+seg-&gt;_refStartTimeUs;
++
++      ADMImage *last=ref-&gt;_videoCache-&gt;getByPts(refPts);
++      if(last)
++      {
++            image-&gt;duplicate(last);
++            updateImageTiming(seg,image);
++            return true;
++      }
++      ADM_error(&quot;Cannot find same image in cache\n&quot;); 
++      ADM_info(&quot;Looking for PTS=%&quot;LLU&quot; ms\n&quot;,refPts/1000);
++      ref-&gt;_videoCache-&gt;dump();
++      return false;
+ }
+ 
+ 
+@@ -338,8 +414,10 @@
+ bool ADM_Composer::rewind(void)
+ {
+         ADM_info(&quot;Rewinding\n&quot;);
+-        return switchToSegment(0);
+-
++        if(switchToSegment(0)==false) return false;
++        _VIDEOS *vid=_segments.getRefVideo(_segments.getSegment(0)-&gt;_reference);
++        _currentPts=vid-&gt;lastDecodedPts;
++        return true;
+ }
+ /**
+     \fn addSegment
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2010-01-23 15:56:08 UTC (rev 5870)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2010-01-23 19:30:19 UTC (rev 5871)
+@@ -133,9 +133,9 @@
+ bool ADM_Composer::nextPictureInternal(uint32_t ref,ADMImage *out)
+ {
+   ADMImage	*result;
+-  EditorCache   *cache=_segments.getRefVideo(ref)-&gt;_videoCache;
++  
+   _VIDEOS *vid=_segments.getRefVideo(ref);
+-
++  EditorCache   *cache=vid-&gt;_videoCache;
+   ADM_assert(vid);
+ 
+    uint32_t loop=20; // Try 20 frames ahead
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2010-01-23 15:56:08 UTC (rev 5870)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2010-01-23 19:30:19 UTC (rev 5871)
+@@ -100,7 +100,8 @@
+                     uint32_t	_internalFlags;  // Flags :
+                     ADM_PP      _pp;             // Postprocessing settings
+                     ADMImage	*_imageBuffer;   // Temp buffer used for decoding
+-                    uint32_t    _currentSegment;   // Current video segment
++                    uint64_t    _currentPts;        // Current image PTS
++                    uint32_t    _currentSegment;    // Current video segment
+                     uint64_t    _nextFrameDts;      // COPYMODE Used in copy mode to fill the missing timestamp
+                                                     // Warning, it is actually the DTS of the NEXT frame to fetch
+ //****************************** Audio **********************************
+@@ -152,6 +153,7 @@
+                     bool        goToIntraTimeVideo(uint64_t time);
+                     bool        nextPicture(ADMImage *image);
+                     bool        samePicture(ADMImage *image);
++                    bool        previousPicture(ADMImage *image);
+                     bool        rewind(void);
+ // Used for stream copy
+                     bool        GoToIntraTime_noDecoding(uint64_t time,uint32_t *toframe=NULL);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.cpp	2010-01-23 15:56:08 UTC (rev 5870)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.cpp	2010-01-23 19:30:19 UTC (rev 5871)
+@@ -541,7 +541,163 @@
+     }
+     return true;
+ }
++
+ /**
++      \fn admPreview::update
++      \brief display data associated with framenum image
++      @param image : current main image (input)
++      @param framenum, framenumber
++*/
++
++uint8_t admPreview::previousPicture(void)
++{
++    uint32_t fl,len,flags;	
++
++    switch(previewMode)
++    {
++      case ADM_PREVIEW_NONE:
++       {
++#if 0
++        if( !video_body-&gt;getUncompressedFrame(framenum+playbackOffset,rdrImage,&amp;flags))
++        {
++          return 0; 
++        }
++#else
++
++        if(!video_body-&gt;previousPicture(rdrImage)) return 0;
++#endif
++            UI_setFrameType(  rdrImage-&gt;flags,rdrImage-&gt;_Qp);
++
++            if(zoom==ZOOM_1_1 || renderHasAccelZoom() )
++            {
++               if(!defered_display) 
++               {
++                  renderUpdateImage(rdrImage-&gt;data,zoom);
++                  
++                }
++            }else
++            {
++                ADM_assert(resizer);
++                ADM_assert(resized);
++                resizer-&gt;resize(rdrImage,resized);
++                if(!defered_display) 
++                  renderUpdateImage(resized-&gt;data,ZOOM_1_1);
++            }
++           // printf(&quot;[admPreview] PTs: %llu\n&quot;,rdrImage-&gt;Pts);
++        }
++        break;
++#if 0
++      case ADM_PREVIEW_OUTPUT:
++            if(framenum&lt;=preview-&gt;getInfo()-&gt;nb_frames-1)
++                  {
++                          if(!preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl)) return 0;
++                          if(zoom==ZOOM_1_1 || renderHasAccelZoom() )
++                          {
++                            if(!defered_display) renderUpdateImage(previewImage-&gt;data,zoom);
++                          }
++                          else
++                          {
++                             resizer-&gt;resize(previewImage,resized);
++                             if(!defered_display) 
++                                  renderUpdateImage(resized-&gt;data,ZOOM_1_1);
++                          }
++                  }
++            break;
++      case ADM_PREVIEW_SEPARATE:
++            ADM_assert(preview);
++            ADM_assert(previewImage);
++
++              if( !video_body-&gt;getUncompressedFrame(framenum+playbackOffset,rdrImage,&amp;flags))
++              {
++                  return 0; 
++              }
++              UI_setFrameType(  rdrImage-&gt;flags,rdrImage-&gt;_Qp);
++
++            if(zoom==ZOOM_1_1 || renderHasAccelZoom()  )
++            {
++              if(!defered_display) 
++				  renderUpdateImage(rdrImage-&gt;data,zoom);
++            }
++			else
++            {
++                ADM_assert(resizer);
++                ADM_assert(resized);
++                resizer-&gt;resize(rdrImage,resized);
++                if(!defered_display) 
++                  renderUpdateImage(resized-&gt;data,zoom);
++            }
++          if( DIA_previewStillAlive())
++          {
++                  aprintf(&quot;Preview: Ask for frame %lu\n&quot;,framenum);
++                  if(framenum&lt;=preview-&gt;getInfo()-&gt;nb_frames-1)
++                  {
++                          preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
++                          if(!defered_display) DIA_previewUpdate(previewImage-&gt;data);
++                  }
++          }
++          break;
++      case ADM_PREVIEW_SIDE:
++              ADM_assert(preview);
++              ADM_assert(previewImage);
++              ADM_assert(original);
++              
++              if( !video_body-&gt;getUncompressedFrame(framenum+playbackOffset,rdrImage,&amp;flags))
++              {
++                  return 0; 
++              }
++              UI_setFrameType(  rdrImage-&gt;flags,rdrImage-&gt;_Qp);
++              previewBlit(rdrImage,original,0,0);
++              
++              if(preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl))
++              {
++                previewBlit(previewImage,original,rdrPhysicalW,0);
++              }
++              else printf(&quot;Cannot get frame %u\n&quot;,framenum);
++              if(zoom==ZOOM_1_1  || renderHasAccelZoom() )
++              {
++                if(!defered_display)
++                  renderUpdateImage(original-&gt;data,zoom);
++              }else
++              {
++                resizer-&gt;resize(original,resized);
++                if(!defered_display) 
++                  renderUpdateImage(resized-&gt;data,ZOOM_1_1);
++              }
++              break;
++        
++      case ADM_PREVIEW_TOP:
++              ADM_assert(preview);
++              ADM_assert(previewImage);
++              ADM_assert(original);
++              
++              if( !video_body-&gt;getUncompressedFrame(framenum+playbackOffset,rdrImage,&amp;flags))
++              {
++                  return 0; 
++              }
++              UI_setFrameType(  rdrImage-&gt;flags,rdrImage-&gt;_Qp);
++              previewBlit(rdrImage,original,0,0);
++              if(preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl))
++              {
++                previewBlit(previewImage,original,0,rdrPhysicalH);
++              }
++              else printf(&quot;Cannot get frame %u\n&quot;,framenum);
++              if(zoom==ZOOM_1_1 || renderHasAccelZoom() )
++              {
++                if(!defered_display)
++                  renderUpdateImage(original-&gt;data,zoom);
++              }else
++              {
++                resizer-&gt;resize(original,resized);
++                if(!defered_display) 
++                  renderUpdateImage(resized-&gt;data,ZOOM_1_1);
++              }
++              break;
++#endif
++      default: ADM_assert(0);
++    }
++    return true;
++}
++/**
+       \fn previewBlit(ADMImage *from,ADMImage *to,uint32_t startx,uint32_t starty)
+       \brief Blit &quot;from&quot; to &quot;to&quot; at position startx,starty
+ */
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.h	2010-01-23 15:56:08 UTC (rev 5870)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.h	2010-01-23 19:30:19 UTC (rev 5871)
+@@ -23,6 +23,7 @@
+ {
+   public:
+       static uint8_t nextPicture(void);
++      static uint8_t previousPicture(void);
+       static uint8_t samePicture(void);
+ //      static uint8_t seekToIntra(uint32_t framenum);
+       static bool seekToIntraPts(uint64_t timeframe);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gui_navigate.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gui_navigate.cpp	2010-01-23 15:56:08 UTC (rev 5870)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gui_navigate.cpp	2010-01-23 19:30:19 UTC (rev 5871)
+@@ -329,7 +329,7 @@
+     if (!avifileinfo)	return;
+ 
+ 
+-    if (!admPreview::previousFrame())
++    if (!admPreview::previousPicture())
+       {
+             GUI_Error_HIG(QT_TR_NOOP(&quot;Error&quot;),	QT_TR_NOOP(&quot;Cannot go to previous frame&quot;));
+             return;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003075.html">[Avidemux-svn-commit] r5870 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+	<LI>Next message: <A HREF="003077.html">[Avidemux-svn-commit] r5872 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3076">[ date ]</a>
+              <a href="thread.html#3076">[ thread ]</a>
+              <a href="subject.html#3076">[ subject ]</a>
+              <a href="author.html#3076">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

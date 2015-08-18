@@ -1,0 +1,148 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5742 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5742%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple&In-Reply-To=%3C200912280639.nBS6dEBr029161%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002948.html">
+   <LINK REL="Next"  HREF="002950.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5742 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5742%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple&In-Reply-To=%3C200912280639.nBS6dEBr029161%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5742 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Dec 28 07:39:14 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002948.html">[Avidemux-svn-commit] r5741 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple
+</A></li>
+        <LI>Next message: <A HREF="002950.html">[Avidemux-svn-commit] r5743 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec:	. xvidRateCtl
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2949">[ date ]</a>
+              <a href="thread.html#2949">[ thread ]</a>
+              <a href="subject.html#2949">[ subject ]</a>
+              <a href="author.html#2949">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-12-28 07:39:12 +0100 (Mon, 28 Dec 2009)
+New Revision: 5742
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple/ADM_devicePulseSimple.cpp
+Log:
+[Pulse] Increase buffer + specify channel mapping
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple/ADM_devicePulseSimple.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple/ADM_devicePulseSimple.cpp	2009-12-27 17:36:17 UTC (rev 5741)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple/ADM_devicePulseSimple.cpp	2009-12-28 06:39:12 UTC (rev 5742)
+@@ -23,11 +23,12 @@
+ #include  &quot;pulse/simple.h&quot;
+ #include  &quot;pulse/error.h&quot;
+ 
+-ADM_DECLARE_AUDIODEVICE(PulseAudioS,pulseSimpleAudioDevice,1,0,1,&quot;PulseAudioSimple audio device (c) mean&quot;);
++ADM_DECLARE_AUDIODEVICE(PulseAudioS,pulseSimpleAudioDevice,1,0,2,&quot;PulseAudioSimple audio device (c) mean&quot;);
+ #define INSTANCE  ((pa_simple *)instance)
+ 
+ // By default we use float NOT
+ #define ADM_PULSE_INT16
++#define ADM_PULSE_LATENCY 50 // ms
+ /**
+     \fn pulseSimpleAudioDevice
+     \brief Constructor
+@@ -44,7 +45,7 @@
+ */
+ uint32_t pulseSimpleAudioDevice::getLatencyMs(void)
+ {
+-   return 20; //latency;
++   return ADM_PULSE_LATENCY; //latency;
+ }
+ 
+ /**
+@@ -77,21 +78,36 @@
+ pa_sample_spec ss;
+ int er;
+ pa_buffer_attr attr;
+-
++pa_channel_map map,*pmap=NULL;
+     attr.maxlength = (uint32_t) -1;
+     attr.tlength = (uint32_t )-1;
+     attr.prebuf =(uint32_t) -1;
+     attr.minreq = (uint32_t) -1;
+     attr.fragsize =(uint32_t) -1;
++
+   // We want something like 20 ms latency
+    uint64_t bufSize=_frequency;
+             bufSize*=_channels;
+             bufSize*=2;      // 1 second worth of audio
+ 
+-  attr.maxlength=bufSize/25; // 50 ms
+-  attr.tlength=bufSize/50; //  20 ms
+-  attr.prebuf=bufSize/100; // 10 ms
++  bufSize=bufSize/1000;
++  bufSize*=ADM_PULSE_LATENCY;
++  attr.tlength=bufSize;       // Latency in bytes
++ 
+ 
++  // Channel mapping
++  if(_channels&gt;2)
++    {
++        pmap=&map;
++        map.channels=_channels;
++        map.map[0]=PA_CHANNEL_POSITION_FRONT_LEFT;
++        map.map[1]=PA_CHANNEL_POSITION_FRONT_RIGHT;
++        map.map[2]=PA_CHANNEL_POSITION_FRONT_CENTER;
++        map.map[3]=PA_CHANNEL_POSITION_REAR_LEFT;
++        map.map[4]=PA_CHANNEL_POSITION_REAR_RIGHT;
++        map.map[5]=PA_CHANNEL_POSITION_SUBWOOFER;
++  }
++
+   ss.format = PA_SAMPLE_S16LE;
+   ss.channels = _channels;
+   ss.rate =_frequency;
+@@ -102,7 +118,7 @@
+                     NULL,               // Use the default device.
+                     &quot;Sound&quot;,            // Description of our stream.
+                     &amp;ss,                // Our sample format.
+-                    NULL,               // Use default channel map
++                    pmap,               // Use default channel map
+                     &amp;attr ,             // Use default buffering attributes.
+                     &amp;er               // Ignore error code.
+                     );
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002948.html">[Avidemux-svn-commit] r5741 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple
+</A></li>
+	<LI>Next message: <A HREF="002950.html">[Avidemux-svn-commit] r5743 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec:	. xvidRateCtl
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2949">[ date ]</a>
+              <a href="thread.html#2949">[ thread ]</a>
+              <a href="subject.html#2949">[ subject ]</a>
+              <a href="author.html#2949">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,231 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3587 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3587%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat&In-Reply-To=%3C200709091507.l89F7Ncf028768%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000860.html">
+   <LINK REL="Next"  HREF="000862.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3587 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3587%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat&In-Reply-To=%3C200709091507.l89F7Ncf028768%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3587 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Sep  9 17:07:23 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000860.html">[Avidemux-svn-commit] r3586 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+        <LI>Next message: <A HREF="000862.html">[Avidemux-svn-commit] r3588 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#861">[ date ]</a>
+              <a href="thread.html#861">[ thread ]</a>
+              <a href="subject.html#861">[ subject ]</a>
+              <a href="author.html#861">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-09-09 17:07:22 +0200 (Sun, 09 Sep 2007)
+New Revision: 3587
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/matroskaenc.c
+Log:
+[Matroska write] Patch lavformat to add defaultduration atom, very useful for fixed rate video
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp	2007-09-09 15:06:41 UTC (rev 3586)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp	2007-09-09 15:07:22 UTC (rev 3587)
+@@ -61,6 +61,8 @@
+ static uint32_t one;
+ uint64_t  _curDTS;
+ 
++static uint8_t ADM_4cc_to_lavcodec(const char *fcc, CodecID *outlavid);
++static uint8_t ADM_WaveTag_to_lavcodec(uint32_t tag, CodecID *outlavid);
+ // convert in in us to out in 90Khz tick
+ int64_t adm_90k( double in)
+ {
+@@ -203,6 +205,15 @@
+                                         memset(c-&gt;codec,0,sizeof(AVCodec));
+                                         c-&gt;codec-&gt;name=ADM_strdup(&quot;H264&quot;);
+                                 }
++                                else
++                                {
++                                   if(!ADM_4cc_to_lavcodec((const char *)&amp;(info-&gt;fcc),&amp;(c-&gt;codec_id)))
++                                   {
++                                      printf(&quot;[lavFormat] Cannot map  this\n&quot;);
++                                      return 0;
++                                   }
++                                  
++                                }
+                         }
+                         if(videoExtraDataSize)
+                         {
+@@ -359,7 +370,7 @@
+                             }
+                             else
+                             {
+-                              GUI_Error_HIG(_(&quot;Incompatible frame rate&quot;), NULL);
++                                GUI_Error_HIG(_(&quot;Incompatible frame rate&quot;), NULL);
+                                 return 0;
+                             }
+                             }
+@@ -414,6 +425,12 @@
+                                   c-&gt;codec_id = CODEC_ID_AAC;
+                                   break;
+                   default:
++                          if(_type==MUXER_MATROSKA)
++                          {
++                           if(ADM_WaveTag_to_lavcodec(audioheader-&gt;encoding, &amp;(c-&gt;codec_id)))
++                             break;
++                          }
++                            
+                           printf(&quot;Cant mux that ! audio\n&quot;); 
+                           printf(&quot;Cant mux that ! audio\n&quot;);
+                           c-&gt;codec_id = CODEC_ID_MP2;
+@@ -701,6 +718,77 @@
+   return v;
+ } 
+ }
++
++typedef struct
++{
++  const char *name;
++  int    id;
++}lavFCC_t;
++
++lavFCC_t lavFCC[]=
++{
++  {&quot;DIV3&quot;,CODEC_ID_MSMPEG4V3},
++  {&quot;FLV1&quot;,CODEC_ID_FLV1},
++  {&quot;MPEG&quot;,CODEC_ID_MPEG2VIDEO},
++  {&quot;DUMMY&quot;,0Xffff}
++};
++/**
++    \fn ADM_4cc_to_lavcodec
++    \brief Convert avi fourcc to lavcodec id (video)
++
++*/
++uint8_t ADM_4cc_to_lavcodec(const char *fcc, CodecID *outlavid)
++{
++    uint32_t nb=sizeof( lavFCC)/sizeof(lavFCC_t);
++    nb--;
++    for(int i=0;i&lt;nb;i++)
++    {
++      if(!strncmp(lavFCC[i].name,fcc,4))
++      {
++        *outlavid=(CodecID)lavFCC[i].id;
++        return 1; 
++      }
++      
++    }
++    return 0;
++  
++}
++//*****************
++typedef struct
++{
++  uint32_t tag;
++  int    id;
++}lavWaveTag_t;
++
++lavWaveTag_t lavWaveTag[]=
++{
++  {WAV_AC3,CODEC_ID_AC3},
++  {WAV_OGG,CODEC_ID_VORBIS},
++  {WAV_AAC,CODEC_ID_AAC},
++  {0xdead,0Xffff} // DUMMY
++};
++/**
++    \fn ADM_WaveTag_to_lavcodec
++    \brief Convert ADM audio codec id to lavcodec id (video)
++
++*/
++uint8_t ADM_WaveTag_to_lavcodec(uint32_t tag, CodecID *outlavid)
++{
++    uint32_t nb=sizeof( lavWaveTag)/sizeof(lavWaveTag_t);
++    nb--;
++    for(int i=0;i&lt;nb;i++)
++    {
++      if(lavWaveTag[i].tag==tag)
++      {
++        *outlavid=(CodecID)lavFCC[i].id;
++        return 1; 
++      }
++      
++    }
++    return 0;
++  
++}
++
+ //___________________________________________________________________________
+ //EOF
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/matroskaenc.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/matroskaenc.c	2007-09-09 15:06:41 UTC (rev 3586)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/matroskaenc.c	2007-09-09 15:07:22 UTC (rev 3587)
+@@ -537,7 +537,23 @@
+         put_ebml_uint (pb, MATROSKA_ID_TRACKNUMBER     , i + 1);
+         put_ebml_uint (pb, MATROSKA_ID_TRACKUID        , i + 1);
+         put_ebml_uint (pb, MATROSKA_ID_TRACKFLAGLACING , 0);    // no lacing (yet)
+-
++/**  MEANX : Add a default duration for video **/
++        if(codec-&gt;codec_type==CODEC_TYPE_VIDEO)
++        {
++          if(codec-&gt;time_base.den &amp;&amp; codec-&gt;time_base.num)
++          {
++            int num=codec-&gt;time_base.num;
++            int den=codec-&gt;time_base.den;
++            unsigned int default_duration;
++            float period=num;
++                  period/=den;
++                  period*=1000*1000*1000; // in ns
++                  default_duration=(unsigned int)floor(period);
++                  put_ebml_uint (pb, MATROSKA_ID_TRACKDEFAULTDURATION ,default_duration);
++          }
++        }
++        
++/**  MEANX : Add a default duration for video **/
+         if (st-&gt;language[0])
+             put_ebml_string(pb, MATROSKA_ID_TRACKLANGUAGE, st-&gt;language);
+         else
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000860.html">[Avidemux-svn-commit] r3586 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+	<LI>Next message: <A HREF="000862.html">[Avidemux-svn-commit] r3588 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#861">[ date ]</a>
+              <a href="thread.html#861">[ thread ]</a>
+              <a href="subject.html#861">[ subject ]</a>
+              <a href="author.html#861">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

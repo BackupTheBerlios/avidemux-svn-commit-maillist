@@ -1,0 +1,177 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3678 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_inputs/ADM_mp4 ADM_libraries/ADM_lavcodec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3678%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%0A%09ADM_inputs/ADM_mp4%20ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200711020847.lA28l5F8010288%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000946.html">
+   <LINK REL="Next"  HREF="000948.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3678 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_inputs/ADM_mp4 ADM_libraries/ADM_lavcodec</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3678%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%0A%09ADM_inputs/ADM_mp4%20ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200711020847.lA28l5F8010288%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3678 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_inputs/ADM_mp4 ADM_libraries/ADM_lavcodec">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Nov  2 09:47:05 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000946.html">[Avidemux-svn-commit] r3677 - branches/avidemux_2.4_branch/po
+</A></li>
+        <LI>Next message: <A HREF="000948.html">[Avidemux-svn-commit] r3679 - in	branches/avidemux_2.4_branch/avidemux: . ADM_libraries
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#947">[ date ]</a>
+              <a href="thread.html#947">[ thread ]</a>
+              <a href="subject.html#947">[ subject ]</a>
+              <a href="author.html#947">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-11-02 09:47:03 +0100 (Fri, 02 Nov 2007)
+New Revision: 3678
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/CMakeLists.txt
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/Makefile.am
+Log:
+[Codec] Support for mjpegb
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp	2007-11-01 10:15:55 UTC (rev 3677)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp	2007-11-02 08:47:03 UTC (rev 3678)
+@@ -323,7 +323,12 @@
+       //    return(decoders *)( new decoderDIVX(w,h));
+     }
+ 
+-  if (fourCC::check (fcc, (uint8_t *) &quot;MJPG&quot;)
++  if (fourCC::check (fcc, (uint8_t *) &quot;MJPB&quot;))
++    {
++      printf (&quot;\n using FF mjpeg codec\n&quot;);
++      return (decoders *) (new decoderFFMjpegB (w, h,extraLen,extraData));
++    }
++if (fourCC::check (fcc, (uint8_t *) &quot;MJPG&quot;)
+       || fourCC::check (fcc, (uint8_t *) &quot;mjpa&quot;))
+     {
+ #if  0
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2007-11-01 10:15:55 UTC (rev 3677)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2007-11-02 08:47:03 UTC (rev 3678)
+@@ -644,6 +644,11 @@
+   WRAP_Open (CODEC_ID_AMV);
+   //_context-&gt;codec_id=CODEC_ID_AMV;
+ }
++decoderFFMjpegB::decoderFFMjpegB (uint32_t w, uint32_t h, uint32_t l, uint8_t * d):decoderFF (w,   h)
++{
++  WRAP_Open (CODEC_ID_MJPEGB);
++  //_context-&gt;codec_id=CODEC_ID_AMV;
++}
+ decoderFFDVBSub::decoderFFDVBSub (uint32_t w, uint32_t h, uint32_t l, uint8_t * d):decoderFF (w,	   h)
+ {
+   _context-&gt;sub_id=1;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h	2007-11-01 10:15:55 UTC (rev 3677)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h	2007-11-02 08:47:03 UTC (rev 3678)
+@@ -327,5 +327,11 @@
+ public:
+   decoderFFAMV (uint32_t w, uint32_t h, uint32_t l, uint8_t * d);
+ };
++class decoderFFMjpegB:public decoderFF
++{
++protected:
++public:
++  decoderFFMjpegB (uint32_t w, uint32_t h, uint32_t l, uint8_t * d);
++};
+ 
+ #endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp	2007-11-01 10:15:55 UTC (rev 3677)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp	2007-11-02 08:47:03 UTC (rev 3678)
+@@ -553,8 +553,14 @@
+                                 //
+                                 switch(entryName)
+                                 {
+-                                  case MKFCCR('s','2','6','3'):  //s263 d263
++                                  case MKFCCR('m','j','p','b'):  //mjpegb
+                                   {
++                                        commonPart(MJPB);
++                                        left=0;
++                                  }
++                                  break;
++                                case MKFCCR('s','2','6','3'):  //s263 d263
++                                  {
+                                         commonPart(H263);
+                                          adm_atom d263(&amp;son);
+                                          printf(&quot;Reading s253, got %s\n&quot;,fourCC::tostringBE(d263.getFCC()));
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/CMakeLists.txt	2007-11-01 10:15:55 UTC (rev 3677)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/CMakeLists.txt	2007-11-02 08:47:03 UTC (rev 3678)
+@@ -31,7 +31,7 @@
+                 dvbsub_parser.c
+                 dvbsubdec.c
+                 dvbsub.c xiph.c
+-                sp5xdec.c nellymoserdec.c
++                sp5xdec.c nellymoserdec.c mjpegbdec.c
+ )
+ # ADD x86 ones
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/Makefile.am
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/Makefile.am	2007-11-01 10:15:55 UTC (rev 3677)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/Makefile.am	2007-11-02 08:47:03 UTC (rev 3678)
+@@ -69,7 +69,7 @@
+                 wma.c \
+                 dvbsub_parser.c \
+                 dvbsubdec.c \
+-                dvbsub.c xiph.c sp5xdec.c nellymoserdec.c
++                dvbsub.c xiph.c sp5xdec.c nellymoserdec.c mjpegbdec.c
+ 
+ 	
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000946.html">[Avidemux-svn-commit] r3677 - branches/avidemux_2.4_branch/po
+</A></li>
+	<LI>Next message: <A HREF="000948.html">[Avidemux-svn-commit] r3679 - in	branches/avidemux_2.4_branch/avidemux: . ADM_libraries
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#947">[ date ]</a>
+              <a href="thread.html#947">[ thread ]</a>
+              <a href="subject.html#947">[ subject ]</a>
+              <a href="author.html#947">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

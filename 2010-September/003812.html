@@ -1,0 +1,253 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6628 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6628%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi&In-Reply-To=%3C20100919142735.12693481094%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003811.html">
+   <LINK REL="Next"  HREF="003813.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6628 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6628%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi&In-Reply-To=%3C20100919142735.12693481094%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6628 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Sep 19 16:27:35 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003811.html">[Avidemux-svn-commit] r6627 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/js
+</A></li>
+        <LI>Next message: <A HREF="003813.html">[Avidemux-svn-commit] r6629 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3812">[ date ]</a>
+              <a href="thread.html#3812">[ thread ]</a>
+              <a href="subject.html#3812">[ subject ]</a>
+              <a href="author.html#3812">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-09-19 16:27:34 +0200 (Sun, 19 Sep 2010)
+New Revision: 6628
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi/muxerAvi.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi/muxerAvi.h
+Log:
+[avi/muxer] Allow skipping audio frames, that can happen if the audio frames have a long duration compared to video frame
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi/muxerAvi.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi/muxerAvi.cpp	2010-09-19 07:35:40 UTC (rev 6627)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi/muxerAvi.cpp	2010-09-19 14:27:34 UTC (rev 6628)
+@@ -22,9 +22,9 @@
+ #include &quot;muxerAvi.h&quot;
+ 
+ 
+-#define AUDIO_BUFFER_SIZE 48000*6*sizeof(float)
+ 
+-#if 1
++
++#if 0
+ #define aprintf(...) {}
+ #else
+ #define aprintf printf
+@@ -42,7 +42,7 @@
+ */
+ muxerAvi::muxerAvi()
+ {
+-    audioBuffer=NULL;
++    audioPackets=NULL;
+     videoBuffer=NULL;
+     clocks=NULL;
+ };
+@@ -99,34 +99,52 @@
+ // Now send audio until they all have DTS &gt; lastVideoDts+increment
+             for(int audioIndex=0;audioIndex&lt;nbAStreams;audioIndex++)
+             {
+-                uint32_t audioSize,nbSample;
+-                uint64_t audioDts;
+                 ADM_audioStream*a=aStreams[audioIndex];
+                 uint32_t fq=a-&gt;getInfo()-&gt;frequency;
+                 int nb=0;
+                 audioClock *clk=clocks[audioIndex];
+-
+-                while(a-&gt;getPacket(audioBuffer,&amp;audioSize, AUDIO_BUFFER_SIZE,&amp;nbSample,&amp;audioDts))
++                aviAudioPacket *aPacket=audioPackets+audioIndex;
++                if(true==aPacket-&gt;eos) return true;
++                while(1)
+                 {
+-                    if(audioDts!=ADM_NO_PTS) audioDts+=audioDelay;
+-                    aprintf(&quot;[Audio] Packet size %&quot;LU&quot; sample:%&quot;LU&quot; dts:%&quot;LLU&quot; target :%&quot;LLU&quot;\n&quot;,audioSize,nbSample,audioDts,targetDts);
+-                    if(audioDts!=ADM_NO_PTS)
+-                        if( abs(audioDts-clk-&gt;getTimeUs())&gt;32000)
++                    if(false==aPacket-&gt;present)
++                    {
++                        if(!a-&gt;getPacket(aPacket-&gt;buffer,
++                                         &amp;(aPacket-&gt;sizeInBytes),
++                                         AUDIO_BUFFER_SIZE,
++                                         &amp;(aPacket-&gt;nbSamples),
++                                         &amp;(aPacket-&gt;dts)))
+                         {
+-                            ADM_warning(&quot;[AviMuxer] Audio skew!\n&quot;);
+-                            clk-&gt;setTimeUs(audioDts);
++                                ADM_warning(&quot;Cannot get audio packet for stream %d\n&quot;,audioIndex);
++                                aPacket-&gt;eos=true;
++                                break;
+                         }
+-                    nb=writter.saveAudioFrame(audioIndex,audioSize,audioBuffer) ;
+-                    encoding-&gt;pushAudioFrame(audioSize);
+-                    clk-&gt;advanceBySample(nbSample);
++                            if(aPacket-&gt;dts!=ADM_NO_PTS) 
++                            {
++                                aPacket-&gt;dts+=audioDelay;
++                            }
++                            aprintf(&quot;[Audio] Packet size %&quot;LU&quot; sample:%&quot;LU&quot; dts:%&quot;LLU&quot; target :%&quot;LLU&quot;\n&quot;,
++                                            aPacket-&gt;sizeInBytes,aPacket-&gt;nbSamples,aPacket-&gt;dts,targetDts);
++                            if(aPacket-&gt;dts!=ADM_NO_PTS)
++                                if( abs(aPacket-&gt;dts-clk-&gt;getTimeUs())&gt;32000)
++                                {
++                                    ADM_warning(&quot;[AviMuxer] Audio skew!\n&quot;);
++                                    clk-&gt;setTimeUs(aPacket-&gt;dts);
++#warning FIXME add padding
++                                }
++                            aPacket-&gt;present=true;
++                    }
++                    // We now have a packet stored
++                    if(aPacket-&gt;dts!=ADM_NO_PTS)
++                        if(aPacket-&gt;dts&gt;targetDts) break; // this one is in the future
++                    nb=writter.saveAudioFrame(audioIndex,aPacket-&gt;sizeInBytes,aPacket-&gt;buffer) ;
++                    encoding-&gt;pushAudioFrame(aPacket-&gt;sizeInBytes);
++                    clk-&gt;advanceBySample(aPacket-&gt;nbSamples);
++                    aPacket-&gt;present=false;
+                     //printf(&quot;%u vs %u\n&quot;,audioDts/1000,(lastVideoDts+videoIncrement)/1000);
+-                    if(audioDts!=ADM_NO_PTS)
+-                    {
+-                        if(audioDts&gt;targetDts) break;
+-                    }
+                 }
+-                if(!nb) aprintf(&quot;[AviMuxer] No audio for video frame %lu\n&quot;,targetDts);
+             }
++
+             return true;
+ }
+ /**
+@@ -143,21 +161,24 @@
+     int ret;
+     int written=0;
+    
+-
+-    audioBuffer=new uint8_t[AUDIO_BUFFER_SIZE];
++    audioPackets=new aviAudioPacket[nbAStreams];
+     videoBuffer=new uint8_t[bufSize];
+ 
+     ADM_info(&quot;[AviMuxer]avg fps=%u\n&quot;,vStream-&gt;getAvgFps1000());
+     ADMBitstream in(bufSize);
+     in.data=videoBuffer;
+     uint64_t aviTime=0;
+-    if(false==vStream-&gt;getPacket(&amp;in)) goto abt;
++    
+     if(in.dts==ADM_NO_PTS) in.dts=0;
+     lastVideoDts=in.dts;
+ 
+     initUI(&quot;Saving Avi&quot;);
+     encoding-&gt;setContainer(&quot;AVI/OpenDML&quot;);
+-
++    if(false==vStream-&gt;getPacket(&amp;in)) 
++    {
++        ADM_error(&quot;Cannot get first video frame\n&quot;);
++        goto abt;
++    }
+     while(1)
+     {
+             
+@@ -198,8 +219,8 @@
+     writter.setEnd();
+     delete [] videoBuffer;
+     videoBuffer=NULL;
+-    delete [] audioBuffer;
+-    audioBuffer=NULL;
++    delete [] audioPackets;
++    audioPackets=NULL;
+     ADM_info(&quot;[AviMuxer] Wrote %d frames, nb audio streams %d\n&quot;,written,nbAStreams);
+     return result;
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi/muxerAvi.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi/muxerAvi.h	2010-09-19 07:35:40 UTC (rev 6627)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi/muxerAvi.h	2010-09-19 14:27:34 UTC (rev 6628)
+@@ -22,9 +22,23 @@
+ #include &quot;ADM_audioClock.h&quot;
+ #include &quot;avi_muxer.h&quot;
+ 
+-
++#define AUDIO_BUFFER_SIZE 48000*6*sizeof(float)
+ extern avi_muxer muxerConfig;
+ 
++class aviAudioPacket
++{
++    public:
++            uint8_t     *buffer;
++            uint64_t    dts;
++            uint32_t    nbSamples;
++            uint32_t    sizeInBytes;
++            bool        present;
++            bool        eos;
++
++            aviAudioPacket() {buffer=new uint8_t[AUDIO_BUFFER_SIZE];eos=false;present=false;}
++            ~aviAudioPacket() {delete [] buffer;buffer=NULL;}
++
++};
+ /**
+     \class muxerAvi
+ */
+@@ -35,10 +49,10 @@
+         bool    setupVideo(ADM_videoStream *video);
+         bool    fillAudio(uint64_t targetDts);
+         aviWrite  writter;
+-        uint8_t   *audioBuffer;
+-        uint8_t   *videoBuffer;
+-        audioClock **clocks;
+-        uint64_t   audioDelay;
++        aviAudioPacket  *audioPackets;
++        uint8_t         *videoBuffer;
++        audioClock      **clocks;
++        uint64_t        audioDelay;
+ public:
+                 muxerAvi();
+         virtual ~muxerAvi();
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003811.html">[Avidemux-svn-commit] r6627 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/js
+</A></li>
+	<LI>Next message: <A HREF="003813.html">[Avidemux-svn-commit] r6629 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3812">[ date ]</a>
+              <a href="thread.html#3812">[ thread ]</a>
+              <a href="subject.html#3812">[ subject ]</a>
+              <a href="author.html#3812">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

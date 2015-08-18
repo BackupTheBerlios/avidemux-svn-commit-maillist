@@ -1,0 +1,768 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5146 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5146%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src&In-Reply-To=%3C200907251435.n6PEZeZW001027%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002360.html">
+   <LINK REL="Next"  HREF="002362.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5146 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5146%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src&In-Reply-To=%3C200907251435.n6PEZeZW001027%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5146 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sat Jul 25 16:35:40 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002360.html">[Avidemux-svn-commit] r5145 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src
+</A></li>
+        <LI>Next message: <A HREF="002362.html">[Avidemux-svn-commit] r5147 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2361">[ date ]</a>
+              <a href="thread.html#2361">[ thread ]</a>
+              <a href="subject.html#2361">[ subject ]</a>
+              <a href="author.html#2361">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-07-25 16:35:32 +0200 (Sat, 25 Jul 2009)
+New Revision: 5146
+
+Added:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/FAC_configMenu.cpp
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/CMakeLists.txt
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/DIA_dialogFactory.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/FAC_bitrate.cpp
+Log:
+[dlgFactory] more work on config menu dialog factory control
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/CMakeLists.txt	2009-07-25 14:33:39 UTC (rev 5145)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/CMakeLists.txt	2009-07-25 14:35:32 UTC (rev 5146)
+@@ -18,6 +18,7 @@
+ 	FAC_threadCount.cpp
+ 	FAC_slider.cpp
+ 	FAC_matrix.cpp
++	FAC_configMenu.cpp
+         ADM_gladeSupport.cpp  
+         choice.cpp       
+         toolkit_dialog.cpp
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/DIA_dialogFactory.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/DIA_dialogFactory.cpp	2009-07-25 14:33:39 UTC (rev 5145)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/DIA_dialogFactory.cpp	2009-07-25 14:35:32 UTC (rev 5146)
+@@ -19,8 +19,11 @@
+ 
+ static uint8_t  buildOneTab(GtkWidget *nb,int index, diaElemTabs *tab);
+ static uint8_t  readOneTab(int index, diaElemTabs *tab);
++static void addControls(GtkWidget *dialog, GtkWidget *vbox, diaElem **controls, unsigned int controlCount);
++static void addButtonBox(GtkWidget *dialog);
+ //
+ static uint8_t gtkDiaFactoryRunTabs(const char *title,uint32_t nb,diaElemTabs **tabs);
++static uint8_t gtkDiaFactoryRunTabs2(const char *title, unsigned int headerControlCount, diaElem **headerControls, unsigned int tabControlCount, diaElemTabs **tabControls);
+ static uint8_t gtkDiaFactoryRun(const char *title,uint32_t nb,diaElem **elems);
+ //
+ 
+@@ -79,61 +82,9 @@
+   gtk_container_add (GTK_CONTAINER (dialog_vbox1), vbox1);
+   gtk_widget_show (vbox1);
+   
+-  int line=0;
+-  int i=0;  
+-  while (i&lt;nb)
+-  {
+-	  if (elems[i]-&gt;mySelf == ELEM_FRAME)
+-	  {
+-		  addLine(elems[i],dialog,vbox1,line);
+-		  i++;
+-	  }
+-	  else
+-	  {
+-		  line = 0;
+-		  int nbLine=0;
+-		  while (i+nbLine&lt;nb &amp;&amp; elems[i+nbLine]-&gt;mySelf != ELEM_FRAME) 
+-			  nbLine++;
+-		  table1 = gtk_table_new (nbLine, 2, FALSE);
+-		  gtk_table_set_col_spacings (GTK_TABLE (table1), 12);
+-		  gtk_table_set_row_spacings (GTK_TABLE (table1), 6);
+-		  gtk_box_pack_start (GTK_BOX(vbox1), table1, FALSE, FALSE, 0);
+-		  gtk_widget_show (table1);
+-                  
+-		  while (i&lt;nb &amp;&amp; elems[i]-&gt;mySelf != ELEM_FRAME)
+-		  {
+-			  addLine(elems[i],dialog,table1,line);
+-			  line+=elems[i]-&gt;getSize();
+-			  i++;
+-		  }
+-	  }
+-  }
+-  
+-  // Add a Close button
+-  GtkWidget *okbutton1;
+-  GtkWidget *cancelbutton1;
++  addControls(dialog, vbox1, elems, nb);
++  addButtonBox(dialog);
+ 
+-  cancelbutton1 = gtk_button_new_from_stock (&quot;gtk-cancel&quot;);
+-  gtk_widget_show (cancelbutton1);
+-  gtk_dialog_add_action_widget (GTK_DIALOG (dialog), cancelbutton1, GTK_RESPONSE_CANCEL);
+-  
+-  okbutton1 = gtk_button_new_from_stock (&quot;gtk-ok&quot;);
+-  gtk_widget_show (okbutton1);
+-  gtk_dialog_add_action_widget (GTK_DIALOG (dialog), okbutton1, GTK_RESPONSE_OK);
+-  GTK_WIDGET_SET_FLAGS (okbutton1, GTK_CAN_DEFAULT);
+-  gtk_dialog_set_default_response (GTK_DIALOG (dialog), GTK_RESPONSE_OK);
+-  
+-  gtk_dialog_set_alternative_button_order(GTK_DIALOG(dialog),
+-										GTK_RESPONSE_OK,
+-										GTK_RESPONSE_CANCEL,
+-										-1);
+-
+-  /* Finalize them */
+-  for(int i=0;i&lt;nb;i++)
+-  {
+-    elems[i]-&gt;finalize();
+-  }
+-  
+   // Show it &amp; run
+   gtk_register_dialog(dialog);
+   if(GTK_RESPONSE_OK==gtk_dialog_run(GTK_DIALOG(dialog)))
+@@ -158,84 +109,120 @@
+ */
+ uint8_t gtkDiaFactoryRunTabs(const char *title,uint32_t nb,diaElemTabs **tabs)
+ {
+-  uint8_t ret=0;
+-  ADM_assert(tabs);
+-  ADM_assert(nb);
+-  ADM_assert(title);
+-  
+-  /* First there was a dialog ...*/
+-  GtkWidget *dialog=gtk_dialog_new ();
+-  GtkWidget *dialog_vbox1;
+-  GtkWidget *table1;
+-  GtkWidget *notebook1;
+-  
+-  gtk_window_set_title (GTK_WINDOW (dialog),title );
+-  gtk_window_set_resizable (GTK_WINDOW (dialog), FALSE);
+-  gtk_container_set_border_width (GTK_CONTAINER (dialog), 6);
+-  gtk_dialog_set_has_separator (GTK_DIALOG (dialog), FALSE);
+-  dialog_vbox1 = GTK_DIALOG (dialog)-&gt;vbox;
+-  gtk_box_set_spacing (GTK_BOX(dialog_vbox1), 12);
+-  gtk_widget_show (dialog_vbox1);
+-   // Ok  create our tabs
+-  notebook1 = gtk_notebook_new ();
+-  gtk_widget_show (notebook1);
+-  gtk_box_pack_start (GTK_BOX (dialog_vbox1), notebook1, FALSE, FALSE, 0);
+-  gtk_container_set_border_width (GTK_CONTAINER (notebook1), 6);
+-  
+-  // And fill them
+-  for(int i=0;i&lt;nb;i++)
+-  {
+-    buildOneTab(notebook1,i,tabs[i]); 
+-  }
+-  
+-  diaElemTabs *itab;
+-  for(int i=0;i&lt;nb;i++)
+-  {
+-    itab=(tabs[i]);
+-    for(int j=0;j&lt;itab-&gt;nbElems;j++)
+-    {
+-      itab-&gt;dias[j]-&gt;finalize();
+-    }
+-  }
+-  // Add a Close button
+-  GtkWidget *okbutton1;
+-  GtkWidget *cancelbutton1;
++	return gtkDiaFactoryRunTabs2(title, 0, NULL, nb, tabs);
++}
+ 
+-  cancelbutton1 = gtk_button_new_from_stock (&quot;gtk-cancel&quot;);
+-  gtk_widget_show (cancelbutton1);
+-  gtk_dialog_add_action_widget (GTK_DIALOG (dialog), cancelbutton1, GTK_RESPONSE_CANCEL);
+-  
+-  okbutton1 = gtk_button_new_from_stock (&quot;gtk-ok&quot;);
+-  gtk_widget_show (okbutton1);
+-  gtk_dialog_add_action_widget (GTK_DIALOG (dialog), okbutton1, GTK_RESPONSE_OK);
+-  GTK_WIDGET_SET_FLAGS (okbutton1, GTK_CAN_DEFAULT);
+-  gtk_dialog_set_default_response (GTK_DIALOG (dialog), GTK_RESPONSE_OK);
++uint8_t gtkDiaFactoryRunTabs2(const char *title, unsigned int headerControlCount, diaElem **headerControls, unsigned int tabControlCount, diaElemTabs **tabControls)
++{
++	uint8_t ret = 0;
+ 
+-  gtk_dialog_set_alternative_button_order(GTK_DIALOG(dialog),
+-										GTK_RESPONSE_OK,
+-										GTK_RESPONSE_CANCEL,
+-										-1);
++	ADM_assert(tabControls);
++	ADM_assert(tabControlCount);
++	ADM_assert(title);
+ 
+-  // Show it &amp; run
+-  gtk_register_dialog(dialog);
+-  if(GTK_RESPONSE_OK==gtk_dialog_run(GTK_DIALOG(dialog)))
+-  {
+-    for(int i=0;i&lt;nb;i++)
+-    {
+-      readOneTab(i,tabs[i]);
+-    }
+-    ret=1;
+-  }
++	GtkWidget *dialog = gtk_dialog_new();
++	GtkWidget *dialog_vbox1;
++	GtkWidget *table1;
++	GtkWidget *notebook1;
+ 
+-  // Cleanup
+-  gtk_unregister_dialog(dialog);
+-  gtk_widget_destroy(dialog);
+-  return ret;
+-  
++	gtk_window_set_title(GTK_WINDOW(dialog),title);
++	gtk_window_set_resizable(GTK_WINDOW(dialog), FALSE);
++	gtk_container_set_border_width(GTK_CONTAINER(dialog), 6);
++	gtk_dialog_set_has_separator(GTK_DIALOG(dialog), FALSE);
++	dialog_vbox1 = GTK_DIALOG(dialog)-&gt;vbox;
++	gtk_box_set_spacing(GTK_BOX(dialog_vbox1), 12);
++	gtk_widget_show(dialog_vbox1);
++
++	if (headerControls)
++		addControls(dialog, dialog_vbox1, headerControls, headerControlCount);
++
++	notebook1 = gtk_notebook_new();
++	gtk_widget_show(notebook1);
++	gtk_box_pack_start(GTK_BOX(dialog_vbox1), notebook1, FALSE, FALSE, 0);
++	gtk_container_set_border_width(GTK_CONTAINER(notebook1), 6);
++
++	for (int i = 0; i &lt; tabControlCount; i++)
++		buildOneTab(notebook1, i, tabControls[i]); 
++
++	addButtonBox(dialog);
++
++	// Show it &amp; run
++	gtk_register_dialog(dialog);
++
++	if (GTK_RESPONSE_OK == gtk_dialog_run(GTK_DIALOG(dialog)))
++	{
++		for (int i = 0; i &lt; tabControlCount; i++)
++			readOneTab(i, tabControls[i]);
++
++		ret = 1;
++	}
++
++	gtk_unregister_dialog(dialog);
++	gtk_widget_destroy(dialog);
++
++	return ret;
+ }
+-/**
+ 
+-*/
++void addControls(GtkWidget *dialog, GtkWidget *vbox, diaElem **controls, unsigned int controlCount)
++{
++	GtkWidget *table;
++	int line = 0;
++	int i = 0;
++
++	while (i &lt; controlCount)
++	{
++		if (controls[i]-&gt;mySelf == ELEM_FRAME)
++		{
++			addLine(controls[i], dialog, vbox, line);
++			i++;
++		}
++		else
++		{
++			int nbLine = 0;
++
++			line = 0;
++
++			while (i + nbLine &lt; controlCount &amp;&amp; controls[i + nbLine]-&gt;mySelf != ELEM_FRAME) 
++				nbLine++;
++
++			table = gtk_table_new(nbLine, 2, FALSE);
++			gtk_table_set_col_spacings(GTK_TABLE(table), 12);
++			gtk_table_set_row_spacings(GTK_TABLE(table), 6);
++			gtk_box_pack_start(GTK_BOX(vbox), table, FALSE, FALSE, 0);
++			gtk_widget_show(table);
++
++			while (i &lt; controlCount &amp;&amp; controls[i]-&gt;mySelf != ELEM_FRAME)
++			{
++				addLine(controls[i], dialog, table, line);
++				line += controls[i]-&gt;getSize();
++				i++;
++			}
++		}
++	}
++
++	for(int i = 0; i &lt; controlCount; i++)
++	{
++		controls[i]-&gt;finalize();
++	}
++}
++
++void addButtonBox(GtkWidget *dialog)
++{
++	GtkWidget *okbutton1;
++	GtkWidget *cancelbutton1;
++
++	cancelbutton1 = gtk_button_new_from_stock(&quot;gtk-cancel&quot;);
++	gtk_widget_show(cancelbutton1);
++	gtk_dialog_add_action_widget(GTK_DIALOG(dialog), cancelbutton1, GTK_RESPONSE_CANCEL);
++
++	okbutton1 = gtk_button_new_from_stock(&quot;gtk-ok&quot;);
++	gtk_widget_show(okbutton1);
++	gtk_dialog_add_action_widget(GTK_DIALOG(dialog), okbutton1, GTK_RESPONSE_OK);
++	GTK_WIDGET_SET_FLAGS(okbutton1, GTK_CAN_DEFAULT);
++	gtk_dialog_set_default_response(GTK_DIALOG(dialog), GTK_RESPONSE_OK);
++	gtk_dialog_set_alternative_button_order(GTK_DIALOG(dialog), GTK_RESPONSE_OK, GTK_RESPONSE_CANCEL, -1);
++}
++
+ uint8_t  buildOneTab(GtkWidget *nb,int index, diaElemTabs *tab)
+ {
+   GtkWidget *table1,*vbox1,*label;
+@@ -246,44 +233,12 @@
+   gtk_container_add (GTK_CONTAINER (nb), vbox1);
+   gtk_widget_show (vbox1);
+ 
+-  int line=0;
+-  int i=0;
+-  while (i&lt;tab-&gt;nbElems)
+-  {
+-	  if (tab-&gt;dias[i]-&gt;mySelf == ELEM_FRAME)
+-	  {
+-		  addLine(tab-&gt;dias[i],nb,vbox1,line);
+-		  i++;
+-	  }
+-	  else
+-	  {
+-                  line = 0;
+-                  int nbLine=0;
+-                   while (i+nbLine&lt;tab-&gt;nbElems &amp;&amp; tab-&gt;dias[i+nbLine]-&gt;mySelf != ELEM_FRAME) 
+-                    nbLine++;
+-                  table1 = gtk_table_new (nbLine, 2, FALSE);
+-                  gtk_table_set_col_spacings (GTK_TABLE (table1), 12);
+-                  gtk_table_set_row_spacings (GTK_TABLE (table1), 6);
+-                  gtk_box_pack_start (GTK_BOX(vbox1), table1, FALSE, FALSE, 0);
+-                  gtk_widget_show (table1);
+-                  
+-                  while (i&lt;tab-&gt;nbElems &amp;&amp; tab-&gt;dias[i]-&gt;mySelf != ELEM_FRAME)
+-                  {
+-                          addLine(tab-&gt;dias[i],nb,table1,line);
+-						  line+=tab-&gt;dias[i]-&gt;getSize();
+-						  i++;
+-                  }
+-	  }
+-  }
++  addControls(nb, vbox1, tab-&gt;dias, tab-&gt;nbElems);
+   
+-
+-  
+   label = gtk_label_new (tab-&gt;title);
+   gtk_widget_show (label);
+   gtk_notebook_set_tab_label (GTK_NOTEBOOK (nb), gtk_notebook_get_nth_page (GTK_NOTEBOOK (nb), index), label);
+ 
+-  
+-
+   return 1; 
+ }
+ /**
+@@ -348,6 +303,8 @@
+ extern DELETE_DIA_ELEM_T    gtkDestroyUSlider;
+ extern 	CREATE_SLIDER_T     gtkCreateSlider;
+ extern 	DELETE_DIA_ELEM_T   gtkDestroySlider;
++extern CREATE_CONFIG_MENU_T gtkCreateConfigMenu;
++extern DELETE_DIA_ELEM_T    gtkDestroyConfigMenu;
+ /**
+  *  \fn gtkFactoryGetVersion
+  * 	\brief returns the version this has been compiled with
+@@ -365,7 +322,7 @@
+ 	&amp;gtkFactoryGetVersion,
+ 	&amp;gtkDiaFactoryRun,
+ 	&amp;gtkDiaFactoryRunTabs,
+-	NULL,
++	&amp;gtkDiaFactoryRunTabs2,
+ 	// Buttons
+ 	&amp;gtkCreateButton,
+ 	&amp;gtkDeleteButton,
+@@ -430,8 +387,8 @@
+ 	&amp;gtkCreateSlider,
+ 	&amp;gtkDestroySlider,
+ 	// Config Menu
+-	NULL,
+-	NULL
++	&amp;gtkCreateConfigMenu,
++	&amp;gtkDestroyConfigMenu
+ };
+ 
+ /**
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/FAC_bitrate.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/FAC_bitrate.cpp	2009-07-25 14:33:39 UTC (rev 5145)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/FAC_bitrate.cpp	2009-07-25 14:35:32 UTC (rev 5146)
+@@ -96,7 +96,6 @@
+  */
+ void diaElemBitrate::setMe(void *dialog, void *opaque,uint32_t line)
+ {
+-  GtkWidget *widget;
+   GtkObject *adj;
+   GtkWidget *label1;
+   GtkWidget *label2;
+
+Added: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/FAC_configMenu.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/FAC_configMenu.cpp	2009-07-25 14:33:39 UTC (rev 5145)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/FAC_configMenu.cpp	2009-07-25 14:35:32 UTC (rev 5146)
+@@ -0,0 +1,313 @@
++/***************************************************************************
++FAC_configMenu.cpp
++Handle dialog factory element : Config Menu
++(C) 2009 Gruntster 
++***************************************************************************/
++
++/***************************************************************************
++*                                                                         *
++*   This program is free software; you can redistribute it and/or modify  *
++*   it under the terms of the GNU General Public License as published by  *
++*   the Free Software Foundation; either version 2 of the License, or     *
++*   (at your option) any later version.                                   *
++*                                                                         *
++***************************************************************************/
++
++#include &lt;string&gt;
++#include &lt;map&gt;
++
++#include &quot;ADM_toolkitGtk.h&quot;
++#include &quot;DIA_factory.h&quot;
++#include &quot;DIA_coreToolkit.h&quot;
++#include &quot;DIA_fileSel.h&quot;
++
++using namespace std;
++
++extern &quot;C&quot;
++{
++#include &quot;ADM_plugin/ADM_vidEnc_plugin.h&quot;
++}
++
++namespace ADM_GtkFactory
++{
++	class diaElemConfigMenuData
++	{
++	public:
++		GtkComboBox *combo;
++		GtkButton *deleteButton;
++
++		diaElem **controls;
++		unsigned int controlCount;
++
++		map&lt;string, int&gt; *configs;
++		const char *userConfigDir;
++		const char *systemConfigDir;
++
++		CONFIG_MENU_CHANGED_T *changedFunc;
++		CONFIG_MENU_SERIALIZE_T *serializeFunc;
++	};
++
++	static map&lt;string, int&gt;* fillConfigurationComboBox(GtkComboBox *combo, const char* userConfigDir, const char* systemConfigDir)
++	{
++#define MAX_CONFIG 100
++
++		uint32_t fileCount;
++		char *files[MAX_CONFIG];
++		map&lt;string, int&gt; *configs = new map&lt;string, int&gt;();
++
++		buildDirectoryContent(&amp;fileCount, userConfigDir, files, MAX_CONFIG, &quot;xml&quot;);
++
++		for (int i = 0; i &lt; fileCount; i++)
++		{
++			files[i][strlen(files[i]) - 4] = 0;	// clip extension
++			configs-&gt;insert(pair&lt;string, ConfigMenuType&gt;(string(ADM_GetFileName(files[i])), CONFIG_MENU_USER));
++
++			ADM_dealloc(files[i]);
++		}
++
++		buildDirectoryContent(&amp;fileCount, systemConfigDir, files, MAX_CONFIG, &quot;xml&quot;);
++
++		for (int i = 0; i &lt; fileCount; i++)
++		{
++			files[i][strlen(files[i]) - 4] = 0;	// clip extension
++			configs-&gt;insert(pair&lt;string, ConfigMenuType&gt;(string(ADM_GetFileName(files[i])), CONFIG_MENU_USER));
++
++			ADM_dealloc(files[i]);
++		}
++
++		GtkTreeModel* model = gtk_combo_box_get_model(combo);
++
++		gtk_list_store_clear(GTK_LIST_STORE(model));
++		gtk_combo_box_append_text(combo, QT_TR_NOOP(&quot;&lt;default&gt;&quot;));
++		gtk_combo_box_append_text(combo, QT_TR_NOOP(&quot;&lt;custom&gt;&quot;));
++
++		for (map&lt;string, int&gt;::iterator it = configs-&gt;begin(); it != configs-&gt;end(); it++)
++			gtk_combo_box_append_text(combo, it-&gt;first.c_str());
++
++		gtk_combo_box_set_active(combo, 0);
++
++		return configs;
++	}
++
++	static bool selectConfiguration(GtkComboBox *combo, map&lt;string, int&gt; *configs, const char *selectFile, ConfigMenuType configurationType)
++	{
++		bool success = false;
++
++		if (configurationType == CONFIG_MENU_DEFAULT)
++		{
++			gtk_combo_box_set_active(combo, 0);
++			success = true;
++		}
++		else
++		{
++			GtkTreeModel* model = gtk_combo_box_get_model(combo);
++			GtkTreeIter iter;
++			char *config;
++			int index = 0;
++
++			if (gtk_tree_model_get_iter_first(model, &amp;iter))
++			{
++				do
++				{
++					map&lt;string, int&gt;::iterator it = configs-&gt;find(string(selectFile));
++
++					gtk_tree_model_get(model, &amp;iter, 0, &amp;config, -1);
++
++					if (strcmp(config, selectFile) == 0 &amp;&amp; it-&gt;second == configurationType)
++					{
++						gtk_combo_box_set_active(combo, index);
++						success = true;
++						break;
++					}
++
++					index++;
++				}
++				while (gtk_tree_model_iter_next(model, &amp;iter));
++			}
++
++			if (!success)
++				gtk_combo_box_set_active(combo, 1);
++		}
++
++		return success;
++	}
++
++	static void saveAsClicked(GtkWidget *widget, gpointer *data)
++	{
++		diaElemConfigMenuData *menuData = (diaElemConfigMenuData*)data;
++
++		if (menuData-&gt;serializeFunc)
++		{
++			ADM_mkdir(menuData-&gt;userConfigDir);
++
++			char filename[1024];
++
++			if (FileSel_SelectWrite(QT_TR_NOOP(&quot;Save As&quot;), filename, 1023, menuData-&gt;userConfigDir))
++			{
++				for (int i = 0; i &lt; menuData-&gt;controlCount; i++)
++					menuData-&gt;controls[i]-&gt;getMe();
++
++				char *configData = menuData-&gt;serializeFunc();
++
++				FILE *fd = fopen(filename, &quot;w&quot;);
++
++				fwrite(configData, 1, strlen(configData), fd);
++				fclose(fd);
++
++				delete menuData-&gt;configs;
++				menuData-&gt;configs = fillConfigurationComboBox(menuData-&gt;combo, menuData-&gt;userConfigDir, menuData-&gt;systemConfigDir);
++
++				const char* baseName = ADM_GetFileName(filename);
++				char *ext = strrchr(baseName, '.');
++
++				if (ext)
++					*ext = 0;
++
++				selectConfiguration(menuData-&gt;combo, menuData-&gt;configs, baseName, CONFIG_MENU_USER);
++
++				delete [] configData;
++			}
++		}
++	}
++
++	static void deleteClicked(GtkWidget *widget, gpointer *data)
++	{
++		diaElemConfigMenuData *menuData = (diaElemConfigMenuData*)data;
++		const char* selectedConfig = gtk_combo_box_get_active_text(menuData-&gt;combo);
++		map&lt;string, int&gt;::iterator it = menuData-&gt;configs-&gt;find(string((selectedConfig)));
++
++		if (it-&gt;second == CONFIG_MENU_USER)
++		{
++			char path[strlen(menuData-&gt;userConfigDir) + strlen(selectedConfig) + 5];
++
++			strcpy(path, menuData-&gt;userConfigDir);
++			strcat(path, selectedConfig);
++			strcat(path, &quot;.xml&quot;);
++
++			if (GUI_Question(QT_TR_NOOP(&quot;Are you sure you wish to delete the selected configuration?&quot;)) &amp;&amp; ADM_fileExist(path))
++			{
++				ADM_unlink(path);
++				menuData-&gt;configs-&gt;erase(it);
++				gtk_combo_box_remove_text(menuData-&gt;combo, gtk_combo_box_get_active(menuData-&gt;combo));
++				gtk_combo_box_set_active(menuData-&gt;combo, 0);	// default
++			}
++		}
++	}
++
++	void comboChanged(GtkWidget *widget, gpointer *data)
++	{
++		diaElemConfigMenuData *menuData = (diaElemConfigMenuData*)data;
++		const char* selectedConfig = gtk_combo_box_get_active_text(menuData-&gt;combo);
++		map&lt;string, int&gt;::iterator it = menuData-&gt;configs-&gt;find(string((selectedConfig)));
++
++		gtk_widget_set_sensitive(GTK_WIDGET(menuData-&gt;deleteButton), it-&gt;second == CONFIG_MENU_USER);
++
++		if (menuData-&gt;changedFunc)
++		{
++			if (!menuData-&gt;changedFunc(selectedConfig, (ConfigMenuType)it-&gt;second))
++				gtk_combo_box_set_active(menuData-&gt;combo, 0);
++
++			for (int i = 0; i &lt; menuData-&gt;controlCount; i++)
++				menuData-&gt;controls[i]-&gt;updateMe();
++		}
++	}
++
++	class diaElemConfigMenu : public diaElem
++	{
++	protected:
++		const char *userConfigDir, *systemConfigDir;
++		diaElem **controls;
++		unsigned int controlCount;
++
++		CONFIG_MENU_CHANGED_T *changedFunc;
++		CONFIG_MENU_SERIALIZE_T *serializeFunc;
++
++	public:
++		diaElemConfigMenu(const char* userConfigDir, const char* systemConfigDir, CONFIG_MENU_CHANGED_T *changedFunc,
++				CONFIG_MENU_SERIALIZE_T *serializeFunc, diaElem **controls, unsigned int controlCount);
++		~diaElemConfigMenu();
++		void setMe(void *dialog, void *opaque, uint32_t line);
++		void getMe(void);
++		void enable(uint32_t onoff);
++		int getRequiredLayout(void);
++		void updateMe(void);
++	};
++
++	diaElemConfigMenu::diaElemConfigMenu(const char* userConfigDir, const char* systemConfigDir, CONFIG_MENU_CHANGED_T *changedFunc,
++				CONFIG_MENU_SERIALIZE_T *serializeFunc, diaElem **controls, unsigned int controlCount) : diaElem(ELEM_CONFIG_MENU)
++	{
++		this-&gt;userConfigDir = userConfigDir;
++		this-&gt;systemConfigDir = systemConfigDir;
++
++		this-&gt;changedFunc = changedFunc;
++		this-&gt;serializeFunc = serializeFunc;
++
++		this-&gt;controls = controls;
++		this-&gt;controlCount = controlCount;
++	}
++
++	diaElemConfigMenu::~diaElemConfigMenu()
++	{
++		diaElemConfigMenuData *data = (diaElemConfigMenuData*)myWidget;
++
++		delete data-&gt;configs;
++		delete data;
++	}
++
++	void diaElemConfigMenu::setMe(void *dialog, void *opaque, uint32_t line)
++	{
++		GtkWidget *label = gtk_label_new_with_mnemonic(QT_TR_NOOP(&quot;Configuration:&quot;));
++		gtk_misc_set_alignment(GTK_MISC(label), 0.0, 0.5);
++		gtk_widget_show(label);
++		gtk_table_attach(GTK_TABLE(opaque), label, 0, 1, line, line + 1, (GtkAttachOptions)(GTK_EXPAND | GTK_FILL), (GtkAttachOptions)0, 0, 0);
++
++		GtkComboBox *combo = GTK_COMBO_BOX(gtk_combo_box_new_text());
++		gtk_widget_show(GTK_WIDGET(combo));
++		gtk_label_set_mnemonic_widget(GTK_LABEL(label), GTK_WIDGET(combo));
++		gtk_table_attach(GTK_TABLE(opaque), GTK_WIDGET(combo), 1, 2, line, line + 1, (GtkAttachOptions)(GTK_EXPAND | GTK_FILL), (GtkAttachOptions)0, 0, 0);
++
++		GtkWidget *button1 = gtk_button_new_from_stock(QT_TR_NOOP(&quot;Save As&quot;));
++		gtk_widget_show(button1);
++		gtk_table_attach(GTK_TABLE(opaque), button1, 2, 3, line, line + 1, (GtkAttachOptions)(GTK_EXPAND | GTK_FILL), (GtkAttachOptions)0, 0, 0);
++
++		GtkButton *button2 = GTK_BUTTON(gtk_button_new_from_stock(QT_TR_NOOP(&quot;Delete&quot;)));
++		gtk_widget_show(GTK_WIDGET(button2));
++		gtk_table_attach(GTK_TABLE(opaque), GTK_WIDGET(button2), 3, 4, line, line + 1, (GtkAttachOptions)(GTK_EXPAND | GTK_FILL), (GtkAttachOptions)0, 0, 0);
++
++		diaElemConfigMenuData *data = new diaElemConfigMenuData();
++
++		data-&gt;combo = combo;
++		data-&gt;deleteButton = button2;
++		data-&gt;configs = fillConfigurationComboBox(combo, this-&gt;userConfigDir, this-&gt;systemConfigDir);
++		data-&gt;controls = controls;
++		data-&gt;controlCount = controlCount;
++		data-&gt;userConfigDir = userConfigDir;
++		data-&gt;systemConfigDir = systemConfigDir;
++		data-&gt;changedFunc = changedFunc;
++		data-&gt;serializeFunc = serializeFunc;
++
++		myWidget = (void*)data;
++
++		g_signal_connect(GTK_OBJECT(button1), &quot;clicked&quot;, G_CALLBACK(saveAsClicked), myWidget);
++		g_signal_connect(GTK_OBJECT(button2), &quot;clicked&quot;, G_CALLBACK(deleteClicked), myWidget);
++		g_signal_connect(GTK_OBJECT(combo), &quot;changed&quot;, G_CALLBACK(comboChanged), myWidget);
++	}
++
++	void diaElemConfigMenu::getMe(void)	{ }
++	void diaElemConfigMenu::enable(uint32_t onoff) { }
++	int diaElemConfigMenu::getRequiredLayout(void) { return 0; }
++	void diaElemConfigMenu::updateMe(void) { }
++}
++
++diaElem* gtkCreateConfigMenu(const char* userConfigDir, const char* systemConfigDir, CONFIG_MENU_CHANGED_T *changedFunc, 
++							 CONFIG_MENU_SERIALIZE_T *serializeFunc, diaElem **controls, unsigned int controlCount)
++{
++	return new ADM_GtkFactory::diaElemConfigMenu(userConfigDir, systemConfigDir, changedFunc, serializeFunc, controls, controlCount);
++}
++
++void gtkDestroyConfigMenu(diaElem *e)
++{
++	ADM_GtkFactory::diaElemConfigMenu *a = (ADM_GtkFactory::diaElemConfigMenu*)e;
++
++	delete a;
++}
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002360.html">[Avidemux-svn-commit] r5145 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src
+</A></li>
+	<LI>Next message: <A HREF="002362.html">[Avidemux-svn-commit] r5147 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2361">[ date ]</a>
+              <a href="thread.html#2361">[ thread ]</a>
+              <a href="subject.html#2361">[ subject ]</a>
+              <a href="author.html#2361">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

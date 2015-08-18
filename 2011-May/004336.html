@@ -1,0 +1,119 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7181 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7181%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C20110501170638.DDEF9481306%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004335.html">
+   <LINK REL="Next"  HREF="004337.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7181 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7181%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C20110501170638.DDEF9481306%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7181 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun May  1 19:06:38 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004335.html">[Avidemux-svn-commit] r7180 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src
+</A></li>
+        <LI>Next message: <A HREF="004337.html">[Avidemux-svn-commit] r7182 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreVideoEncoder/include	avidemux_core/ADM_coreVideoEncoder/src	avidemux_plugins/ADM_videoEncoder/x264	avidemux_plugins/ADM_videoEncoder/xvid4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4336">[ date ]</a>
+              <a href="thread.html#4336">[ thread ]</a>
+              <a href="subject.html#4336">[ subject ]</a>
+              <a href="author.html#4336">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-05-01 19:06:38 +0200 (Sun, 01 May 2011)
+New Revision: 7181
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp
+Log:
+[editor] In case of slightly borked mpeg2 file, the PTS are present and we compute the DTS from them. If a ref frame has been corrupted, the dts goes back as it goes to ref[-2] instead of ref[-1] since ref[-1] has been borked. workaround : run the dts checker after computing dts
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp	2011-05-01 17:06:37 UTC (rev 7180)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp	2011-05-01 17:06:38 UTC (rev 7181)
+@@ -373,7 +373,8 @@
+         if(nPts&gt;=info.nb_frames-2 )
+         {
+             ADM_info(&quot;Got PTS, compute dts\n&quot;);
+-            return setDtsFromPts(hdr,timeIncrementUs,delay);
++            if(false== setDtsFromPts(hdr,timeIncrementUs,delay)) return false;
++            return ADM_verifyDts(hdr,timeIncrementUs);
+         }
+         // No b frames, PTS=DTS
+         if(!nbB)
+@@ -386,7 +387,7 @@
+         if(nDts&gt;=info.nb_frames-2 )
+         {
+             ADM_info(&quot;Got DTS, compute  PTS\n&quot;);
+-            return setPtsFromDts(hdr,timeIncrementUs,delay);
++            return  setPtsFromDts(hdr,timeIncrementUs,delay);
+         }
+         // Case 4: We have a bit of both
+         ADM_info(&quot;Get some dts and pts\n&quot;);
+@@ -467,6 +468,7 @@
+     uint32_t flags;
+     uint64_t pts,dts;
+ 
++    ADM_info(&quot;computing pts...\n&quot;);
+     aviInfo info;
+     hdr-&gt;getVideoInfo(&amp;info);
+     nbFrames=info.nb_frames;
+@@ -485,6 +487,7 @@
+                 nbBframe=0;
+             }
+     }
++    ADM_info(&quot;max bframe = %d\n&quot;,maxBframe);
+     nbBframe=0;
+     // We have now maxBframe = max number of Bframes in sequence
+     for(int i=1;i&lt;nbFrames;i++)
+@@ -526,6 +529,8 @@
+     int nbB=0;
+     uint64_t pts,dts;
+ 
++    ADM_info(&quot;computing dts...\n&quot;);
++
+     aviInfo info;
+     hdr-&gt;getVideoInfo(&amp;info);
+     nbFrames=info.nb_frames;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004335.html">[Avidemux-svn-commit] r7180 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src
+</A></li>
+	<LI>Next message: <A HREF="004337.html">[Avidemux-svn-commit] r7182 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreVideoEncoder/include	avidemux_core/ADM_coreVideoEncoder/src	avidemux_plugins/ADM_videoEncoder/x264	avidemux_plugins/ADM_videoEncoder/xvid4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4336">[ date ]</a>
+              <a href="thread.html#4336">[ thread ]</a>
+              <a href="subject.html#4336">[ subject ]</a>
+              <a href="author.html#4336">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

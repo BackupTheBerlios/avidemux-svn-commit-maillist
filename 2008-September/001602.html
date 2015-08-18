@@ -1,0 +1,152 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4362 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4362%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat&In-Reply-To=%3C200809181435.m8IEZus7010869%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001601.html">
+   <LINK REL="Next"  HREF="001603.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4362 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4362%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat&In-Reply-To=%3C200809181435.m8IEZus7010869%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4362 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Thu Sep 18 16:35:56 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001601.html">[Avidemux-svn-commit] r4361 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+        <LI>Next message: <A HREF="001603.html">[Avidemux-svn-commit] r4363 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1602">[ date ]</a>
+              <a href="thread.html#1602">[ thread ]</a>
+              <a href="subject.html#1602">[ subject ]</a>
+              <a href="author.html#1602">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-09-18 16:35:50 +0200 (Thu, 18 Sep 2008)
+New Revision: 4362
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp
+Log:
+[muxer] remove the use of doubles in the libavformat muxer wrapper when calculating video PTS &amp; DTS as it causes rounding issues
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp	2008-09-18 14:30:12 UTC (rev 4361)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp	2008-09-18 14:35:50 UTC (rev 4362)
+@@ -605,54 +605,33 @@
+ //___________________________________________________________________________
+ uint8_t lavMuxer::writeVideoPacket(ADMBitstream *bitstream)
+ {
+-int ret;
++	int ret;
++	AVPacket pkt;
++	AVRational fps = {1, 1000000};
+ 
+-double p,d;
+-  	AVPacket pkt;
+-            av_init_packet(&amp;pkt);
++	av_init_packet(&amp;pkt);
+ 
+-        p=bitstream-&gt;ptsFrame+1;      // Pts           // Time p/fps1000=out/den  out=p*den*1000/fps1000
+-        p=(p*1000*1000*1000);
+-        p=p/_fps1000;                  // in us
++	_curDTS = av_rescale_q(bitstream-&gt;dtsFrame, video_st-&gt;codec-&gt;time_base, fps);
+ 
+-        d=bitstream-&gt;dtsFrame;		// dts
+-	d=(d*1000*1000*1000);
+-	d=d/_fps1000;
++	switch (_type)
++	{
++		case MUXER_FLV:
++		case MUXER_MATROSKA:
++		{
++			fps.den = 1000;
++			break;
++		}
++		default:
++		{
++			fps.den = video_st-&gt;codec-&gt;time_base.den;
++			break;
++		}
++	}
+ 
++	pkt.pts = av_rescale_q(bitstream-&gt;ptsFrame + 1, video_st-&gt;codec-&gt;time_base, fps);
++	pkt.dts = av_rescale_q(bitstream-&gt;dtsFrame, video_st-&gt;codec-&gt;time_base, fps);
++	pkt.stream_index = 0;
+ 
+-	_curDTS=(int64_t)floor(d);
+-    aprintf(&quot;Adm video unscaled dts=:%u\n&quot;,(uint32_t)d);
+-        // Rescale
+-#define RESCALE(x) x=x*1000.;\
+-                   x=x/_fps1000;
+-
+-        p=bitstream-&gt;ptsFrame+1;
+-        RESCALE(p);
+-// MP4/ TS
+-        d=bitstream-&gt;dtsFrame;  // p &amp; d are now in seconds
+-        RESCALE(d);
+-        switch(_type)  // video_st-&gt;codec-&gt;time_base.den
+-        {
+-        case MUXER_FLV :
+-        case MUXER_MATROSKA:
+-                    {
+-                        p=p*1000;
+-                        d=d*1000; // in milliseconds
+-                        break;
+-                    }
+-        
+-        default:
+-                    p=p*video_st-&gt;codec-&gt;time_base.den;
+-                    d=d*video_st-&gt;codec-&gt;time_base.den;
+-                    break;
+-        }
+-    	pkt.dts=(int64_t)floor(d);
+-    	pkt.pts=(int64_t)floor(p);
+-
+-       // printf(&quot;Lavformat : Pts :%u dts:%u&quot;,displayframe,frameno);
+-	aprintf(&quot;Lavformat : Pts :%llu dts:%llu&quot;,pkt.pts,pkt.dts);
+-	pkt.stream_index=0;
+-
+         pkt.data= bitstream-&gt;data;
+         pkt.size= bitstream-&gt;len;
+ 	// Look if it is a gop start or seq start
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001601.html">[Avidemux-svn-commit] r4361 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+	<LI>Next message: <A HREF="001603.html">[Avidemux-svn-commit] r4363 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1602">[ date ]</a>
+              <a href="thread.html#1602">[ thread ]</a>
+              <a href="subject.html#1602">[ subject ]</a>
+              <a href="author.html#1602">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,359 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4266 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_audiofilter ADM_coreAudio/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4266%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%0A%09ADM_audiofilter%20ADM_coreAudio/src&In-Reply-To=%3C200807201730.m6KHUC8f010753%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001507.html">
+   <LINK REL="Next"  HREF="001509.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4266 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_audiofilter ADM_coreAudio/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4266%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%0A%09ADM_audiofilter%20ADM_coreAudio/src&In-Reply-To=%3C200807201730.m6KHUC8f010753%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4266 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_audiofilter ADM_coreAudio/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jul 20 19:30:12 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001507.html">[Avidemux-svn-commit] r4264 - in	branches/avidemux_2.5_branch_gruntster: avidemux	plugins/ADM_audioDevices/Esd
+</A></li>
+        <LI>Next message: <A HREF="001509.html">[Avidemux-svn-commit] r4267 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1508">[ date ]</a>
+              <a href="thread.html#1508">[ thread ]</a>
+              <a href="subject.html#1508">[ subject ]</a>
+              <a href="author.html#1508">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-07-20 19:30:11 +0200 (Sun, 20 Jul 2008)
+New Revision: 4266
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter/audiofilter_film2pal.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter/audiofilter_film2pal.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreAudio/src/ADM_audioFilter.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreAudio/src/ADM_audioResample.cpp
+Log:
+[Pal2film] use SRC to do the Pal/Film conversion, better quality, much worse speed :(
+
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter/audiofilter_film2pal.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter/audiofilter_film2pal.cpp	2008-07-20 17:27:33 UTC (rev 4265)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter/audiofilter_film2pal.cpp	2008-07-20 17:30:11 UTC (rev 4266)
+@@ -14,7 +14,7 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
+-#include &quot;config.h&quot;
++
+ #include &lt;math.h&gt;
+ 
+ #include &quot;ADM_default.h&quot;
+@@ -22,149 +22,74 @@
+ #include &quot;ADM_audioFilter.h&quot;
+ #include &quot;audiofilter_film2pal.h&quot;
+ 
+-//__________
+-
+-AUDMAudioFilterFilm2Pal::AUDMAudioFilterFilm2Pal(AUDMAudioFilter * instream):AUDMAudioFilter (instream)
++AUDMAudioFilterFilm2Pal::AUDMAudioFilterFilm2Pal(AUDMAudioFilter *previous) : 
++            AUDMAudioFilterFilmChange(previous,1001,960)
+ {
+-    // nothing special here...
+-  _target=0;
+-  _removed=0;
+-  _previous-&gt;rewind();
+-  _modulo=0;
+-  printf(&quot;[Film2Pal] Creating\n&quot;);
+-};
+-
+-AUDMAudioFilterFilm2Pal::~AUDMAudioFilterFilm2Pal()
+-{
+-  printf(&quot;[Film2Pal] Destroying\n&quot;);
++    printf(&quot;[Film2Pal] Created\n&quot;);
+ }
+-//
+-//___________________________________________
+-uint32_t AUDMAudioFilterFilm2Pal::fill( uint32_t max, float * buffer,AUD_Status *status)
++AUDMAudioFilterPal2Film::AUDMAudioFilterPal2Film(AUDMAudioFilter *previous) : 
++            AUDMAudioFilterFilmChange(previous,960,1001)
+ {
+-  uint32_t len,i,rendered;
+-  uint32_t min=_wavHeader.channels;
+-  float *start;
+-  
+-  shrink();
+-  fillIncomingBuffer(status);
+-  
+-  len=_tail-_head;
+-  if(len&gt;max) len=max;
+-  
+-  len=len/min;
++    printf(&quot;[Pal2Film] Created\n&quot;);
++}
++#define CONTECT ((SRC_STATE *)context))
++//__________
+ 
+-  rendered=0;
+-  start=&amp;_incomingBuffer[_head];
+-
+-  while(len--) // in sample
+-  {
+-        //_______________________________________
+-        // FilmToPal : 24 fps to 25 fps -&gt; shorten frame
+-        // 1001 samples -&gt; 960 samples
+-        //______________________________________
+-       if(_removed) // Fixme , use dither or something
+-        { 
+-              _removed--;
+-        }
+-        else
+-        {
+-        
+-            memcpy(buffer,start,min*sizeof(float));
+-            buffer+=min;
+-            rendered+=min;    
+-        }
+-        _target++; // nb Processed
+-     // Consume it
+-        start+=min;
+-        _head+=min;
+-        _modulo++;
+-        if(_target&gt;1001)
+-        {
+-            _removed+=41;
+-            _target-=1001;
+-        }
+-  }
+-  return rendered;
+-};
+-//****************************************************
+-AUDMAudioFilterPal2Film::AUDMAudioFilterPal2Film(AUDMAudioFilter * instream):AUDMAudioFilter (instream)
++AUDMAudioFilterFilmChange::AUDMAudioFilterFilmChange(AUDMAudioFilter * instream,uint32_t from, uint32_t to):AUDMAudioFilter (instream)
+ {
+-    // nothing special here...
+-  _target=0;
+-  _removed=0;
+-  _modulo=0;
+-  _previous-&gt;rewind();
+-  printf(&quot;[Pal2Film] Creating\n&quot;);
++    // The parameter are in sample, we deal with fq
++    if(true!=resampler.init(from,to,_wavHeader.channels))
++    {
++        printf(&quot;[AudioFilter Resample] Init failed! \n&quot;);
++        ADM_assert(0);
++    }
++    printf(&quot;[FilmChange] Creating\n&quot;);
+ };
+ 
+-AUDMAudioFilterPal2Film::~AUDMAudioFilterPal2Film()
++AUDMAudioFilterFilmChange::~AUDMAudioFilterFilmChange()
+ {
+-  printf(&quot;[Film2Pal] Destroying\n&quot;);
++  
++  printf(&quot;[FilmChange] Destroying\n&quot;);
+ }
+ //
+ //___________________________________________
+-uint32_t AUDMAudioFilterPal2Film::fill( uint32_t max, float * buffer,AUD_Status *status)
+-//uint32_t AUDMAudioFilterFilm2Pal::fill( uint32_t max, float * buffer,AUD_Status *status)
++uint32_t AUDMAudioFilterFilmChange::fill( uint32_t max, float * buffer,AUD_Status *status)
+ {
+   uint32_t len,i,rendered;
+-  uint32_t min=_wavHeader.channels;
++  uint32_t chan=_wavHeader.channels;
+   float *start;
+   
+   shrink();
+   fillIncomingBuffer(status);
+   
+-  ADM_assert(_tail&gt;=_head);
+-  
+-  len=_tail-_head;  // How much float available ?
++  len=_tail-_head;
++  if(max&gt;64)
++    max-=64; // Prevent overflow
++
+   if(len&gt;max) len=max;
+   
+-  len=len/min; // convert to sample
+-  
+-  if(len==0)
+-  {
+-        printf(&quot;**oops**\n&quot;);
+-  }
+-  rendered=0;
+-  start=&amp;_incomingBuffer[_head];
+-  while(len--)
+-  {
+-        memcpy(buffer,start,min*sizeof(float));
+-       // printf(&quot; Target :%d removed :%d\n&quot;,_target,_removed);
+-        buffer+=min;
+-        rendered+=min;
++  len=len/chan; // in sample
+ 
+-       
+-        _target++; // _target is the number of sample we processed
+-
+-        _modulo++;
+-
+-        if(_target&gt;960) // Time to duplicate samples
++        uint32_t maxSample=max/chan; // in sample
++        uint32_t nbOut=0;
++        uint32_t nbIn=len;
++        uint32_t nbInTaken=0;
++        float *from,*to;
++        from=_incomingBuffer+_head;
++        to=buffer;
++        if(true!=resampler.process(from,to, 
++                    nbIn,
++                    maxSample,
++                    &amp;nbInTaken, 
++                    &amp;nbOut))
+         {
+-            _removed+=41;
+-            _target-=960;
++            printf(&quot;[FilmChange] EOF ??\n&quot;);
++            *status=AUD_END_OF_STREAM;
++            return 0;
+         }
+-        if(rendered&gt;=max-1)
+-        {
+-            start+=min;
+-            _head+=min;
+-            return rendered;
+-        }
+-        //_______________________________________
+-        // Pal2Film : 25 fps to 24 fps -&gt; Duplicate samples
+-        // by 41 samples every 960 samples 960-&gt;1001
+-        //______________________________________
+-        if(_removed /*&amp;&amp; ((_modulo&amp;15)==1)*/) // Spread the duplication
+-        {
+-          memcpy(buffer,start,min*sizeof(float));
+-          buffer+=min;
+-          rendered+=min;			
+-          _removed--;
+-        }  
+-        start+=min;
+-        _head+=min;
+-  }
+-  return rendered;
++      _head=_head+(nbInTaken*chan);
++      return nbOut*chan;
+ };
++
+ //EOF
+ 
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter/audiofilter_film2pal.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter/audiofilter_film2pal.h	2008-07-20 17:27:33 UTC (rev 4265)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter/audiofilter_film2pal.h	2008-07-20 17:30:11 UTC (rev 4266)
+@@ -17,29 +17,29 @@
+ #define AUDIO_F_FILM2PAL_H
+ 
+ #include &quot;ADM_audioFilter.h&quot;
+-#include &quot;audiofilter_limiter_param.h&quot;
+-class AUDMAudioFilterFilm2Pal : public AUDMAudioFilter
++#include &quot;audiofilter_SRC.h&quot;
++#define BLK_SIZE 512
++
++class AUDMAudioFilterFilmChange : public AUDMAudioFilter
+ {
+   protected:
+-    uint32_t   _target;
+-    uint32_t _removed;
+-    uint32_t _modulo;
++    ADM_resample          resampler;
+   public:
+-                          AUDMAudioFilterFilm2Pal(AUDMAudioFilter *previous);
+-    virtual                ~AUDMAudioFilterFilm2Pal();
++                          AUDMAudioFilterFilmChange(AUDMAudioFilter *previous,uint32_t from, uint32_t to);
++    virtual                ~AUDMAudioFilterFilmChange();
+     virtual    uint32_t   fill(uint32_t max,float *output,AUD_Status *status);
+ };
+-class AUDMAudioFilterPal2Film : public AUDMAudioFilter
++class AUDMAudioFilterPal2Film : public AUDMAudioFilterFilmChange
+ {
+   protected:
+-    uint32_t   _target;
+-    uint32_t _removed;
+-    uint32_t _modulo;
+-
+   public:
+                             AUDMAudioFilterPal2Film(AUDMAudioFilter *previous);
+-    virtual                ~AUDMAudioFilterPal2Film();
+-    virtual    uint32_t   fill(uint32_t max,float *output,AUD_Status *status);
+ };
++class AUDMAudioFilterFilm2Pal : public AUDMAudioFilterFilmChange
++{
++  protected:
++  public:
++                            AUDMAudioFilterFilm2Pal(AUDMAudioFilter *previous);
++};
+ 
+ #endif
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreAudio/src/ADM_audioFilter.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreAudio/src/ADM_audioFilter.cpp	2008-07-20 17:27:33 UTC (rev 4265)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreAudio/src/ADM_audioFilter.cpp	2008-07-20 17:30:11 UTC (rev 4266)
+@@ -32,6 +32,7 @@
+   if(_previous)
+   {
+       memcpy(&amp;_wavHeader,_previous-&gt;getInfo(),sizeof(_wavHeader));
++      _wavHeader.bitspersample=16; // We deal with PCM here...
+       _length=previous-&gt;getLength();
+   }
+   _head=_tail=0; 
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreAudio/src/ADM_audioResample.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreAudio/src/ADM_audioResample.cpp	2008-07-20 17:27:33 UTC (rev 4265)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreAudio/src/ADM_audioResample.cpp	2008-07-20 17:30:11 UTC (rev 4266)
+@@ -48,7 +48,7 @@
+     fromFrequency=from;
+     toFrequency=to;
+     nbChannels=channel;
+-    context=(void *)src_new (SRC_SINC_MEDIUM_QUALITY, channel, &amp;er) ;
++    context=(void *)src_new (SRC_SINC_FASTEST*0+1*SRC_SINC_MEDIUM_QUALITY, channel, &amp;er) ;
+     if(!context) 
+     {
+         printf(&quot;[SRC] Error :%d\n&quot;,er);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001507.html">[Avidemux-svn-commit] r4264 - in	branches/avidemux_2.5_branch_gruntster: avidemux	plugins/ADM_audioDevices/Esd
+</A></li>
+	<LI>Next message: <A HREF="001509.html">[Avidemux-svn-commit] r4267 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1508">[ date ]</a>
+              <a href="thread.html#1508">[ thread ]</a>
+              <a href="subject.html#1508">[ subject ]</a>
+              <a href="author.html#1508">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

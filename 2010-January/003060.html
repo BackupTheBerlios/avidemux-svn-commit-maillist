@@ -1,0 +1,476 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5856 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5856%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy&In-Reply-To=%3C201001171552.o0HFqR1v013810%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003061.html">
+   <LINK REL="Next"  HREF="003062.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5856 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5856%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy&In-Reply-To=%3C201001171552.o0HFqR1v013810%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5856 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jan 17 16:52:27 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003061.html">[Avidemux-svn-commit] r5855 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers
+</A></li>
+        <LI>Next message: <A HREF="003062.html">[Avidemux-svn-commit] r5857 -	branches/avidemux_2.6_branch_mean/addons/avisynthproxy
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3060">[ date ]</a>
+              <a href="thread.html#3060">[ thread ]</a>
+              <a href="subject.html#3060">[ subject ]</a>
+              <a href="author.html#3060">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-01-17 16:52:27 +0100 (Sun, 17 Jan 2010)
+New Revision: 5856
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxyAudio.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/CMakeLists.txt
+Log:
+[avsDemuxer] Add audio + set low delay so that audio can come in quickly, we do a lot of smallish request here
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.cpp	2010-01-17 15:52:26 UTC (rev 5855)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.cpp	2010-01-17 15:52:27 UTC (rev 5856)
+@@ -27,7 +27,10 @@
+ */
+ avsHeader::avsHeader()
+ {
+-    
++    haveAudio=false;
++    memset(&amp;wavHeader,0,sizeof(wavHeader));
++    audioStream=NULL;
++    audioAccess=NULL;
+ }
+ /**
+     \fn avsHeader
+@@ -36,9 +39,17 @@
+  avsHeader::~avsHeader(  )
+ {
+     close();   
++    
+ }
++/**
++    \fn close
++*/
+ uint8_t avsHeader::close()
+ {
++    if(audioStream) delete audioStream;
++    if(audioAccess) delete audioAccess;
++    audioStream=NULL;
++    audioAccess=NULL;
+     network.close();
+     return 1;
+ }
+@@ -108,7 +119,28 @@
+     _video_bih.biWidth = _mainaviheader.dwWidth = info.width;
+     _video_bih.biHeight = _mainaviheader.dwHeight = info.height;
+     _video_bih.biCompression = _videostream.fccHandler =  fourCC::get((uint8_t *) &quot;YV12&quot;);
+-    
++   
++    //
++    if(info.frequency)
++    {
++        wavHeader.frequency=info.frequency;
++        wavHeader.channels=info.channels;
++        wavHeader.bitspersample=16;
++        wavHeader.blockalign=info.channels*2;
++        wavHeader.byterate=info.frequency*2*info.channels;
++        wavHeader.encoding=WAV_PCM;
++        audioAccess=new ADM_avsAccess(&amp;network,&amp;wavHeader,10000);
++        _isaudiopresent=1;
++        if(audioAccess)
++            audioStream=ADM_audioCreateStream(&amp;wavHeader,audioAccess);
++        if(audioStream)
++        {
++            ADM_info(&quot;Created audio stream\n&quot;);
++            haveAudio=true;
++        }
++        else
++            ADM_warning(&quot;Error when creating audio stream\n&quot;);
++    }
+     printf(&quot;Connection to avsproxy succeed\n&quot;);
+     return 1;
+ }
+@@ -137,6 +169,7 @@
+         ADM_warning(&quot;Avisynth proxy out of bound %u / %u\n&quot;,framenum,_mainaviheader.dwTotalFrames);
+         return 0;
+     }
++    
+     avsNetPacket out;
+     out.buffer=img-&gt;data;
+     out.sizeMax=page;
+@@ -238,9 +271,6 @@
+     *size=(_mainaviheader.dwWidth*_mainaviheader.dwHeight*3)&gt;&gt;1;
+     return true;
+ }
+-WAVHeader              *avsHeader::getAudioInfo(uint32_t i ) {return NULL;} ;
+-uint8_t                 avsHeader::getAudioStream(uint32_t i,ADM_audioStream  **audio){*audio=NULL;return 0;}
+-uint8_t                 avsHeader::getNbAudioStreams(void) {return 0;};
+ 
+ //EOF
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.h	2010-01-17 15:52:26 UTC (rev 5855)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.h	2010-01-17 15:52:27 UTC (rev 5856)
+@@ -20,8 +20,39 @@
+ #include &quot;ADM_audioStream.h&quot;
+ #include &quot;ADM_avsproxy_net.h&quot;
+ #define AVS_PROXY_DUMMY_FILE &quot;::ADM_AVS_PROXY::&quot; // warning this is duplicated in main app
+-
+ /**
++    \fn ADM_avsAccess
++*/
++class ADM_avsAccess : public ADM_audioAccess
++{
++protected:
++                      
++                avsNet           *network;
++                WAVHeader        *wavHeader;
++                uint64_t         duration;
++                uint64_t         nextSample;
++                uint8_t          *audioBuffer;
++                uint64_t         sampleToTime(uint64_t sample);
++                void             increment(uint64_t sample);
++public:
++                                  ADM_avsAccess(avsNet *net, WAVHeader *wav,uint64_t duration); 
++                virtual           ~ADM_avsAccess();
++                                    /// Hint, the stream is pure CBR (AC3,MP2,MP3)
++                virtual bool      isCBR(void) { return true;}
++                                    /// Return true if the demuxer can seek in time
++                virtual bool      canSeekTime(void) {return true;};
++                                    /// Return true if the demuxer can seek by offser
++                virtual bool      canSeekOffset(void) {return false;};
++                                    /// Return true if we can have the audio duration
++                virtual bool      canGetDuration(void) {return true;};
++                                    /// Returns audio duration in us
++                virtual uint64_t  getDurationInUs(void);
++                                    /// Go to a given time
++                virtual bool      goToTime(uint64_t timeUs);
++                virtual bool      getPacket(uint8_t *buffer, uint32_t *size, uint32_t maxSize,uint64_t *dts);
++                bool              getExtraData(uint32_t *l, uint8_t **d){*l=0;*d=NULL;return true;};
++};
++/**
+     \class avsHeader
+ */
+ class avsHeader         :public vidHeader
+@@ -29,6 +60,10 @@
+     protected:
+         uint64_t                    frameToTime(uint32_t frame);
+         avsNet                      network;
++        WAVHeader                   wavHeader;
++        bool                        haveAudio;
++        ADM_audioStream             *audioStream;
++        ADM_avsAccess               *audioAccess;
+     public:
+ 
+ 
+@@ -47,9 +82,26 @@
+   //				 Audio
+   //__________________________
+ 
+-virtual 	WAVHeader              *getAudioInfo(uint32_t i )  ;
+-virtual 	uint8_t                 getAudioStream(uint32_t i,ADM_audioStream  **audio);
+-virtual     uint8_t                 getNbAudioStreams(void);
++virtual 	WAVHeader              *getAudioInfo(uint32_t i )  
++                                    {
++                                        if(true==haveAudio) 
++                                            return &wavHeader;
++                                        return NULL;
++                                    };
++virtual 	uint8_t                 getAudioStream(uint32_t i,ADM_audioStream  **audio)
++                                    {
++                                            *audio=NULL;
++                                            if(false==haveAudio) return 0;
++                                            if(i) return 0;
++                                            *audio= audioStream;
++                                            return true;
++                                    }
++virtual     uint8_t                 getNbAudioStreams(void) 
++                                    {
++                                        if(true==haveAudio) 
++                                                return 1;
++                                        return 0;
++                                    }
+ 
+   //__________________________
+   //				 video
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxyAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxyAudio.cpp	2010-01-17 15:52:26 UTC (rev 5855)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxyAudio.cpp	2010-01-17 15:52:27 UTC (rev 5856)
+@@ -0,0 +1,123 @@
++/***************************************************************************
++    \file ADM_avsproxyAudio.cpp
++    \author (C) 2007-2010 by mean  <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include &quot;ADM_default.h&quot;
++#include &quot;fourcc.h&quot;
++#include &quot;DIA_coreToolkit.h&quot;
++
++#include &quot;fourcc.h&quot;
++#include &quot;ADM_avsproxy.h&quot;
++#include &quot;ADM_avsproxy_internal.h&quot;
++#define AVS_AUDIO_BUFFER_SIZE (48000*6*4)
++/**
++    \fn ADM_avsAccess
++*/
++ADM_avsAccess::ADM_avsAccess(avsNet *net, WAVHeader *wav,uint64_t duration)
++{
++    network=net;
++    this-&gt;wavHeader=wav;
++    this-&gt;duration=duration;
++    nextSample=0;
++    audioBuffer=new uint8_t[AVS_AUDIO_BUFFER_SIZE];
++}
++/**
++    \fn ~ADM_avsAccess
++*/
++
++ADM_avsAccess::~ADM_avsAccess()
++{
++    if(audioBuffer)
++        delete [] audioBuffer;
++    audioBuffer=NULL;
++}
++/**
++    \fn getDurationInUs
++*/
++uint64_t  ADM_avsAccess::getDurationInUs(void)
++{
++    return duration;
++}
++/**
++    \fn goToTime
++*/
++bool      ADM_avsAccess::goToTime(uint64_t timeUs)
++{
++    // convert us to sample
++    float f=timeUs;
++    f*=wavHeader-&gt;frequency;
++    f/=1000000.;
++    nextSample=(uint32_t )f;
++    return true;
++}
++/**
++    \fn sampleToTime
++*/
++uint64_t ADM_avsAccess::sampleToTime(uint64_t sample)
++{
++    float f=sample;
++    f/=wavHeader-&gt;frequency;
++    f*=1000000;
++    return (uint64_t)f;
++}
++/**
++    \fn increment
++*/
++void ADM_avsAccess::increment(uint64_t sample)
++{
++    nextSample+=sample;
++}
++/**
++    \fn getPacket
++*/
++bool      ADM_avsAccess::getPacket(uint8_t *buffer, uint32_t *size, uint32_t maxSize,uint64_t *dts)
++{
++    avsNetPacket out;
++    avsNetPacket in;
++    avsAudioFrame aFrame;
++    aFrame.startSample=nextSample;
++    
++#warning this is incorrect
++    aFrame.sizeInFloatSample=maxSize/(2*wavHeader-&gt;channels);
++    in.buffer=(uint8_t *)&aFrame;
++    in.size=sizeof(aFrame);
++
++    out.buffer=audioBuffer;
++    out.sizeMax=maxSize+sizeof(aFrame);
++    out.size=0;
++    //printf(&quot;Asking for frame %d\n&quot;,framenum);
++    if(!network-&gt;command(AvsCmd_GetAudio,0,&amp;in,&amp;out))
++    {
++        ADM_error(&quot;Get audio failed for frame \n&quot;);
++        return false;   
++    }
++  //  printf(&quot;Out size : %d\n&quot;,(int)out.size);
++    
++    //
++    //
++    memcpy(&amp;aFrame,audioBuffer,sizeof(aFrame));
++   // printf(&quot;NbSample : %d\n&quot;,(int)aFrame.sizeInFloatSample);
++    if(!aFrame.sizeInFloatSample)
++    {
++        ADM_warning(&quot;Error in audio (Zero samples\n&quot;);
++        return false;
++    }
++    *dts=sampleToTime(nextSample);
++    increment(aFrame.sizeInFloatSample);
++    *size=out.size-sizeof(aFrame);
++    memcpy(buffer,audioBuffer+sizeof(aFrame),out.size-sizeof(aFrame));
++  return true;
++};
++//EOF
++
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.cpp	2010-01-17 15:52:26 UTC (rev 5855)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.cpp	2010-01-17 15:52:27 UTC (rev 5856)
+@@ -1,4 +1,3 @@
+-
+ /***************************************************************************
+     \file ADM_avsproxy_net.cpp
+     \brief Handle the network part of avsproxy demuxer
+@@ -25,6 +24,7 @@
+ #include &lt;sys/socket.h&gt;
+ #include &lt;netinet/in.h&gt;
+ #include &lt;arpa/inet.h&gt;
++#include &lt;netinet/tcp.h&gt;
+ #endif
+ 
+ #include &lt;stdio.h&gt;
+@@ -39,7 +39,7 @@
+ #define MAGGIC 0xDEADBEEF
+ 
+ #define aprintf(...) {}
+-#define DEBUG_NET
++//#define DEBUG_NET
+ /**
+     \fn bindMe
+ */
+@@ -58,12 +58,17 @@
+     struct sockaddr_in  service;
+     service.sin_family = AF_INET;
+ #ifdef DEBUG_NET
+-    service.sin_addr.s_addr = inet_addr(&quot;192.168.0.22&quot;);
++    service.sin_addr.s_addr = inet_addr(&quot;192.168.0.21&quot;);
+ #else
+     service.sin_addr.s_addr = inet_addr(&quot;127.0.0.1&quot;);
+ #endif    
+     service.sin_port = htons(port);
+     
++// Set socket to lowdelay, else it will be choppy
++    int flag = 1;
++    setsockopt( mySocket, IPPROTO_TCP, TCP_NODELAY, (char *)&amp;flag, sizeof(flag) );
++
++
+     if(connect(mySocket,(struct sockaddr *)&amp;service,sizeof(service)))
+     {
+         printf(&quot;[avsProxy]Socket connect error %d on port %d\n&quot;,errno,port);
+@@ -98,9 +103,11 @@
+    avsNetPacket dummy={0,0,NULL};
+    avsNetPacket *in2=in;
+     if(!in2) in2=&dummy;
++    lock.lock();
+     if(!sendData(cmd,frame,in2-&gt;size,in2-&gt;buffer))
+     {
+         printf(&quot;[avsProxy]Send Cmd %u failed for frame %u\n&quot;,cmd,frame);
++        lock.unlock();
+         return 0;
+     }
+     // Wait reply
+@@ -115,6 +122,7 @@
+     ADM_assert(out-&gt;size&lt;=out-&gt;sizeMax);
+     ADM_assert(reply==cmd+1);
+     aprintf(&quot;[avsProxy]Cmd %u on frame %u succeed\n&quot;,cmd,frame);
++    lock.unlock();
+     return 1;   
+ }
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.h	2010-01-17 15:52:26 UTC (rev 5855)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.h	2010-01-17 15:52:27 UTC (rev 5856)
+@@ -14,7 +14,7 @@
+  ***************************************************************************/
+ #ifndef AVS_PROXY_NET_H
+ #define AVS_PROXY_NET_H
+-
++#include &quot;ADM_threads.h&quot;
+ typedef struct
+ {
+     uint32_t size;
+@@ -29,6 +29,7 @@
+ {
+     protected:
+         int         mySocket;
++        admMutex    lock;
+     public:
+         bool     bindMe(uint32_t port);
+         bool     sendData(uint32_t cmd,uint32_t frame, uint32_t payload_size,uint8_t *payload);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/CMakeLists.txt	2010-01-17 15:52:26 UTC (rev 5855)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/CMakeLists.txt	2010-01-17 15:52:27 UTC (rev 5856)
+@@ -3,6 +3,7 @@
+ 	ADM_avsproxy.cpp  
+         ADM_avsproxy_net.cpp
+         ADM_avsPlugin.cpp
++        ADM_avsproxyAudio.cpp
+ )
+ ADD_LIBRARY(ADM_dm_avsproxy SHARED ${ADM_avsproxy_SRCS})
+ INIT_DEMUXER(ADM_dm_avsproxy)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003061.html">[Avidemux-svn-commit] r5855 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers
+</A></li>
+	<LI>Next message: <A HREF="003062.html">[Avidemux-svn-commit] r5857 -	branches/avidemux_2.6_branch_mean/addons/avisynthproxy
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3060">[ date ]</a>
+              <a href="thread.html#3060">[ thread ]</a>
+              <a href="subject.html#3060">[ subject ]</a>
+              <a href="author.html#3060">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

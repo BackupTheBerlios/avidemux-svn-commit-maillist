@@ -1,0 +1,194 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6361 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6361%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec%3A%0A%09include%20src&In-Reply-To=%3C201006111808.o5BI8ROP008729%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003551.html">
+   <LINK REL="Next"  HREF="003553.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6361 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec:	include src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6361%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec%3A%0A%09include%20src&In-Reply-To=%3C201006111808.o5BI8ROP008729%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6361 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Jun 11 20:08:27 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003551.html">[Avidemux-svn-commit] r6360 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/include	avidemux/common/ADM_videoCodec/src avidemux/qt4 cmake
+</A></li>
+        <LI>Next message: <A HREF="003553.html">[Avidemux-svn-commit] r6362 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/xml
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3552">[ date ]</a>
+              <a href="thread.html#3552">[ thread ]</a>
+              <a href="subject.html#3552">[ subject ]</a>
+              <a href="author.html#3552">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-06-11 20:08:27 +0200 (Fri, 11 Jun 2010)
+New Revision: 6361
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/include/ADM_vpx.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_vpx.cpp
+Log:
+[vpx] Decoding VP8 through libvpx (hackish)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/include/ADM_vpx.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/include/ADM_vpx.h	2010-06-11 18:08:25 UTC (rev 6360)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/include/ADM_vpx.h	2010-06-11 18:08:27 UTC (rev 6361)
+@@ -36,18 +36,13 @@
+                     decoderVPX (uint32_t w, uint32_t h,uint32_t fcc, uint32_t extraDataLen, uint8_t *extraData,uint32_t bpp);
+                     ~decoderVPX();
+     virtual bool    uncompress (ADMCompressedImage * in, ADMImage * out);
+-
+-    virtual bool dontcopy (void)
+-                      {
+-                        return 0; // We cannot use ffmpeg internal buffer, they dont exist!
+-                      }
+-
+     virtual bool bFramePossible (void)
+       {
+         return 0;
+       }
+     virtual const char *getDecoderName(void) {return &quot;LibVPX&quot;;}
+     virtual bool  initializedOk(void)        {return alive;};
++    virtual bool dontcopy (void)             {return true;}
+ };
+ 
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_vpx.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_vpx.cpp	2010-06-11 18:08:25 UTC (rev 6360)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_vpx.cpp	2010-06-11 18:08:27 UTC (rev 6361)
+@@ -25,7 +25,9 @@
+ #include &quot;config.h&quot;
+ #ifdef USE_VPX
+ #include &quot;ADM_vpx.h&quot;
+-
++#include &quot;vpx/vpx_decoder.h&quot;
++#include &quot;vpx/vp8dx.h&quot;
++#define VPX ((vpx_codec_ctx_t *)vpx)
+ /**
+     \fn ctor
+ */
+@@ -33,19 +35,80 @@
+         : decoders(  w,   h,  fcc,   extraDataLen,  extraData,  bpp)
+ {   
+     alive=false;
++    vpx=NULL;
++    vpx_codec_dec_cfg_t cfg;
++    vpx_codec_flags_t flags=0; //VPX_CODEC_USE_POSTPROC
++    vpx_codec_ctx_t *instance=new vpx_codec_ctx_t;
++    const struct vpx_codec_iface *iface = &amp;vpx_codec_vp8_dx_algo;
++    
++    memset(instance,0,sizeof(*instance));
++    memset(&amp;cfg,0,sizeof(cfg));
++    cfg.threads=1;
++    cfg.w=w;
++    cfg.h=h;
++    if(VPX_CODEC_OK!=vpx_codec_dec_init(instance, iface, &amp;cfg, flags))
++    {
++        delete instance;
++        ADM_warning(&quot;Vpx init ko\n&quot;);
++    }else
++    {
++        alive=true;
++        vpx=(void *)instance;
++        ADM_info(&quot;Vpx init ok\n&quot;);
++
++    }
+ }
+ /**
+     \fn dtor
+ */
+ decoderVPX::~decoderVPX ()
+ {
+-
++    if(vpx)
++    {
++        vpx_codec_ctx_t *a=VPX;
++        delete a;
++        vpx=NULL;
++    }
++    ADM_info(&quot;Destroying VPX decoder\n&quot;);
+ }
+ /**
+     \fn uncompress
+ */
+ bool    decoderVPX::uncompress (ADMCompressedImage * in, ADMImage * out)
+ {
++    if (vpx_codec_decode(VPX, in-&gt;data, in-&gt;dataLength, NULL, 0) != VPX_CODEC_OK) 
++    {
++        ADM_warning(&quot;Error decoding VPX\n&quot;);
++        return false;
++    }
++    struct vpx_image *img;
++    const void *iter = NULL;
++    img = vpx_codec_get_frame(VPX, &amp;iter);
++    if(img)
++    {
++            if (img-&gt;fmt != VPX_IMG_FMT_I420) 
++            {
++                ADM_warning(&quot;Wrong Colorspace\n&quot;);
++                return false;
++            }
++            ADMImageRef    *r=out-&gt;castToRef();
++            if(r)
++            {
++                    r-&gt;_planes[0]=img-&gt;planes[0];
++                    r-&gt;_planes[1]=img-&gt;planes[1];
++                    r-&gt;_planes[2]=img-&gt;planes[2];
++                    r-&gt;_planeStride[0]=img-&gt;stride[0];
++                    r-&gt;_planeStride[1]=img-&gt;stride[1];
++                    r-&gt;_planeStride[2]=img-&gt;stride[2];
++                    r-&gt;_colorspace=ADM_COLOR_YV12;
++                    r-&gt;Pts=in-&gt;demuxerPts;
++                    r-&gt;flags=in-&gt;flags;
++                    return true;
++            }
++                
++            ADM_warning(&quot;Only ref for VPX decoder\n&quot;);
++
++    }
+     return false;
+ }
+ #endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003551.html">[Avidemux-svn-commit] r6360 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/include	avidemux/common/ADM_videoCodec/src avidemux/qt4 cmake
+</A></li>
+	<LI>Next message: <A HREF="003553.html">[Avidemux-svn-commit] r6362 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/xml
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3552">[ date ]</a>
+              <a href="thread.html#3552">[ thread ]</a>
+              <a href="subject.html#3552">[ subject ]</a>
+              <a href="author.html#3552">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

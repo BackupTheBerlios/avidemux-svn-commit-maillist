@@ -1,0 +1,2409 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3402 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3402%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200707170606.l6H66Nh7016860%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000677.html">
+   <LINK REL="Next"  HREF="000679.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3402 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3402%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200707170606.l6H66Nh7016860%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3402 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Jul 17 08:06:23 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000677.html">[Avidemux-svn-commit] r3401 - in	branches/avidemux_2.4_branch/avidemux: . ADM_audiodevice
+</A></li>
+        <LI>Next message: <A HREF="000679.html">[Avidemux-svn-commit] r3403 - in	branches/avidemux_2.4_branch/avidemux: ADM_outputs/oplug_avi	ADM_userInterfaces/ADM_GTK/ADM_toolkit_gtk
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#678">[ date ]</a>
+              <a href="thread.html#678">[ thread ]</a>
+              <a href="subject.html#678">[ subject ]</a>
+              <a href="author.html#678">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-07-17 08:06:22 +0200 (Tue, 17 Jul 2007)
+New Revision: 3402
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/dvbsub.c
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/dvbsub_parser.c
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/dvbsubdec.c
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/CMakeLists.txt
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/ffconf.c
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/ffconf.h
+Log:
+[LAV] More codecs
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/CMakeLists.txt	2007-07-17 02:24:45 UTC (rev 3401)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/CMakeLists.txt	2007-07-17 06:06:22 UTC (rev 3402)
+@@ -28,8 +28,9 @@
+                 ac3enc.c ac3.c ac3tab.c
+                 mjpegenc.c mjpegdec.c
+                 wma.c
+-
+-
++                dvbsub_parser.c
++                dvbsubdec.c
++                dvbsub.c
+ )
+ # ADD x86 ones
+ 
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/dvbsub.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/dvbsub.c	2007-07-17 02:24:45 UTC (rev 3401)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/dvbsub.c	2007-07-17 06:06:22 UTC (rev 3402)
+@@ -0,0 +1,437 @@
++/*
++ * DVB subtitle encoding for ffmpeg
++ * Copyright (c) 2005 Fabrice Bellard.
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++#include &quot;avcodec.h&quot;
++#include &quot;bytestream.h&quot;
++
++typedef struct DVBSubtitleContext {
++    int hide_state;
++    int object_version;
++} DVBSubtitleContext;
++
++#define PUTBITS2(val)\
++{\
++    bitbuf |= (val) &lt;&lt; bitcnt;\
++    bitcnt -= 2;\
++    if (bitcnt &lt; 0) {\
++        bitcnt = 6;\
++        *q++ = bitbuf;\
++        bitbuf = 0;\
++    }\
++}
++
++static void dvb_encode_rle2(uint8_t **pq,
++                            const uint8_t *bitmap, int linesize,
++                            int w, int h)
++{
++    uint8_t *q;
++    unsigned int bitbuf;
++    int bitcnt;
++    int x, y, len, x1, v, color;
++
++    q = *pq;
++
++    for(y = 0; y &lt; h; y++) {
++        *q++ = 0x10;
++        bitbuf = 0;
++        bitcnt = 6;
++
++        x = 0;
++        while (x &lt; w) {
++            x1 = x;
++            color = bitmap[x1++];
++            while (x1 &lt; w &amp;&amp; bitmap[x1] == color)
++                x1++;
++            len = x1 - x;
++            if (color == 0 &amp;&amp; len == 2) {
++                PUTBITS2(0);
++                PUTBITS2(0);
++                PUTBITS2(1);
++            } else if (len &gt;= 3 &amp;&amp; len &lt;= 10) {
++                v = len - 3;
++                PUTBITS2(0);
++                PUTBITS2((v &gt;&gt; 2) | 2);
++                PUTBITS2(v &amp; 3);
++                PUTBITS2(color);
++            } else if (len &gt;= 12 &amp;&amp; len &lt;= 27) {
++                v = len - 12;
++                PUTBITS2(0);
++                PUTBITS2(0);
++                PUTBITS2(2);
++                PUTBITS2(v &gt;&gt; 2);
++                PUTBITS2(v &amp; 3);
++                PUTBITS2(color);
++            } else if (len &gt;= 29) {
++                /* length = 29 ... 284 */
++                if (len &gt; 284)
++                    len = 284;
++                v = len - 29;
++                PUTBITS2(0);
++                PUTBITS2(0);
++                PUTBITS2(3);
++                PUTBITS2((v &gt;&gt; 6));
++                PUTBITS2((v &gt;&gt; 4) &amp; 3);
++                PUTBITS2((v &gt;&gt; 2) &amp; 3);
++                PUTBITS2(v &amp; 3);
++                PUTBITS2(color);
++            } else {
++                PUTBITS2(color);
++                if (color == 0) {
++                    PUTBITS2(1);
++                }
++                len = 1;
++            }
++            x += len;
++        }
++        /* end of line */
++        PUTBITS2(0);
++        PUTBITS2(0);
++        PUTBITS2(0);
++        if (bitcnt != 6) {
++            *q++ = bitbuf;
++        }
++        *q++ = 0xf0;
++        bitmap += linesize;
++    }
++    *pq = q;
++}
++
++#define PUTBITS4(val)\
++{\
++    bitbuf |= (val) &lt;&lt; bitcnt;\
++    bitcnt -= 4;\
++    if (bitcnt &lt; 0) {\
++        bitcnt = 4;\
++        *q++ = bitbuf;\
++        bitbuf = 0;\
++    }\
++}
++
++/* some DVB decoders only implement 4 bits/pixel */
++static void dvb_encode_rle4(uint8_t **pq,
++                            const uint8_t *bitmap, int linesize,
++                            int w, int h)
++{
++    uint8_t *q;
++    unsigned int bitbuf;
++    int bitcnt;
++    int x, y, len, x1, v, color;
++
++    q = *pq;
++
++    for(y = 0; y &lt; h; y++) {
++        *q++ = 0x11;
++        bitbuf = 0;
++        bitcnt = 4;
++
++        x = 0;
++        while (x &lt; w) {
++            x1 = x;
++            color = bitmap[x1++];
++            while (x1 &lt; w &amp;&amp; bitmap[x1] == color)
++                x1++;
++            len = x1 - x;
++            if (color == 0 &amp;&amp; len == 2) {
++                PUTBITS4(0);
++                PUTBITS4(0xd);
++            } else if (color == 0 &amp;&amp; (len &gt;= 3 &amp;&amp; len &lt;= 9)) {
++                PUTBITS4(0);
++                PUTBITS4(len - 2);
++            } else if (len &gt;= 4 &amp;&amp; len &lt;= 7) {
++                PUTBITS4(0);
++                PUTBITS4(8 + len - 4);
++                PUTBITS4(color);
++            } else if (len &gt;= 9 &amp;&amp; len &lt;= 24) {
++                PUTBITS4(0);
++                PUTBITS4(0xe);
++                PUTBITS4(len - 9);
++                PUTBITS4(color);
++            } else if (len &gt;= 25) {
++                if (len &gt; 280)
++                    len = 280;
++                v = len - 25;
++                PUTBITS4(0);
++                PUTBITS4(0xf);
++                PUTBITS4(v &gt;&gt; 4);
++                PUTBITS4(v &amp; 0xf);
++                PUTBITS4(color);
++            } else {
++                PUTBITS4(color);
++                if (color == 0) {
++                    PUTBITS4(0xc);
++                }
++                len = 1;
++            }
++            x += len;
++        }
++        /* end of line */
++        PUTBITS4(0);
++        PUTBITS4(0);
++        if (bitcnt != 4) {
++            *q++ = bitbuf;
++        }
++        *q++ = 0xf0;
++        bitmap += linesize;
++    }
++    *pq = q;
++}
++
++#define SCALEBITS 10
++#define ONE_HALF  (1 &lt;&lt; (SCALEBITS - 1))
++#define FIX(x)    ((int) ((x) * (1&lt;&lt;SCALEBITS) + 0.5))
++
++#define RGB_TO_Y_CCIR(r, g, b) \
++((FIX(0.29900*219.0/255.0) * (r) + FIX(0.58700*219.0/255.0) * (g) + \
++  FIX(0.11400*219.0/255.0) * (b) + (ONE_HALF + (16 &lt;&lt; SCALEBITS))) &gt;&gt; SCALEBITS)
++
++#define RGB_TO_U_CCIR(r1, g1, b1, shift)\
++(((- FIX(0.16874*224.0/255.0) * r1 - FIX(0.33126*224.0/255.0) * g1 +         \
++     FIX(0.50000*224.0/255.0) * b1 + (ONE_HALF &lt;&lt; shift) - 1) &gt;&gt; (SCALEBITS + shift)) + 128)
++
++#define RGB_TO_V_CCIR(r1, g1, b1, shift)\
++(((FIX(0.50000*224.0/255.0) * r1 - FIX(0.41869*224.0/255.0) * g1 -           \
++   FIX(0.08131*224.0/255.0) * b1 + (ONE_HALF &lt;&lt; shift) - 1) &gt;&gt; (SCALEBITS + shift)) + 128)
++
++static int encode_dvb_subtitles(DVBSubtitleContext *s,
++                                uint8_t *outbuf, AVSubtitle *h)
++{
++    uint8_t *q, *pseg_len;
++    int page_id, region_id, clut_id, object_id, i, bpp_index, page_state;
++
++
++    q = outbuf;
++
++    page_id = 1;
++
++    if (h-&gt;num_rects == 0 || h-&gt;rects == NULL)
++        return -1;
++
++    *q++ = 0x00; /* subtitle_stream_id */
++
++    /* page composition segment */
++
++    *q++ = 0x0f; /* sync_byte */
++    *q++ = 0x10; /* segment_type */
++    bytestream_put_be16(&amp;q, page_id);
++    pseg_len = q;
++    q += 2; /* segment length */
++    *q++ = 30; /* page_timeout (seconds) */
++    if (s-&gt;hide_state)
++        page_state = 0; /* normal case */
++    else
++        page_state = 2; /* mode change */
++    /* page_version = 0 + page_state */
++    *q++ = s-&gt;object_version | (page_state &lt;&lt; 2) | 3;
++
++    for (region_id = 0; region_id &lt; h-&gt;num_rects; region_id++) {
++        *q++ = region_id;
++        *q++ = 0xff; /* reserved */
++        bytestream_put_be16(&amp;q, h-&gt;rects[region_id].x); /* left pos */
++        bytestream_put_be16(&amp;q, h-&gt;rects[region_id].y); /* top pos */
++    }
++
++    bytestream_put_be16(&amp;pseg_len, q - pseg_len - 2);
++
++    if (!s-&gt;hide_state) {
++        for (clut_id = 0; clut_id &lt; h-&gt;num_rects; clut_id++) {
++
++            /* CLUT segment */
++
++            if (h-&gt;rects[clut_id].nb_colors &lt;= 4) {
++                /* 2 bpp, some decoders do not support it correctly */
++                bpp_index = 0;
++            } else if (h-&gt;rects[clut_id].nb_colors &lt;= 16) {
++                /* 4 bpp, standard encoding */
++                bpp_index = 1;
++            } else {
++                return -1;
++            }
++
++            *q++ = 0x0f; /* sync byte */
++            *q++ = 0x12; /* CLUT definition segment */
++            bytestream_put_be16(&amp;q, page_id);
++            pseg_len = q;
++            q += 2; /* segment length */
++            *q++ = clut_id;
++            *q++ = (0 &lt;&lt; 4) | 0xf; /* version = 0 */
++
++            for(i = 0; i &lt; h-&gt;rects[clut_id].nb_colors; i++) {
++                *q++ = i; /* clut_entry_id */
++                *q++ = (1 &lt;&lt; (7 - bpp_index)) | (0xf &lt;&lt; 1) | 1; /* 2 bits/pixel full range */
++                {
++                    int a, r, g, b;
++                    a = (h-&gt;rects[clut_id].rgba_palette[i] &gt;&gt; 24) &amp; 0xff;
++                    r = (h-&gt;rects[clut_id].rgba_palette[i] &gt;&gt; 16) &amp; 0xff;
++                    g = (h-&gt;rects[clut_id].rgba_palette[i] &gt;&gt; 8) &amp; 0xff;
++                    b = (h-&gt;rects[clut_id].rgba_palette[i] &gt;&gt; 0) &amp; 0xff;
++
++                    *q++ = RGB_TO_Y_CCIR(r, g, b);
++                    *q++ = RGB_TO_V_CCIR(r, g, b, 0);
++                    *q++ = RGB_TO_U_CCIR(r, g, b, 0);
++                    *q++ = 255 - a;
++                }
++            }
++
++            bytestream_put_be16(&amp;pseg_len, q - pseg_len - 2);
++        }
++    }
++
++    for (region_id = 0; region_id &lt; h-&gt;num_rects; region_id++) {
++
++        /* region composition segment */
++
++        if (h-&gt;rects[region_id].nb_colors &lt;= 4) {
++            /* 2 bpp, some decoders do not support it correctly */
++            bpp_index = 0;
++        } else if (h-&gt;rects[region_id].nb_colors &lt;= 16) {
++            /* 4 bpp, standard encoding */
++            bpp_index = 1;
++        } else {
++            return -1;
++        }
++
++        *q++ = 0x0f; /* sync_byte */
++        *q++ = 0x11; /* segment_type */
++        bytestream_put_be16(&amp;q, page_id);
++        pseg_len = q;
++        q += 2; /* segment length */
++        *q++ = region_id;
++        *q++ = (s-&gt;object_version &lt;&lt; 4) | (0 &lt;&lt; 3) | 0x07; /* version , no fill */
++        bytestream_put_be16(&amp;q, h-&gt;rects[region_id].w); /* region width */
++        bytestream_put_be16(&amp;q, h-&gt;rects[region_id].h); /* region height */
++        *q++ = ((1 + bpp_index) &lt;&lt; 5) | ((1 + bpp_index) &lt;&lt; 2) | 0x03;
++        *q++ = region_id; /* clut_id == region_id */
++        *q++ = 0; /* 8 bit fill colors */
++        *q++ = 0x03; /* 4 bit and 2 bit fill colors */
++
++        if (!s-&gt;hide_state) {
++            bytestream_put_be16(&amp;q, region_id); /* object_id == region_id */
++            *q++ = (0 &lt;&lt; 6) | (0 &lt;&lt; 4);
++            *q++ = 0;
++            *q++ = 0xf0;
++            *q++ = 0;
++        }
++
++        bytestream_put_be16(&amp;pseg_len, q - pseg_len - 2);
++    }
++
++    if (!s-&gt;hide_state) {
++
++        for (object_id = 0; object_id &lt; h-&gt;num_rects; object_id++) {
++            /* Object Data segment */
++
++            if (h-&gt;rects[object_id].nb_colors &lt;= 4) {
++                /* 2 bpp, some decoders do not support it correctly */
++                bpp_index = 0;
++            } else if (h-&gt;rects[object_id].nb_colors &lt;= 16) {
++                /* 4 bpp, standard encoding */
++                bpp_index = 1;
++            } else {
++                return -1;
++            }
++
++            *q++ = 0x0f; /* sync byte */
++            *q++ = 0x13;
++            bytestream_put_be16(&amp;q, page_id);
++            pseg_len = q;
++            q += 2; /* segment length */
++
++            bytestream_put_be16(&amp;q, object_id);
++            *q++ = (s-&gt;object_version &lt;&lt; 4) | (0 &lt;&lt; 2) | (0 &lt;&lt; 1) | 1; /* version = 0,
++                                                                       onject_coding_method,
++                                                                       non_modifying_color_flag */
++            {
++                uint8_t *ptop_field_len, *pbottom_field_len, *top_ptr, *bottom_ptr;
++                void (*dvb_encode_rle)(uint8_t **pq,
++                                        const uint8_t *bitmap, int linesize,
++                                        int w, int h);
++                ptop_field_len = q;
++                q += 2;
++                pbottom_field_len = q;
++                q += 2;
++
++                if (bpp_index == 0)
++                    dvb_encode_rle = dvb_encode_rle2;
++                else
++                    dvb_encode_rle = dvb_encode_rle4;
++
++                top_ptr = q;
++                dvb_encode_rle(&amp;q, h-&gt;rects[object_id].bitmap, h-&gt;rects[object_id].w * 2,
++                                    h-&gt;rects[object_id].w, h-&gt;rects[object_id].h &gt;&gt; 1);
++                bottom_ptr = q;
++                dvb_encode_rle(&amp;q, h-&gt;rects[object_id].bitmap + h-&gt;rects[object_id].w,
++                                    h-&gt;rects[object_id].w * 2, h-&gt;rects[object_id].w,
++                                    h-&gt;rects[object_id].h &gt;&gt; 1);
++
++                bytestream_put_be16(&amp;ptop_field_len, bottom_ptr - top_ptr);
++                bytestream_put_be16(&amp;pbottom_field_len, q - bottom_ptr);
++            }
++
++            bytestream_put_be16(&amp;pseg_len, q - pseg_len - 2);
++        }
++    }
++
++    /* end of display set segment */
++
++    *q++ = 0x0f; /* sync_byte */
++    *q++ = 0x80; /* segment_type */
++    bytestream_put_be16(&amp;q, page_id);
++    pseg_len = q;
++    q += 2; /* segment length */
++
++    bytestream_put_be16(&amp;pseg_len, q - pseg_len - 2);
++
++    *q++ = 0xff; /* end of PES data */
++
++    s-&gt;object_version = (s-&gt;object_version + 1) &amp; 0xf;
++    s-&gt;hide_state = !s-&gt;hide_state;
++    return q - outbuf;
++}
++
++static int dvbsub_init_decoder(AVCodecContext *avctx)
++{
++    return 0;
++}
++
++static int dvbsub_close_decoder(AVCodecContext *avctx)
++{
++    return 0;
++}
++
++static int dvbsub_encode(AVCodecContext *avctx,
++                       unsigned char *buf, int buf_size, void *data)
++{
++    DVBSubtitleContext *s = avctx-&gt;priv_data;
++    AVSubtitle *sub = data;
++    int ret;
++
++    ret = encode_dvb_subtitles(s, buf, sub);
++    return ret;
++}
++
++AVCodec dvbsub_encoder = {
++    &quot;dvbsub&quot;,
++    CODEC_TYPE_SUBTITLE,
++    CODEC_ID_DVB_SUBTITLE,
++    sizeof(DVBSubtitleContext),
++    dvbsub_init_decoder,
++    dvbsub_encode,
++    dvbsub_close_decoder,
++};
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/dvbsub_parser.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/dvbsub_parser.c	2007-07-17 02:24:45 UTC (rev 3401)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/dvbsub_parser.c	2007-07-17 06:06:22 UTC (rev 3402)
+@@ -0,0 +1,196 @@
++/*
++ * DVB subtitle parser for FFmpeg
++ * Copyright (c) 2005 Ian Caulfield.
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++#include &quot;avcodec.h&quot;
++#include &quot;dsputil.h&quot;
++#include &quot;bitstream.h&quot;
++
++//#define DEBUG
++//#define DEBUG_PACKET_CONTENTS
++
++/* Parser (mostly) copied from dvdsub.c */
++
++#define PARSE_BUF_SIZE  (65536)
++
++
++/* parser definition */
++typedef struct DVBSubParseContext {
++    uint8_t *packet_buf;
++    int packet_start;
++    int packet_index;
++    int in_packet;
++} DVBSubParseContext;
++
++static int dvbsub_parse_init(AVCodecParserContext *s)
++{
++    DVBSubParseContext *pc = s-&gt;priv_data;
++    pc-&gt;packet_buf = av_malloc(PARSE_BUF_SIZE);
++
++    return 0;
++}
++
++static int dvbsub_parse(AVCodecParserContext *s,
++                        AVCodecContext *avctx,
++                        const uint8_t **poutbuf, int *poutbuf_size,
++                        const uint8_t *buf, int buf_size)
++{
++    DVBSubParseContext *pc = s-&gt;priv_data;
++    uint8_t *p, *p_end;
++    int len, buf_pos = 0;
++
++#ifdef DEBUG
++    av_log(avctx, AV_LOG_INFO, &quot;DVB parse packet pts=%&quot;PRIx64&quot;, lpts=%&quot;PRIx64&quot;, cpts=%&quot;PRIx64&quot;:\n&quot;,
++            s-&gt;pts, s-&gt;last_pts, s-&gt;cur_frame_pts[s-&gt;cur_frame_start_index]);
++#endif
++
++#ifdef DEBUG_PACKET_CONTENTS
++    int i;
++
++    for (i=0; i &lt; buf_size; i++)
++    {
++        av_log(avctx, AV_LOG_INFO, &quot;%02x &quot;, buf[i]);
++        if (i % 16 == 15)
++            av_log(avctx, AV_LOG_INFO, &quot;\n&quot;);
++    }
++
++    if (i % 16 != 0)
++        av_log(avctx, AV_LOG_INFO, &quot;\n&quot;);
++
++#endif
++
++    *poutbuf = NULL;
++    *poutbuf_size = 0;
++
++    s-&gt;fetch_timestamp = 1;
++
++    if (s-&gt;last_pts != s-&gt;pts &amp;&amp; s-&gt;last_pts != AV_NOPTS_VALUE) /* Start of a new packet */
++    {
++        if (pc-&gt;packet_index != pc-&gt;packet_start)
++        {
++#ifdef DEBUG
++            av_log(avctx, AV_LOG_INFO, &quot;Discarding %d bytes\n&quot;,
++                pc-&gt;packet_index - pc-&gt;packet_start);
++#endif
++        }
++
++        pc-&gt;packet_start = 0;
++        pc-&gt;packet_index = 0;
++
++        if (buf_size &lt; 2 || buf[0] != 0x20 || buf[1] != 0x00) {
++#ifdef DEBUG
++            av_log(avctx, AV_LOG_INFO, &quot;Bad packet header\n&quot;);
++#endif
++            return -1;
++        }
++
++        buf_pos = 2;
++
++        pc-&gt;in_packet = 1;
++    } else {
++        if (pc-&gt;packet_start != 0)
++        {
++            if (pc-&gt;packet_index != pc-&gt;packet_start)
++            {
++                memmove(pc-&gt;packet_buf, pc-&gt;packet_buf + pc-&gt;packet_start,
++                            pc-&gt;packet_index - pc-&gt;packet_start);
++
++                pc-&gt;packet_index -= pc-&gt;packet_start;
++                pc-&gt;packet_start = 0;
++            } else {
++                pc-&gt;packet_start = 0;
++                pc-&gt;packet_index = 0;
++            }
++        }
++    }
++
++    if (buf_size - buf_pos + pc-&gt;packet_index &gt; PARSE_BUF_SIZE)
++        return -1;
++
++/* if not currently in a packet, discard data */
++    if (pc-&gt;in_packet == 0)
++        return buf_size;
++
++    memcpy(pc-&gt;packet_buf + pc-&gt;packet_index, buf + buf_pos, buf_size - buf_pos);
++    pc-&gt;packet_index += buf_size - buf_pos;
++
++    p = pc-&gt;packet_buf;
++    p_end = pc-&gt;packet_buf + pc-&gt;packet_index;
++
++    while (p &lt; p_end)
++    {
++        if (*p == 0x0f)
++        {
++            if (p + 6 &lt;= p_end)
++            {
++                len = AV_RB16(p + 4);
++
++                if (p + len + 6 &lt;= p_end)
++                {
++                    *poutbuf_size += len + 6;
++
++                    p += len + 6;
++                } else
++                    break;
++            } else
++                break;
++        } else if (*p == 0xff) {
++            if (p + 1 &lt; p_end)
++            {
++#ifdef DEBUG
++                av_log(avctx, AV_LOG_INFO, &quot;Junk at end of packet\n&quot;);
++#endif
++            }
++            pc-&gt;packet_index = p - pc-&gt;packet_buf;
++            pc-&gt;in_packet = 0;
++            break;
++        } else {
++            av_log(avctx, AV_LOG_ERROR, &quot;Junk in packet\n&quot;);
++
++            pc-&gt;packet_index = p - pc-&gt;packet_buf;
++            pc-&gt;in_packet = 0;
++            break;
++        }
++    }
++
++    if (*poutbuf_size &gt; 0)
++    {
++        *poutbuf = pc-&gt;packet_buf;
++        pc-&gt;packet_start = *poutbuf_size;
++    }
++
++    if (s-&gt;last_pts == AV_NOPTS_VALUE)
++        s-&gt;last_pts = s-&gt;pts;
++
++    return buf_size;
++}
++
++static void dvbsub_parse_close(AVCodecParserContext *s)
++{
++    DVBSubParseContext *pc = s-&gt;priv_data;
++    av_freep(&amp;pc-&gt;packet_buf);
++}
++
++AVCodecParser dvbsub_parser = {
++    { CODEC_ID_DVB_SUBTITLE },
++    sizeof(DVBSubParseContext),
++    dvbsub_parse_init,
++    dvbsub_parse,
++    dvbsub_parse_close,
++};
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/dvbsubdec.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/dvbsubdec.c	2007-07-17 02:24:45 UTC (rev 3401)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/dvbsubdec.c	2007-07-17 06:06:22 UTC (rev 3402)
+@@ -0,0 +1,1461 @@
++/*
++ * DVB subtitle decoding for ffmpeg
++ * Copyright (c) 2005 Ian Caulfield.
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++#include &quot;avcodec.h&quot;
++#include &quot;dsputil.h&quot;
++#include &quot;bitstream.h&quot;
++
++//#define DEBUG
++//#define DEBUG_PACKET_CONTENTS
++//#define DEBUG_SAVE_IMAGES
++
++#define DVBSUB_PAGE_SEGMENT     0x10
++#define DVBSUB_REGION_SEGMENT   0x11
++#define DVBSUB_CLUT_SEGMENT     0x12
++#define DVBSUB_OBJECT_SEGMENT   0x13
++#define DVBSUB_DISPLAY_SEGMENT  0x80
++
++#define cm (ff_cropTbl + MAX_NEG_CROP)
++
++#ifdef DEBUG_SAVE_IMAGES
++#undef fprintf
++#if 0
++static void png_save(const char *filename, uint8_t *bitmap, int w, int h,
++                     uint32_t *rgba_palette)
++{
++    int x, y, v;
++    FILE *f;
++    char fname[40], fname2[40];
++    char command[1024];
++
++    snprintf(fname, 40, &quot;%s.ppm&quot;, filename);
++
++    f = fopen(fname, &quot;w&quot;);
++    if (!f) {
++        perror(fname);
++        exit(1);
++    }
++    fprintf(f, &quot;P6\n&quot;
++            &quot;%d %d\n&quot;
++            &quot;%d\n&quot;,
++            w, h, 255);
++    for(y = 0; y &lt; h; y++) {
++        for(x = 0; x &lt; w; x++) {
++            v = rgba_palette[bitmap[y * w + x]];
++            putc((v &gt;&gt; 16) &amp; 0xff, f);
++            putc((v &gt;&gt; 8) &amp; 0xff, f);
++            putc((v &gt;&gt; 0) &amp; 0xff, f);
++        }
++    }
++    fclose(f);
++
++
++    snprintf(fname2, 40, &quot;%s-a.pgm&quot;, filename);
++
++    f = fopen(fname2, &quot;w&quot;);
++    if (!f) {
++        perror(fname2);
++        exit(1);
++    }
++    fprintf(f, &quot;P5\n&quot;
++            &quot;%d %d\n&quot;
++            &quot;%d\n&quot;,
++            w, h, 255);
++    for(y = 0; y &lt; h; y++) {
++        for(x = 0; x &lt; w; x++) {
++            v = rgba_palette[bitmap[y * w + x]];
++            putc((v &gt;&gt; 24) &amp; 0xff, f);
++        }
++    }
++    fclose(f);
++
++    snprintf(command, 1024, &quot;pnmtopng -alpha %s %s &gt; %s.png 2&gt; /dev/null&quot;, fname2, fname, filename);
++    system(command);
++
++    snprintf(command, 1024, &quot;rm %s %s&quot;, fname, fname2);
++    system(command);
++}
++#endif
++
++static void png_save2(const char *filename, uint32_t *bitmap, int w, int h)
++{
++    int x, y, v;
++    FILE *f;
++    char fname[40], fname2[40];
++    char command[1024];
++
++    snprintf(fname, 40, &quot;%s.ppm&quot;, filename);
++
++    f = fopen(fname, &quot;w&quot;);
++    if (!f) {
++        perror(fname);
++        exit(1);
++    }
++    fprintf(f, &quot;P6\n&quot;
++            &quot;%d %d\n&quot;
++            &quot;%d\n&quot;,
++            w, h, 255);
++    for(y = 0; y &lt; h; y++) {
++        for(x = 0; x &lt; w; x++) {
++            v = bitmap[y * w + x];
++            putc((v &gt;&gt; 16) &amp; 0xff, f);
++            putc((v &gt;&gt; 8) &amp; 0xff, f);
++            putc((v &gt;&gt; 0) &amp; 0xff, f);
++        }
++    }
++    fclose(f);
++
++
++    snprintf(fname2, 40, &quot;%s-a.pgm&quot;, filename);
++
++    f = fopen(fname2, &quot;w&quot;);
++    if (!f) {
++        perror(fname2);
++        exit(1);
++    }
++    fprintf(f, &quot;P5\n&quot;
++            &quot;%d %d\n&quot;
++            &quot;%d\n&quot;,
++            w, h, 255);
++    for(y = 0; y &lt; h; y++) {
++        for(x = 0; x &lt; w; x++) {
++            v = bitmap[y * w + x];
++            putc((v &gt;&gt; 24) &amp; 0xff, f);
++        }
++    }
++    fclose(f);
++
++    snprintf(command, 1024, &quot;pnmtopng -alpha %s %s &gt; %s.png 2&gt; /dev/null&quot;, fname2, fname, filename);
++    system(command);
++
++    snprintf(command, 1024, &quot;rm %s %s&quot;, fname, fname2);
++    system(command);
++}
++#endif
++
++#define RGBA(r,g,b,a) (((a) &lt;&lt; 24) | ((r) &lt;&lt; 16) | ((g) &lt;&lt; 8) | (b))
++
++typedef struct DVBSubCLUT {
++    int id;
++
++    uint32_t clut4[4];
++    uint32_t clut16[16];
++    uint32_t clut256[256];
++
++    struct DVBSubCLUT *next;
++} DVBSubCLUT;
++
++static DVBSubCLUT default_clut;
++
++typedef struct DVBSubObjectDisplay {
++    int object_id;
++    int region_id;
++
++    int x_pos;
++    int y_pos;
++
++    int fgcolour;
++    int bgcolour;
++
++    struct DVBSubObjectDisplay *region_list_next;
++    struct DVBSubObjectDisplay *object_list_next;
++} DVBSubObjectDisplay;
++
++typedef struct DVBSubObject {
++    int id;
++
++    int type;
++
++    DVBSubObjectDisplay *display_list;
++
++    struct DVBSubObject *next;
++} DVBSubObject;
++
++typedef struct DVBSubRegionDisplay {
++    int region_id;
++
++    int x_pos;
++    int y_pos;
++
++    struct DVBSubRegionDisplay *next;
++} DVBSubRegionDisplay;
++
++typedef struct DVBSubRegion {
++    int id;
++
++    int width;
++    int height;
++    int depth;
++
++    int clut;
++    int bgcolour;
++
++    uint8_t *pbuf;
++    int buf_size;
++
++    DVBSubObjectDisplay *display_list;
++
++    struct DVBSubRegion *next;
++} DVBSubRegion;
++
++typedef struct DVBSubContext {
++    int composition_id;
++    int ancillary_id;
++
++    int time_out;
++    DVBSubRegion *region_list;
++    DVBSubCLUT   *clut_list;
++    DVBSubObject *object_list;
++
++    int display_list_size;
++    DVBSubRegionDisplay *display_list;
++} DVBSubContext;
++
++
++static DVBSubObject* get_object(DVBSubContext *ctx, int object_id)
++{
++    DVBSubObject *ptr = ctx-&gt;object_list;
++
++    while (ptr != NULL &amp;&amp; ptr-&gt;id != object_id) {
++        ptr = ptr-&gt;next;
++    }
++
++    return ptr;
++}
++
++static DVBSubCLUT* get_clut(DVBSubContext *ctx, int clut_id)
++{
++    DVBSubCLUT *ptr = ctx-&gt;clut_list;
++
++    while (ptr != NULL &amp;&amp; ptr-&gt;id != clut_id) {
++        ptr = ptr-&gt;next;
++    }
++
++    return ptr;
++}
++
++static DVBSubRegion* get_region(DVBSubContext *ctx, int region_id)
++{
++    DVBSubRegion *ptr = ctx-&gt;region_list;
++
++    while (ptr != NULL &amp;&amp; ptr-&gt;id != region_id) {
++        ptr = ptr-&gt;next;
++    }
++
++    return ptr;
++}
++
++static void delete_region_display_list(DVBSubContext *ctx, DVBSubRegion *region)
++{
++    DVBSubObject *object, *obj2, **obj2_ptr;
++    DVBSubObjectDisplay *display, *obj_disp, **obj_disp_ptr;
++
++    while (region-&gt;display_list != NULL) {
++        display = region-&gt;display_list;
++
++        object = get_object(ctx, display-&gt;object_id);
++
++        if (object != NULL) {
++            obj_disp = object-&gt;display_list;
++            obj_disp_ptr = &amp;object-&gt;display_list;
++
++            while (obj_disp != NULL &amp;&amp; obj_disp != display) {
++                obj_disp_ptr = &amp;obj_disp-&gt;object_list_next;
++                obj_disp = obj_disp-&gt;object_list_next;
++            }
++
++            if (obj_disp) {
++                *obj_disp_ptr = obj_disp-&gt;object_list_next;
++
++                if (object-&gt;display_list == NULL) {
++                    obj2 = ctx-&gt;object_list;
++                    obj2_ptr = &amp;ctx-&gt;object_list;
++
++                    while (obj2 != NULL &amp;&amp; obj2 != object) {
++                        obj2_ptr = &amp;obj2-&gt;next;
++                        obj2 = obj2-&gt;next;
++                    }
++
++                    *obj2_ptr = obj2-&gt;next;
++
++                    av_free(obj2);
++                }
++            }
++        }
++
++        region-&gt;display_list = display-&gt;region_list_next;
++
++        av_free(display);
++    }
++
++}
++
++static void delete_state(DVBSubContext *ctx)
++{
++    DVBSubRegion *region;
++    DVBSubCLUT *clut;
++
++    while (ctx-&gt;region_list != NULL)
++    {
++        region = ctx-&gt;region_list;
++
++        ctx-&gt;region_list = region-&gt;next;
++
++        delete_region_display_list(ctx, region);
++        if (region-&gt;pbuf != NULL)
++            av_free(region-&gt;pbuf);
++
++        av_free(region);
++    }
++
++    while (ctx-&gt;clut_list != NULL)
++    {
++        clut = ctx-&gt;clut_list;
++
++        ctx-&gt;clut_list = clut-&gt;next;
++
++        av_free(clut);
++    }
++
++    /* Should already be null */
++    if (ctx-&gt;object_list != NULL)
++        av_log(0, AV_LOG_ERROR, &quot;Memory deallocation error!\n&quot;);
++}
++
++static int dvbsub_init_decoder(AVCodecContext *avctx)
++{
++    int i, r, g, b, a = 0;
++    DVBSubContext *ctx = (DVBSubContext*) avctx-&gt;priv_data;
++
++    memset(avctx-&gt;priv_data, 0, sizeof(DVBSubContext));
++
++    ctx-&gt;composition_id = avctx-&gt;sub_id &amp; 0xffff;
++    ctx-&gt;ancillary_id = avctx-&gt;sub_id &gt;&gt; 16;
++
++    default_clut.id = -1;
++    default_clut.next = NULL;
++
++    default_clut.clut4[0] = RGBA(  0,   0,   0,   0);
++    default_clut.clut4[1] = RGBA(255, 255, 255, 255);
++    default_clut.clut4[2] = RGBA(  0,   0,   0, 255);
++    default_clut.clut4[3] = RGBA(127, 127, 127, 255);
++
++    default_clut.clut16[0] = RGBA(  0,   0,   0,   0);
++    for (i = 1; i &lt; 16; i++) {
++        if (i &lt; 8) {
++            r = (i &amp; 1) ? 255 : 0;
++            g = (i &amp; 2) ? 255 : 0;
++            b = (i &amp; 4) ? 255 : 0;
++        } else {
++            r = (i &amp; 1) ? 127 : 0;
++            g = (i &amp; 2) ? 127 : 0;
++            b = (i &amp; 4) ? 127 : 0;
++        }
++        default_clut.clut16[i] = RGBA(r, g, b, 255);
++    }
++
++    default_clut.clut256[0] = RGBA(  0,   0,   0,   0);
++    for (i = 1; i &lt; 256; i++) {
++        if (i &lt; 8) {
++            r = (i &amp; 1) ? 255 : 0;
++            g = (i &amp; 2) ? 255 : 0;
++            b = (i &amp; 4) ? 255 : 0;
++            a = 63;
++        } else {
++            switch (i &amp; 0x88) {
++            case 0x00:
++                r = ((i &amp; 1) ? 85 : 0) + ((i &amp; 0x10) ? 170 : 0);
++                g = ((i &amp; 2) ? 85 : 0) + ((i &amp; 0x20) ? 170 : 0);
++                b = ((i &amp; 4) ? 85 : 0) + ((i &amp; 0x40) ? 170 : 0);
++                a = 255;
++                break;
++            case 0x08:
++                r = ((i &amp; 1) ? 85 : 0) + ((i &amp; 0x10) ? 170 : 0);
++                g = ((i &amp; 2) ? 85 : 0) + ((i &amp; 0x20) ? 170 : 0);
++                b = ((i &amp; 4) ? 85 : 0) + ((i &amp; 0x40) ? 170 : 0);
++                a = 127;
++                break;
++            case 0x80:
++                r = 127 + ((i &amp; 1) ? 43 : 0) + ((i &amp; 0x10) ? 85 : 0);
++                g = 127 + ((i &amp; 2) ? 43 : 0) + ((i &amp; 0x20) ? 85 : 0);
++                b = 127 + ((i &amp; 4) ? 43 : 0) + ((i &amp; 0x40) ? 85 : 0);
++                a = 255;
++                break;
++            case 0x88:
++                r = ((i &amp; 1) ? 43 : 0) + ((i &amp; 0x10) ? 85 : 0);
++                g = ((i &amp; 2) ? 43 : 0) + ((i &amp; 0x20) ? 85 : 0);
++                b = ((i &amp; 4) ? 43 : 0) + ((i &amp; 0x40) ? 85 : 0);
++                a = 255;
++                break;
++            }
++        }
++        default_clut.clut256[i] = RGBA(r, g, b, a);
++    }
++
++    return 0;
++}
++
++static int dvbsub_close_decoder(AVCodecContext *avctx)
++{
++    DVBSubContext *ctx = (DVBSubContext*) avctx-&gt;priv_data;
++    DVBSubRegionDisplay *display;
++
++    delete_state(ctx);
++
++    while (ctx-&gt;display_list != NULL)
++    {
++        display = ctx-&gt;display_list;
++        ctx-&gt;display_list = display-&gt;next;
++
++        av_free(display);
++    }
++
++    return 0;
++}
++
++static int dvbsub_read_2bit_string(uint8_t *destbuf, int dbuf_len,
++                                   uint8_t **srcbuf, int buf_size,
++                                   int non_mod, uint8_t *map_table)
++{
++    GetBitContext gb;
++
++    int bits;
++    int run_length;
++    int pixels_read = 0;
++
++    init_get_bits(&amp;gb, *srcbuf, buf_size &lt;&lt; 8);
++
++    while (get_bits_count(&amp;gb) &lt; (buf_size &lt;&lt; 8) &amp;&amp; pixels_read &lt; dbuf_len) {
++        bits = get_bits(&amp;gb, 2);
++
++        if (bits != 0) {
++            if (non_mod != 1 || bits != 1) {
++                if (map_table != NULL)
++                    *destbuf++ = map_table[bits];
++                else
++                    *destbuf++ = bits;
++            }
++            pixels_read++;
++        } else {
++            bits = get_bits(&amp;gb, 1);
++            if (bits == 1) {
++                run_length = get_bits(&amp;gb, 3) + 3;
++                bits = get_bits(&amp;gb, 2);
++
++                if (non_mod == 1 &amp;&amp; bits == 1)
++                    pixels_read += run_length;
++                else {
++                    if (map_table != NULL)
++                        bits = map_table[bits];
++                    while (run_length-- &gt; 0 &amp;&amp; pixels_read &lt; dbuf_len) {
++                        *destbuf++ = bits;
++                        pixels_read++;
++                    }
++                }
++            } else {
++                bits = get_bits(&amp;gb, 1);
++                if (bits == 0) {
++                    bits = get_bits(&amp;gb, 2);
++                    if (bits == 2) {
++                        run_length = get_bits(&amp;gb, 4) + 12;
++                        bits = get_bits(&amp;gb, 2);
++
++                        if (non_mod == 1 &amp;&amp; bits == 1)
++                            pixels_read += run_length;
++                        else {
++                            if (map_table != NULL)
++                                bits = map_table[bits];
++                            while (run_length-- &gt; 0 &amp;&amp; pixels_read &lt; dbuf_len) {
++                                *destbuf++ = bits;
++                                pixels_read++;
++                            }
++                        }
++                    } else if (bits == 3) {
++                        run_length = get_bits(&amp;gb, 8) + 29;
++                        bits = get_bits(&amp;gb, 2);
++
++                        if (non_mod == 1 &amp;&amp; bits == 1)
++                            pixels_read += run_length;
++                        else {
++                            if (map_table != NULL)
++                                bits = map_table[bits];
++                            while (run_length-- &gt; 0 &amp;&amp; pixels_read &lt; dbuf_len) {
++                                *destbuf++ = bits;
++                                pixels_read++;
++                            }
++                        }
++                    } else if (bits == 1) {
++                        pixels_read += 2;
++                        if (map_table != NULL)
++                            bits = map_table[0];
++                        else
++                            bits = 0;
++                        if (pixels_read &lt;= dbuf_len) {
++                            *destbuf++ = bits;
++                            *destbuf++ = bits;
++                        }
++                    } else {
++                        (*srcbuf) += (get_bits_count(&amp;gb) + 7) &gt;&gt; 3;
++                        return pixels_read;
++                    }
++                } else {
++                    if (map_table != NULL)
++                        bits = map_table[0];
++                    else
++                        bits = 0;
++                    *destbuf++ = bits;
++                    pixels_read++;
++                }
++            }
++        }
++    }
++
++    if (get_bits(&amp;gb, 6) != 0)
++        av_log(0, AV_LOG_ERROR, &quot;DVBSub error: line overflow\n&quot;);
++
++    (*srcbuf) += (get_bits_count(&amp;gb) + 7) &gt;&gt; 3;
++
++    return pixels_read;
++}
++
++static int dvbsub_read_4bit_string(uint8_t *destbuf, int dbuf_len,
++                                   uint8_t **srcbuf, int buf_size,
++                                   int non_mod, uint8_t *map_table)
++{
++    GetBitContext gb;
++
++    int bits;
++    int run_length;
++    int pixels_read = 0;
++
++    init_get_bits(&amp;gb, *srcbuf, buf_size &lt;&lt; 8);
++
++    while (get_bits_count(&amp;gb) &lt; (buf_size &lt;&lt; 8) &amp;&amp; pixels_read &lt; dbuf_len) {
++        bits = get_bits(&amp;gb, 4);
++
++        if (bits != 0) {
++            if (non_mod != 1 || bits != 1) {
++                if (map_table != NULL)
++                    *destbuf++ = map_table[bits];
++                else
++                    *destbuf++ = bits;
++            }
++            pixels_read++;
++        } else {
++            bits = get_bits(&amp;gb, 1);
++            if (bits == 0) {
++                run_length = get_bits(&amp;gb, 3);
++
++                if (run_length == 0) {
++                    (*srcbuf) += (get_bits_count(&amp;gb) + 7) &gt;&gt; 3;
++                    return pixels_read;
++                }
++
++                run_length += 2;
++
++                if (map_table != NULL)
++                    bits = map_table[0];
++                else
++                    bits = 0;
++
++                while (run_length-- &gt; 0 &amp;&amp; pixels_read &lt; dbuf_len) {
++                    *destbuf++ = bits;
++                    pixels_read++;
++                }
++            } else {
++                bits = get_bits(&amp;gb, 1);
++                if (bits == 0) {
++                    run_length = get_bits(&amp;gb, 2) + 4;
++                    bits = get_bits(&amp;gb, 4);
++
++                    if (non_mod == 1 &amp;&amp; bits == 1)
++                        pixels_read += run_length;
++                    else {
++                        if (map_table != NULL)
++                            bits = map_table[bits];
++                        while (run_length-- &gt; 0 &amp;&amp; pixels_read &lt; dbuf_len) {
++                            *destbuf++ = bits;
++                            pixels_read++;
++                        }
++                    }
++                } else {
++                    bits = get_bits(&amp;gb, 2);
++                    if (bits == 2) {
++                        run_length = get_bits(&amp;gb, 4) + 9;
++                        bits = get_bits(&amp;gb, 4);
++
++                        if (non_mod == 1 &amp;&amp; bits == 1)
++                            pixels_read += run_length;
++                        else {
++                            if (map_table != NULL)
++                                bits = map_table[bits];
++                            while (run_length-- &gt; 0 &amp;&amp; pixels_read &lt; dbuf_len) {
++                                *destbuf++ = bits;
++                                pixels_read++;
++                            }
++                        }
++                    } else if (bits == 3) {
++                        run_length = get_bits(&amp;gb, 8) + 25;
++                        bits = get_bits(&amp;gb, 4);
++
++                        if (non_mod == 1 &amp;&amp; bits == 1)
++                            pixels_read += run_length;
++                        else {
++                            if (map_table != NULL)
++                                bits = map_table[bits];
++                            while (run_length-- &gt; 0 &amp;&amp; pixels_read &lt; dbuf_len) {
++                                *destbuf++ = bits;
++                                pixels_read++;
++                            }
++                        }
++                    } else if (bits == 1) {
++                        pixels_read += 2;
++                        if (map_table != NULL)
++                            bits = map_table[0];
++                        else
++                            bits = 0;
++                        if (pixels_read &lt;= dbuf_len) {
++                            *destbuf++ = bits;
++                            *destbuf++ = bits;
++                        }
++                    } else {
++                        if (map_table != NULL)
++                            bits = map_table[0];
++                        else
++                            bits = 0;
++                        *destbuf++ = bits;
++                        pixels_read ++;
++                    }
++                }
++            }
++        }
++    }
++
++    if (get_bits(&amp;gb, 8) != 0)
++        av_log(0, AV_LOG_ERROR, &quot;DVBSub error: line overflow\n&quot;);
++
++    (*srcbuf) += (get_bits_count(&amp;gb) + 7) &gt;&gt; 3;
++
++    return pixels_read;
++}
++
++static int dvbsub_read_8bit_string(uint8_t *destbuf, int dbuf_len,
++                                    uint8_t **srcbuf, int buf_size,
++                                    int non_mod, uint8_t *map_table)
++{
++    uint8_t *sbuf_end = (*srcbuf) + buf_size;
++    int bits;
++    int run_length;
++    int pixels_read = 0;
++
++    while (*srcbuf &lt; sbuf_end &amp;&amp; pixels_read &lt; dbuf_len) {
++        bits = *(*srcbuf)++;
++
++        if (bits != 0) {
++            if (non_mod != 1 || bits != 1) {
++                if (map_table != NULL)
++                    *destbuf++ = map_table[bits];
++                else
++                    *destbuf++ = bits;
++            }
++            pixels_read++;
++        } else {
++            bits = *(*srcbuf)++;
++            run_length = bits &amp; 0x7f;
++            if ((bits &amp; 0x80) == 0) {
++                if (run_length == 0) {
++                    return pixels_read;
++                }
++
++                if (map_table != NULL)
++                    bits = map_table[0];
++                else
++                    bits = 0;
++                while (run_length-- &gt; 0 &amp;&amp; pixels_read &lt; dbuf_len) {
++                    *destbuf++ = bits;
++                    pixels_read++;
++                }
++            } else {
++                bits = *(*srcbuf)++;
++
++                if (non_mod == 1 &amp;&amp; bits == 1)
++                    pixels_read += run_length;
++                if (map_table != NULL)
++                    bits = map_table[bits];
++                else while (run_length-- &gt; 0 &amp;&amp; pixels_read &lt; dbuf_len) {
++                    *destbuf++ = bits;
++                    pixels_read++;
++                }
++            }
++        }
++    }
++
++    if (*(*srcbuf)++ != 0)
++        av_log(0, AV_LOG_ERROR, &quot;DVBSub error: line overflow\n&quot;);
++
++    return pixels_read;
++}
++
++
++
++static void dvbsub_parse_pixel_data_block(AVCodecContext *avctx, DVBSubObjectDisplay *display,
++                                          uint8_t *buf, int buf_size, int top_bottom, int non_mod)
++{
++    DVBSubContext *ctx = (DVBSubContext*) avctx-&gt;priv_data;
++
++    DVBSubRegion *region = get_region(ctx, display-&gt;region_id);
++    uint8_t *buf_end = buf + buf_size;
++    uint8_t *pbuf;
++    int x_pos, y_pos;
++    int i;
++
++    uint8_t map2to4[] = { 0x0,  0x7,  0x8,  0xf};
++    uint8_t map2to8[] = {0x00, 0x77, 0x88, 0xff};
++    uint8_t map4to8[] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
++                         0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
++    uint8_t *map_table;
++
++#ifdef DEBUG
++    av_log(avctx, AV_LOG_INFO, &quot;DVB pixel block size %d, %s field:\n&quot;, buf_size,
++                top_bottom ? &quot;bottom&quot; : &quot;top&quot;);
++#endif
++
++#ifdef DEBUG_PACKET_CONTENTS
++    for (i = 0; i &lt; buf_size; i++)
++    {
++        if (i % 16 == 0)
++            av_log(avctx, AV_LOG_INFO, &quot;0x%08p: &quot;, buf+i);
++
++        av_log(avctx, AV_LOG_INFO, &quot;%02x &quot;, buf[i]);
++        if (i % 16 == 15)
++            av_log(avctx, AV_LOG_INFO, &quot;\n&quot;);
++    }
++
++    if (i % 16 != 0)
++        av_log(avctx, AV_LOG_INFO, &quot;\n&quot;);
++
++#endif
++
++    if (region == 0)
++        return;
++
++    pbuf = region-&gt;pbuf;
++
++    x_pos = display-&gt;x_pos;
++    y_pos = display-&gt;y_pos;
++
++    if ((y_pos &amp; 1) != top_bottom)
++        y_pos++;
++
++    while (buf &lt; buf_end) {
++        if (x_pos &gt; region-&gt;width || y_pos &gt; region-&gt;height) {
++            av_log(avctx, AV_LOG_ERROR, &quot;Invalid object location!\n&quot;);
++            return;
++        }
++
++        switch (*buf++) {
++        case 0x10:
++            if (region-&gt;depth == 8)
++                map_table = map2to8;
++            else if (region-&gt;depth == 4)
++                map_table = map2to4;
++            else
++                map_table = NULL;
++
++            x_pos += dvbsub_read_2bit_string(pbuf + (y_pos * region-&gt;width) + x_pos,
++                                                region-&gt;width - x_pos, &amp;buf, buf_size,
++                                                non_mod, map_table);
++            break;
++        case 0x11:
++            if (region-&gt;depth &lt; 4) {
++                av_log(avctx, AV_LOG_ERROR, &quot;4-bit pixel string in %d-bit region!\n&quot;, region-&gt;depth);
++                return;
++            }
++
++            if (region-&gt;depth == 8)
++                map_table = map4to8;
++            else
++                map_table = NULL;
++
++            x_pos += dvbsub_read_4bit_string(pbuf + (y_pos * region-&gt;width) + x_pos,
++                                                region-&gt;width - x_pos, &amp;buf, buf_size,
++                                                non_mod, map_table);
++            break;
++        case 0x12:
++            if (region-&gt;depth &lt; 8) {
++                av_log(avctx, AV_LOG_ERROR, &quot;8-bit pixel string in %d-bit region!\n&quot;, region-&gt;depth);
++                return;
++            }
++
++            x_pos += dvbsub_read_8bit_string(pbuf + (y_pos * region-&gt;width) + x_pos,
++                                                region-&gt;width - x_pos, &amp;buf, buf_size,
++                                                non_mod, NULL);
++            break;
++
++        case 0x20:
++            map2to4[0] = (*buf) &gt;&gt; 4;
++            map2to4[1] = (*buf++) &amp; 0xf;
++            map2to4[2] = (*buf) &gt;&gt; 4;
++            map2to4[3] = (*buf++) &amp; 0xf;
++            break;
++        case 0x21:
++            for (i = 0; i &lt; 4; i++)
++                map2to8[i] = *buf++;
++            break;
++        case 0x22:
++            for (i = 0; i &lt; 16; i++)
++                map4to8[i] = *buf++;
++            break;
++
++        case 0xf0:
++            x_pos = display-&gt;x_pos;
++            y_pos += 2;
++            break;
++        default:
++            av_log(avctx, AV_LOG_INFO, &quot;Unknown/unsupported pixel block 0x%x\n&quot;, *(buf-1));
++        }
++    }
++
++}
++
++static void dvbsub_parse_object_segment(AVCodecContext *avctx,
++                                        uint8_t *buf, int buf_size)
++{
++    DVBSubContext *ctx = (DVBSubContext*) avctx-&gt;priv_data;
++
++    uint8_t *buf_end = buf + buf_size;
++    uint8_t *block;
++    int object_id;
++    DVBSubObject *object;
++    DVBSubObjectDisplay *display;
++    int top_field_len, bottom_field_len;
++
++    int coding_method, non_modifying_colour;
++
++    object_id = AV_RB16(buf);
++    buf += 2;
++
++    object = get_object(ctx, object_id);
++
++    if (!object)
++        return;
++
++    coding_method = ((*buf) &gt;&gt; 2) &amp; 3;
++    non_modifying_colour = ((*buf++) &gt;&gt; 1) &amp; 1;
++
++    if (coding_method == 0) {
++        top_field_len = AV_RB16(buf);
++        buf += 2;
++        bottom_field_len = AV_RB16(buf);
++        buf += 2;
++
++        if (buf + top_field_len + bottom_field_len &gt; buf_end) {
++            av_log(avctx, AV_LOG_ERROR, &quot;Field data size too large\n&quot;);
++            return;
++        }
++
++        for (display = object-&gt;display_list; display != 0; display = display-&gt;object_list_next) {
++            block = buf;
++
++            dvbsub_parse_pixel_data_block(avctx, display, block, top_field_len, 0,
++                                            non_modifying_colour);
++
++            if (bottom_field_len &gt; 0)
++                block = buf + top_field_len;
++            else
++                bottom_field_len = top_field_len;
++
++            dvbsub_parse_pixel_data_block(avctx, display, block, bottom_field_len, 1,
++                                            non_modifying_colour);
++        }
++
++/*  } else if (coding_method == 1) {*/
++
++    } else {
++        av_log(avctx, AV_LOG_ERROR, &quot;Unknown object coding %d\n&quot;, coding_method);
++    }
++
++}
++
++#define SCALEBITS 10
++#define ONE_HALF  (1 &lt;&lt; (SCALEBITS - 1))
++#define FIX(x)    ((int) ((x) * (1&lt;&lt;SCALEBITS) + 0.5))
++
++#define YUV_TO_RGB1_CCIR(cb1, cr1)\
++{\
++    cb = (cb1) - 128;\
++    cr = (cr1) - 128;\
++    r_add = FIX(1.40200*255.0/224.0) * cr + ONE_HALF;\
++    g_add = - FIX(0.34414*255.0/224.0) * cb - FIX(0.71414*255.0/224.0) * cr + \
++            ONE_HALF;\
++    b_add = FIX(1.77200*255.0/224.0) * cb + ONE_HALF;\
++}
++
++#define YUV_TO_RGB2_CCIR(r, g, b, y1)\
++{\
++    y = ((y1) - 16) * FIX(255.0/219.0);\
++    r = cm[(y + r_add) &gt;&gt; SCALEBITS];\
++    g = cm[(y + g_add) &gt;&gt; SCALEBITS];\
++    b = cm[(y + b_add) &gt;&gt; SCALEBITS];\
++}
++
++
++static void dvbsub_parse_clut_segment(AVCodecContext *avctx,
++                                        uint8_t *buf, int buf_size)
++{
++    DVBSubContext *ctx = (DVBSubContext*) avctx-&gt;priv_data;
++
++    uint8_t *buf_end = buf + buf_size;
++    int clut_id;
++    DVBSubCLUT *clut;
++    int entry_id, depth , full_range;
++    int y, cr, cb, alpha;
++    int r, g, b, r_add, g_add, b_add;
++
++#ifdef DEBUG_PACKET_CONTENTS
++    int i;
++
++    av_log(avctx, AV_LOG_INFO, &quot;DVB clut packet:\n&quot;);
++
++    for (i=0; i &lt; buf_size; i++)
++    {
++        av_log(avctx, AV_LOG_INFO, &quot;%02x &quot;, buf[i]);
++        if (i % 16 == 15)
++            av_log(avctx, AV_LOG_INFO, &quot;\n&quot;);
++    }
++
++    if (i % 16 != 0)
++        av_log(avctx, AV_LOG_INFO, &quot;\n&quot;);
++
++#endif
++
++    clut_id = *buf++;
++    buf += 1;
++
++    clut = get_clut(ctx, clut_id);
++
++    if (clut == NULL) {
++        clut = av_malloc(sizeof(DVBSubCLUT));
++
++        memcpy(clut, &amp;default_clut, sizeof(DVBSubCLUT));
++
++        clut-&gt;id = clut_id;
++
++        clut-&gt;next = ctx-&gt;clut_list;
++        ctx-&gt;clut_list = clut;
++    }
++
++    while (buf + 4 &lt; buf_end)
++    {
++        entry_id = *buf++;
++
++        depth = (*buf) &amp; 0xe0;
++
++        if (depth == 0) {
++            av_log(avctx, AV_LOG_ERROR, &quot;Invalid clut depth 0x%x!\n&quot;, *buf);
++            return;
++        }
++
++        full_range = (*buf++) &amp; 1;
++
++        if (full_range) {
++            y = *buf++;
++            cr = *buf++;
++            cb = *buf++;
++            alpha = *buf++;
++        } else {
++            y = buf[0] &amp; 0xfc;
++            cr = (((buf[0] &amp; 3) &lt;&lt; 2) | ((buf[1] &gt;&gt; 6) &amp; 3)) &lt;&lt; 4;
++            cb = (buf[1] &lt;&lt; 2) &amp; 0xf0;
++            alpha = (buf[1] &lt;&lt; 6) &amp; 0xc0;
++
++            buf += 2;
++        }
++
++        if (y == 0)
++            alpha = 0xff;
++
++        YUV_TO_RGB1_CCIR(cb, cr);
++        YUV_TO_RGB2_CCIR(r, g, b, y);
++
++#ifdef DEBUG
++        av_log(avctx, AV_LOG_INFO, &quot;clut %d := (%d,%d,%d,%d)\n&quot;, entry_id, r, g, b, alpha);
++#endif
++
++        if (depth &amp; 0x80)
++            clut-&gt;clut4[entry_id] = RGBA(r,g,b,255 - alpha);
++        if (depth &amp; 0x40)
++            clut-&gt;clut16[entry_id] = RGBA(r,g,b,255 - alpha);
++        if (depth &amp; 0x20)
++            clut-&gt;clut256[entry_id] = RGBA(r,g,b,255 - alpha);
++    }
++}
++
++
++static void dvbsub_parse_region_segment(AVCodecContext *avctx,
++                                        uint8_t *buf, int buf_size)
++{
++    DVBSubContext *ctx = (DVBSubContext*) avctx-&gt;priv_data;
++
++    uint8_t *buf_end = buf + buf_size;
++    int region_id, object_id;
++    DVBSubRegion *region;
++    DVBSubObject *object;
++    DVBSubObjectDisplay *display;
++    int fill;
++
++    if (buf_size &lt; 10)
++        return;
++
++    region_id = *buf++;
++
++    region = get_region(ctx, region_id);
++
++    if (region == NULL)
++    {
++        region = av_mallocz(sizeof(DVBSubRegion));
++
++        region-&gt;id = region_id;
++
++        region-&gt;next = ctx-&gt;region_list;
++        ctx-&gt;region_list = region;
++    }
++
++    fill = ((*buf++) &gt;&gt; 3) &amp; 1;
++
++    region-&gt;width = AV_RB16(buf);
++    buf += 2;
++    region-&gt;height = AV_RB16(buf);
++    buf += 2;
++
++    if (region-&gt;width * region-&gt;height != region-&gt;buf_size) {
++        if (region-&gt;pbuf != 0)
++            av_free(region-&gt;pbuf);
++
++        region-&gt;buf_size = region-&gt;width * region-&gt;height;
++
++        region-&gt;pbuf = av_malloc(region-&gt;buf_size);
++
++        fill = 1;
++    }
++
++    region-&gt;depth = 1 &lt;&lt; (((*buf++) &gt;&gt; 2) &amp; 7);
++    region-&gt;clut = *buf++;
++
++    if (region-&gt;depth == 8)
++        region-&gt;bgcolour = *buf++;
++    else {
++        buf += 1;
++
++        if (region-&gt;depth == 4)
++            region-&gt;bgcolour = (((*buf++) &gt;&gt; 4) &amp; 15);
++        else
++            region-&gt;bgcolour = (((*buf++) &gt;&gt; 2) &amp; 3);
++    }
++
++#ifdef DEBUG
++    av_log(avctx, AV_LOG_INFO, &quot;Region %d, (%dx%d)\n&quot;, region_id, region-&gt;width, region-&gt;height);
++#endif
++
++    if (fill) {
++        memset(region-&gt;pbuf, region-&gt;bgcolour, region-&gt;buf_size);
++#ifdef DEBUG
++        av_log(avctx, AV_LOG_INFO, &quot;Fill region (%d)\n&quot;, region-&gt;bgcolour);
++#endif
++    }
++
++    delete_region_display_list(ctx, region);
++
++    while (buf + 5 &lt; buf_end) {
++        object_id = AV_RB16(buf);
++        buf += 2;
++
++        object = get_object(ctx, object_id);
++
++        if (object == NULL) {
++            object = av_mallocz(sizeof(DVBSubObject));
++
++            object-&gt;id = object_id;
++            object-&gt;next = ctx-&gt;object_list;
++            ctx-&gt;object_list = object;
++        }
++
++        object-&gt;type = (*buf) &gt;&gt; 6;
++
++        display = av_mallocz(sizeof(DVBSubObjectDisplay));
++
++        display-&gt;object_id = object_id;
++        display-&gt;region_id = region_id;
++
++        display-&gt;x_pos = AV_RB16(buf) &amp; 0xfff;
++        buf += 2;
++        display-&gt;y_pos = AV_RB16(buf) &amp; 0xfff;
++        buf += 2;
++
++        if ((object-&gt;type == 1 || object-&gt;type == 2) &amp;&amp; buf+1 &lt; buf_end) {
++            display-&gt;fgcolour = *buf++;
++            display-&gt;bgcolour = *buf++;
++        }
++
++        display-&gt;region_list_next = region-&gt;display_list;
++        region-&gt;display_list = display;
++
++        display-&gt;object_list_next = object-&gt;display_list;
++        object-&gt;display_list = display;
++    }
++}
++
++static void dvbsub_parse_page_segment(AVCodecContext *avctx,
++                                        uint8_t *buf, int buf_size)
++{
++    DVBSubContext *ctx = (DVBSubContext*) avctx-&gt;priv_data;
++    DVBSubRegionDisplay *display;
++    DVBSubRegionDisplay *tmp_display_list, **tmp_ptr;
++
++    uint8_t *buf_end = buf + buf_size;
++    int region_id;
++    int page_state;
++
++    if (buf_size &lt; 1)
++        return;
++
++    ctx-&gt;time_out = *buf++;
++    page_state = ((*buf++) &gt;&gt; 2) &amp; 3;
++
++#ifdef DEBUG
++    av_log(avctx, AV_LOG_INFO, &quot;Page time out %ds, state %d\n&quot;, ctx-&gt;time_out, page_state);
++#endif
++
++    if (page_state == 2)
++    {
++        delete_state(ctx);
++    }
++
++    tmp_display_list = ctx-&gt;display_list;
++    ctx-&gt;display_list = NULL;
++    ctx-&gt;display_list_size = 0;
++
++    while (buf + 5 &lt; buf_end) {
++        region_id = *buf++;
++        buf += 1;
++
++        display = tmp_display_list;
++        tmp_ptr = &amp;tmp_display_list;
++
++        while (display != NULL &amp;&amp; display-&gt;region_id != region_id) {
++            tmp_ptr = &amp;display-&gt;next;
++            display = display-&gt;next;
++        }
++
++        if (display == NULL)
++            display = av_mallocz(sizeof(DVBSubRegionDisplay));
++
++        display-&gt;region_id = region_id;
++
++        display-&gt;x_pos = AV_RB16(buf);
++        buf += 2;
++        display-&gt;y_pos = AV_RB16(buf);
++        buf += 2;
++
++        *tmp_ptr = display-&gt;next;
++
++        display-&gt;next = ctx-&gt;display_list;
++        ctx-&gt;display_list = display;
++        ctx-&gt;display_list_size++;
++
++#ifdef DEBUG
++        av_log(avctx, AV_LOG_INFO, &quot;Region %d, (%d,%d)\n&quot;, region_id, display-&gt;x_pos, display-&gt;y_pos);
++#endif
++    }
++
++    while (tmp_display_list != 0) {
++        display = tmp_display_list;
++
++        tmp_display_list = display-&gt;next;
++
++        av_free(display);
++    }
++
++}
++
++
++#ifdef DEBUG_SAVE_IMAGES
++static void save_display_set(DVBSubContext *ctx)
++{
++    DVBSubRegion *region;
++    DVBSubRegionDisplay *display;
++    DVBSubCLUT *clut;
++    uint32_t *clut_table;
++    int x_pos, y_pos, width, height;
++    int x, y, y_off, x_off;
++    uint32_t *pbuf;
++    char filename[32];
++    static int fileno_index = 0;
++
++    x_pos = -1;
++    y_pos = -1;
++    width = 0;
++    height = 0;
++
++    for (display = ctx-&gt;display_list; display != NULL; display = display-&gt;next) {
++        region = get_region(ctx, display-&gt;region_id);
++
++        if (x_pos == -1) {
++            x_pos = display-&gt;x_pos;
++            y_pos = display-&gt;y_pos;
++            width = region-&gt;width;
++            height = region-&gt;height;
++        } else {
++            if (display-&gt;x_pos &lt; x_pos) {
++                width += (x_pos - display-&gt;x_pos);
++                x_pos = display-&gt;x_pos;
++            }
++
++            if (display-&gt;y_pos &lt; y_pos) {
++                height += (y_pos - display-&gt;y_pos);
++                y_pos = display-&gt;y_pos;
++            }
++
++            if (display-&gt;x_pos + region-&gt;width &gt; x_pos + width) {
++                width = display-&gt;x_pos + region-&gt;width - x_pos;
++            }
++
++            if (display-&gt;y_pos + region-&gt;height &gt; y_pos + height) {
++                height = display-&gt;y_pos + region-&gt;height - y_pos;
++            }
++        }
++    }
++
++    if (x_pos &gt;= 0) {
++
++        pbuf = av_malloc(width * height * 4);
++
++        for (display = ctx-&gt;display_list; display != NULL; display = display-&gt;next) {
++            region = get_region(ctx, display-&gt;region_id);
++
++            x_off = display-&gt;x_pos - x_pos;
++            y_off = display-&gt;y_pos - y_pos;
++
++            clut = get_clut(ctx, region-&gt;clut);
++
++            if (clut == 0)
++                clut = &amp;default_clut;
++
++            switch (region-&gt;depth) {
++            case 2:
++                clut_table = clut-&gt;clut4;
++                break;
++            case 8:
++                clut_table = clut-&gt;clut256;
++                break;
++            case 4:
++            default:
++                clut_table = clut-&gt;clut16;
++                break;
++            }
++
++            for (y = 0; y &lt; region-&gt;height; y++) {
++                for (x = 0; x &lt; region-&gt;width; x++) {
++                    pbuf[((y + y_off) * width) + x_off + x] =
++                        clut_table[region-&gt;pbuf[y * region-&gt;width + x]];
++                }
++            }
++
++        }
++
++        snprintf(filename, 32, &quot;dvbs.%d&quot;, fileno_index);
++
++        png_save2(filename, pbuf, width, height);
++
++        av_free(pbuf);
++    }
++
++    fileno_index++;
++}
++#endif
++
++static int dvbsub_display_end_segment(AVCodecContext *avctx, uint8_t *buf,
++                                        int buf_size, AVSubtitle *sub)
++{
++    DVBSubContext *ctx = (DVBSubContext*) avctx-&gt;priv_data;
++
++    DVBSubRegion *region;
++    DVBSubRegionDisplay *display;
++    AVSubtitleRect *rect;
++    DVBSubCLUT *clut;
++    uint32_t *clut_table;
++    int i;
++
++    sub-&gt;rects = NULL;
++    sub-&gt;start_display_time = 0;
++    sub-&gt;end_display_time = ctx-&gt;time_out * 1000;
++    sub-&gt;format = 0;
++
++    sub-&gt;num_rects = ctx-&gt;display_list_size;
++
++    if (sub-&gt;num_rects &gt; 0)
++        sub-&gt;rects = av_mallocz(sizeof(AVSubtitleRect) * sub-&gt;num_rects);
++
++    i = 0;
++
++    for (display = ctx-&gt;display_list; display != NULL; display = display-&gt;next) {
++        region = get_region(ctx, display-&gt;region_id);
++        rect = &amp;sub-&gt;rects[i];
++
++        if (region == NULL)
++            continue;
++
++        rect-&gt;x = display-&gt;x_pos;
++        rect-&gt;y = display-&gt;y_pos;
++        rect-&gt;w = region-&gt;width;
++        rect-&gt;h = region-&gt;height;
++        rect-&gt;nb_colors = 16;
++        rect-&gt;linesize = region-&gt;width;
++
++        clut = get_clut(ctx, region-&gt;clut);
++
++        if (clut == NULL)
++            clut = &amp;default_clut;
++
++        switch (region-&gt;depth) {
++        case 2:
++            clut_table = clut-&gt;clut4;
++            break;
++        case 8:
++            clut_table = clut-&gt;clut256;
++            break;
++        case 4:
++        default:
++            clut_table = clut-&gt;clut16;
++            break;
++        }
++
++        rect-&gt;rgba_palette = av_malloc((1 &lt;&lt; region-&gt;depth) * sizeof(uint32_t));
++        memcpy(rect-&gt;rgba_palette, clut_table, (1 &lt;&lt; region-&gt;depth) * sizeof(uint32_t));
++
++        rect-&gt;bitmap = av_malloc(region-&gt;buf_size);
++        memcpy(rect-&gt;bitmap, region-&gt;pbuf, region-&gt;buf_size);
++
++        i++;
++    }
++
++    sub-&gt;num_rects = i;
++
++#ifdef DEBUG_SAVE_IMAGES
++    save_display_set(ctx);
++#endif
++
++    return 1;
++}
++
++static int dvbsub_decode(AVCodecContext *avctx,
++                         void *data, int *data_size,
++                         uint8_t *buf, int buf_size)
++{
++    DVBSubContext *ctx = (DVBSubContext*) avctx-&gt;priv_data;
++    AVSubtitle *sub = (AVSubtitle*) data;
++    uint8_t *p, *p_end;
++    int segment_type;
++    int page_id;
++    int segment_length;
++
++#ifdef DEBUG_PACKET_CONTENTS
++    int i;
++
++    av_log(avctx, AV_LOG_INFO, &quot;DVB sub packet:\n&quot;);
++
++    for (i=0; i &lt; buf_size; i++)
++    {
++        av_log(avctx, AV_LOG_INFO, &quot;%02x &quot;, buf[i]);
++        if (i % 16 == 15)
++            av_log(avctx, AV_LOG_INFO, &quot;\n&quot;);
++    }
++
++    if (i % 16 != 0)
++        av_log(avctx, AV_LOG_INFO, &quot;\n&quot;);
++
++#endif
++
++    if (buf_size &lt;= 2)
++        return -1;
++
++    p = buf;
++    p_end = buf + buf_size;
++
++    while (p &lt; p_end &amp;&amp; *p == 0x0f)
++    {
++        p += 1;
++        segment_type = *p++;
++        page_id = AV_RB16(p);
++        p += 2;
++        segment_length = AV_RB16(p);
++        p += 2;
++
++        if (page_id == ctx-&gt;composition_id || page_id == ctx-&gt;ancillary_id) {
++            switch (segment_type) {
++            case DVBSUB_PAGE_SEGMENT:
++                dvbsub_parse_page_segment(avctx, p, segment_length);
++                break;
++            case DVBSUB_REGION_SEGMENT:
++                dvbsub_parse_region_segment(avctx, p, segment_length);
++                break;
++            case DVBSUB_CLUT_SEGMENT:
++                dvbsub_parse_clut_segment(avctx, p, segment_length);
++                break;
++            case DVBSUB_OBJECT_SEGMENT:
++                dvbsub_parse_object_segment(avctx, p, segment_length);
++                break;
++            case DVBSUB_DISPLAY_SEGMENT:
++                *data_size = dvbsub_display_end_segment(avctx, p, segment_length, sub);
++                break;
++            default:
++#ifdef DEBUG
++                av_log(avctx, AV_LOG_INFO, &quot;Subtitling segment type 0x%x, page id %d, length %d\n&quot;,
++                        segment_type, page_id, segment_length);
++#endif
++                break;
++            }
++        }
++
++        p += segment_length;
++    }
++
++    if (p != p_end)
++    {
++#ifdef DEBUG
++        av_log(avctx, AV_LOG_INFO, &quot;Junk at end of packet\n&quot;);
++#endif
++        return -1;
++    }
++
++    return buf_size;
++}
++
++
++AVCodec dvbsub_decoder = {
++    &quot;dvbsub&quot;,
++    CODEC_TYPE_SUBTITLE,
++    CODEC_ID_DVB_SUBTITLE,
++    sizeof(DVBSubContext),
++    dvbsub_init_decoder,
++    NULL,
++    dvbsub_close_decoder,
++    dvbsub_decode,
++};
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/ffconf.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/ffconf.c	2007-07-17 02:24:45 UTC (rev 3401)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/ffconf.c	2007-07-17 06:06:22 UTC (rev 3402)
+@@ -33,6 +33,17 @@
+     DECLARE_DECODER (MJPEG, mjpeg);
+     DECLARE_DECODER(WMAV2, wmav2);
+     DECLARE_DECODER (DVVIDEO, dvvideo);
++    DECLARE_DECODER (HUFFYUV, huffyuv);
++    DECLARE_DECODER (FFVHUFF, ffvhuff);
++    DECLARE_DECODER(SVQ3, svq3);
++    DECLARE_DECODER(TSCC, tscc);
++    DECLARE_DECODER(QDM2, qdm2);
++    DECLARE_DECODER (FFV1, ffv1);
++    DECLARE_DECODER (MPEG1VIDEO, mpeg1video);
++    DECLARE_DECODER (MPEG2VIDEO, mpeg2video);
++    DECLARE_DECODER (RV10, rv10);
++    DECLARE_DECODER (RV20, rv20);
++    DECLARE_DECODER (DVBSUB, dvbsub);
+ 
+ #undef DECLARE_DECODER
+ #define DECLARE_DECODER(a,b); printf(&quot;#define ENABLE_&quot;#a&quot;_DECODER 0\n&quot;); 
+@@ -65,13 +76,11 @@
+     DECLARE_DECODER(SMACKER, smacker);
+     DECLARE_DECODER(SMC, smc);
+     DECLARE_DECODER(SP5X, sp5x);
+-    DECLARE_DECODER(SVQ3, svq3);
+     DECLARE_DECODER(THEORA, theora);
+     DECLARE_DECODER(THP, thp);
+     DECLARE_DECODER(TIERTEXSEQVIDEO, tiertexseqvideo);
+     DECLARE_DECODER(TRUEMOTION1, truemotion1);
+     DECLARE_DECODER(TRUEMOTION2, truemotion2);
+-    DECLARE_DECODER(TSCC, tscc);
+     DECLARE_DECODER(TXD, txd);
+     DECLARE_DECODER(ULTI, ulti);
+     DECLARE_DECODER(VMDVIDEO, vmdvideo);
+@@ -95,7 +104,6 @@
+     DECLARE_DECODER(MP3ADU, mp3adu);
+     DECLARE_DECODER(MP3ON4, mp3on4);
+     DECLARE_DECODER(MPC7, mpc7);
+-    DECLARE_DECODER(QDM2, qdm2);
+     DECLARE_DECODER(RA_144, ra_144);
+     DECLARE_DECODER(RA_288, ra_288);
+     DECLARE_DECODER(SHORTEN, shorten);
+@@ -113,23 +121,16 @@
+     DECLARE_DECODER (ASV1, asv1);
+     DECLARE_DECODER (ASV2, asv2);
+     DECLARE_DECODER (BMP, bmp);
+-    DECLARE_DECODER (FFV1, ffv1);
+-    DECLARE_DECODER (FFVHUFF, ffvhuff);
+     DECLARE_DECODER (FLASHSV, flashsv);
+     DECLARE_DECODER (FLV, flv);
+     DECLARE_DECODER (GIF, gif);
+     DECLARE_DECODER (H261, h261);
+     DECLARE_DECODER (H263, h263);
+-    DECLARE_DECODER (HUFFYUV, huffyuv);
+     DECLARE_DECODER (JPEGLS, jpegls);
+-    DECLARE_DECODER (MPEG1VIDEO, mpeg1video);
+-    DECLARE_DECODER (MPEG2VIDEO, mpeg2video);
+     DECLARE_DECODER (PNG, png);
+     DECLARE_DECODER (QTRLE, qtrle);
+     DECLARE_DECODER (RAWVIDEO, rawvideo);
+     DECLARE_DECODER (ROQ, roq);
+-    DECLARE_DECODER (RV10, rv10);
+-    DECLARE_DECODER (RV20, rv20);
+     DECLARE_DECODER (SGI, sgi);
+     DECLARE_DECODER (SNOW, snow);
+     DECLARE_DECODER (SVQ1, svq1);
+@@ -184,7 +185,6 @@
+     DECLARE_DECODER (ADPCM_SWF, adpcm_swf);
+     DECLARE_DECODER (ADPCM_XA, adpcm_xa);
+     DECLARE_DECODER (ADPCM_YAMAHA, adpcm_yamaha);
+-    DECLARE_DECODER (DVBSUB, dvbsub);
+     DECLARE_DECODER (DVDSUB, dvdsub);
+ 
+ #define DECLARE_PARSER(a,b); printf(&quot;#define ENABLE_&quot;#a&quot;_PARSER 1\n&quot;); 
+@@ -221,6 +221,8 @@
+     DECLARE_ENCODER (SNOW, snow);
+     DECLARE_ENCODER (MP2, mp2);
+     DECLARE_ENCODER (DVVIDEO, dvvideo);
++    DECLARE_ENCODER (HUFFYUV, huffyuv);
++    DECLARE_ENCODER (DVBSUB, dvbsub);
+ 
+ #undef DECLARE_ENCODER
+ #define DECLARE_ENCODER(a,b); printf(&quot;#define ENABLE_&quot;#a&quot;_ENCODER 0\n&quot;); 
+@@ -245,7 +247,6 @@
+     DECLARE_ENCODER (FLV, flv);
+     DECLARE_ENCODER (GIF, gif);
+     DECLARE_ENCODER (H261, h261);
+-    DECLARE_ENCODER (HUFFYUV, huffyuv);
+     DECLARE_ENCODER (JPEGLS, jpegls);
+     DECLARE_ENCODER (MSMPEG4V1, msmpeg4v1);
+     DECLARE_ENCODER (MSMPEG4V2, msmpeg4v2);
+@@ -308,7 +309,6 @@
+     DECLARE_ENCODER (ADPCM_SWF, adpcm_swf);
+     DECLARE_ENCODER (ADPCM_XA, adpcm_xa);
+     DECLARE_ENCODER (ADPCM_YAMAHA, adpcm_yamaha);
+-    DECLARE_ENCODER (DVBSUB, dvbsub);
+     DECLARE_ENCODER (DVDSUB, dvdsub);
+ 
+ printf(&quot;#define ENABLE_LIBVORBIS_ENCODER        0\n&quot;);
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/ffconf.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/ffconf.h	2007-07-17 02:24:45 UTC (rev 3401)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/ffconf.h	2007-07-17 06:06:22 UTC (rev 3402)
+@@ -24,6 +24,17 @@
+ #define ENABLE_MJPEG_DECODER 1
+ #define ENABLE_WMAV2_DECODER 1
+ #define ENABLE_DVVIDEO_DECODER 1
++#define ENABLE_HUFFYUV_DECODER 1
++#define ENABLE_FFVHUFF_DECODER 1
++#define ENABLE_SVQ3_DECODER 1
++#define ENABLE_TSCC_DECODER 1
++#define ENABLE_QDM2_DECODER 1
++#define ENABLE_FFV1_DECODER 1
++#define ENABLE_MPEG1VIDEO_DECODER 1
++#define ENABLE_MPEG2VIDEO_DECODER 1
++#define ENABLE_RV10_DECODER 1
++#define ENABLE_RV20_DECODER 1
++#define ENABLE_DVBSUB_DECODER 1
+ #define ENABLE_AASC_DECODER 0
+ #define ENABLE_AVS_DECODER 0
+ #define ENABLE_BETHSOFTVID_DECODER 0
+@@ -52,13 +63,11 @@
+ #define ENABLE_SMACKER_DECODER 0
+ #define ENABLE_SMC_DECODER 0
+ #define ENABLE_SP5X_DECODER 0
+-#define ENABLE_SVQ3_DECODER 0
+ #define ENABLE_THEORA_DECODER 0
+ #define ENABLE_THP_DECODER 0
+ #define ENABLE_TIERTEXSEQVIDEO_DECODER 0
+ #define ENABLE_TRUEMOTION1_DECODER 0
+ #define ENABLE_TRUEMOTION2_DECODER 0
+-#define ENABLE_TSCC_DECODER 0
+ #define ENABLE_TXD_DECODER 0
+ #define ENABLE_ULTI_DECODER 0
+ #define ENABLE_VMDVIDEO_DECODER 0
+@@ -82,7 +91,6 @@
+ #define ENABLE_MP3ADU_DECODER 0
+ #define ENABLE_MP3ON4_DECODER 0
+ #define ENABLE_MPC7_DECODER 0
+-#define ENABLE_QDM2_DECODER 0
+ #define ENABLE_RA_144_DECODER 0
+ #define ENABLE_RA_288_DECODER 0
+ #define ENABLE_SHORTEN_DECODER 0
+@@ -99,23 +107,16 @@
+ #define ENABLE_ASV1_DECODER 0
+ #define ENABLE_ASV2_DECODER 0
+ #define ENABLE_BMP_DECODER 0
+-#define ENABLE_FFV1_DECODER 0
+-#define ENABLE_FFVHUFF_DECODER 0
+ #define ENABLE_FLASHSV_DECODER 0
+ #define ENABLE_FLV_DECODER 0
+ #define ENABLE_GIF_DECODER 0
+ #define ENABLE_H261_DECODER 0
+ #define ENABLE_H263_DECODER 0
+-#define ENABLE_HUFFYUV_DECODER 0
+ #define ENABLE_JPEGLS_DECODER 0
+-#define ENABLE_MPEG1VIDEO_DECODER 0
+-#define ENABLE_MPEG2VIDEO_DECODER 0
+ #define ENABLE_PNG_DECODER 0
+ #define ENABLE_QTRLE_DECODER 0
+ #define ENABLE_RAWVIDEO_DECODER 0
+ #define ENABLE_ROQ_DECODER 0
+-#define ENABLE_RV10_DECODER 0
+-#define ENABLE_RV20_DECODER 0
+ #define ENABLE_SGI_DECODER 0
+ #define ENABLE_SNOW_DECODER 0
+ #define ENABLE_SVQ1_DECODER 0
+@@ -170,7 +171,6 @@
+ #define ENABLE_ADPCM_SWF_DECODER 0
+ #define ENABLE_ADPCM_XA_DECODER 0
+ #define ENABLE_ADPCM_YAMAHA_DECODER 0
+-#define ENABLE_DVBSUB_DECODER 0
+ #define ENABLE_DVDSUB_DECODER 0
+ #define ENABLE_H263_PARSER 1
+ #define ENABLE_H264_PARSER 1
+@@ -200,6 +200,8 @@
+ #define ENABLE_SNOW_ENCODER 1
+ #define ENABLE_MP2_ENCODER 1
+ #define ENABLE_DVVIDEO_ENCODER 1
++#define ENABLE_HUFFYUV_ENCODER 1
++#define ENABLE_DVBSUB_ENCODER 1
+ #define ENABLE_LIBX264_ENCODER 0
+ #define ENABLE_LIBXVID_ENCODER 0
+ #define ENABLE_LJPEG_ENCODER 0
+@@ -219,7 +221,6 @@
+ #define ENABLE_FLV_ENCODER 0
+ #define ENABLE_GIF_ENCODER 0
+ #define ENABLE_H261_ENCODER 0
+-#define ENABLE_HUFFYUV_ENCODER 0
+ #define ENABLE_JPEGLS_ENCODER 0
+ #define ENABLE_MSMPEG4V1_ENCODER 0
+ #define ENABLE_MSMPEG4V2_ENCODER 0
+@@ -282,7 +283,6 @@
+ #define ENABLE_ADPCM_SWF_ENCODER 0
+ #define ENABLE_ADPCM_XA_ENCODER 0
+ #define ENABLE_ADPCM_YAMAHA_ENCODER 0
+-#define ENABLE_DVBSUB_ENCODER 0
+ #define ENABLE_DVDSUB_ENCODER 0
+ #define ENABLE_LIBVORBIS_ENCODER        0
+ #define ENABLE_LIBVORBIS_DECODER        0
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000677.html">[Avidemux-svn-commit] r3401 - in	branches/avidemux_2.4_branch/avidemux: . ADM_audiodevice
+</A></li>
+	<LI>Next message: <A HREF="000679.html">[Avidemux-svn-commit] r3403 - in	branches/avidemux_2.4_branch/avidemux: ADM_outputs/oplug_avi	ADM_userInterfaces/ADM_GTK/ADM_toolkit_gtk
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#678">[ date ]</a>
+              <a href="thread.html#678">[ thread ]</a>
+              <a href="subject.html#678">[ subject ]</a>
+              <a href="author.html#678">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,225 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7424 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7424%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src&In-Reply-To=%3C20110815140631.AC9C9481298%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004574.html">
+   <LINK REL="Next"  HREF="004576.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7424 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7424%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src&In-Reply-To=%3C20110815140631.AC9C9481298%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7424 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Aug 15 16:06:31 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004574.html">[Avidemux-svn-commit] r7423 - in branches/avidemux_2.6_branch_mean:	avidemux/qt4/ADM_UIs/include avidemux/qt4/ADM_UIs/src	avidemux_plugins/ADM_videoFilters6_openGl/glSmooth	avidemux_plugins/ADM_videoFilters6_openGl/sample_fragment	avidemux_plugins/ADM_videoFilters6_openGl/sample_fragment2	avidemux_plugins/ADM_videoFilters6_openGl/sample_vertex
+</A></li>
+        <LI>Next message: <A HREF="004576.html">[Avidemux-svn-commit] r7425 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4575">[ date ]</a>
+              <a href="thread.html#4575">[ thread ]</a>
+              <a href="subject.html#4575">[ subject ]</a>
+              <a href="author.html#4575">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-08-15 16:06:31 +0200 (Mon, 15 Aug 2011)
+New Revision: 7424
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp
+Log:
+[Gl/readback] MMX optimize reading processed texture
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp	2011-08-15 14:06:29 UTC (rev 7423)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp	2011-08-15 14:06:31 UTC (rev 7424)
+@@ -169,7 +169,55 @@
+ #endif
+     return true;
+ }
++typedef void typeGlYv444(const uint8_t *src,uint8_t *dst,const int width);
++#ifdef ADM_CPU_X86
++static inline void glYUV444_MMXInit(void)
++{
++   static uint64_t FUNNY_MANGLE(mask);
++    mask=0x00ff000000ff0000LL;
++  //mask=0x0000ff000000ff00LL;
++    __asm__(&quot; movq &quot;Mangle(mask)&quot;, %%mm7\n&quot; ::);
++}
++static inline void glYUV444_MMX(const uint8_t *src, uint8_t *dst, const int width)
++{
++ 
++    int count=width/8;
++                    __asm__(
++                        &quot;1:\n&quot;
++                        &quot;movq           (%0),%%mm0 \n&quot;
++                        &quot;pand           %%mm7,%%mm0\n&quot;
++                        &quot;movq           8(%0),%%mm1 \n&quot;
++                        &quot;pand           %%mm7,%%mm1\n&quot;
+ 
++                        &quot;movq           16(%0),%%mm2 \n&quot;
++                        &quot;pand           %%mm7,%%mm2\n&quot;
++                        &quot;movq           24(%0),%%mm3 \n&quot;
++                        &quot;pand           %%mm7,%%mm3\n&quot;
++
++                        &quot;packuswb       %%mm1,%%mm0\n&quot;
++                        &quot;packuswb       %%mm3,%%mm2\n&quot;
++                        &quot;psrlw          $8,%%mm0\n&quot;
++                        &quot;psrlw          $8,%%mm2\n&quot;
++                        &quot;packuswb       %%mm2,%%mm0\n&quot;
++
++                        &quot;movq           %%mm0,(%1)  \n&quot;  
++                        &quot;add            $32,%0      \n&quot;
++                        &quot;add            $8,%1       \n&quot;
++                        &quot;sub            $1,%2        \n&quot;
++                        &quot;jnz             1b         \n&quot;
++                        
++                        :: &quot;r&quot;(src),&quot;r&quot;(dst),&quot;r&quot;(count)
++                        );
++}
++#endif
++static inline void glYUV444_C(const uint8_t *src, uint8_t *dst, const int width)
++{
++       for(int x=0;x&lt;width;x++)
++        {
++            dst[x]  = src[x*4+TEX_Y_OFFSET];
++        }
++}
++
+ /**
+     \fn downloadTexture
+     \brief Download YUVA texture into a YV12 image
+@@ -181,57 +229,57 @@
+     // Assume RGB32, read R or A
+     int strideY=image-&gt;GetPitch(PLANAR_Y);
+     uint8_t *toY=image-&gt;GetWritePtr(PLANAR_Y);
+-    
+-    int width=image-&gt;GetWidth(PLANAR_Y);
+-    int height=image-&gt;GetHeight(PLANAR_Y);
+-
+-    // Do Y
+-    for(int y=1;y&lt;=height;y++)
+-    {
+-        const uchar *src=qimg.constScanLine(height-y);
+-        if(!src)
+-        {
+-            ADM_error(&quot;Can t get pointer to openGl texture\n&quot;);
+-            return false;
+-        }
+-        for(int x=0;x&lt;width;x++)
+-        {
+-            toY[x]  = src[x*4+TEX_Y_OFFSET];
+-            
+-        }
+-        toY+=strideY;
+-    }
+-    // do U &amp; V
+     uint8_t *toU=image-&gt;GetWritePtr(PLANAR_U);
+     uint8_t *toV=image-&gt;GetWritePtr(PLANAR_V);
+     int      strideU=image-&gt;GetPitch(PLANAR_U);
+     int      strideV=image-&gt;GetPitch(PLANAR_V);
+ 
+-    for(int y=1;y&lt;=height;y+=2)
++    int width=image-&gt;GetWidth(PLANAR_Y);
++    int height=image-&gt;GetHeight(PLANAR_Y);
++    typeGlYv444 *luma=glYUV444_C;
++#ifdef ADM_CPU_X86
++      if(CpuCaps::hasMMX())
++      {
++            glYUV444_MMXInit();
++            luma=glYUV444_MMX;
++      }
++#endif
++    // Do Y
++    for(int y=1;y&lt;=height;y++)
+     {
+         const uchar *src=qimg.constScanLine(height-y);
++        
++        
+         if(!src)
+         {
+             ADM_error(&quot;Can t get pointer to openGl texture\n&quot;);
+             return false;
+         }
+-        for(int x=0;x&lt;width;x+=2) // Stupid subsample: 1 out of 4
+-        {
+-            const uchar *p=src+x*4;
+-            uint32_t v=*(uint32_t *)p;
+-            if(!v)
++       luma(src,toY,width);
++       toY+=strideY;
++       if(y&amp;1)
++       {
++            for(int x=0;x&lt;width;x+=2) // Stupid subsample: 1 out of 4
+             {
+-                    toU[x/2]=128;
+-                    toV[x/2]=128;
+-            }else
+-            {
+-                toU[x/2]  =  p[TEX_U_OFFSET];
+-                toV[x/2]  =  p[TEX_V_OFFSET];
++                const uchar *p=src+x*4;
++                uint32_t v=*(uint32_t *)p;
++                if(!v)
++                {
++                        toU[x/2]=128;
++                        toV[x/2]=128;
++                }else
++                {
++                    toU[x/2]  =  p[TEX_U_OFFSET];
++                    toV[x/2]  =  p[TEX_V_OFFSET];
++                }
+             }
+-        }
+-        toU+=strideU;
+-        toV+=strideV;
++            toU+=strideU;
++            toV+=strideV;
++       }
+     }
++#ifdef ADM_CPU_X86
++    __asm__( &quot;emms\n&quot;::  );
++#endif
+     return true;
+ }
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004574.html">[Avidemux-svn-commit] r7423 - in branches/avidemux_2.6_branch_mean:	avidemux/qt4/ADM_UIs/include avidemux/qt4/ADM_UIs/src	avidemux_plugins/ADM_videoFilters6_openGl/glSmooth	avidemux_plugins/ADM_videoFilters6_openGl/sample_fragment	avidemux_plugins/ADM_videoFilters6_openGl/sample_fragment2	avidemux_plugins/ADM_videoFilters6_openGl/sample_vertex
+</A></li>
+	<LI>Next message: <A HREF="004576.html">[Avidemux-svn-commit] r7425 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4575">[ date ]</a>
+              <a href="thread.html#4575">[ thread ]</a>
+              <a href="subject.html#4575">[ subject ]</a>
+              <a href="author.html#4575">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

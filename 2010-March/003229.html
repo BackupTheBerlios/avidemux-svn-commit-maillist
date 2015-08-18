@@ -1,0 +1,159 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6025 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6025%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264&In-Reply-To=%3C201003231455.o2NEt2eU009031%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003228.html">
+   <LINK REL="Next"  HREF="003230.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6025 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6025%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264&In-Reply-To=%3C201003231455.o2NEt2eU009031%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6025 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Mar 23 15:55:02 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003228.html">[Avidemux-svn-commit] r6024 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src	avidemux/common/ADM_videoFilter2/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src
+</A></li>
+        <LI>Next message: <A HREF="003230.html">[Avidemux-svn-commit] r6026 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3229">[ date ]</a>
+              <a href="thread.html#3229">[ thread ]</a>
+              <a href="subject.html#3229">[ subject ]</a>
+              <a href="author.html#3229">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-03-23 15:55:02 +0100 (Tue, 23 Mar 2010)
+New Revision: 6025
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp
+Log:
+[x264] Slightly better CQ/CRF mode
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp	2010-03-23 14:55:00 UTC (rev 6024)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp	2010-03-23 14:55:02 UTC (rev 6025)
+@@ -43,7 +43,7 @@
+ x264_encoder x264Settings=
+ {
+     {
+-    COMPRESS_CQ, //COMPRESSION_MODE  mode;
++    COMPRESS_AQ, //COMPRESSION_MODE  mode;
+     15,              // uint32_t          qz;           /// Quantizer
+     1500,           //uint32_t          bitrate;      /// In kb/s 
+     700,            //uint32_t          finalsize;    /// In ?
+@@ -51,15 +51,15 @@
+         ADM_ENC_CAP_CBR+
+         ADM_ENC_CAP_CQ+
+         ADM_ENC_CAP_AQ+
+-        ADM_ENC_CAP_2PASS+
+-        ADM_ENC_CAP_2PASS_BR+
++        0*ADM_ENC_CAP_2PASS+
++        0*ADM_ENC_CAP_2PASS_BR+
+         ADM_ENC_CAP_GLOBAL+
+-        ADM_ENC_CAP_SAME
++        0*ADM_ENC_CAP_SAME
+     },
+     2, // uint32_t MaxRefFrames;
+-    20, //uint32_t MinIdr;
+-    50, //uint32_t MaxIdr;
+-    2,  // threads
++    10, //uint32_t MinIdr;
++    150, //uint32_t MaxIdr;
++    99,  // threads (auto)
+    true, //bool _8x8;
+    true, //bool _8x8P;
+    true, //bool _8x8B;
+@@ -68,8 +68,8 @@
+    true, //bool _4x4I;
+    2, //uint32_t MaxBFrame;
+    30, //uint32_t profile;
+-   true, //bool CABAC;
+-   true, //bool Trellis;     
++   false, //bool CABAC;
++   false, //bool Trellis;     
+     
+ };
+ /**
+@@ -99,6 +99,8 @@
+         memcpy(p, seiUserData, seiUserDataLen);
+         p += seiUserDataLen;
+         seiUserDataLen = 0;
++        delete [] seiUserData;
++        seiUserData=NULL;
+     }
+ 
+     for (i = 0; i &lt; nalCount; i++)
+@@ -261,6 +263,8 @@
+         out-&gt;pts =  picout-&gt;i_pts+getEncoderDelay();	
+         out-&gt;dts=queueOfDts[0];
+         queueOfDts.erase(queueOfDts.begin());
++        aprintf(&quot;pts = %&quot;LLU&quot;, dts=%&quot;LLU&quot;, pts+delay=%&quot;LLU&quot; delta=%&quot;LLU&quot;\n&quot;,picout-&gt;i_pts,out-&gt;dts,out-&gt;pts,
++                    out-&gt;pts-out-&gt;dts);
+         switch (picout-&gt;i_type)
+         {
+         case X264_TYPE_IDR:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp	2010-03-23 14:55:00 UTC (rev 6024)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Setup.cpp	2010-03-23 14:55:02 UTC (rev 6025)
+@@ -48,6 +48,7 @@
+ bool x264Encoder::setup(void)
+ {
+   ADM_info(&quot;x264, setting up&quot;);
++  
+   firstIdr=true;
+   image=new ADMImage(getWidth(),getHeight());
+   MMSET(param);
+@@ -69,8 +70,8 @@
+     usSecondsToFrac(f,&amp;n,&amp;d);
+     param.i_fps_num = n;
+     param.i_fps_den = d;
++    encoderDelay=f*x264Settings.MaxBFrame;
+ 
+-
+ #define MKPARAM(x,y) {param.x = x264Settings.y;printf(&quot;[x264] &quot;#x&quot; = %d\n&quot;,param.x);}
+ #define MKPARAMF(x,y) {param.x = (float)x264Settings.y / 100; printf(&quot;[x264] &quot;#x&quot; = %.2f\n&quot;,param.x);}
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003228.html">[Avidemux-svn-commit] r6024 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src	avidemux/common/ADM_videoFilter2/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src
+</A></li>
+	<LI>Next message: <A HREF="003230.html">[Avidemux-svn-commit] r6026 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3229">[ date ]</a>
+              <a href="thread.html#3229">[ thread ]</a>
+              <a href="subject.html#3229">[ subject ]</a>
+              <a href="author.html#3229">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

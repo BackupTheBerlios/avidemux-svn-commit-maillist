@@ -1,0 +1,249 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2998 - in	branches/avidemux_2.4_branch/avidemux: . ADM_inputs/ADM_3gp	ADM_video
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2998%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%20ADM_inputs/ADM_3gp%0A%09ADM_video&In-Reply-To=%3C200705011353.l41DrgxT017987%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   
+   <LINK REL="Next"  HREF="000312.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2998 - in	branches/avidemux_2.4_branch/avidemux: . ADM_inputs/ADM_3gp	ADM_video</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2998%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%20ADM_inputs/ADM_3gp%0A%09ADM_video&In-Reply-To=%3C200705011353.l41DrgxT017987%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2998 - in	branches/avidemux_2.4_branch/avidemux: . ADM_inputs/ADM_3gp	ADM_video">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue May  1 15:53:42 CEST 2007</I>
+    <P><UL>
+        
+        <LI>Next message: <A HREF="000312.html">[Avidemux-svn-commit] r2999 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#311">[ date ]</a>
+              <a href="thread.html#311">[ thread ]</a>
+              <a href="subject.html#311">[ subject ]</a>
+              <a href="author.html#311">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-05-01 15:53:40 +0200 (Tue, 01 May 2007)
+New Revision: 2998
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_infoextractor.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_reorderTemplate.cpp
+   branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp
+Log:
+use template for .mp4 reorder, more info on display hex
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.cpp	2007-04-30 14:48:21 UTC (rev 2997)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.cpp	2007-05-01 13:53:40 UTC (rev 2998)
+@@ -1599,78 +1599,22 @@
+ /***************************************/
+ uint8_t _3GPHeader::reorder( void )
+ {
+-_3gpIndex *index;
+-uint8_t ret=1;
+-uint32_t nbFrame= _videostream.dwLength;
+-        // already done..
++
+         if( _reordered) return 1;
+         printf(&quot;Reordering...\n&quot;);
+-        _3gpIndex *old,*nw;
++#define INDEX_TMPL        _3gpIndex
++#define INDEX_ARRAY_TMPL  (VDEO.index)
++#define FRAMETYPE_TMPL    intra
++  
++#include &quot;ADM_video/ADM_reorderTemplate.cpp&quot;
+ 
+-        old=VDEO.index;
+-        ADM_assert(old);
+-        
+-        index=new _3gpIndex[nbFrame];
+-        // clear B frame flag for last frames
+-        old[nbFrame-1].intra &amp;=~AVI_B_FRAME;
++#undef INDEX_TMPL       
++#undef INDEX_ARRAY_TMPL 
++#undef FRAMETYPE_TMPL   
++        VDEO.nbIndex= _mainaviheader.dwTotalFrames;
++        // last frame cannot be B frame
++        index[last].intra&amp;=~AVI_B_FRAME;
++          _reordered=ret;
++        return ret;
+ 
+-                        //__________________________________________
+-                        // the direct index is in DTS time (i.e. decoder time)
+-                        // we will now do the PTS index, so that frame numbering is done
+-                        // according to the frame # as they are seen by editor / user
+-                        // I1 P0 B0 B1 P1 B2 B3 I2 B7 B8
+-                        // xx I1 B0 B1 P0 B2 B3 P1 B7 B8
+-                        //__________________________________________
+-                        uint32_t forward=0;
+-                        uint32_t curPTS=0;
+-                        uint32_t dropped=0;
+-
+-                        for(uint32_t c=1;c&lt;nbFrame;c++)
+-                        {
+-                                if(!(old[c].intra &amp; AVI_B_FRAME))
+-                                        {
+-                                                                memcpy(&amp;index[curPTS],
+-                                                                                &amp;old[forward],
+-                                                                                sizeof(_3gpIndex));
+-                                                                forward=c;
+-                                                                curPTS++;
+-                                                                dropped++;
+-                                        }
+-                                        else
+-                                        {// we need  at lest 2 i/P frames to start decoding B frames
+-                                                if(dropped&gt;=1)
+-                                                {
+-                                                        memcpy(&amp;index[curPTS],
+-                                                                &amp;old[c],
+-                                                                sizeof(_3gpIndex));
+-                                                        curPTS++;
+-                                                }
+-                                                else
+-                                                {
+-                                                printf(&quot;We dropped a frame (%d/%d).\n&quot;,dropped,c);
+-                                                }
+-                                        }
+-                        }
+-
+-                        uint32_t last;
+-
+-
+-                        // put back last I/P we had in store
+-                        memcpy(&amp;index[curPTS],
+-                                &amp;old[forward],
+-                                sizeof(_3gpIndex));
+-                        last=curPTS;
+-
+-                        _videostream.dwLength= _mainaviheader.dwTotalFrames=nbFrame=last+1;
+-                        // last frame is always I
+-
+-                        delete [] old;
+-
+-                        VDEO.index=index;;
+-                        VDEO.nbIndex= _mainaviheader.dwTotalFrames;
+-                        // last frame cannot be B frame
+-                        index[last].intra&amp;=~AVI_B_FRAME;
+-                         _reordered=ret;
+-                        return ret;
+-
+ }
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_infoextractor.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_infoextractor.cpp	2007-04-30 14:48:21 UTC (rev 2997)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_infoextractor.cpp	2007-05-01 13:53:40 UTC (rev 2998)
+@@ -328,9 +328,11 @@
+   {
+     
+               uint32_t length=(head[0]&lt;&lt;24) + (head[1]&lt;&lt;16) +(head[2]&lt;&lt;8)+(head[3]);
+-              if(length&gt;len)
++              if(length&gt;len||length&lt;6)
+               {
+-                printf(&quot;Warning , incomplete nal (%u/%u)\n&quot;,length,len); 
++                printf(&quot;Warning , incomplete nal (%u/%u),(%0x/%0x)\n&quot;,length,len,length,len);
++                *flags=0;
++                return 0;
+               }
+               head+=4; // Skip nal lenth
+               length-=4;
+@@ -348,7 +350,7 @@
+                                   break;
+                   default:
+                           printf(&quot;??0x%x\n&quot;,stream);
+-                          head+=length+1;
++                          head+=length-5;
+                           continue;
+                 }
+   }
+@@ -367,6 +369,7 @@
+   uint8_t stream;
+ #define NAL_NON_IDR       1
+ #define NAL_IDR           5
++#define NAL_SEI           6
+ 
+   uint32_t val,hnt;  
+   
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_reorderTemplate.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_reorderTemplate.cpp	2007-04-30 14:48:21 UTC (rev 2997)
++++ branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_reorderTemplate.cpp	2007-05-01 13:53:40 UTC (rev 2998)
+@@ -79,4 +79,6 @@
+ 			INDEX_ARRAY_TMPL=index;;
+ 			// last frame cannot be B frame
+ 			INDEX_ARRAY_TMPL[last].FRAMETYPE_TMPL&amp;=~AVI_B_FRAME;
++                        // And first is an intra
++                        INDEX_ARRAY_TMPL[0].FRAMETYPE_TMPL=AVI_KEY_FRAME;
+ 			 _reordered=ret;
+
+Modified: branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp	2007-04-30 14:48:21 UTC (rev 2997)
++++ branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp	2007-05-01 13:53:40 UTC (rev 2998)
+@@ -2440,7 +2440,7 @@
+ {
+ #define DISPLAY_HEX 32*3
+  uint8_t *buffer;
+- uint32_t len,fullLen;
++ uint32_t len,fullLen,flags;
+  char     string[DISPLAY_HEX*3+6],*s;
+  char     title[80];
+  
+@@ -2463,7 +2463,16 @@
+     
+  }
+  *s=0;
+- sprintf(title,&quot;Len: %u bytes\n&quot;,fullLen);
++ video_body-&gt;getFlags (curframe, &amp;flags);
++ char Type='?';
++ switch(flags)
++ {
++   case 0: Type='P'; break;
++   case AVI_KEY_FRAME: Type='I'; break;
++   case AVI_B_FRAME: Type='B'; break;
++   default : Type='?'; break;
++ }
++ sprintf(title,&quot;Len: %u bytes %c\n&quot;,fullLen,Type);
+  
+  GUI_Info_HIG( ADM_LOG_IMPORTANT,title, string);
+  delete [] buffer;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	
+	<LI>Next message: <A HREF="000312.html">[Avidemux-svn-commit] r2999 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#311">[ date ]</a>
+              <a href="thread.html#311">[ thread ]</a>
+              <a href="subject.html#311">[ subject ]</a>
+              <a href="author.html#311">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

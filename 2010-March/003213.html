@@ -1,0 +1,451 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6008 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/include	avidemux/common/ADM_audioFilter/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6008%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_audioFilter/include%0A%09avidemux/common/ADM_audioFilter/src%0A%09avidemux_core/ADM_coreUtils/include%20avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C201003180649.o2I6nlrY025429%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003212.html">
+   <LINK REL="Next"  HREF="003214.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6008 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/include	avidemux/common/ADM_audioFilter/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6008%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_audioFilter/include%0A%09avidemux/common/ADM_audioFilter/src%0A%09avidemux_core/ADM_coreUtils/include%20avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C201003180649.o2I6nlrY025429%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6008 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/include	avidemux/common/ADM_audioFilter/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Mar 18 07:49:47 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003212.html">[Avidemux-svn-commit] r6007 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers:	muxerAvi muxerDummy muxerRaw
+</A></li>
+        <LI>Next message: <A HREF="003214.html">[Avidemux-svn-commit] r6009 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3213">[ date ]</a>
+              <a href="thread.html#3213">[ thread ]</a>
+              <a href="subject.html#3213">[ subject ]</a>
+              <a href="author.html#3213">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-03-18 07:49:46 +0100 (Thu, 18 Mar 2010)
+New Revision: 6008
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_threadQueue.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_threadQueue.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/include/audiofilter_thread.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_thread.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/CMakeLists.txt
+Log:
+[threading] Factorize thread worker code into ADM_threadQueue baseclass
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/include/audiofilter_thread.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/include/audiofilter_thread.h	2010-03-18 06:49:43 UTC (rev 6007)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/include/audiofilter_thread.h	2010-03-18 06:49:46 UTC (rev 6008)
+@@ -16,46 +16,19 @@
+ #define AUDM_ACCESS_THREAD_H
+ 
+ #include &quot;ADM_audioStream.h&quot;
+-#include &quot;ADM_threads.h&quot;
+-using std::vector;
+-#include &lt;vector&gt;
++#include &quot;ADM_threadQueue.h&quot;
+ 
+ 
+-
+ /**
+-    \struct ADM_audioPacket
+-*/
+-typedef struct
+-{
+-    uint8_t *data;
+-    uint32_t dataLen;
+-    uint64_t dts;
+-}ADM_audioPacket;
+-typedef  vector &lt;ADM_audioPacket&gt; ListOfAudioPacket;
+-
+-typedef enum
+-{
+-    RunStateIdle,
+-    RunStateRunning,
+-    RunStateStopOrder,
+-    RunStateStopped
+-}RunState;
+-
+-/**
+     \class ADM_audioAccess_thread
+     \brief Wrap ADM_audioAccess inside a thread
+ 
+ */
+-class ADM_audioAccess_thread : public ADM_audioAccess
++class ADM_audioAccess_thread : public ADM_audioAccess,public ADM_threadQueue
+ {
+   protected:
+                 ADM_audioAccess   *son;
+-                ListOfAudioPacket list;
+-                admMutex          *mutex;
+-                admCond           *cond;
+-                bool              started;
+-volatile        RunState          threadState;
+-                pthread_t         myThread;
++              
+   public:
+ 
+ 
+@@ -76,9 +49,9 @@
+                                     /// Grab extra data
+                 virtual bool      getExtraData(uint32_t *l, uint8_t **d);
+ 
+-                virtual bool    getPacket(uint8_t *buffer, uint32_t *size, uint32_t maxSize,uint64_t *dts);
+-                virtual bool    isCBR(void) {return son-&gt;isCBR();};
+-                void            run(void);
++                virtual bool      getPacket(uint8_t *buffer, uint32_t *size, uint32_t maxSize,uint64_t *dts);
++                virtual bool      isCBR(void) {return son-&gt;isCBR();};
++                virtual bool      runAction(void);
+ };
+ 
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_thread.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_thread.cpp	2010-03-18 06:49:43 UTC (rev 6007)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_thread.cpp	2010-03-18 06:49:46 UTC (rev 6008)
+@@ -31,14 +31,10 @@
+     \fn ADM_audioAccess_thread
+     \brief
+ */
+-ADM_audioAccess_thread::ADM_audioAccess_thread(ADM_audioAccess *son)
++ADM_audioAccess_thread::ADM_audioAccess_thread(ADM_audioAccess *son) :ADM_threadQueue()
+ {
+     this-&gt;son=son;
+     ADM_info(&quot;Swallowing audio access into a thread\n&quot;);
+-    mutex=new admMutex(&quot;audioAccess&quot;);
+-    cond=new admCond(mutex);
+-    threadState=RunStateIdle;
+-    started=false;
+     
+ }
+ /**
+@@ -49,29 +45,12 @@
+ ADM_audioAccess_thread::~ADM_audioAccess_thread()
+ {
+     ADM_info(&quot;Killing audio thread and son\n&quot;);
+-    // ask the thread to stop
+-    
+-    if(started)
+-    {
+-        mutex-&gt;lock();
+-        if(threadState==RunStateRunning)
+-        {   
+-            ADM_info(&quot;Asking the thread to stop\n&quot;);
+-            threadState=RunStateStopOrder;
+-            mutex-&gt;unlock();
+-            int count=100;
+-            while(count)
+-            {
+-                if(threadState==RunStateStopped) break;
+-                ADM_usleep(1000*100); // Slep 100 ms
+-            }
+-        }else mutex-&gt;unlock();
+-    }
++   
+     // Empty the list...
+     int nb=list.size();
+     for(int i=0;i&lt;nb;i++)
+     {
+-        ADM_audioPacket *pkt=&amp;(list[i]);
++        ADM_queuePacket *pkt=&amp;(list[i]);
+         if(pkt-&gt;data) delete [] pkt-&gt;data;
+         pkt-&gt;data=NULL;
+     }
+@@ -116,18 +95,7 @@
+ {
+     if(false==started)
+     {
+-        ADM_info(&quot;Starting thread...\n&quot;);
+-        if(pthread_create(&amp;myThread,NULL, boomerang, this))
+-        {
+-            ADM_error(&quot;ERROR CREATING THREAD\n&quot;);
+-            ADM_assert(0);
+-        }
+-        while(threadState==RunStateIdle)
+-        {
+-            ADM_usleep(10000);
+-        }
+-        ADM_info(&quot;Thread created and started\n&quot;);
+-        started=true;
++        startThread();      
+     }
+     while(1)
+     {
+@@ -136,7 +104,7 @@
+         {
+             //
+             // Dequeue one item
+-            ADM_audioPacket *pkt=&amp;(list[0]);
++            ADM_queuePacket *pkt=&amp;(list[0]);
+             ADM_assert(pkt-&gt;data);
+             ADM_assert(pkt-&gt;dataLen&lt;maxSize);
+             memcpy(buffer,pkt-&gt;data,pkt-&gt;dataLen);
+@@ -162,13 +130,12 @@
+     return false;
+ }
+ /**
+-    \fn run
++    \fn runAction
+     \brief entry point for thread
+ */
+-void ADM_audioAccess_thread::run(void)
++bool ADM_audioAccess_thread::runAction(void)
+ {
+     #define CHUNK_SIZE (48000*sizeof(float)*6)
+-    threadState=RunStateRunning;
+     uint8_t *buffer=new uint8_t[CHUNK_SIZE];
+     uint32_t size;
+     uint64_t dts;
+@@ -179,7 +146,7 @@
+             ADM_info(&quot;Audio Thread, no more data\n&quot;);
+             goto theEnd;
+         }
+-        ADM_audioPacket p;
++        ADM_queuePacket p;
+         p.data=new uint8_t[size];
+         memcpy(p.data,buffer,size);
+         p.dataLen=size;
+@@ -205,7 +172,7 @@
+ 
+ theEnd:
+     delete [] buffer;
+-    threadState=RunStateStopped;
++    return true;
+ }
+ /**
+     \fn ADM_threadifyAudioAccess
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_threadQueue.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_threadQueue.h	2010-03-18 06:49:43 UTC (rev 6007)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_threadQueue.h	2010-03-18 06:49:46 UTC (rev 6008)
+@@ -0,0 +1,72 @@
++/***************************************************************************
++            \file ADM_threadQueue.cpp
++            \brief Create a thread that fills a queue from another part
++            \author  (c) 2010 Mean , <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#ifndef ADM_THREAD_QUEUE_H
++#define ADM_THREAD_QUEUE_H
++#include &quot;ADM_threads.h&quot;
++
++using namespace std;
++#include &lt;vector&gt;
++
++
++
++/**
++    \struct ADM_audioPacket
++*/
++typedef struct
++{
++    uint8_t *data;
++    uint32_t dataLen;
++    uint64_t dts;
++    uint64_t pts;
++}ADM_queuePacket;
++
++typedef  vector &lt;ADM_queuePacket&gt; ListOfQueuePacket;
++
++typedef enum
++{
++    RunStateIdle,
++    RunStateRunning,
++    RunStateStopOrder,
++    RunStateStopped
++}RunState;
++
++/**
++    \class ADM_threadQueue
++    \brief Wrap queue/thread
++
++*/
++class ADM_threadQueue
++{
++  protected:
++                ListOfQueuePacket list;
++                admMutex          *mutex;
++                admCond           *cond;
++                bool              started;
++volatile        RunState          threadState;
++                pthread_t         myThread;
++  public:
++
++
++                                    ADM_threadQueue() ;
++                virtual             ~ADM_threadQueue();
++                void                run(void);
++protected:
++        virtual bool                runAction(void)=0; 
++                bool                startThread(void);
++};
++
++
++#endif
++
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_threadQueue.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_threadQueue.cpp	2010-03-18 06:49:43 UTC (rev 6007)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_threadQueue.cpp	2010-03-18 06:49:46 UTC (rev 6008)
+@@ -0,0 +1,95 @@
++/***************************************************************************
++            \file ADM_threadQueue.cpp
++            \brief Create a thread that fills a queue from another part
++            \author  (c) 2010 Mean , <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_threadQueue.h&quot;
++#include &lt;math.h&gt;
++
++static void *boomerang(void *x)
++{
++    ADM_threadQueue *a=(ADM_threadQueue *)x;
++    a-&gt;run();
++}
++
++/**
++    \fn ADM_audioAccess_thread
++    \brief
++*/
++ADM_threadQueue::ADM_threadQueue(void)
++{
++    mutex=new admMutex(&quot;audioAccess&quot;);
++    cond=new admCond(mutex);
++    threadState=RunStateIdle;
++    started=false;    
++}
++/**
++    \fn ~ADM_threadQueue
++    \brief
++*/
++
++ADM_threadQueue::~ADM_threadQueue()
++{
++    ADM_info(&quot;Killing audio thread and son\n&quot;);
++    // ask the thread to stop
++    
++    if(started)
++    {
++        mutex-&gt;lock();
++        if(threadState==RunStateRunning)
++        {   
++            ADM_info(&quot;Asking the thread to stop\n&quot;);
++            threadState=RunStateStopOrder;
++            mutex-&gt;unlock();
++            int count=100;
++            while(count)
++            {
++                if(threadState==RunStateStopped) break;
++                ADM_usleep(1000*100); // Slep 100 ms
++            }
++        }else mutex-&gt;unlock();
++    }
++   
++}
++
++/**
++    \fn run
++    \brief entry point for thread
++*/
++void ADM_threadQueue::run(void)
++{
++    
++    threadState=RunStateRunning;
++    runAction();
++    threadState=RunStateStopped;
++}
++/**
++    \fn startThread
++*/
++bool ADM_threadQueue::startThread(void)
++{
++      ADM_info(&quot;Starting thread...\n&quot;);
++        if(pthread_create(&amp;myThread,NULL, boomerang, this))
++        {
++            ADM_error(&quot;ERROR CREATING THREAD\n&quot;);
++            ADM_assert(0);
++        }
++        while(threadState==RunStateIdle)
++        {
++            ADM_usleep(10000);
++        }
++        ADM_info(&quot;Thread created and started\n&quot;);
++        started=true;
++        return true;
++}
++// EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/CMakeLists.txt	2010-03-18 06:49:43 UTC (rev 6007)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/CMakeLists.txt	2010-03-18 06:49:46 UTC (rev 6008)
+@@ -10,6 +10,7 @@
+ ADM_file.cpp
+ ADM_paramList.cpp
+ ADM_coreCodecMapping.cpp
++ADM_threadQueue.cpp
+ prefs.cpp)
+ 
+ ADD_LIBRARY(ADM_coreUtils6 SHARED ${ADM_coreUtils_SRCS})
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003212.html">[Avidemux-svn-commit] r6007 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers:	muxerAvi muxerDummy muxerRaw
+</A></li>
+	<LI>Next message: <A HREF="003214.html">[Avidemux-svn-commit] r6009 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3213">[ date ]</a>
+              <a href="thread.html#3213">[ thread ]</a>
+              <a href="subject.html#3213">[ subject ]</a>
+              <a href="author.html#3213">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

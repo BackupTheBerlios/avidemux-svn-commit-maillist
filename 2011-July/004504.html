@@ -1,0 +1,494 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7350 - in	branches/avidemux_2.6_branch_mean/avidemux: common/ADM_render	qt4/ADM_UIs/include qt4/ADM_UIs/src qt4/ADM_userInterfaces/ADM_gui
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7350%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20common/ADM_render%0A%09qt4/ADM_UIs/include%20qt4/ADM_UIs/src%20qt4/ADM_userInterfaces/ADM_gui&In-Reply-To=%3C20110726055357.A139848148B%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004503.html">
+   <LINK REL="Next"  HREF="004505.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7350 - in	branches/avidemux_2.6_branch_mean/avidemux: common/ADM_render	qt4/ADM_UIs/include qt4/ADM_UIs/src qt4/ADM_userInterfaces/ADM_gui</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7350%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20common/ADM_render%0A%09qt4/ADM_UIs/include%20qt4/ADM_UIs/src%20qt4/ADM_userInterfaces/ADM_gui&In-Reply-To=%3C20110726055357.A139848148B%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7350 - in	branches/avidemux_2.6_branch_mean/avidemux: common/ADM_render	qt4/ADM_UIs/include qt4/ADM_UIs/src qt4/ADM_userInterfaces/ADM_gui">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Jul 26 07:53:57 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004503.html">[Avidemux-svn-commit] r7349 - in branches/avidemux_2.6_branch_mean:	avidemux_plugins/ADM_videoFilters6_openGl/sample cmake
+</A></li>
+        <LI>Next message: <A HREF="004505.html">[Avidemux-svn-commit] r7351 - in	branches/avidemux_2.6_branch_mean/avidemux: common/ADM_render	qt4/ADM_UIs/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4504">[ date ]</a>
+              <a href="thread.html#4504">[ thread ]</a>
+              <a href="subject.html#4504">[ subject ]</a>
+              <a href="author.html#4504">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-07-26 07:53:57 +0200 (Tue, 26 Jul 2011)
+New Revision: 7350
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGLFilter.h
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.h
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGL.h
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui/Q_gui2.cpp
+Log:
+[openGL/qt4] Factorize code (glActiveTexture &amp; friends)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp	2011-07-26 05:53:55 UTC (rev 7349)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp	2011-07-26 05:53:57 UTC (rev 7350)
+@@ -11,7 +11,7 @@
+ *                                                                         *
+ ***************************************************************************///
+ #define GL_GLEXT_PROTOTYPES
+-
++#include &quot;T_openGL.h&quot;
+ #include &lt;QtGui/QPainter&gt;
+ 
+ #ifdef __APPLE__
+@@ -66,7 +66,8 @@
+ 	imageWidth = w;
+ 	imageHeight = h;
+ 	firstRun = true;
+-	glProgram = NULL;
++	glProgram = NULL;
++    myActiveTexture=NULL;
+ }
+ /**
+ 
+@@ -123,17 +124,13 @@
+ void QtGlAccelWidget::initializeGL()
+ {
+ 	int success = 1;
++    GlActiveTexture_Type *myActiveTexture= ADM_getActiveTexture();
++    if(!myActiveTexture)
++    {
++        success=0;
++        printf(&quot;[GL Render] Cannot get glActiveTexture\n&quot;);
++    }
+ 
+-#ifndef QT_OPENGL_ES
+-	glActiveTexture = (_glActiveTexture)this-&gt;context()-&gt;getProcAddress(QLatin1String(&quot;glActiveTexture&quot;));
+-
+-	if (!glActiveTexture)
+-	{
+-		success = 0;
+-		printf(&quot;[GL Render] Active Texture function not found!\n&quot;);
+-	}
+-#endif
+-
+ 	printf(&quot;[GL Render] OpenGL Vendor: %s\n&quot;, glGetString(GL_VENDOR));
+ 	printf(&quot;[GL Render] OpenGL Renderer: %s\n&quot;, glGetString(GL_RENDERER));
+ 	printf(&quot;[GL Render] OpenGL Version: %s\n&quot;, glGetString(GL_VERSION));
+@@ -184,7 +181,7 @@
+ 	}
+ 
+ 	// U
+-	glActiveTexture(GL_TEXTURE1);
++	myActiveTexture(GL_TEXTURE1);
+ 	glBindTexture(GL_TEXTURE_RECTANGLE_NV, 1);
+ 	glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+ 	glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+@@ -198,7 +195,7 @@
+ 		glTexSubImage2D(GL_TEXTURE_RECTANGLE_NV, 0, 0, 0, textureStrides[1], textureHeights[1], GL_LUMINANCE, GL_UNSIGNED_BYTE, textureOffsets[1]);
+ 
+ 	// V
+-	glActiveTexture(GL_TEXTURE2);
++	myActiveTexture(GL_TEXTURE2);
+ 	glBindTexture(GL_TEXTURE_RECTANGLE_NV, 2);
+ 	glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+ 	glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+@@ -212,7 +209,7 @@
+ 		glTexSubImage2D(GL_TEXTURE_RECTANGLE_NV, 0, 0, 0, textureStrides[2], textureHeights[2], GL_LUMINANCE, GL_UNSIGNED_BYTE, textureOffsets[2]);
+ 
+ 	// Y
+-	glActiveTexture(GL_TEXTURE0);
++	myActiveTexture(GL_TEXTURE0);
+ 	glBindTexture(GL_TEXTURE_RECTANGLE_NV, 3);
+ 	glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+ 	glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+@@ -279,7 +276,9 @@
+     if(false==status)
+     {
+         ADM_warning(&quot;[GL Render] Init failed : No QFl support or no GLShareProgram\n&quot;);
+-        ADM_warning(&quot;[GL Render] hasOpenGl : %d, hasOpenGLShaderProgram %d\n&quot;,(int)QGLFormat::hasOpenGL(),(int)QGLShaderProgram::hasOpenGLShaderPrograms());
++        ADM_warning(&quot;[GL Render] hasOpenGl : %d, hasOpenGLShaderProgram %d\n&quot;,
++                            (int)QGLFormat::hasOpenGL(),
++                            (int)QGLShaderProgram::hasOpenGLShaderPrograms());
+         return false;
+     }
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.h	2011-07-26 05:53:55 UTC (rev 7349)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.h	2011-07-26 05:53:57 UTC (rev 7350)
+@@ -32,12 +32,8 @@
+     GLsizei textureStrides[3];
+ 	GLsizei textureHeights[3];
+ 	uint8_t *textureOffsets[3];
++    GlActiveTexture_Type *myActiveTexture;
+ 
+-#ifndef QT_OPENGL_ES
+-	typedef void (*_glActiveTexture) (GLenum);
+-	_glActiveTexture glActiveTexture;
+-#endif
+-
+ protected:
+ 	void initializeGL();
+ 	void paintGL();
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGL.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGL.h	2011-07-26 05:53:55 UTC (rev 7349)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGL.h	2011-07-26 05:53:57 UTC (rev 7350)
+@@ -1,9 +1,35 @@
++/***************************************************************************
++  \file T_openGL.h
++  \brief OpenGL related filters
++  \author (C) 2011 Mean <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">Fixounet at free.fr</A> 
++***************************************************************************/
+ 
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
+ #ifndef T_OPENGL_H
+ #define T_OPENGL_H
++
++#ifdef __APPLE__
++#	include &lt;OpenGL/gl.h&gt;
++#	include &lt;OpenGL/glext.h&gt;
++#	define GL_TEXTURE_RECTANGLE_NV GL_TEXTURE_RECTANGLE_EXT
++#else
++#	include &lt;GL/gl.h&gt;
++#	include &lt;GL/glext.h&gt;
++#endif
+ 
+-bool ADM_setGlWidget(QGLWidget *w);
+-QGLWidget *ADM_getGlWidget(void);
++#include &lt;QtOpenGL/QtOpenGL&gt;
+ 
++
++// Get glActiveTexture
++typedef GLAPI void APIENTRY (GlActiveTexture_Type)(GLenum texture);
++bool ADM_setActiveTexture(GlActiveTexture_Type *set);
++GlActiveTexture_Type *ADM_getActiveTexture(void);
+ #endif
+ 
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGLFilter.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGLFilter.h	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGLFilter.h	2011-07-26 05:53:57 UTC (rev 7350)
+@@ -0,0 +1,51 @@
++/***************************************************************************
++  \file T_openGL.h
++  \brief OpenGL related filters
++  \author (C) 2011 Mean <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">Fixounet at free.fr</A> 
++***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#ifndef T_OPENGL_FILTER_H
++#define T_OPENGL_FILTER_H
++#include &quot;T_openGL.h&quot;
++
++#include &quot;ADM_assert.h&quot;
++#include &quot;ADM_coreVideoFilter.h&quot;
++
++/**
++ *  \class ADM_coreVideoFilterQtGl
++ *  \brief base class for all QtGl video filters
++ */
++class ADM_coreVideoFilterQtGl:  public ADM_coreVideoFilter
++{
++protected:
++                            
++                    const   QGLContext           *context;
++                            QGLFramebufferObject *fboY;
++                            QGLFramebufferObject *fboUV;
++                            QGLShaderProgram     *glProgram;
++                            bool                 firstRun;
++                            GlActiveTexture_Type *myGlActiveTexture;
++protected:
++                            bool downloadTexture(ADMImage *target, ADM_PLANE plane,QGLFramebufferObject *fbo);
++
++public:
++                            ADM_coreVideoFilterQtGl(ADM_coreVideoFilter *previous,CONFcouple *conf=NULL);
++       virtual             ~ADM_coreVideoFilterQtGl();
++
++                                                                                        
++protected:
++};
++// Hooks
++// Get our top widget
++bool ADM_setGlWidget(QGLWidget *w);
++QGLWidget *ADM_getGlWidget(void);
++#endif
++
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp	2011-07-26 05:53:55 UTC (rev 7349)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp	2011-07-26 05:53:57 UTC (rev 7350)
+@@ -1,15 +1,143 @@
+-#include &lt;QtOpenGL/QtOpenGL&gt;
+-#include &quot;ADM_assert.h&quot;
++/***************************************************************************
++  \file T_openGL.h
++  \brief OpenGL related filters
++  \author (C) 2011 Mean <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">Fixounet at free.fr</A> 
++***************************************************************************/
+ #include &quot;T_openGL.h&quot;
++#include &quot;T_openGLFilter.h&quot;
++#include &quot;ADM_default.h&quot;
++#include &quot;DIA_coreToolkit.h&quot;
+ static QGLWidget *thisWidget=NULL;
++static GlActiveTexture_Type *myActiveTexture=NULL;
+ 
++
++/**
++    \fn ADM_setActiveTexture
++*/
++bool ADM_setActiveTexture(GlActiveTexture_Type *set)
++{
++    myActiveTexture=set;
++    return true;
++}
++/**
++    \fn ADM_getActiveTexture
++*/
++GlActiveTexture_Type *ADM_getActiveTexture(void)
++{
++    return myActiveTexture;
++}
++
++/**
++
++*/
+ bool ADM_setGlWidget(QGLWidget *w)
+ {
+         thisWidget=w;
+         return true;
+ }
++/**
++
++*/
+ QGLWidget *ADM_getGlWidget(void)
+ {
+         return thisWidget;
+         
+ }
++/**
++    \fn ctor
++*/
++ADM_coreVideoFilterQtGl::ADM_coreVideoFilterQtGl(ADM_coreVideoFilter *previous,CONFcouple *conf)
++:ADM_coreVideoFilter(previous,conf)
++{
++    context=NULL;
++    glProgram=NULL;
++    fboY=NULL;
++    fboUV=NULL;
++    firstRun=true;
++    ADM_info(&quot;Gl : Allocating context and frameBufferObjects\n&quot;);
++    context=QGLContext::currentContext();
++    ADM_assert(context);
++    fboY = new QGLFramebufferObject(info.width,info.height);
++    ADM_assert(fboY);
++    fboUV = new QGLFramebufferObject(info.width/2,info.height/2);
++    ADM_assert(fboUV);
++    myGlActiveTexture=ADM_getActiveTexture();
++    if(!myGlActiveTexture)
++    {
++        ADM_error(&quot;Cannot get glActiveTexture\n&quot;);
++        GUI_Error_HIG(&quot;&quot;,&quot;Cannot get glActiveTexture&quot;);
++        ADM_assert(0);
++    }
++    // glTexture TODO
++
++}
++/**
++    \fn dtor
++*/
++ADM_coreVideoFilterQtGl::~ADM_coreVideoFilterQtGl()
++{
++    ADM_info(&quot;Gl filter : Destroying..\n&quot;);
++    if(glProgram) delete glProgram;
++    glProgram=NULL;
++    if(fboY) delete fboY;
++    fboY=NULL;
++    if(fboUV) delete fboUV;
++    fboUV=NULL;
++
++}
++/**
++    \fn downloadTexture
++*/
++bool ADM_coreVideoFilterQtGl::downloadTexture(ADMImage *image, ADM_PLANE plane,
++        QGLFramebufferObject *fbo)
++{
++#ifdef BENCH_READTEXTURE
++    {
++    ADMBenchmark bench;
++    for(int i=0;i&lt;100;i++)
++    {
++        bench.start();
++        QImage qimg(fbo-&gt;toImage());
++        bench.end();
++     }
++    ADM_warning(&quot;convert to Qimage\n&quot;);
++    bench.printResult();
++    }
++#endif
++
++    QImage qimg(fbo-&gt;toImage()); // this is slow ! ~ 15 ms for a 720 picture (Y only).
++
++
++
++    // Assume RGB32, read R or A
++#ifdef BENCH_READTEXTURE
++    ADMBenchmark bench;
++    for(int i=0;i&lt;100;i++)
++    {
++        bench.start();
++#endif
++    int stride=image-&gt;GetPitch(plane);
++    uint8_t *to=image-&gt;GetWritePtr(plane);
++    int width=image-&gt;GetWidth(plane);
++    int height=image-&gt;GetHeight(plane);
++    for(int y=0;y&lt;height;y++)
++    {
++        const uchar *src=qimg.constScanLine(height-y);
++        if(!src)
++        {
++            ADM_error(&quot;Can t get pointer to openGl texture\n&quot;);
++            return false;
++        }
++        for(int x=0;x&lt;width;x++)
++            to[x]=src[x*4];
++        to+=stride;
++    }
++#ifdef BENCH_READTEXTURE
++        bench.end();
++    }
++    bench.printResult();
++
++#endif
++    return true;
++}
++// EOF
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui/Q_gui2.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui/Q_gui2.cpp	2011-07-26 05:53:55 UTC (rev 7349)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui/Q_gui2.cpp	2011-07-26 05:53:57 UTC (rev 7350)
+@@ -11,7 +11,9 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
++
+ #include &quot;config.h&quot;
++
+ #include &quot;ADM_inttype.h&quot;
+ #include &lt;QtCore/QFileInfo&gt;
+ #include &lt;QtCore/QUrl&gt;
+@@ -22,6 +24,10 @@
+ #include &lt;QtOpenGL/QGLWidget&gt;
+ #endif
+ 
++#ifdef USE_OPENGL
++#include &quot;T_openGL.h&quot;
++#endif
++
+ #define MENU_DECLARE
+ #include &quot;Q_gui2.h&quot;
+ #include &quot;ADM_default.h&quot;
+@@ -88,8 +94,8 @@
+ #include &quot;translation_table.h&quot;   
+ 
+ #ifdef USE_OPENGL
++#include &quot;T_openGLFilter.h&quot;
+ #include &quot;Q_dummyWidget.h&quot;
+-#include &quot;T_openGL.h&quot;
+ dummyGLWidget *topGlWidget=NULL;
+ dummyGLWidget *topGlWidgetRoot=NULL;
+ #endif
+@@ -845,6 +851,24 @@
+     ADM_info(&quot;Creating openGl dummy widget\n&quot;);
+     topGlWidgetRoot=new dummyGLWidget(VuMeter);
+     ADM_setGlWidget(topGlWidgetRoot);
++
++#ifndef QT_OPENGL_ES
++    GlActiveTexture_Type *tex= (GlActiveTexture_Type *)topGlWidgetRoot-&gt;context()-&gt;getProcAddress(QLatin1String(&quot;glActiveTexture&quot;));
++
++	if (!tex)
++	{
++		ADM_error(&quot;[GL Render] Active Texture function not found!\n&quot;);
++	}
++    ADM_setActiveTexture(tex);
++#else
++    ADM_setActiveTexture(glActiveTexture);
++#endif
++
++	printf(&quot;[GL Render] OpenGL Vendor: %s\n&quot;, glGetString(GL_VENDOR));
++	printf(&quot;[GL Render] OpenGL Renderer: %s\n&quot;, glGetString(GL_RENDERER));
++	printf(&quot;[GL Render] OpenGL Version: %s\n&quot;, glGetString(GL_VERSION));
++	printf(&quot;[GL Render] OpenGL Extensions: %s\n&quot;, glGetString(GL_EXTENSIONS));
++
+ #endif
+     myApplication-&gt;exec();
+ #ifdef USE_OPENGL
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004503.html">[Avidemux-svn-commit] r7349 - in branches/avidemux_2.6_branch_mean:	avidemux_plugins/ADM_videoFilters6_openGl/sample cmake
+</A></li>
+	<LI>Next message: <A HREF="004505.html">[Avidemux-svn-commit] r7351 - in	branches/avidemux_2.6_branch_mean/avidemux: common/ADM_render	qt4/ADM_UIs/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4504">[ date ]</a>
+              <a href="thread.html#4504">[ thread ]</a>
+              <a href="subject.html#4504">[ subject ]</a>
+              <a href="author.html#4504">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

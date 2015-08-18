@@ -1,0 +1,244 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5134 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins:	ADM_muxers/muxerFlv ADM_videoEncoder/ffFlv1
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5134%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins%3A%0A%09ADM_muxers/muxerFlv%20ADM_videoEncoder/ffFlv1&In-Reply-To=%3C200907231818.n6NIIoIV009304%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002348.html">
+   <LINK REL="Next"  HREF="002350.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5134 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins:	ADM_muxers/muxerFlv ADM_videoEncoder/ffFlv1</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5134%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins%3A%0A%09ADM_muxers/muxerFlv%20ADM_videoEncoder/ffFlv1&In-Reply-To=%3C200907231818.n6NIIoIV009304%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5134 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins:	ADM_muxers/muxerFlv ADM_videoEncoder/ffFlv1">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jul 23 20:18:50 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002348.html">[Avidemux-svn-commit] r5133 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins:	ADM_muxers ADM_videoEncoder ADM_videoEncoder/ffFlv1
+</A></li>
+        <LI>Next message: <A HREF="002350.html">[Avidemux-svn-commit] r5135 - in	branches/avidemux_2.6_branch_mean/avidemux: common	common/ADM_icons common/ADM_icons/scalable	gtk/ADM_userInterfaces/glade/main
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2349">[ date ]</a>
+              <a href="thread.html#2349">[ thread ]</a>
+              <a href="subject.html#2349">[ subject ]</a>
+              <a href="author.html#2349">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-07-23 20:18:50 +0200 (Thu, 23 Jul 2009)
+New Revision: 5134
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv/muxerFlv.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffFlv1/ADM_ffFlv1.cpp
+Log:
+[flv muxer] dont assert , exit more cleanly
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv/muxerFlv.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv/muxerFlv.cpp	2009-07-23 18:18:48 UTC (rev 5133)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv/muxerFlv.cpp	2009-07-23 18:18:50 UTC (rev 5134)
+@@ -87,6 +87,11 @@
+ bool muxerFlv::open(const char *file, ADM_videoStream *s,uint32_t nbAudioTrack,ADM_audioStream **a)
+ {
+     uint32_t fcc=s-&gt;getFCC();
++    bool r=true;
++    uint32_t videoExtraDataSize=0;
++    uint8_t  *videoExtraData;
++    char *fileTitle=NULL;
++        
+      if(fourCC::check(fcc,(uint8_t *)&quot;FLV1&quot;) || isVP6Compatible(fcc))
+      {
+ 
+@@ -136,15 +141,17 @@
+ 	if (!video_st)
+ 	{
+ 		printf(&quot;[FLV] new stream failed\n&quot;);
+-		return false;
++		r=false;
++        goto finish;
+ 	}
+     AVCodecContext *c;
+ 	c = video_st-&gt;codec;
+-
++        video_st-&gt;sample_aspect_ratio.num=1;
++        video_st-&gt;sample_aspect_ratio.den=1;
+   // probably a memeleak here
+-        char *foo=ADM_strdup(file);
++        fileTitle=ADM_strdup(file);
+ 
+-        strcpy(oc-&gt;title,ADM_GetFileName(foo));
++        strcpy(oc-&gt;title,ADM_GetFileName(fileTitle));
+         strcpy(oc-&gt;author,&quot;Avidemux&quot;);
+         c-&gt;sample_aspect_ratio.num=1;
+         c-&gt;sample_aspect_ratio.den=1;
+@@ -171,8 +178,6 @@
+                         ADM_assert(0);
+                 }
+ 
+-        uint32_t videoExtraDataSize=0;
+-        uint8_t  *videoExtraData;
+         s-&gt;getExtraData(&amp;videoExtraDataSize,&amp;videoExtraData);
+         if(videoExtraDataSize)
+         {
+@@ -191,7 +196,7 @@
+         c-&gt;flags=CODEC_FLAG_QSCALE;
+         c-&gt;width = s-&gt;getWidth();
+         c-&gt;height =s-&gt;getHeight();
+-
++        
+         rescaleFps(s-&gt;getAvgFps1000(),&amp;(c-&gt;time_base));
+         c-&gt;gop_size=15;
+ 
+@@ -213,7 +218,9 @@
+           if (!audio_st)
+           {
+                   printf(&quot;[FLV]: new stream failed (audio)\n&quot;);
+-                  return false;
++                  r=false;
++                  goto finish;
++                                 
+           }
+           WAVHeader *audioheader=a[0]-&gt;getInfo();;
+ 
+@@ -241,6 +248,8 @@
+                                   break;
+                   default:
+                                  printf(&quot;[FLV]: Unsupported audio\n&quot;);
++                                 r=false;
++                                 goto finish;
+                                  return false;
+                           break;
+           }
+@@ -253,6 +262,7 @@
+ 
+         }
+         // /audio
++        
+         oc-&gt;mux_rate=10080*1000;
+         oc-&gt;preload=AV_TIME_BASE/10; // 100 ms preloading
+         oc-&gt;max_delay=200*1000; // 500 ms
+@@ -264,14 +274,21 @@
+         if (url_fopen(&amp;(oc-&gt;pb), file, URL_WRONLY) &lt; 0)
+         {
+             printf(&quot;[FLV]: Failed to open file :%s\n&quot;,file);
+-            return false;
++            r=false;
++            goto finish;
+         }
+ 
+-        ADM_assert(av_write_header(oc)&gt;=0);
++        if(av_write_header(oc)&lt;0)
++        {
++            printf(&quot;[Flv Muxer] Muxer rejected the parameters\n&quot;);
++            r=false;
++            
++        }
++finish:
+         vStream=s;
+         aStreams=a;
+         nbAStreams=nbAudioTrack;
+-        return true;
++        return r;
+ }
+ 
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffFlv1/ADM_ffFlv1.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffFlv1/ADM_ffFlv1.cpp	2009-07-23 18:18:48 UTC (rev 5133)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffFlv1/ADM_ffFlv1.cpp	2009-07-23 18:18:50 UTC (rev 5134)
+@@ -1,6 +1,6 @@
+ /***************************************************************************
+-                          \fn ADM_ffMsMpeg4
+-                          \brief Front end for libavcodec MsMpeg4 aka divx3 encoder
++                          \fn ADM_ffFlv1
++                          \brief Front end for libavcodec Flv1 encoder
+                              -------------------
+     
+     copyright            : (C) 2002/2009 by mean
+@@ -36,7 +36,7 @@
+     1500,           //uint32_t          bitrate;      /// In kb/s 
+     700,            //uint32_t          finalsize;    /// In ?
+     1500,           //uint32_t          avg_bitrate;  /// avg_bitrate is in kb/s!!
+-    ADM_ENC_CAP_CBR+ADM_ENC_CAP_CQ+ADM_ENC_CAP_2PASS+ADM_ENC_CAP_2PASS_BR+ADM_ENC_CAP_GLOBAL+ADM_ENC_CAP_SAME
++    ADM_ENC_CAP_CBR+ADM_ENC_CAP_CQ+ADM_ENC_CAP_2PASS+ADM_ENC_CAP_2PASS_BR
+     },
+           ME_EPZS,			// ME
+           0,				// GMC     
+@@ -102,7 +102,6 @@
+                 return false;
+             }
+             break;
+-      case COMPRESS_SAME:
+       case COMPRESS_CQ:
+             _context-&gt;flags |= CODEC_FLAG_QSCALE;
+             _context-&gt;bit_rate = 0;
+@@ -114,7 +113,7 @@
+             return false;
+     }
+     presetContext(&amp;Settings);
+-    if(false== ADM_coreVideoEncoderFFmpeg::setup(CODEC_ID_MSMPEG4V3))
++    if(false== ADM_coreVideoEncoderFFmpeg::setup(CODEC_ID_FLV1))
+         return false;
+ 
+     printf(&quot;[ffFlv1] Setup ok\n&quot;);
+@@ -149,13 +148,6 @@
+     if(!q) q=2;
+     switch(Settings.params.mode)
+     {
+-      case COMPRESS_SAME:
+-                // Keep same frame type &amp; same Qz as the incoming frame...
+-            _frame.quality = (int) floor (FF_QP2LAMBDA * q+ 0.5);
+-            if(image-&gt;flags &amp; AVI_KEY_FRAME)    _frame.pict_type=FF_I_TYPE;
+-            else                                _frame.pict_type=FF_P_TYPE;
+-
+-            break;
+       case COMPRESS_2PASS:
+       case COMPRESS_2PASS_BITRATE:
+             switch(pass)
+@@ -256,7 +248,7 @@
+         diaElemTabs tabRC(QT_TR_NOOP(&quot;Rate Control&quot;),3,diaRC);
+         
+          diaElemTabs *tabs[]={&amp;tabMode,&amp;tabQz,&amp;tabRC};
+-        if( diaFactoryRunTabs(QT_TR_NOOP(&quot;libavcodec MPEG-4 configuration&quot;),3,tabs))
++        if( diaFactoryRunTabs(QT_TR_NOOP(&quot;libavcodec FLV1 configuration&quot;),3,tabs))
+         {
+           conf-&gt;me_method=(Motion_Est_ID)me;
+           return true;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002348.html">[Avidemux-svn-commit] r5133 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins:	ADM_muxers ADM_videoEncoder ADM_videoEncoder/ffFlv1
+</A></li>
+	<LI>Next message: <A HREF="002350.html">[Avidemux-svn-commit] r5135 - in	branches/avidemux_2.6_branch_mean/avidemux: common	common/ADM_icons common/ADM_icons/scalable	gtk/ADM_userInterfaces/glade/main
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2349">[ date ]</a>
+              <a href="thread.html#2349">[ thread ]</a>
+              <a href="subject.html#2349">[ subject ]</a>
+              <a href="author.html#2349">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,152 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6146 - in	branches/avidemux_2.5_branch_gruntster: avidemux plugins	plugins/ADM_videoEncoder/ADM_vidEnc_avcodec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6146%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux%20plugins%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_avcodec&In-Reply-To=%3C201004301630.o3UGULOM012557%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003348.html">
+   
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6146 - in	branches/avidemux_2.5_branch_gruntster: avidemux plugins	plugins/ADM_videoEncoder/ADM_vidEnc_avcodec</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6146%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux%20plugins%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_avcodec&In-Reply-To=%3C201004301630.o3UGULOM012557%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6146 - in	branches/avidemux_2.5_branch_gruntster: avidemux plugins	plugins/ADM_videoEncoder/ADM_vidEnc_avcodec">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Apr 30 18:30:21 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003348.html">[Avidemux-svn-commit] r6145 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4
+</A></li>
+        
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3349">[ date ]</a>
+              <a href="thread.html#3349">[ thread ]</a>
+              <a href="subject.html#3349">[ subject ]</a>
+              <a href="author.html#3349">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-04-30 18:30:20 +0200 (Fri, 30 Apr 2010)
+New Revision: 6146
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/CMakeLists.txt
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/CMakeLists.txt
+   branches/avidemux_2.5_branch_gruntster/plugins/CMakeLists.txt
+Log:
+[build] Merged/modified 2nd patch from Florent Rougon (not tested much)
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/CMakeLists.txt	2010-04-29 17:58:36 UTC (rev 6145)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/CMakeLists.txt	2010-04-30 16:30:20 UTC (rev 6146)
+@@ -478,11 +478,17 @@
+ 	INSTALL(TARGETS ${ADM_EXES} RUNTIME DESTINATION ${BIN_DIR} LIBRARY DESTINATION lib${LIB_SUFFIX})
+ ENDIF (APPLE)
+ 
+-IF (UNIX AND NOT APPLE)
+-   ADD_CUSTOM_COMMAND(TARGET ffmpeg
++MACRO (ADM_SYMLINK_LIBS)
++       FOREACH (t ${ARGV})
++             ADD_CUSTOM_COMMAND(TARGET ${t}
+                       POST_BUILD
+                       COMMAND mkdir -p ${CMAKE_BINARY_DIR}/lib${LIB_SUFFIX}
+                       COMMAND find ${CMAKE_BINARY_DIR}/avidemux -name '*.so*' | xargs ln -sft ${CMAKE_BINARY_DIR}/lib${LIB_SUFFIX}
+                       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                       COMMENT &quot;Creating temporary lib directory for proper plugins linking&quot;)
+-ENDIF (UNIX AND NOT APPLE)
++       ENDFOREACH (t )
++ENDMACRO (ADM_SYMLINK_LIBS)
++IF (UNIX AND NOT APPLE)
++   # Some plugins link to ADM_coreImage (e.g., ADM_vf_addborders) and thus need the symlink in ${CMAKE_BINARY_DIR}/lib${LIB_SUFFIX}
++   ADM_SYMLINK_LIBS(ffmpeg ADM_coreImage)
++ENDIF(UNIX AND NOT APPLE)
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/CMakeLists.txt	2010-04-29 17:58:36 UTC (rev 6145)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/CMakeLists.txt	2010-04-30 16:30:20 UTC (rev 6146)
+@@ -34,7 +34,8 @@
+ getFfmpegLibNames(${AVIDEMUX_SOURCE_DIR}/avidemux/ADM_libraries/ffmpeg)
+ 
+ add_library(ADM_libavcodec UNKNOWN IMPORTED)
+-set_property(TARGET ADM_libavcodec PROPERTY IMPORTED_LOCATION &quot;${FFMPEG_INSTALL_DIR}/${LIBAVCODEC_LIB}&quot;)
++#set_property(TARGET ADM_libavcodec PROPERTY IMPORTED_LOCATION &quot;${FFMPEG_INSTALL_DIR}/${LIBAVCODEC_LIB}&quot;)
++set_property(TARGET ADM_libavcodec PROPERTY IMPORTED_LOCATION &quot;${FFMPEG_LIB_DIR}/${LIBAVCODEC_LIB}&quot;)
+ 
+ add_subdirectory(xml)
+ 
+@@ -48,4 +49,4 @@
+ INSTALL(FILES Flv1Param.xsd DESTINATION &quot;${VIDENC_INSTALL_DIR}${PLUGIN_SCHEMA_DIR}&quot;)
+ INSTALL(FILES MjpegParam.xsd DESTINATION &quot;${VIDENC_INSTALL_DIR}${PLUGIN_SCHEMA_DIR}&quot;)
+ INSTALL(FILES H263Param.xsd DESTINATION &quot;${VIDENC_INSTALL_DIR}${PLUGIN_SCHEMA_DIR}&quot;)
+-INSTALL(FILES Mpeg4aspParam.xsd DESTINATION &quot;${VIDENC_INSTALL_DIR}${PLUGIN_SCHEMA_DIR}&quot;)
+\ No newline at end of file
++INSTALL(FILES Mpeg4aspParam.xsd DESTINATION &quot;${VIDENC_INSTALL_DIR}${PLUGIN_SCHEMA_DIR}&quot;)
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/CMakeLists.txt	2010-04-29 17:58:36 UTC (rev 6145)
++++ branches/avidemux_2.5_branch_gruntster/plugins/CMakeLists.txt	2010-04-30 16:30:20 UTC (rev 6146)
+@@ -42,8 +42,18 @@
+ ELSE (NOT AVIDEMUX_INSTALL_PREFIX)
+ 	SET(AVIDEMUX_INSTALL_PREFIX &quot;${AVIDEMUX_INSTALL_PREFIX}&quot; CACHE STRING &quot;&quot;)
+ ENDIF (NOT AVIDEMUX_INSTALL_PREFIX)
++########################################
++# If avidemux_lib_dir is set, use it
++# else use prefix
++########################################
++IF (AVIDEMUX_LIB_DIR)
++	SET(AVIDEMUX_LIB_DIR &quot;${AVIDEMUX_LIB_DIR}&quot; CACHE STRING &quot;&quot;)
++ELSE (AVIDEMUX_LIB_DIR)
++	SET(AVIDEMUX_LIB_DIR &quot;${AVIDEMUX_INSTALL_PREFIX}/lib${LIB_SUFFIX}&quot; CACHE STRING &quot;&quot;)
++ENDIF (AVIDEMUX_LIB_DIR)
+ 
+-LINK_DIRECTORIES(${AVIDEMUX_INSTALL_PREFIX}/lib${LIB_SUFFIX})
++MESSAGE(STATUS &quot;Using ${AVIDEMUX_LIB_DIR} to look for avidemux libraries&quot;)
++LINK_DIRECTORIES(${AVIDEMUX_LIB_DIR})
+ 
+ ########################################
+ # Where is coreConfig ?
+@@ -98,7 +108,7 @@
+ 	ENDIF (CMAKE_BUILD_TYPE STREQUAL &quot;Release&quot;)
+ ELSE (WIN32)
+ 	SET(BIN_DIR bin)
+-	set(FFMPEG_LIB_DIR ${AVIDEMUX_INSTALL_PREFIX}/lib${LIB_SUFFIX})
++	set(FFMPEG_LIB_DIR ${AVIDEMUX_LIB_DIR})
+ ENDIF (WIN32)
+ 
+ ########################################
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003348.html">[Avidemux-svn-commit] r6145 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4
+</A></li>
+	
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3349">[ date ]</a>
+              <a href="thread.html#3349">[ thread ]</a>
+              <a href="subject.html#3349">[ subject ]</a>
+              <a href="author.html#3349">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

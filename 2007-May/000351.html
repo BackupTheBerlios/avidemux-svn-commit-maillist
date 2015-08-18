@@ -1,0 +1,211 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3048 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3048%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200705071349.l47DnfVu002613%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000350.html">
+   <LINK REL="Next"  HREF="000352.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3048 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3048%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200705071349.l47DnfVu002613%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3048 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon May  7 15:49:41 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000350.html">[Avidemux-svn-commit] r3047 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+        <LI>Next message: <A HREF="000352.html">[Avidemux-svn-commit] r3049 - in branches/avidemux_2.4_branch: .	avidemux/ADM_audiocodec avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#351">[ date ]</a>
+              <a href="thread.html#351">[ thread ]</a>
+              <a href="subject.html#351">[ subject ]</a>
+              <a href="author.html#351">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-05-07 15:49:40 +0200 (Mon, 07 May 2007)
+New Revision: 3048
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_ebml.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ebml.cpp
+Log:
+fix overflow in vorbisreformat + set all frame as keyframe by default instead of random value
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_ebml.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_ebml.h	2007-05-07 08:37:45 UTC (rev 3047)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_ebml.h	2007-05-07 13:49:40 UTC (rev 3048)
+@@ -14,7 +14,10 @@
+ {
+   protected:
+         uint64_t  _fileSize;
++        
+   public:
++        ADM_ebml  *_root;
++        uint32_t  _refCount;                
+                     ADM_ebml(void);
+         virtual     ~ADM_ebml();
+         int64_t     readSignedInt(uint32_t nb);
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2007-05-07 08:37:45 UTC (rev 3047)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2007-05-07 13:49:40 UTC (rev 3048)
+@@ -480,6 +480,12 @@
+       READ_LEN(len1);
+       READ_LEN(len2);
+       len3=oldata+oldlen-head;
++      if(len3&lt;=len1+len2)
++      {
++        printf(&quot;Error in vorbis header, len3 too small %u %u / %u\n&quot;,len1,len2,len3);
++        return 0; 
++      }
++      len3-=(len1+len2);
+       printf(&quot;Found packet len : %u %u %u, total size %u\n&quot;,len1,len2,len3,oldlen);
+       // Now build our own packet...
+       uint8_t *nwdata=new uint8_t[len1+len2+len3+sizeof(uint32_t)*3];
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-05-07 08:37:45 UTC (rev 3047)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-05-07 13:49:40 UTC (rev 3048)
+@@ -251,7 +251,7 @@
+   int x=Track-&gt;_nbIndex;
+   index[x].pos=where;
+   index[x].size=size;
+-  index[x].flags=flags;
++  index[x].flags=AVI_KEY_FRAME;
+   index[x].timeCode=0;
+   
+   float f=timecodeMS;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2007-05-07 08:37:45 UTC (rev 3047)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2007-05-07 13:49:40 UTC (rev 3048)
+@@ -37,10 +37,11 @@
+ */
+  mkvAudio ::~mkvAudio()
+ {
+-  if(_parser) delete _parser;
+-  _parser=NULL; 
+   if(_clusterParser)  delete _clusterParser;
+   _clusterParser=NULL;
++    if(_parser) delete _parser;
++  _parser=NULL; 
++
+ }
+ 
+ uint32_t    mkvAudio::read(uint32_t len,uint8_t *buffer)
+@@ -278,6 +279,7 @@
+   _nbClusters=nbClusters;
+   _clusters=clust;
+   ADM_assert(_clusters);
++  _destroyable = 1;
+   
+    _parser=new ADM_ebml_file();
+    ADM_assert(_parser-&gt;open(name));
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ebml.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ebml.cpp	2007-05-07 08:37:45 UTC (rev 3047)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ebml.cpp	2007-05-07 13:49:40 UTC (rev 3048)
+@@ -234,31 +234,52 @@
+   fp=father-&gt;fp;
+   _fileSize=father-&gt;_fileSize;
+    _begin=ftello(fp);
++   _root=father-&gt;_root;
++   ADM_assert(_root);
++   _root-&gt;_refCount++;
+ }
+ ADM_ebml_file::ADM_ebml_file(void) : ADM_ebml()
+ {
+   _close=0;
++  fp=NULL;
++  _fileSize=0;
++  _begin=0;
++  _root=NULL;
++  _refCount=0;
+ }
+ ADM_ebml_file::~ADM_ebml_file()
+ {
+   ADM_assert(fp);
+-  if(_close)
++  if(_close)  // We are the 1st one
+   {
+     ADM_assert(!_begin);
+-    fclose(fp);
++    if(!_refCount)
++    {
++      fclose(fp);
++    }else
++    {
++      printf(&quot;WARNING: EBML killing father with non empty refcount : %u\n&quot;,_refCount); 
++    }
+   }
+-  else fseeko(fp,_begin+_size,SEEK_SET);
++  else 
++  {
++    fseeko(fp,_begin+_size,SEEK_SET);
++    ADM_assert(_root);
++    _root-&gt;_refCount--;
++  }
+   fp=NULL; 
+ }
+ uint8_t ADM_ebml_file::open(const char *name)
+ {
+-  _close=1;
++  
+   fp=fopen(name,&quot;rb&quot;);
+   if(!fp) 
+   {
+     aprintf(&quot;[EBML FILE] Failed to open &lt;%s&gt;\n&quot;,name);
+     return 0;
+   }
++  _root=this;
++  _close=1;
+   fseeko(fp,0,SEEK_END);
+   _begin=0;
+   _fileSize=_size=ftello(fp);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000350.html">[Avidemux-svn-commit] r3047 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+	<LI>Next message: <A HREF="000352.html">[Avidemux-svn-commit] r3049 - in branches/avidemux_2.4_branch: .	avidemux/ADM_audiocodec avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#351">[ date ]</a>
+              <a href="thread.html#351">[ thread ]</a>
+              <a href="subject.html#351">[ subject ]</a>
+              <a href="author.html#351">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,121 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4254 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4254%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4&In-Reply-To=%3C200807191758.m6JHwS94025496%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001499.html">
+   <LINK REL="Next"  HREF="001501.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4254 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4254%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4&In-Reply-To=%3C200807191758.m6JHwS94025496%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4254 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jul 19 19:58:28 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001499.html">[Avidemux-svn-commit] r4253 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_inputs/ADM_mp4 ADM_libraries/ADM_ffmpeg/ADM_lavformat
+</A></li>
+        <LI>Next message: <A HREF="001501.html">[Avidemux-svn-commit] r4255 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_libraries/ADM_utilities
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1500">[ date ]</a>
+              <a href="thread.html#1500">[ thread ]</a>
+              <a href="subject.html#1500">[ subject ]</a>
+              <a href="author.html#1500">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-07-19 19:58:27 +0200 (Sat, 19 Jul 2008)
+New Revision: 4254
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4audio.cpp
+Log:
+[Merge] 4220 :improve detection of mp2 auido
+
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp	2008-07-19 17:58:25 UTC (rev 4253)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp	2008-07-19 17:58:27 UTC (rev 4254)
+@@ -1039,9 +1039,11 @@
+                                     {
+                                       switch(objectTypeIndication)
+                                       {
+-                                          case 0x69:ADIO.encoding=WAV_MP3;break;
+-                                          case 0x6b:ADIO.encoding=WAV_MP2;break;
+-                                          case 0x6d:ADIO.encoding=WAV_MP3;break;
++                                          case 0x69:
++                                          case 0x6b:
++                                          case 0x6d:
++											  ADIO.encoding=WAV_MP3;
++											  break;
+                                           case 226:ADIO.encoding=WAV_AC3;break;
+                                           break;
+ 
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4audio.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4audio.cpp	2008-07-19 17:58:25 UTC (rev 4253)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4audio.cpp	2008-07-19 17:58:27 UTC (rev 4254)
+@@ -47,7 +47,22 @@
+ 
+ 	_extraLen=track-&gt;extraDataSize;
+ 	_extraData=track-&gt;extraData;
+-	
++
++	// Check if MP3 track is actually MP2
++	if (track-&gt;_rdWav.encoding == WAV_MP3 &amp;&amp; _nb_chunks &amp;&amp; _index[0].size &gt;= 4)
++	{
++		uint8_t sample[4];
++
++		fseeko(_fd, _index[0].offset, SEEK_SET);
++		fread(&amp;sample, 1, 4, _fd);
++
++		uint32_t fcc = sample[0] &lt;&lt; 24 | sample[1] &lt;&lt; 16 | sample[2] &lt;&lt; 8 | sample[3];
++		int layer = 4 - ((fcc &gt;&gt; 17) &amp; 0x3);
++
++		if (layer == 2)
++			track-&gt;_rdWav.encoding = WAV_MP2;
++	}
++
+ 	_wavheader=new WAVHeader;
+         memcpy(_wavheader,&amp;(track-&gt;_rdWav),sizeof(WAVHeader));
+ 	
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001499.html">[Avidemux-svn-commit] r4253 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_inputs/ADM_mp4 ADM_libraries/ADM_ffmpeg/ADM_lavformat
+</A></li>
+	<LI>Next message: <A HREF="001501.html">[Avidemux-svn-commit] r4255 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_libraries/ADM_utilities
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1500">[ date ]</a>
+              <a href="thread.html#1500">[ thread ]</a>
+              <a href="subject.html#1500">[ subject ]</a>
+              <a href="author.html#1500">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

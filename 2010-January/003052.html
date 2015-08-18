@@ -1,0 +1,199 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5846 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImageLoader/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5846%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImageLoader/src&In-Reply-To=%3C201001131951.o0DJpua9030050%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003051.html">
+   <LINK REL="Next"  HREF="003053.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5846 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImageLoader/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5846%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImageLoader/src&In-Reply-To=%3C201001131951.o0DJpua9030050%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5846 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImageLoader/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Jan 13 20:51:56 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003051.html">[Avidemux-svn-commit] r5845 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/common avidemux_core	avidemux_core/ADM_coreImage/include	avidemux_core/ADM_coreImageLoader	avidemux_core/ADM_coreImageLoader/include	avidemux_core/ADM_coreImageLoader/src cmake
+</A></li>
+        <LI>Next message: <A HREF="003053.html">[Avidemux-svn-commit] r5847 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImageLoader/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3052">[ date ]</a>
+              <a href="thread.html#3052">[ thread ]</a>
+              <a href="subject.html#3052">[ subject ]</a>
+              <a href="author.html#3052">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-01-13 20:51:56 +0100 (Wed, 13 Jan 2010)
+New Revision: 5846
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImageLoader/src/ADM_imageLoader.cpp
+Log:
+[imageLoader] Re-enable png and jpg now that the codec are in a easy to access abstraction lib
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImageLoader/src/ADM_imageLoader.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImageLoader/src/ADM_imageLoader.cpp	2010-01-13 19:51:53 UTC (rev 5845)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImageLoader/src/ADM_imageLoader.cpp	2010-01-13 19:51:56 UTC (rev 5846)
+@@ -13,18 +13,18 @@
+  ***************************************************************************/
+ 
+ #include &quot;ADM_default.h&quot;
+-
+-
+ #include &quot;ADM_image.h&quot;
+ #include &quot;ADM_bitmap.h&quot;
+ #include &quot;DIA_coreToolkit.h&quot;
+ #include &quot;ADM_imageLoader.h&quot;
+ #include &quot;ADM_colorspace.h&quot;
++#include &quot;ADM_codec.h&quot;
++#include &quot;fourcc.h&quot;
+ //**********************************
+-//static ADMImage *createImageFromFile_jpeg(const char *filename);
++static ADMImage *createImageFromFile_jpeg(const char *filename);
+ static ADMImage *createImageFromFile_Bmp(const char *filename);
+ static ADMImage *createImageFromFile_Bmp2(const char *filename);
+-//static ADMImage *createImageFromFile_png(const char *filename);
++static ADMImage *createImageFromFile_png(const char *filename);
+ //***********************************
+ static uint8_t read8(FILE *fd)
+ {
+@@ -64,14 +64,12 @@
+ 		case  ADM_IMAGE_UNKNOWN: 
+ 					printf(&quot;[imageLoader] Trouble identifying /loading %s\n&quot;,filename);
+ 					return NULL;
+-#if 0
+ 		case ADM_IMAGE_JPG:
+ 					return createImageFromFile_jpeg(filename);
+ 					break;
+ 		case ADM_IMAGE_PNG:
+ 					return createImageFromFile_png(filename);
+ 					break;
+-#endif
+ 		case ADM_IMAGE_BMP2:
+ 					return createImageFromFile_Bmp2(filename);
+ 					break;
+@@ -81,7 +79,6 @@
+ 	}
+ 	ADM_assert(0);
+ }
+-#if 0
+ /**
+  * 	\fn createImageFromFile_jpeg
+  *  \brief Create image from jpeg file
+@@ -153,12 +150,17 @@
+ 		    
+ 		    ADMImage tmpImage(w,h,1); // It is a reference image
+ 		    // Now unpack it ...
+-		    decoderFFMJPEG *decoder=new decoderFFMJPEG(w,h);
++            decoders *dec=ADM_coreCodecGetDecoder (fourCC::get((uint8_t *)&quot;MJPG&quot;),   w,   h, 0 , NULL,0);
++            if(!dec)
++            {
++                ADM_warning(&quot;Cannot find decoder for mpjeg&quot;);
++                return NULL;
++            }
+ 		    ADMCompressedImage bin;
+ 		    bin.data=data;
+ 		    bin.dataLength=_imgSize; // This is more than actually, but who cares...
+ 		    
+-		    decoder-&gt;uncompress (&amp;bin, &amp;tmpImage);
++		    dec-&gt;uncompress (&amp;bin, &amp;tmpImage);
+ 		    //
+ 		    ADMImage *image=NULL;
+ 		    switch(tmpImage._colorspace)
+@@ -181,12 +183,11 @@
+ 		    	GUI_Error_HIG(QT_TR_NOOP(&quot;Wrong Colorspace&quot;),QT_TR_NOOP(&quot;Only YV12/I420 or YUY2/I422 JPegs are supported&quot;));
+ 		    }
+ 		    // Cannot destroy decoder earlier as tmpImage has pointers to its internals
+-		    delete decoder;
+-		    decoder=NULL;
++		    delete dec;
++		    dec=NULL;
+ 		    delete [] data;
+ 		    return image;		
+ }
+-#endif
+ /**
+  * 	\fn createImageFromFile_jpeg
+  *  \brief Create image from Bmp
+@@ -295,7 +296,6 @@
+     	delete [] data;
+     	return image;		
+ }
+-#if 0
+ /**
+  * 	\fn createImageFromFile_png
+  *  \brief Create image from PNG
+@@ -323,25 +323,28 @@
+  	   uint8_t *data=new uint8_t[size];
+  	   fread(data,size,1,fd);
+  	   fclose(fd);
+-    
+-  
+-    
+  	   ADMImage tmpImage(w,h,1);
+     	// Decode PNG
+-    	decoderPng decoder(w,h);
++        decoders *dec=ADM_coreCodecGetDecoder (fourCC::get((uint8_t *)&quot;PNG &quot;),   w,   h, 0 , NULL,0);
++    	if(!dec)
++        {
++            ADM_warning(&quot;Cannot get PNG decoder&quot;);
++            return NULL;
++        }
+     	ADMCompressedImage bin;
+     	bin.data=data;
+     	bin.dataLength=size; // This is more than actually, but who cares...
+     			    
+-    	decoder.uncompress (&amp;bin, &amp;tmpImage);
++    	dec-&gt;uncompress (&amp;bin, &amp;tmpImage);
+     	
+     	ADMImage *image=new ADMImage(w,h);
+     	COL_RGB24_to_YV12( w, h,tmpImage._planes[0],image-&gt;data);
+     
+     	delete [] data;
++        delete dec;
++        dec=NULL;
+     	return image;		
+ }
+-#endif
+ /**
+  * 		\fn ADM_identidyImageFile
+  * 		\brief Identidy image type, returns type and width/height
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003051.html">[Avidemux-svn-commit] r5845 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/common avidemux_core	avidemux_core/ADM_coreImage/include	avidemux_core/ADM_coreImageLoader	avidemux_core/ADM_coreImageLoader/include	avidemux_core/ADM_coreImageLoader/src cmake
+</A></li>
+	<LI>Next message: <A HREF="003053.html">[Avidemux-svn-commit] r5847 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImageLoader/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3052">[ date ]</a>
+              <a href="thread.html#3052">[ thread ]</a>
+              <a href="subject.html#3052">[ subject ]</a>
+              <a href="author.html#3052">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

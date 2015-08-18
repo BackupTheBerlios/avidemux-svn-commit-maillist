@@ -1,0 +1,223 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6740 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreJobs/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6740%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreJobs/src&In-Reply-To=%3C20101111075354.74FFA481047%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003922.html">
+   <LINK REL="Next"  HREF="003919.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6740 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreJobs/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6740%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreJobs/src&In-Reply-To=%3C20101111075354.74FFA481047%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6740 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreJobs/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Nov 11 08:53:54 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003922.html">[Avidemux-svn-commit] r6739 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+        <LI>Next message: <A HREF="003919.html">[Avidemux-svn-commit] r6741 -	branches/avidemux_2.6_branch_mean/cmake/sql
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3918">[ date ]</a>
+              <a href="thread.html#3918">[ thread ]</a>
+              <a href="subject.html#3918">[ subject ]</a>
+              <a href="author.html#3918">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-11-11 08:53:54 +0100 (Thu, 11 Nov 2010)
+New Revision: 6740
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreJobs/src/ADM_coreJobs.cpp
+Log:
+[jobs] Create database if it does not exist
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreJobs/src/ADM_coreJobs.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreJobs/src/ADM_coreJobs.cpp	2010-11-11 07:53:52 UTC (rev 6739)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreJobs/src/ADM_coreJobs.cpp	2010-11-11 07:53:54 UTC (rev 6740)
+@@ -20,7 +20,88 @@
+ #include &quot;libjobdb.h&quot;
+ static char *dbFile=NULL;
+ Database    *mydb=NULL;
++
++#define ADM_DB_SCHEMA 2
++
++static const char *createString1=&quot;\
++CREATE TABLE version(\
++value integer not null\
++);&quot;;
++static const char *createString2=&quot;\
++CREATE TABLE jobs(\
++id integer primary key autoincrement not null,\
++jscript varchar(100) default '' not null,\
++jobname varchar(100) default '' not null,\
++outputFile varchar(256) default '' not null,\
++status integer,\
++startTime date,\
++endTime date\
++);\
++&quot;;
++
+ /**
++    \fn ADM_jobInitializeDb
++*/
++static bool ADM_jobInitializeDb(void)
++{
++    bool r=true;
++    Database *m=new Database(dbFile);
++    if(!m-&gt;Connected())
++    {
++        ADM_warning(&quot;Cannot create database  %s \n&quot;,dbFile);
++        return false;
++    }
++    ADM_info(&quot;Creating database schema...\n&quot;);
++    Query q(*m);
++    r=q.execute(createString1);
++    r=q.execute(createString2);
++    q.execute(&quot;COMMIT;&quot;);
++    
++    if(r){
++        // update version
++        char s[256];
++        sprintf(s,&quot;INSERT INTO version (value) VALUES (%d);&quot;,ADM_DB_SCHEMA);
++        r=q.execute(s);
++        delete m;
++    }
++    return r;
++}
++/**
++        \fn dbInit
++*/
++static bool dbInit(void)
++{
++    mydb=new Database(dbFile);
++    if(!mydb-&gt;Connected())
++    {
++        delete mydb;
++        mydb=NULL;
++        return false;
++    }
++    return true;
++}
++/**
++        \fn dbCleanup
++*/
++
++static bool dbCleanup(void)
++{
++    if(mydb)
++    {
++        delete mydb;
++        mydb=NULL;
++    }
++    return true;
++}
++/**
++    \fn ADM_jobCheckVersion
++    \brief returns true if the db has the right version
++*/
++static bool ADM_jobCheckVersion(void)
++{
++    return true;
++}
++/**
+     \fn ADM_jobInit
+     \brief init sql and friends
+ */
+@@ -29,20 +110,38 @@
+     dbFile=new char[1024];
+     strcpy(dbFile,ADM_getBaseDir());
+     strcat(dbFile,&quot;/jobs.sql&quot;);
+-
++    
++    ADM_info(&quot;Initializing database (%s)\n&quot;,dbFile);
+     if(!ADM_fileExist(dbFile))
+     {
+         ADM_warning(&quot;[Jobs] jobs.sql does not exist, creating from default...\n&quot;);
+-        return false;
++        if(!ADM_jobInitializeDb())
++            return false;
++        ADM_info(&quot;Database created\n&quot;);
+     }
+-    mydb=new Database(dbFile);
+-    if(!mydb-&gt;Connected())
++    if(false==dbInit())
+     {
+-        ADM_warning(&quot;Cannot use database...\n&quot;);
+-        delete mydb;
+-        mydb=NULL;
++        ADM_warning(&quot;Cannot initialize database \n&quot;);
++        dbCleanup();
+         return false;
+     }
++    // Check DB version...
++    if(false==ADM_jobCheckVersion())
++    {
++        ADM_info(&quot;Bad database version...\n&quot;);
++        dbCleanup();
++        unlink(dbFile);
++        if(true==ADM_jobInitializeDb())
++        {
++            if(false==dbInit())
++            {
++                dbCleanup();
++                ADM_warning(&quot;Cannot recreate database\n&quot;);
++                return false;
++            }
++        }
++    }
++    //
+     ADM_info(&quot;Successfully connected to jobs database..\n&quot;);
+     return true;
+ }
+@@ -51,11 +150,7 @@
+ */
+ bool    ADM_jobShutDown(void)
+ {
+-    if(mydb)
+-    {
+-        delete mydb;
+-        mydb=NULL;
+-    }
++    dbCleanup();
+     ADM_info(&quot;Shutting down jobs database\n&quot;);
+     return true;
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003922.html">[Avidemux-svn-commit] r6739 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+	<LI>Next message: <A HREF="003919.html">[Avidemux-svn-commit] r6741 -	branches/avidemux_2.6_branch_mean/cmake/sql
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3918">[ date ]</a>
+              <a href="thread.html#3918">[ thread ]</a>
+              <a href="subject.html#3918">[ subject ]</a>
+              <a href="author.html#3918">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

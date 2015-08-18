@@ -1,0 +1,140 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4143 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4143%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_codecs&In-Reply-To=%3C200806221723.m5MHNPM0011635%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001397.html">
+   <LINK REL="Next"  HREF="001399.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4143 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4143%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_codecs&In-Reply-To=%3C200806221723.m5MHNPM0011635%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4143 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jun 22 19:23:25 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001397.html">[Avidemux-svn-commit] r4142 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+        <LI>Next message: <A HREF="001399.html">[Avidemux-svn-commit] r4144 - in branches/avidemux_2.4_branch:	admin avidemux avidemux/ADM_libraries/ADM_utilities
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1398">[ date ]</a>
+              <a href="thread.html#1398">[ thread ]</a>
+              <a href="subject.html#1398">[ subject ]</a>
+              <a href="author.html#1398">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-06-22 19:23:25 +0200 (Sun, 22 Jun 2008)
+New Revision: 4143
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_mpeg.cpp
+Log:
+[Mpeg2] Handle the case where depending on progressive/interlaced mpeg2dec force the height to the next multiple of 32 (FS#142)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_mpeg.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_mpeg.cpp	2008-06-22 14:46:21 UTC (rev 4142)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_mpeg.cpp	2008-06-22 17:23:25 UTC (rev 4143)
+@@ -153,17 +153,20 @@
+ 	// store for future use
+ 	_seqFound = 0;
+ 	par_width=par_height=1;
+-
+-	printf (&quot;\nInitializing MPEG2 decoder %lu x %lu\n&quot;, _w, _h);
++    uint32_t roundWidth,roundHeight;
++    roundWidth=(_w+15)&amp;~15;
++    roundHeight=(_h+31)&amp;~31; // depending on interlaced/Progressive the height must be a multiple of 32
++	printf (&quot;[Mpeg2dec]Initializing MPEG2 decoder %lu x %lu\n&quot;, _w, _h);
++    printf (&quot;[Mpeg2dec]Initializing MPEG2 decoder using %lu x %lu\n&quot;, roundWidth, roundHeight);
+ 	output = yv12_open ();
+ 	inst = (yv12_instance_t *) output;
+-	unpackBuffer = new uint8_t[(w * h * 9) &gt;&gt; 1];
++	unpackBuffer = new uint8_t[(roundWidth * roundHeight * 9) &gt;&gt; 1];
+ 	inst-&gt;buffer = unpackBuffer;
+ 	_decoder = mpeg2_init();
+ 	dec = &amp;((MPEG2DEC)-&gt;decoder);
+ 
+-	wmb = (_w + 15) &gt;&gt; 4;;
+-	hmb = (_h + 15) &gt;&gt; 4;;
++	wmb = (roundWidth) &gt;&gt; 4;;
++	hmb = (roundWidth) &gt;&gt; 4;;
+ 
+ 	dec-&gt;quant_stride = wmb;
+ 	dec-&gt;quant = (int8_t *)ADM_alloc ((wmb * hmb) * sizeof (int8_t));
+@@ -225,7 +228,7 @@
+     }
+   if (dontcopy ())
+     {
+-      uint32_t plane = _w * _h;
++      uint32_t plane = _w * ((_h+31)&amp;~31);
+ 
+       out-&gt;_planes[0] = t;
+       out-&gt;_planes[1] = t + plane;
+@@ -236,7 +239,10 @@
+     }
+   else
+     {
+-      memcpy (out-&gt;data, t, (_w * _h * 3) &gt;&gt; 1);
++    uint32_t plane = _w * ((_h+31)&amp;~31);
++      memcpy (YPLANE(out), t, _w * _h );
++      memcpy (UPLANE(out), t+plane, (_w * _h)&gt;&gt;2 );
++      memcpy (VPLANE(out), t+(plane*5)/4, (_w * _h)&gt;&gt;2 );
+     }
+ 
+   switch (MPEG2DEC-&gt;decoder.coding_type)
+@@ -324,6 +330,7 @@
+ 		  fprintf (stderr, &quot;display setup failed\n&quot;);
+ 		  exit (1);
+ 		}
++          printf(&quot;[Mpeg2dec] Found info %u x %u\n&quot;, info-&gt;sequence-&gt;width, info-&gt;sequence-&gt;height);
+ 	      uint8_t *buf[3];
+ 	      void *id;
+ 	      //mpeg2_custom_fbuf(MPEG2DEC,1);
+@@ -414,7 +421,8 @@
+ }
+ 
+ /**
+-	yv12_setup_fbuf : Allocate some buffers
++	\fn yv12_setup_fbuf 
++    \brief : Allocate some buffers
+ */
+ static void
+ yv12_setup_fbuf (vo_instance_t * _instance, uint8_t ** buf, void **id)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001397.html">[Avidemux-svn-commit] r4142 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+	<LI>Next message: <A HREF="001399.html">[Avidemux-svn-commit] r4144 - in branches/avidemux_2.4_branch:	admin avidemux avidemux/ADM_libraries/ADM_utilities
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1398">[ date ]</a>
+              <a href="thread.html#1398">[ thread ]</a>
+              <a href="subject.html#1398">[ subject ]</a>
+              <a href="author.html#1398">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

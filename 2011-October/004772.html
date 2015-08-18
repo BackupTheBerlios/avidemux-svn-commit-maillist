@@ -1,0 +1,168 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7627 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7627%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062905.257FD481404%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004771.html">
+   <LINK REL="Next"  HREF="004773.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7627 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7627%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062905.257FD481404%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7627 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Oct 28 08:29:05 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004771.html">[Avidemux-svn-commit] r7626 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+        <LI>Next message: <A HREF="004773.html">[Avidemux-svn-commit] r7628 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4772">[ date ]</a>
+              <a href="thread.html#4772">[ thread ]</a>
+              <a href="subject.html#4772">[ subject ]</a>
+              <a href="author.html#4772">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-10-28 08:29:04 +0200 (Fri, 28 Oct 2011)
+New Revision: 7627
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+Log:
+[ASF/demux] Use the provided usperframe to compute fps
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h	2011-10-28 06:29:03 UTC (rev 7626)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h	2011-10-28 06:29:04 UTC (rev 7627)
+@@ -109,6 +109,15 @@
+   uint64_t     lastDts;
+   WAVHeader    wavHeader;
+ }asfAudioTrak;
++/**
++    \class ADM_usPerFrameMapping
++*/
++class ADM_usPerFrameMapping
++{
++public:
++    int         streamNb;
++    uint64_t    usPerFrame;
++};
+ 
+ /**
+     \class asfAudioAccess
+@@ -158,11 +167,12 @@
+ class asfHeader         :public vidHeader
+ {
+   protected:
++    std::vector             &lt;ADM_usPerFrameMapping&gt; frameDurationMapping;
+     uint8_t                 getHeaders( void);
+     uint8_t                 buildIndex(void);
+     uint8_t                 loadVideo(asfChunk *s);
+     bool                    loadAudio(asfChunk *s,uint32_t sid);
+-    bool                    decodeExtHeader(asfChunk *s);
++    bool                    decodeExtHeader(asfChunk *a);
+     bool                    decodeStreamHeader(asfChunk *s);
+     queueOfAsfBits          readQueue;
+     queueOfAsfBits          storageQueue;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-28 06:29:03 UTC (rev 7626)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-28 06:29:04 UTC (rev 7627)
+@@ -114,7 +114,7 @@
+             int streamNumber=0xff;
+             int streamLangIndex=0xff;
+             uint64_t avgTimePerFrameUs=0;
+-
++            ADM_usPerFrameMapping map;
+             s-&gt;read32();s-&gt;read32(); // start time
+             s-&gt;read32();s-&gt;read32(); // end time
+             s-&gt;read32(); // bitrate
+@@ -164,6 +164,9 @@
+                     x-&gt;skipChunk();
+                     delete x;
+             }
++            map.streamNb=streamNumber;
++            map.usPerFrame=avg;
++            frameDurationMapping.push_back(map);
+             return true;
+ }
+ /** *****************************************
+@@ -560,9 +563,22 @@
+   // Update fps
+   // In fact it is an average fps
+   //
+-  _videostream.dwScale=1000;
+-  if(!_videostream.dwRate)
+-  {
++    _videostream.dwScale=1000;
++    // check if we have a duration per frame for video...
++    int n=frameDurationMapping.size();
++    int dex=-1;
++    for(int i=0;i&lt;n;i++)
++    {
++        if(frameDurationMapping[i].streamNb==_videoStreamId)
++            dex=i;
++    }
++    if(dex!=-1)
++    {
++        ADM_info(&quot;Average fps provided\n&quot;);
++        setFps(frameDurationMapping[dex].usPerFrame);
++    }
++    else
++    {
+       ADM_info(&quot;Fps not provided, guessing it from nbFrame and duration\n&quot;);
+       uint32_t avgFps;
+       if(_index[nbImage-1].pts!=ADM_NO_PTS &amp;&amp; _index[0].pts!=ADM_NO_PTS)
+@@ -575,10 +591,7 @@
+             printf(&quot;[Asf] No pts, setting 30 fps hardcoded\n&quot;);
+             _videostream.dwRate=(uint32_t)30000;;
+         }
+-  }else
+-    {
+-        ADM_info(&quot;Already got fps (%d/1000)\n&quot;,_videostream.dwRate);
+     }
+-  return 1;
++    return 1;
+   
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004771.html">[Avidemux-svn-commit] r7626 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+	<LI>Next message: <A HREF="004773.html">[Avidemux-svn-commit] r7628 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4772">[ date ]</a>
+              <a href="thread.html#4772">[ thread ]</a>
+              <a href="subject.html#4772">[ subject ]</a>
+              <a href="author.html#4772">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

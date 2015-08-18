@@ -1,0 +1,812 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4641 - in	branches/avidemux_2.6_branch_mean/avidemux: . ADM_codecs
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4641%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20.%20ADM_codecs&In-Reply-To=%3C200903011030.n21AUtsN023692%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   
+   <LINK REL="Next"  HREF="001872.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4641 - in	branches/avidemux_2.6_branch_mean/avidemux: . ADM_codecs</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4641%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20.%20ADM_codecs&In-Reply-To=%3C200903011030.n21AUtsN023692%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4641 - in	branches/avidemux_2.6_branch_mean/avidemux: . ADM_codecs">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Mar  1 11:30:55 CET 2009</I>
+    <P><UL>
+        
+        <LI>Next message: <A HREF="001872.html">[Avidemux-svn-commit] r4642 - in	branches/avidemux_2.6_branch_mean/avidemux: . ADM_editor	ADM_toolkit ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_NONE/ADM_gui2	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1871">[ date ]</a>
+              <a href="thread.html#1871">[ thread ]</a>
+              <a href="subject.html#1871">[ subject ]</a>
+              <a href="author.html#1871">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-03-01 11:30:52 +0100 (Sun, 01 Mar 2009)
+New Revision: 4641
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux/gui_misc.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpegConfig.h
+   branches/avidemux_2.6_branch_mean/avidemux/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux/gtk_gui.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/gui_action.names
+   branches/avidemux_2.6_branch_mean/avidemux/gui_save.cpp
+Log:
+[UI] Cleanup  main dispatch func
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpegConfig.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpegConfig.h	2009-02-27 13:41:01 UTC (rev 4640)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpegConfig.h	2009-03-01 10:30:52 UTC (rev 4641)
+@@ -21,6 +21,7 @@
+  ***************************************************************************/
+ #ifndef ADM_FFCONFIG
+ #define ADM_FFCONFIG
++#include &quot;avcodec.h&quot;
+ typedef struct FFcodecSetting
+ {
+   Motion_Est_ID me_method;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/CMakeLists.txt	2009-02-27 13:41:01 UTC (rev 4640)
++++ branches/avidemux_2.6_branch_mean/avidemux/CMakeLists.txt	2009-03-01 10:30:52 UTC (rev 4641)
+@@ -140,6 +140,7 @@
+ guiplay.cpp  
+ gui_save.cpp  
+ gui_savenew.cpp  
++gui_misc.cpp
+ main.cpp  
+ gui_action.cpp
+ gui_blackframes.cpp
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gtk_gui.cpp	2009-02-27 13:41:01 UTC (rev 4640)
++++ branches/avidemux_2.6_branch_mean/avidemux/gtk_gui.cpp	2009-03-01 10:30:52 UTC (rev 4641)
+@@ -1751,138 +1751,6 @@
+ // Temporary place...
+ 
+ /**
+-    \fn saveAsBmp
+-    \brief save current image into filename, into bmp format
+-*/
+-uint8_t  ADMImage::saveAsBmp(const char *filename)
+-{
+-  ADM_BITMAPFILEHEADER bmfh;
+-  ADM_BITMAPINFOHEADER bmph;
+-  FILE *fd;
+-  uint32_t sz;
+-  uint16_t s16;
+-  uint32_t s32;
+-
+-  sz = _width* _height * 3;
+-
+-  bmfh.bfReserved1 = bmfh.bfReserved2 = 0;
+-  bmfh.bfOffBits = sizeof (bmfh) + sizeof (bmph);
+-//_________________________________________
+-  bmph.biSize = sizeof (bmph);
+-  bmph.biWidth = _width;
+-  bmph.biHeight = _height;
+-  bmph.biPlanes = 1;
+-  bmph.biBitCount = 24;
+-  bmph.biCompression = 0;	// COMPRESSION NONE
+-  bmph.biSizeImage = sz;
+-  bmph.biXPelsPerMeter = 0;
+-  bmph.biYPelsPerMeter = 0;
+-  bmph.biClrUsed = 0;
+-  bmph.biClrImportant = 0;
+-/*
+-	bmph.resolutionUnits=0;
+-	bmph.origin=0;
+-	bmph.colorEncoding=0;
+-*/
+-
+-  ADMImage image(_width,_height);
+-
+-
+-  printf (&quot;\n %u x %u=%u\n&quot;, bmph.biWidth, bmph.biHeight, sz);
+-
+-  uint8_t *out;
+-
+-        out=(uint8_t *)ADM_alloc(sz);
+-        if(!out)
+-        {
+-            GUI_Error_HIG(QT_TR_NOOP(&quot;Memory error&quot;), NULL);
+-//            ADM_dealloc(out);
+-            return 0;
+-        }
+-
+-        if(!COL_yv12rgbBMP(bmph.biWidth, bmph.biHeight,data, out))
+-        {
+-              GUI_Error_HIG(QT_TR_NOOP(&quot;Error converting to BMP&quot;), NULL);
+-              ADM_dealloc(out);
+-              return 0;
+-        }
+-        fd = fopen (filename, &quot;wb&quot;);
+-        if (!fd)
+-        {
+-                GUI_Error_HIG (QT_TR_NOOP(&quot;Something bad happened&quot;), NULL);
+-                ADM_dealloc(out);
+-                return 0;
+-        }
+-
+-	// Bitmpap file header, not using tructure due to gcc padding it
+-#ifdef ADM_BIG_ENDIAN
+-	s16 = 0x424D;
+-#else
+-  	s16 = 0x4D42;
+-#endif
+-  	s32 = 14 + sizeof (bmph) + sz;
+-#ifdef ADM_BIG_ENDIAN
+-	#define SWAP32(x) x=R32(x)
+-#else
+-	#define SWAP32(x) ;
+-#endif
+-        SWAP32(s32);
+-        fwrite (&amp;s16, 2, 1, fd);
+-        fwrite (&amp;s32, 4, 1, fd);
+-        s32 = 0;
+-        fwrite (&amp;s32, 4, 1, fd);
+-        s32 = 14 + sizeof (bmph);
+-        SWAP32(s32);
+-        fwrite (&amp;s32, 4, 1, fd);
+-#ifdef ADM_BIG_ENDIAN
+-	Endian_BitMapInfo(&amp;bmph);
+-#endif
+-        fwrite (&amp;bmph, sizeof (bmph), 1, fd);
+-        fwrite (out, sz, 1, fd);
+-
+-        fclose(fd);
+-        ADM_dealloc(out);
+-        return 1;
+-}
+-/**
+-    \fn saveAsJpg
+-    \brief save current image into filename, into jpg format
+-*/
+-uint8_t  ADMImage::saveAsJpg(const char *filename)
+-{
+- ffmpegEncoderFFMjpeg *codec=NULL;
+-  FILE *fd;
+-  uint8_t *buffer=NULL;
+-  uint32_t sz;
+-
+-
+-        sz = _width*_height*3;
+-        ADMBitstream bitstream(sz);
+-        buffer=new uint8_t[sz];
+-        bitstream.data=buffer;
+-        codec=new  ffmpegEncoderFFMjpeg(_width,_height,FF_MJPEG)  ;
+-        codec-&gt;init( 95,25000);
+-        if(!codec-&gt;encode(this,&amp;bitstream))
+-        {
+-                GUI_Error_HIG(QT_TR_NOOP(&quot;Cannot encode the frame&quot;), NULL);
+-                delete [] buffer;
+-                delete codec;
+-                return 0;
+-        }
+-        delete codec;
+-        fd=fopen(filename,&quot;wb&quot;);
+-        if(!fd)
+-        {
+-                GUI_Error_HIG(QT_TR_NOOP(&quot;File error&quot;),QT_TR_NOOP( &quot;Cannot open \&quot;%s\&quot; for writing.&quot;), filename);
+-                delete [] buffer;
+-                return 0;
+-        }
+-        fwrite (buffer, bitstream.len, 1, fd);
+-        fclose(fd);
+-        delete [] buffer;
+-        return 1;
+-}
+-/**
+  *      \fn UI_getPreferredRender
+  *      \brief Returns to render lib the user preferred rendering method
+  *
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/gui_action.names
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gui_action.names	2009-02-27 13:41:01 UTC (rev 4640)
++++ branches/avidemux_2.6_branch_mean/avidemux/gui_action.names	2009-03-01 10:30:52 UTC (rev 4641)
+@@ -13,20 +13,13 @@
+ //----- SAVE -----
+ ACT(SAVE_BEGIN)
+ ACT(SaveImg)
+-ACT(SaveOGM)
+ ACT(SaveJPG)
+ ACT(SaveBunchJPG)
+ ACT(SaveDVDPS)
+-ACT(SaveUnpackedMpeg4)
+-ACT(SAVE_END)
+-ACT(SaveDualAudio)
+ ACT(SaveAvi)
+ ACT(SaveWave)
+-ACT(SaveMpeg1vcd)
+-ACT(SaveMpeg2svcd)
+-ACT(SaveMpeg2dvd)
+ ACT(SaveRaw)
+-ACT(XVCD)
++ACT(SAVE_END)
+ // /SAVE
+ 
+ //--- NAVIGATE----
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/gui_misc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gui_misc.cpp	2009-02-27 13:41:01 UTC (rev 4640)
++++ branches/avidemux_2.6_branch_mean/avidemux/gui_misc.cpp	2009-03-01 10:30:52 UTC (rev 4641)
+@@ -0,0 +1,144 @@
++/**
++      \file gui_misc
++      \brief 2nd part of ADMImage, put here to avoid weird dependancies
++*/
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_image.h&quot;
++#include &quot;ADM_bitmap.h&quot;
++#include &quot;DIA_coreToolkit.h&quot;
++#include &quot;ADM_colorspace.h&quot;
++#include &quot;ADM_bitstream.h&quot;
++#include &quot;ADM_codecs/ADM_codec.h&quot;
++#include &quot;ADM_codecs/ADM_ffmpeg.h&quot;
++/**
++    \fn saveAsBmp
++    \brief save current image into filename, into bmp format
++*/
++uint8_t  ADMImage::saveAsBmp(const char *filename)
++{
++  ADM_BITMAPFILEHEADER bmfh;
++  ADM_BITMAPINFOHEADER bmph;
++  FILE *fd;
++  uint32_t sz;
++  uint16_t s16;
++  uint32_t s32;
++
++  sz = _width* _height * 3;
++
++  bmfh.bfReserved1 = bmfh.bfReserved2 = 0;
++  bmfh.bfOffBits = sizeof (bmfh) + sizeof (bmph);
++//_________________________________________
++  bmph.biSize = sizeof (bmph);
++  bmph.biWidth = _width;
++  bmph.biHeight = _height;
++  bmph.biPlanes = 1;
++  bmph.biBitCount = 24;
++  bmph.biCompression = 0;	// COMPRESSION NONE
++  bmph.biSizeImage = sz;
++  bmph.biXPelsPerMeter = 0;
++  bmph.biYPelsPerMeter = 0;
++  bmph.biClrUsed = 0;
++  bmph.biClrImportant = 0;
++/*
++	bmph.resolutionUnits=0;
++	bmph.origin=0;
++	bmph.colorEncoding=0;
++*/
++
++  ADMImage image(_width,_height);
++
++
++  printf (&quot;\n %u x %u=%u\n&quot;, bmph.biWidth, bmph.biHeight, sz);
++
++  uint8_t *out;
++
++        out=(uint8_t *)ADM_alloc(sz);
++        if(!out)
++        {
++            GUI_Error_HIG(QT_TR_NOOP(&quot;Memory error&quot;), NULL);
++//            ADM_dealloc(out);
++            return 0;
++        }
++
++        if(!COL_yv12rgbBMP(bmph.biWidth, bmph.biHeight,data, out))
++        {
++              GUI_Error_HIG(QT_TR_NOOP(&quot;Error converting to BMP&quot;), NULL);
++              ADM_dealloc(out);
++              return 0;
++        }
++        fd = fopen (filename, &quot;wb&quot;);
++        if (!fd)
++        {
++                GUI_Error_HIG (QT_TR_NOOP(&quot;Something bad happened&quot;), NULL);
++                ADM_dealloc(out);
++                return 0;
++        }
++
++	// Bitmpap file header, not using tructure due to gcc padding it
++#ifdef ADM_BIG_ENDIAN
++	s16 = 0x424D;
++#else
++  	s16 = 0x4D42;
++#endif
++  	s32 = 14 + sizeof (bmph) + sz;
++#ifdef ADM_BIG_ENDIAN
++	#define SWAP32(x) x=R32(x)
++#else
++	#define SWAP32(x) ;
++#endif
++        SWAP32(s32);
++        fwrite (&amp;s16, 2, 1, fd);
++        fwrite (&amp;s32, 4, 1, fd);
++        s32 = 0;
++        fwrite (&amp;s32, 4, 1, fd);
++        s32 = 14 + sizeof (bmph);
++        SWAP32(s32);
++        fwrite (&amp;s32, 4, 1, fd);
++#ifdef ADM_BIG_ENDIAN
++	Endian_BitMapInfo(&amp;bmph);
++#endif
++        fwrite (&amp;bmph, sizeof (bmph), 1, fd);
++        fwrite (out, sz, 1, fd);
++
++        fclose(fd);
++        ADM_dealloc(out);
++        return 1;
++}
++/**
++    \fn saveAsJpg
++    \brief save current image into filename, into jpg format
++*/
++uint8_t  ADMImage::saveAsJpg(const char *filename)
++{
++ ffmpegEncoderFFMjpeg *codec=NULL;
++  FILE *fd;
++  uint8_t *buffer=NULL;
++  uint32_t sz;
++
++
++        sz = _width*_height*3;
++        ADMBitstream bitstream(sz);
++        buffer=new uint8_t[sz];
++        bitstream.data=buffer;
++        codec=new  ffmpegEncoderFFMjpeg(_width,_height,FF_MJPEG)  ;
++        codec-&gt;init( 95,25000);
++        if(!codec-&gt;encode(this,&amp;bitstream))
++        {
++                GUI_Error_HIG(QT_TR_NOOP(&quot;Cannot encode the frame&quot;), NULL);
++                delete [] buffer;
++                delete codec;
++                return 0;
++        }
++        delete codec;
++        fd=fopen(filename,&quot;wb&quot;);
++        if(!fd)
++        {
++                GUI_Error_HIG(QT_TR_NOOP(&quot;File error&quot;),QT_TR_NOOP( &quot;Cannot open \&quot;%s\&quot; for writing.&quot;), filename);
++                delete [] buffer;
++                return 0;
++        }
++        fwrite (buffer, bitstream.len, 1, fd);
++        fclose(fd);
++        delete [] buffer;
++        return 1;
++}
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/gui_save.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gui_save.cpp	2009-02-27 13:41:01 UTC (rev 4640)
++++ branches/avidemux_2.6_branch_mean/avidemux/gui_save.cpp	2009-03-01 10:30:52 UTC (rev 4641)
+@@ -1,6 +1,6 @@
+ /** *************************************************************************
+             \file gui_save.cpp
+-            \brief handle all kind of sabe
++            \brief handle all kind of save
+     
+     copyright            : (C) 2002/2009 by mean
+     email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+@@ -55,18 +55,7 @@
+ {
+     switch(action)
+     {
+-    case ACT_SaveUnpackedMpeg4:
+-      if(GUI_Question(QT_TR_NOOP(&quot;This is to be used to undo packed VOP on MPEG-4.\nContinue ?&quot;)))
+-			{
+-                          GUI_FileSelWrite (QT_TR_NOOP(&quot;Select AVI File to Write&quot;), (SELFILE_CB *)A_SaveUnpackedVop);
+ 
+-			}
+-    			break;
+-
+-    case ACT_SaveOGM:
+-//                        GUI_FileSelWrite (QT_TR_NOOP(&quot;Select OGM File to Write&quot;), (SELFILE_CB *)ogmSave);
+-    			break;
+-
+     case ACT_SaveWork:
+       GUI_FileSelWrite (QT_TR_NOOP(&quot;Select Workbench to Save&quot;), A_saveWorkbench);
+ 	  UI_refreshCustomMenu();
+@@ -88,15 +77,9 @@
+     case ACT_SaveWave:
+       	{
+           GUI_FileSelWrite (QT_TR_NOOP(&quot;Select File to Save Audio&quot;),(SELFILE_CB *)A_audioSave);
+-
+-	}
++        }
+       break;
+ 
+-    case ACT_SaveDualAudio:
+-      //GUI_FileSelWrite (&quot;Select AVI to save &quot;,
+-      A_SaveAudioDualAudio(NULL);
+-      break;
+-
+     case ACT_SaveBunchJPG:
+       GUI_FileSelWrite (QT_TR_NOOP(&quot;Select JPEG Sequence to Save&quot;), A_saveBunchJpg);
+     	break;
+@@ -120,6 +103,157 @@
+     }
+ }
+ /**
++    \fn A_audioSave
++    \brief Save audio track
++*/
++
++int A_audioSave(char *name)
++{
++	if (!currentaudiostream)	// yes it is checked 2 times so what ?
++	return 0;
++	if (audioProcessMode())
++	{
++		// if we get here, either not compressed
++		// or decompressable
++		A_saveAudioDecodedTest(name);
++    }
++	else			// copy mode...
++    {
++       A_saveAudio(name);
++    }
++	return 1;
++}
++
++/**
++    \fn A_saveAudioDecodedTest
++    \brief Save current stream (generally avi...)
++     in decoded mode (assuming MP3)
++*/
++void A_saveAudioDecodedTest (char *name)
++{
++#if 0
++// debug audio seek
++  uint32_t len, gauge = 0;
++  uint32_t written = 0;
++  FILE *out;
++  AVDMGenericAudioStream *saveFilter;
++
++  uint64_t sampleTarget,sampleCurrent;
++
++#undef BITT
++#define BITT 4*1152
++#define OUTCHUNK 1024*1024
++  uint8_t *outbuffer;
++
++  if (!currentaudiostream)
++    return;
++
++
++  if (!(out = fopen (name, &quot;wb&quot;)))
++    {
++      GUI_Error_HIG (QT_TR_NOOP(&quot;File error&quot;), QT_TR_NOOP(&quot;Cannot open \&quot;%s\&quot; for writing.&quot;), name);
++      return;
++    }
++
++  outbuffer = (uint8_t *) ADM_alloc (2 * OUTCHUNK);	// 1Meg cache;
++  if (!outbuffer)
++    {
++      GUI_Error_HIG (QT_TR_NOOP(&quot;Memory Error&quot;), NULL);
++      return;
++    }
++
++
++
++// re-ignite first filter...
++
++
++
++
++  // Write Wav header
++
++  /* Sat Nov 09 06:11:52 CET 2002 Fixes from Maik Broemme &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">mbroemme at plusserver.de</A>&gt; */
++  /* If you set negative delay and save the audio stream, the saved stream was shorter than the video stream. */
++
++  /* Example: video stream is 10 minutes long, audio stream perhaps 20 minutes, you need the audio stream from */
++  /*          minute 1 until 11, so you setup an audio delay from -60 seconds, but this 60 seconds were removed */
++  /*          from begin and end of the audio stream. That was not good :) Now it runs correctly also if you use */
++  /*          audio stream with same length then video, therefore is premature ending :) */
++
++
++
++//        saveFilter =  buildAudioFilter (currentaudiostream,video_body-&gt;getTime (frameStart));
++
++		if (saveFilter == NULL)
++		{
++			fclose(out);
++			ADM_dealloc(outbuffer);
++			return;
++		}
++
++    	DIA_working *work=new DIA_working(QT_TR_NOOP(&quot;Saving audio&quot;));
++
++
++//
++//  Create First filter that is null filter
++//
++  saveFilter-&gt;writeHeader (out);
++  uint32_t tstart,tend,samples;
++  double duration;
++  tstart=video_body-&gt;getTime(frameStart);
++  tend=video_body-&gt;getTime(frameEnd+1);
++  duration=(tend-tstart);
++  duration*=saveFilter-&gt;getInfo()-&gt;frequency;
++  duration/=1000.;
++
++  sampleTarget=(uint64_t)floor(duration);
++  sampleCurrent=0;
++  gauge=0;
++
++  if( frameStart == frameEnd ){
++     /* JSC: we will write some bytes, but nobody should expect useful data */
++    GUI_Error_HIG(QT_TR_NOOP(&quot;No frames to encode&quot;),QT_TR_NOOP(&quot;Please check markers. Is \&quot;A&gt;\&quot; == \&quot;&gt;B\&quot;?&quot;));
++  }
++
++  while ((sampleCurrent&lt;sampleTarget))
++    {
++      if(!saveFilter-&gt;getPacket(outbuffer + gauge,&amp;len,&amp;samples))
++      {
++        printf(&quot;Audio save:Read error\n&quot;);
++      	break;
++      }
++      //      printf(&quot;Got : %lu\n&quot;,len2);
++      gauge += len;
++      sampleCurrent+=samples;
++      // update GUI
++	// JSC: if &quot;A&gt;&quot; == &quot;&gt;B&quot; we will get &gt;100% here =&gt; assert in work-&gt;update()
++	if (work-&gt;update ((sampleCurrent&gt;&gt;10 &gt; sampleTarget&gt;&gt;10 ? sampleTarget&gt;&gt;10 : sampleCurrent&gt;&gt;10), sampleTarget&gt;&gt;10))	// abort request ?
++	    break;;
++      if (gauge &gt; OUTCHUNK)	// either out buffer is full
++	{
++	  fwrite (outbuffer, 1, gauge, out);
++	  written += gauge;
++	  gauge = 0;
++	}
++    };
++// Clean up
++	if(gauge)
++	{
++		fwrite (outbuffer,  gauge,1, out);
++		written += gauge;
++		gauge = 0;
++	}
++  saveFilter-&gt;endWrite (out, written);
++  fclose (out);
++  ADM_dealloc (outbuffer);
++  delete work;
++//  deleteAudioFilter (saveFilter);
++//  currentaudiostream-&gt;endDecompress ();
++  printf (&quot;AudioSave: actually written %u\n&quot;, written);
++  printf (&quot;Audiosave: target sample:%llu, got :%llu\n&quot;,sampleTarget,sampleCurrent);
++
++#endif
++}
++/**
+         \fn A_saveAudio
+         \brief Save current stream (generally avi...)     in raw mode
+ */
+@@ -146,14 +280,15 @@
+ 
+   work=createWorking(QT_TR_NOOP(&quot;Saving audio&quot;));
+ 
+-  uint32_t timeEnd,timeStart,sample,hold,len;
++  uint64_t timeEnd,timeStart;
++  uint32_t hold,len,sample;
+   uint64_t tgt_sample,cur_sample;
+   double   duration;
+ 
+   // compute start position and duration in samples
+ 
+-   timeStart=video_body-&gt;getTime (frameStart);
+-   timeEnd=video_body-&gt;getTime (frameEnd+1);
++   timeStart=video_body-&gt;estimatePts (frameStart);
++   timeEnd=video_body-&gt;estimatePts (frameEnd+1);
+ 
+    currentaudiostream-&gt;goToTime (timeStart);
+    duration=timeEnd-timeStart;
+@@ -411,28 +546,7 @@
+      ADM_dealloc(actual_workbench_file);
+   actual_workbench_file = ADM_strdup(name);
+ }
+-/**
+-    \fn A_audioSave
+-    \brief Save audio track
+-*/
+ 
+-int A_audioSave(char *name)
+-{
+-	if (!currentaudiostream)	// yes it is checked 2 times so what ?
+-	return 0;
+-	if (audioProcessMode())
+-	{
+-
+-		// if we get here, either not compressed
+-		// or decompressable
+-		A_saveAudioDecodedTest(name);
+-	    }
+-	else			// copy mode...
+-	    {
+-	       A_saveAudio(name);
+-	    }
+-	return 1;
+-}
+ int A_SaveWrapper(char *name)
+ {
+ 
+@@ -447,134 +561,5 @@
+         return 1;
+ }
+ 
+-/**
+-    \fn A_saveAudioDecodedTest
+-    \brief Save current stream (generally avi...)
+-     in decoded mode (assuming MP3)
+-*/
+-void A_saveAudioDecodedTest (char *name)
+-{
+-#if 0
+-// debug audio seek
+-  uint32_t len, gauge = 0;
+-  uint32_t written = 0;
+-  FILE *out;
+-  AVDMGenericAudioStream *saveFilter;
+-
+-  uint64_t sampleTarget,sampleCurrent;
+-
+-#undef BITT
+-#define BITT 4*1152
+-#define OUTCHUNK 1024*1024
+-  uint8_t *outbuffer;
+-
+-  if (!currentaudiostream)
+-    return;
+-
+-
+-  if (!(out = fopen (name, &quot;wb&quot;)))
+-    {
+-      GUI_Error_HIG (QT_TR_NOOP(&quot;File error&quot;), QT_TR_NOOP(&quot;Cannot open \&quot;%s\&quot; for writing.&quot;), name);
+-      return;
+-    }
+-
+-  outbuffer = (uint8_t *) ADM_alloc (2 * OUTCHUNK);	// 1Meg cache;
+-  if (!outbuffer)
+-    {
+-      GUI_Error_HIG (QT_TR_NOOP(&quot;Memory Error&quot;), NULL);
+-      return;
+-    }
+-
+-
+-
+-// re-ignite first filter...
+-
+-
+-
+-
+-  // Write Wav header
+-
+-  /* Sat Nov 09 06:11:52 CET 2002 Fixes from Maik Broemme &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">mbroemme at plusserver.de</A>&gt; */
+-  /* If you set negative delay and save the audio stream, the saved stream was shorter than the video stream. */
+-
+-  /* Example: video stream is 10 minutes long, audio stream perhaps 20 minutes, you need the audio stream from */
+-  /*          minute 1 until 11, so you setup an audio delay from -60 seconds, but this 60 seconds were removed */
+-  /*          from begin and end of the audio stream. That was not good :) Now it runs correctly also if you use */
+-  /*          audio stream with same length then video, therefore is premature ending :) */
+-
+-
+-
+-//        saveFilter =  buildAudioFilter (currentaudiostream,video_body-&gt;getTime (frameStart));
+-
+-		if (saveFilter == NULL)
+-		{
+-			fclose(out);
+-			ADM_dealloc(outbuffer);
+-			return;
+-		}
+-
+-    	DIA_working *work=new DIA_working(QT_TR_NOOP(&quot;Saving audio&quot;));
+-
+-
+-//
+-//  Create First filter that is null filter
+-//
+-  saveFilter-&gt;writeHeader (out);
+-  uint32_t tstart,tend,samples;
+-  double duration;
+-  tstart=video_body-&gt;getTime(frameStart);
+-  tend=video_body-&gt;getTime(frameEnd+1);
+-  duration=(tend-tstart);
+-  duration*=saveFilter-&gt;getInfo()-&gt;frequency;
+-  duration/=1000.;
+-
+-  sampleTarget=(uint64_t)floor(duration);
+-  sampleCurrent=0;
+-  gauge=0;
+-
+-  if( frameStart == frameEnd ){
+-     /* JSC: we will write some bytes, but nobody should expect useful data */
+-    GUI_Error_HIG(QT_TR_NOOP(&quot;No frames to encode&quot;),QT_TR_NOOP(&quot;Please check markers. Is \&quot;A&gt;\&quot; == \&quot;&gt;B\&quot;?&quot;));
+-  }
+-
+-  while ((sampleCurrent&lt;sampleTarget))
+-    {
+-      if(!saveFilter-&gt;getPacket(outbuffer + gauge,&amp;len,&amp;samples))
+-      {
+-        printf(&quot;Audio save:Read error\n&quot;);
+-      	break;
+-      }
+-      //      printf(&quot;Got : %lu\n&quot;,len2);
+-      gauge += len;
+-      sampleCurrent+=samples;
+-      // update GUI
+-	// JSC: if &quot;A&gt;&quot; == &quot;&gt;B&quot; we will get &gt;100% here =&gt; assert in work-&gt;update()
+-	if (work-&gt;update ((sampleCurrent&gt;&gt;10 &gt; sampleTarget&gt;&gt;10 ? sampleTarget&gt;&gt;10 : sampleCurrent&gt;&gt;10), sampleTarget&gt;&gt;10))	// abort request ?
+-	    break;;
+-      if (gauge &gt; OUTCHUNK)	// either out buffer is full
+-	{
+-	  fwrite (outbuffer, 1, gauge, out);
+-	  written += gauge;
+-	  gauge = 0;
+-	}
+-    };
+-// Clean up
+-	if(gauge)
+-	{
+-		fwrite (outbuffer,  gauge,1, out);
+-		written += gauge;
+-		gauge = 0;
+-	}
+-  saveFilter-&gt;endWrite (out, written);
+-  fclose (out);
+-  ADM_dealloc (outbuffer);
+-  delete work;
+-//  deleteAudioFilter (saveFilter);
+-//  currentaudiostream-&gt;endDecompress ();
+-  printf (&quot;AudioSave: actually written %u\n&quot;, written);
+-  printf (&quot;Audiosave: target sample:%llu, got :%llu\n&quot;,sampleTarget,sampleCurrent);
+-
+-#endif
+-}
+ //EOF
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	
+	<LI>Next message: <A HREF="001872.html">[Avidemux-svn-commit] r4642 - in	branches/avidemux_2.6_branch_mean/avidemux: . ADM_editor	ADM_toolkit ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_NONE/ADM_gui2	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1871">[ date ]</a>
+              <a href="thread.html#1871">[ thread ]</a>
+              <a href="subject.html#1871">[ subject ]</a>
+              <a href="author.html#1871">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

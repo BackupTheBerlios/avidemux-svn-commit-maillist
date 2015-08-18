@@ -1,0 +1,485 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5863 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5863%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C201001200634.o0K6YB6S000668%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003067.html">
+   <LINK REL="Next"  HREF="003069.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5863 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5863%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C201001200634.o0K6YB6S000668%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5863 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Jan 20 07:34:11 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003067.html">[Avidemux-svn-commit] r5862 - in	branches/avidemux_2.5_branch_gruntster:	avidemux/ADM_coreImage/include avidemux/ADM_coreImage/src	avidemux/ADM_encoder cmake cmake/patches
+</A></li>
+        <LI>Next message: <A HREF="003069.html">[Avidemux-svn-commit] r5864 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3068">[ date ]</a>
+              <a href="thread.html#3068">[ thread ]</a>
+              <a href="subject.html#3068">[ subject ]</a>
+              <a href="author.html#3068">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-01-20 07:34:09 +0100 (Wed, 20 Jan 2010)
+New Revision: 5863
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+Log:
+[editor] Simplify cache handling, incomplete. That breaks decoding, to be continued
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.cpp	2010-01-19 22:27:28 UTC (rev 5862)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.cpp	2010-01-20 06:34:09 UTC (rev 5863)
+@@ -1,21 +1,22 @@
+-
+ /**
+     \file edCache
+     \brief Handle internal cache for decoded image
++    \author mean <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A> (c) 2003-2010
+ 
+-    Eviction is done using LRU method
+-    Counter is &quot;now&quot; and farther frame are seleced for replacement
+-
++   Simple fifo queue for dedcoded image with helper functions to search image in it.
+ */
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_image.h&quot;
+ #include &quot;ADM_editor/ADM_edCache.h&quot;
+-
+-
+-#include &quot;ADM_debugID.h&quot;
+-#define MODULE_NAME MODULE_EDITOR
+-#include &quot;ADM_debug.h&quot;
+-#undef aprintf
++#define ADM_NO_PTS 0xffffffffffffffffLL
+ #if 1
+ #define aprintf(...) {}
+ #else
+@@ -32,10 +33,8 @@
+ 	for(uint32_t i=0;i&lt;size;i++)
+ 	{
+ 		_elem[i].image=new ADMImage(w,h);
+-		_elem[i].frameNum=ADM_INVALID_CACHE;
+-		_elem[i].lastUse=ADM_INVALID_CACHE;
++		_elem[i].pts=ADM_NO_PTS;
+ 	}
+-	_counter=0;
+ 	_nbImage=size;
+ }
+ /**
+@@ -49,26 +48,26 @@
+ 		delete _elem[i].image;
+ 	}
+ 	delete[] _elem;
+-
+ }
+ /**
+-    \fn getImage
+-    \brief find image by framenumber, returns null if not found (obsolete)
++
+ */
+-ADMImage 	*EditorCache::getImage(uint32_t no)
++void EditorCache::check()
+ {
+-	for(uint32_t i=0;i&lt;_nbImage;i++)
+-	{
+-		if(_elem[i].frameNum==no)
+-		{
+-			aprintf(&quot;EdCache: %lu  in cache %lu\n&quot;,no,i);
+-			_elem[i].lastUse=_counter;
+-			_counter++;
+-			 return _elem[i].image;
+-		}
+-	}
+-// 	aprintf(&quot;EdCache: %lu not in cache\n&quot;,no);
+-	return NULL;
++    if(readIndex==writeIndex) // empty
++    {
++        readIndex=writeIndex=0;
++    }
++    // Wrap
++    if(writeIndex &amp;0x80000000)
++    {
++        int min=readIndex;
++        if(writeIndex&lt;min) min=writeIndex;
++        int mul=min/_nbImage;
++        int start=mul*_nbImage;
++        readIndex-=start;
++        writeIndex-=start;
++    }
+ }
+ /**
+     \fn getFreeImage
+@@ -81,33 +80,20 @@
+ 	uint32_t min=0;
+ 	uint64_t  delta=0;
+     int found=-1;
+-
+-    // First search for a really free image
+-    for(int i=0;i&lt;_nbImage;i++)
++    check();
++    // next!
++    int r,w;
++    r=readIndex%_nbImage;
++    w=(writeIndex)%_nbImage;
++    if(r==w)
+     {
+-        if(_elem[i].frameNum==ADM_INVALID_CACHE)
+-                found=i;
+-        aprintf(&quot;[edCache] Buffer %d free\n&quot;,found);
++        readIndex++;
++        found=writeIndex%_nbImage;
+     }
+-    // Then the older one/LRU
+-    if(found==-1)
+-    {
+-        aprintf(&quot;[edCache] looking for older cache entry\n&quot;);
+-        for(int i=0;i&lt;_nbImage;i++)
+-        {
+-            delta=abs((int)(_counter-_elem[i].lastUse));
+-            if(delta&gt;min)
+-            {
+-                min=delta;
+-                found=i;
+-                
+-            }
+-        }
+-    }
++    // Mark it as used
+     if(found==-1) ADM_assert(0);
+-	_elem[found].lastUse=_counter+1;;
+-	_elem[found].frameNum=ADM_IN_USE_CACHE;
+-
++	_elem[found].pts=ADM_NO_PTS;;
++    writeIndex++;
+ 	return _elem[found].image;
+ 
+ }
+@@ -121,8 +107,9 @@
+     printf(&quot;[edCache] Flush\n&quot;);
+     for(int i=0;i&lt;_nbImage;i++)
+     {
+-        _elem[i].frameNum=ADM_INVALID_CACHE;
++        _elem[i].pts=ADM_NO_PTS;
+     }
++    writeIndex=readIndex=0;
+ }
+ /**
+     \fn invalidate
+@@ -130,14 +117,15 @@
+ */
+ void        EditorCache::invalidate(ADMImage *image)
+ {
+-   
+     for(int i=0;i&lt;_nbImage;i++)
+     {
+         if(_elem[i].image==image)
+             {
+-                   _elem[i].frameNum=ADM_INVALID_CACHE;
+-                    aprintf(&quot;[edCache] Invalidating %d\n&quot;,i);
+-                  return;
++                uint32_t prev=(writeIndex+_nbImage-1)%_nbImage;
++                 ADM_assert(i==prev);
++                 ADM_assert(_elem[i].pts==ADM_NO_PTS);
++                 writeIndex=prev;
++                 return;
+             }
+     }
+     printf(&quot;[edCache]Image not in cache\n&quot;);
+@@ -148,24 +136,20 @@
+         \brief update the frameNo associated to a cache line (obsolete)
+                Only used to mark it as valid
+ */
+-uint8_t		EditorCache::updateFrameNum(ADMImage *image,uint32_t frameno)
++bool		EditorCache::validate(ADMImage *image)
+ {
+ 	for(uint32_t i=0;i&lt;_nbImage;i++)
+ 	{
+ 		if(_elem[i].image==image)
+ 		{
+-			ADM_assert(_elem[i].frameNum==ADM_IN_USE_CACHE);
+-			_elem[i].frameNum=frameno;
+-			_elem[i].lastUse=_counter;
+-            aprintf(&quot;[edCache] Updatding %d with framenum %&quot;LU&quot;\n&quot;,i,frameno);
+-			_counter++;
+-			return 1;
+-
++            ADM_assert(_elem[i].pts==ADM_NO_PTS);
++			_elem[i].pts=image-&gt;Pts;
++			return true;
+ 		}
+ 
+ 	}
+ 	ADM_assert(0);
+-
++    return false;
+ }
+ /**
+     \fn dump
+@@ -173,15 +157,15 @@
+ */
+ void EditorCache::dump( void)
+ {
++    printf(&quot;ReadIndex:%&quot;LU&quot;, WriteIndex:%&quot;LU&quot;\n&quot;,readIndex,writeIndex);
+ 	for(int i=0;i&lt;_nbImage;i++)
+ 	{
+         cacheElem *e=&amp;(_elem[i]);
+-        switch(e-&gt;frameNum)
++        switch(e-&gt;pts)
+         {
+-            case ADM_IN_USE_CACHE:  printf(&quot;Edcache content[%d] In use\n&quot;,i);break;
+-            case ADM_INVALID_CACHE: printf(&quot;Edcache content[%d] Free\n&quot;,i);break;
++            case ADM_NO_PTS:  printf(&quot;Not used\n&quot;,i);break;
+             default:
+-                printf(&quot;Edcache content[%d]: Num:%&quot;LU&quot; PTS : %&quot;LLU&quot; us%&quot;LLU&quot; ms\n&quot;,i,e-&gt;frameNum,
++                printf(&quot;Edcache content[%d]: PTS : %&quot;LLU&quot; us%&quot;LLU&quot; ms\n&quot;,i,
+                                                                     e-&gt;image-&gt;Pts,e-&gt;image-&gt;Pts/1000);
+         }
+ 	}
+@@ -191,67 +175,58 @@
+     \brief Find the image with the closest PTS just above pts.
+ 
+ */
+-ADMImage    *EditorCache::findJustAfter(uint64_t pts)
++ADMImage    *EditorCache::getAfter(uint64_t pts)
+ {
+-int smallest=-1;
+-uint64_t value=0xF000000000000000LL;
+-
+-    for(uint32_t i=0;i&lt;_nbImage;i++)
++    for(uint32_t i=readIndex;i&lt;writeIndex-1;i++)
+ 	{
+-		if(_elem[i].frameNum==ADM_INVALID_CACHE) continue;
+-		if(_elem[i].image-&gt;Pts&gt;pts)
++        int index=i%_nbImage;
++        ADM_assert(_elem[index].pts!=ADM_NO_PTS);
++        if(_elem[index].pts==pts)
+         {
+-            //printf(&quot;[Editor::findJustAfer] Looking for %lu, got %lu\n&quot;,pts,_elem[i].image-&gt;Pts);
+-            if(_elem[i].image-&gt;Pts &lt; value)
+-            {
+-                value=_elem[i].image-&gt;Pts;
+-                smallest=i;
+-            }
++            index++;
++            index%=_nbImage;
++            return _elem[index].image;
+         }
+     }
+-	if(smallest==-1) return NULL;
+-    return _elem[smallest].image;
++    ADM_warning(&quot;Cannot find image after %&quot;LLU&quot; ms in cache\n&quot;,pts/1000);
++    return NULL;
+ }
+ /**
+-    \fn getByPts
+-    \brief returns the image that has exactly that PTS
++    \fn findJustAfter
++    \brief Find the image with the closest PTS just above pts.
++
+ */
+-ADMImage *EditorCache::getByPts(uint64_t Pts)
++ADMImage    *EditorCache::getBefore(uint64_t pts)
+ {
+-    for(int i=0;i&lt;_nbImage;i++)
++    for(uint32_t i=readIndex+1;i&lt;writeIndex;i++)
+ 	{
+-		if(_elem[i].frameNum==ADM_INVALID_CACHE) continue;
+-		if(_elem[i].image-&gt;Pts==Pts)
++        int index=i%_nbImage;
++        ADM_assert(_elem[index].pts!=ADM_NO_PTS);
++        if(_elem[index].pts==pts)
+         {
+-            _elem[i].lastUse=_counter;
+-			_counter++;
+-            return _elem[i].image;
++            index--;
++            index%=_nbImage;
++            return _elem[index].image;
+         }
+     }
++    ADM_warning(&quot;Cannot find image before %&quot;LLU&quot; ms in cache\n&quot;,pts/1000);
+     return NULL;
+ }
++
+ /**
+-        \fn findLastBefore
+-        \brief Search the cache for the image just before pts
++    \fn getByPts
++    \brief returns the image that has exactly that PTS
+ */
+-ADMImage    *EditorCache::findLastBefore(uint64_t pts)
++ADMImage *EditorCache::getByPts(uint64_t Pts)
+ {
+-  uint64_t delta=1&lt;&lt;31; // should be enough
+-  int index=-1;
+-  for(int i=0;i&lt;_nbImage;i++)
++    for(int i=readIndex;i&lt;writeIndex;i++)
+ 	{
+-        cacheElem *elem=&amp;(_elem[i]);
+-		if(elem-&gt;frameNum==ADM_INVALID_CACHE) continue;
+-		if(elem-&gt;image-&gt;Pts&gt;=pts)  continue;
+-        uint64_t d=abs(pts-elem-&gt;image-&gt;Pts);
+-        if(d&lt;delta)
++		if(_elem[i].image-&gt;Pts==Pts)
+         {
+-            delta=d;
+-            index=i;
++            return _elem[i].image;
+         }
+     }
+-    if(index==-1)
+-        return NULL;
+-    return _elem[index].image;
++    return NULL;
+ }
++
+ // EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.h	2010-01-19 22:27:28 UTC (rev 5862)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.h	2010-01-20 06:34:09 UTC (rev 5863)
+@@ -16,29 +16,30 @@
+ #define ADM_IN_USE_CACHE  0xfffe
+ typedef struct cacheElem
+ {
+-	uint32_t lastUse;
+-	uint32_t frameNum;
+ 	ADMImage *image;
+-
++    uint64_t pts;       // If set to ADM_NO_PTS -&gt; unused entry
+ }cacheElem;
++/**
++    \class EditorCache
++    \brief internal source-attached image cache
++*/
+ class EditorCache
+ {
+ 	private :
+-			uint32_t	_counter;
++			uint32_t     readIndex,writeIndex;
+ 			cacheElem	 *_elem;
+ 			uint32_t	_nbImage;
++            void        check(void);
+ 	public:
+                         EditorCache(uint32_t size,uint32_t w, uint32_t h);
+                         ~EditorCache(void);
+ 			ADMImage	*getFreeImage(void);	
+-			ADMImage 	*getImage(uint32_t no);
+-			uint8_t		updateFrameNum(ADMImage *image,uint32_t frame);
++			bool		validate(ADMImage *image);
+ 			void		dump(void);
+             void        flush(void);
+             void        invalidate(ADMImage *image);
+-            ADMImage    *findJustAfter(uint64_t pts);
+-            ADMImage    *findLastBefore(uint64_t pts);
+-            ADMImage    *getByPts(uint64_t Pts);
+-            
++            ADMImage    *getByPts(uint64_t Pts);            
++            ADMImage    *getAfter(uint64_t Pts);
++            ADMImage    *getBefore(uint64_t Pts);
+ };
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2010-01-19 22:27:28 UTC (rev 5862)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2010-01-20 06:34:09 UTC (rev 5863)
+@@ -150,7 +150,7 @@
+             continue;
+         }
+         // Search the lowest PTS above our current PTS...
+-        ADMImage *img=cache-&gt;findJustAfter(vid-&gt;lastReadPts);
++        ADMImage *img=cache-&gt;getAfter(vid-&gt;lastReadPts);
+         if(img)
+         {
+             // Duplicate
+@@ -231,7 +231,7 @@
+          cache-&gt;invalidate(result);
+          return true; // Not an error in itself
+       }
+-     cache-&gt;updateFrameNum(result,vid-&gt;lastSentFrame);
++     
+      uint64_t pts=result-&gt;Pts;
+      uint64_t old=vid-&gt;lastDecodedPts;
+         if(pts==ADM_COMPRESSED_NO_PTS) // No PTS available ?
+@@ -244,6 +244,8 @@
+                 aprintf(&quot;[Editor] got PTS\n&quot;);
+                 vid-&gt;lastDecodedPts=pts;
+             }
++
++    cache-&gt;validate(result);
+     aprintf(&quot;&gt;&gt;Decoded frame %&quot;LU&quot; with pts=%&quot;LLD&quot; us, %&quot;LLD&quot; ms, ptsdelta=%&quot;LLD&quot; ms \n&quot;,
+     frame,
+     vid-&gt;lastDecodedPts,
+@@ -546,7 +548,7 @@
+              continue;
+           }else
+             {
+-                cache-&gt;updateFrameNum(result,vid-&gt;lastSentFrame);
++                
+                 uint64_t pts=result-&gt;Pts;
+                 aprintf(&quot;[Decoder] Decoder Frame %&quot;LU&quot; pts=%&quot;LLU&quot; ms, %&quot;LLU&quot; us\n&quot;,vid-&gt;lastSentFrame,
+                                                         result-&gt;Pts/1000,result-&gt;Pts);
+@@ -572,6 +574,7 @@
+                     }
+                     vid-&gt;lastDecodedPts=pts;
+                 }
++                cache-&gt;validate(result);
+             }
+ 
+             // Found our image ?
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003067.html">[Avidemux-svn-commit] r5862 - in	branches/avidemux_2.5_branch_gruntster:	avidemux/ADM_coreImage/include avidemux/ADM_coreImage/src	avidemux/ADM_encoder cmake cmake/patches
+</A></li>
+	<LI>Next message: <A HREF="003069.html">[Avidemux-svn-commit] r5864 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3068">[ date ]</a>
+              <a href="thread.html#3068">[ thread ]</a>
+              <a href="subject.html#3068">[ subject ]</a>
+              <a href="author.html#3068">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,185 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7211 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7211%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS&In-Reply-To=%3C20110518052722.9E5294813CD%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004365.html">
+   <LINK REL="Next"  HREF="004367.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7211 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7211%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS&In-Reply-To=%3C20110518052722.9E5294813CD%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7211 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed May 18 07:27:22 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004365.html">[Avidemux-svn-commit] r7210 - branches/avidemux_2.6_branch_mean
+</A></li>
+        <LI>Next message: <A HREF="004367.html">[Avidemux-svn-commit] r7212 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4366">[ date ]</a>
+              <a href="thread.html#4366">[ thread ]</a>
+              <a href="subject.html#4366">[ subject ]</a>
+              <a href="author.html#4366">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-05-18 07:27:21 +0200 (Wed, 18 May 2011)
+New Revision: 7211
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTS.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTSConfig.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTSPlugin.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.conf
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer_desc.cpp
+Log:
+[Ts/muxer] Add vbr mode
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTS.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTS.cpp	2011-05-16 05:29:00 UTC (rev 7210)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTS.cpp	2011-05-18 05:27:21 UTC (rev 7211)
+@@ -31,8 +31,9 @@
+ 
+ ts_muxer tsMuxerConfig=
+ {
+-    false,
+-    10
++    false,      // non compliant stream
++    true,       // vbr
++    10          // muxRate MBits/s
+ };
+ 
+ /**
+@@ -105,7 +106,10 @@
+         }
+         
+         // /audio
+-        oc-&gt;mux_rate=tsMuxerConfig.muxRateInMBits*1000000LL;
++        if(tsMuxerConfig.vbr)
++            oc-&gt;mux_rate=1;
++        else
++            oc-&gt;mux_rate=tsMuxerConfig.muxRateInMBits*1000000LL;
+         audio_st-&gt;codec-&gt;bit_rate=a[0]-&gt;getInfo()-&gt;byterate*8;        
+        
+         oc-&gt;preload=3000; // 30 ms preloading
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTSConfig.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTSConfig.cpp	2011-05-16 05:29:00 UTC (rev 7210)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTSConfig.cpp	2011-05-18 05:27:21 UTC (rev 7211)
+@@ -23,13 +23,18 @@
+ bool ffTSConfigure(void)
+ {
+         uint32_t muxRate=(uint32_t)tsMuxerConfig.muxRateInMBits;
++        bool     vbr=tsMuxerConfig.vbr;
+ 
++        diaElemToggle   v(&amp;vbr,&quot;VBR muxing&quot;);
+         diaElemUInteger mux(&amp;muxRate,&quot;Mux rate (MBits/s)&quot;,3,60);
+ 
+-        diaElem *tabs[]={&amp;mux};
+-        if( diaFactoryRun((&quot;TS Muxer&quot;),1,tabs))
++        v.link(0,&amp;mux);
++
++        diaElem *tabs[]={&amp;v,&amp;mux};
++        if( diaFactoryRun((&quot;TS Muxer&quot;),2,tabs))
+         {            
+             tsMuxerConfig.muxRateInMBits=muxRate;
++            tsMuxerConfig.vbr=vbr;
+             return true;
+         }
+         return false;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTSPlugin.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTSPlugin.cpp	2011-05-16 05:29:00 UTC (rev 7210)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTSPlugin.cpp	2011-05-18 05:27:21 UTC (rev 7211)
+@@ -22,7 +22,7 @@
+  bool ffTSConfigure(void);
+ 
+ ADM_MUXER_BEGIN( muxerffTS,
+-                    1,0,0,
++                    1,0,1,
+                     &quot;ffTS&quot;,    // Internal name
+                     &quot;ffMpeg TS muxer plugin (c) Mean 2009&quot;,
+                     &quot;Mpeg TS Muxer (ff)&quot;, // DIsplay name
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.conf
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.conf	2011-05-16 05:29:00 UTC (rev 7210)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.conf	2011-05-18 05:27:21 UTC (rev 7211)
+@@ -1,4 +1,5 @@
+ ts_muxer{
+ bool:acceptNonCompliant
++bool:vbr
+ uint32_t:muxRateInMBits
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.h	2011-05-16 05:29:00 UTC (rev 7210)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.h	2011-05-18 05:27:21 UTC (rev 7211)
+@@ -1,9 +1,9 @@
+-// automatically generated by admSerialization.py, do not edit!
+ // automatically generated by admSerialization.py do not edit
+ #ifndef ADM_ts_muxer_CONF_H
+ #define ADM_ts_muxer_CONF_H
+ typedef struct {
+ bool acceptNonCompliant;
++bool vbr;
+ uint32_t muxRateInMBits;
+ }ts_muxer;
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer_desc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer_desc.cpp	2011-05-16 05:29:00 UTC (rev 7210)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer_desc.cpp	2011-05-18 05:27:21 UTC (rev 7211)
+@@ -1,5 +1,7 @@
+-const ADM_paramList ts_muxer_param[]={
++// automatically generated by admSerialization.py, do not edit!
++extern const ADM_paramList ts_muxer_param[]={
+  {&quot;acceptNonCompliant&quot;,offsetof(ts_muxer,acceptNonCompliant),&quot;bool&quot;,ADM_param_bool},
++ {&quot;vbr&quot;,offsetof(ts_muxer,vbr),&quot;bool&quot;,ADM_param_bool},
+  {&quot;muxRateInMBits&quot;,offsetof(ts_muxer,muxRateInMBits),&quot;uint32_t&quot;,ADM_param_uint32_t},
+ {NULL,0,NULL}
+ };
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004365.html">[Avidemux-svn-commit] r7210 - branches/avidemux_2.6_branch_mean
+</A></li>
+	<LI>Next message: <A HREF="004367.html">[Avidemux-svn-commit] r7212 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4366">[ date ]</a>
+              <a href="thread.html#4366">[ thread ]</a>
+              <a href="subject.html#4366">[ subject ]</a>
+              <a href="author.html#4366">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

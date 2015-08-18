@@ -1,0 +1,242 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5360 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5360%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264&In-Reply-To=%3C200909302125.n8ULPO25019848%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002570.html">
+   
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5360 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5360%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264&In-Reply-To=%3C200909302125.n8ULPO25019848%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5360 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Wed Sep 30 23:25:24 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002570.html">[Avidemux-svn-commit] r5358 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+        
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2571">[ date ]</a>
+              <a href="thread.html#2571">[ thread ]</a>
+              <a href="subject.html#2571">[ subject ]</a>
+              <a href="author.html#2571">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-09-30 23:25:18 +0200 (Wed, 30 Sep 2009)
+New Revision: 5360
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Options.cpp
+Log:
+[x264] support API version 76
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-09-29 05:00:26 UTC (rev 5359)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-09-30 21:25:18 UTC (rev 5360)
+@@ -60,8 +60,10 @@
+ 	_extraData = NULL;
+ 	_extraDataSize = 0;
+ 
++#if X264_BUILD &lt; 76
+ 	_seiUserData = NULL;
+ 	_seiUserDataLen = 0;
++#endif
+ 
+ 	_encodeOptions.structSize = sizeof(vidEncOptions);
+ 	_encodeOptions.encodeMode = DEFAULT_ENCODE_MODE;
+@@ -329,15 +331,27 @@
+ 		_picture.img.i_plane = 3;
+ 	}
+ 
++#if X264_BUILD &gt; 75
++	int size = x264_encoder_encode(_handle, &amp;nal, &amp;nalCount, encodeParams-&gt;frameData[0] ? &amp;_picture : NULL, &amp;picture_out);
++
++	if (size &gt; 0)
++	{
++		memcpy(_buffer, nal-&gt;p_payload, size);
++	}
++	else if (size &lt; 0)
++	{
++		printf(&quot;[x264] Error encoding\n&quot;);
++		return ADM_VIDENC_ERR_FAILED;
++	}
++
++	encodeParams-&gt;encodedDataSize = size;
++#else
+ 	if (x264_encoder_encode(_handle, &amp;nal, &amp;nalCount, encodeParams-&gt;frameData[0] ? &amp;_picture : NULL, &amp;picture_out) &lt; 0)
+ 	{
+ 		printf(&quot;[x264] Error encoding\n&quot;);
+ 		return ADM_VIDENC_ERR_FAILED;
+ 	}
+ 
+-	_currentFrame++;
+-
+-	// Write
+ 	int size = 0;
+ 	int currentNal, sizemax;
+ 
+@@ -363,13 +377,16 @@
+ 	}
+ 
+ 	encodeParams-&gt;encodedDataSize = size;
++#endif
++
++	_currentFrame++;
+ 	encodeParams-&gt;ptsFrame = picture_out.i_pts;	// In fact it is the picture number in out case
+ 
+ 	switch (picture_out.i_type)
+ 	{
+ 		case X264_TYPE_IDR:
+ 			encodeParams-&gt;frameType = ADM_VIDENC_FRAMETYPE_IDR;
+-
++#if X264_BUILD &lt; 76
+ 			if(!_param.b_repeat_headers &amp;&amp; _seiUserData &amp;&amp; !picture_out.i_pts)
+ 			{
+ 				// Put our SEI front...
+@@ -389,6 +406,7 @@
+ 				size += 4 + _seiUserDataLen;
+ 				encodeParams-&gt;encodedDataSize = size; // update total size
+ 			}
++#endif
+ 
+ 			break;
+ 		case X264_TYPE_I:
+@@ -413,6 +431,18 @@
+ {
+ 	x264_nal_t *nal;
+ 	int nalCount;
++
++	if (!_handle)
++		return false;
++
++	if (_extraData)
++		delete _extraData;
++
++#if X264_BUILD &gt; 75
++	_extraDataSize = x264_encoder_headers(_handle, &amp;nal, &amp;nalCount);
++	_extraData = new uint8_t[_extraDataSize];
++	memcpy(_extraData, nal-&gt;p_payload, _extraDataSize);
++#else
+ 	uint32_t offset = 0;
+ 	uint8_t buffer[X264_MAX_HEADER_SIZE];
+ 	uint8_t picParam[X264_MAX_HEADER_SIZE];
+@@ -421,21 +451,11 @@
+ 	int picParamLen = 0, seqParamLen = 0, seiParamLen = 0, len;
+ 	int sz;
+ 
+-	if (!_handle)
+-		return false;
+-
+-	if (x264_encoder_headers(_handle, &amp;nal, &amp;nalCount))
+-	{
+-		printf(&quot;[x264] Cannot create header\n&quot;);
+-		return false;
+-	}
+-
+-	if (_extraData)
+-		delete _extraData;
+-
+ 	_extraData = new uint8_t[X264_MAX_HEADER_SIZE];
+ 	_extraDataSize = 0;
+ 
++	x264_encoder_headers(_handle, &amp;nal, &amp;nalCount)
++
+ 	printf(&quot;[x264] Nal count: %d\n&quot;, nalCount);
+ 
+ 	// Now encode them
+@@ -509,8 +529,10 @@
+ 	}
+ 
+ 	_extraDataSize = offset;
++#endif
+ 
+ 	printf(&quot;[x264] generated %d extra bytes for header\n&quot;, _extraDataSize);
++
+ 	return true;
+ }
+ 
+@@ -535,12 +557,14 @@
+ 		_extraDataSize = 0;
+ 	}
+ 
++#if X264_BUILD &lt; 76
+ 	if (_seiUserData)
+ 	{
+ 		delete [] _seiUserData;
+ 		_seiUserData = NULL;
+ 		_seiUserDataLen = 0;
+ 	}
++#endif
+ 
+ 	return ADM_VIDENC_ERR_SUCCESS;
+ }
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.h	2009-09-29 05:00:26 UTC (rev 5359)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.h	2009-09-30 21:25:18 UTC (rev 5360)
+@@ -52,8 +52,10 @@
+ 		int _currentPass, _passCount;
+ 		bool _opened, _openPass;
+ 
++#if X264_BUILD &lt; 76
+ 		uint8_t *_seiUserData;
+ 		uint32_t _seiUserDataLen;
++#endif
+ 
+ 		uint8_t *_extraData;
+ 		int _extraDataSize;
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Options.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Options.cpp	2009-09-29 05:00:26 UTC (rev 5359)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Options.cpp	2009-09-30 21:25:18 UTC (rev 5360)
+@@ -24,8 +24,6 @@
+ #include &lt;math.h&gt;
+ #include &lt;libxml/parser.h&gt;
+ #include &lt;libxml/xmlschemas.h&gt;
+-#include &lt;sstream&gt;
+-#include &lt;string&gt;
+ 
+ #include &quot;config.h&quot;
+ #include &quot;ADM_inttype.h&quot;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002570.html">[Avidemux-svn-commit] r5358 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+	
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2571">[ date ]</a>
+              <a href="thread.html#2571">[ thread ]</a>
+              <a href="subject.html#2571">[ subject ]</a>
+              <a href="author.html#2571">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

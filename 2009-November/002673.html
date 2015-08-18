@@ -1,0 +1,277 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5462 - in	branches/avidemux_2.6_branch_mean/avidemux/common:	ADM_audioFilter/src ADM_editor ADM_script
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5462%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%0A%09ADM_audioFilter/src%20ADM_editor%20ADM_script&In-Reply-To=%3C200911121540.nACFeYux010183%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002672.html">
+   <LINK REL="Next"  HREF="002674.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5462 - in	branches/avidemux_2.6_branch_mean/avidemux/common:	ADM_audioFilter/src ADM_editor ADM_script</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5462%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%0A%09ADM_audioFilter/src%20ADM_editor%20ADM_script&In-Reply-To=%3C200911121540.nACFeYux010183%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5462 - in	branches/avidemux_2.6_branch_mean/avidemux/common:	ADM_audioFilter/src ADM_editor ADM_script">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Nov 12 16:40:34 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002672.html">[Avidemux-svn-commit] r5461 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils:	include src
+</A></li>
+        <LI>Next message: <A HREF="002674.html">[Avidemux-svn-commit] r5463 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders:	faac lame lavcodec twolame vorbis
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2673">[ date ]</a>
+              <a href="thread.html#2673">[ thread ]</a>
+              <a href="subject.html#2673">[ subject ]</a>
+              <a href="author.html#2673">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-11-12 16:40:33 +0100 (Thu, 12 Nov 2009)
+New Revision: 5462
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audio_encoderPlugin.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxAudio.cpp
+Log:
+[All] New more flexible custom configuration for audio codec in plain text
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audio_encoderPlugin.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audio_encoderPlugin.cpp	2009-11-12 15:40:31 UTC (rev 5461)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audio_encoderPlugin.cpp	2009-11-12 15:40:33 UTC (rev 5462)
+@@ -347,7 +347,7 @@
+         \brief 
+ */
+ 
+-uint8_t getAudioExtraConf(uint32_t *bitrate,uint32_t *extraDataSize, uint8_t **extradata)
++bool getAudioExtraConf(uint32_t *bitrate,CONFcouple **couple)
+ {
+     if(!currentEncoder)
+     {
+@@ -358,25 +358,28 @@
+      ADM_audioEncoder *encoder= ListOfAudioEncoder[currentEncoder];
+      *bitrate=encoder-&gt;getBitrate();
+      if(encoder-&gt;getConfigurationData)
+-        return encoder-&gt;getConfigurationData(extraDataSize,extradata);
++        return encoder-&gt;getConfigurationData(couple);
+      else return 1;
+ }
+ /**
+     \fn setAudioExtraConf
+ */
+-uint8_t setAudioExtraConf(uint32_t bitrate,uint32_t extraDataSize, uint8_t *extradata)
++bool setAudioExtraConf(uint32_t bitrate,CONFcouple *c)
+ {
+     if(!currentEncoder)
+     {
+         printf(&quot;[AudioEncoder] Cannot set conf on copy!\n&quot;);
+-        return 0;
++        return false;
+     }
+      ADM_assert(currentEncoder&lt;ListOfAudioEncoder.size());
+      ADM_audioEncoder *encoder= ListOfAudioEncoder[currentEncoder];
+      encoder-&gt;setBitrate(bitrate);
+      if(encoder-&gt;setConfigurationData)
+-        return encoder-&gt;setConfigurationData(extraDataSize,extradata);
+-    else return 1;
++     {
++        if(c)             return encoder-&gt;setConfigurationData(c);
++        ADM_warning(&quot;Null extra configuration given to audio codec!\n&quot;);
++     }
++     return true;
+ }     
+ /**
+         \fn audio_selectCodecByTag
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp	2009-11-12 15:40:31 UTC (rev 5461)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp	2009-11-12 15:40:33 UTC (rev 5462)
+@@ -22,11 +22,12 @@
+ #include &quot;ADM_quota.h&quot;
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+ 
+-
++#include &quot;audioEncoderApi.h&quot;
+ #include &quot;DIA_coreToolkit.h&quot;
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+ #include &quot;ADM_videoFilter.h&quot;
+ #include &quot;ADM_videoFilter_internal.h&quot;
++#include &quot;ADM_paramList.h&quot;
+ #include &quot;prefs.h&quot;
+ #include &quot;avi_vars.h&quot;
+ 
+@@ -182,16 +183,28 @@
+                         qfprintf(fd,&quot;app.audio.setTrack(%d);\n&quot;, source); 
+                         
+         }
+-
+-   getAudioExtraConf(&amp;bitrate,&amp;extraDataSize,&amp;extraData);
+-   qfprintf(fd,&quot;app.audio.codec(\&quot;%s\&quot;,%d,%d,\&quot;&quot;, audioCodecGetName(),bitrate,extraDataSize); 
+-   for(int i=0;i&lt;extraDataSize;i++)
+-   {
+-     qfprintf(fd,&quot;%02x &quot;,extraData[i]);
+-   }
+-   qfprintf(fd,&quot;\&quot;);\n&quot;);
++#endif
++   CONFcouple *couples=NULL;
++   getAudioExtraConf(&amp;bitrate,&amp;couples);
++   if(couples==NULL)
++    qfprintf(fd,&quot;app.audio.codec(\&quot;%s\&quot;,%d);\n&quot;,audioCodecGetName(),bitrate); 
++   else
++    {
++        qfprintf(fd,&quot;app.audio.codec(\&quot;%s\&quot;,%d&quot;, audioCodecGetName(),bitrate); 
++        uint32_t n=couples-&gt;getNumber();
++        
++        for(int i=0;i&lt;n;i++)
++        {
++            char *name,*value;
++            couples-&gt;getEntry(i,&amp;name,&amp;value);
++            qfprintf(fd,&quot;,\&quot;%s=%s\&quot;&quot;,name,value);
++        }
++        qfprintf(fd,&quot;);\n&quot;);
++        delete couples;
++        couples=NULL;
++    }
+    
+-   
++#if 0   
+    //qfprintf(fd,&quot;app.audio.process=%s;\n&quot;,truefalse[audioProcessMode()]);
+    qfprintf(fd,&quot;app.audio.normalizeMode=%d;\n&quot;,audioGetNormalizeMode());
+    qfprintf(fd,&quot;app.audio.normalizeValue=%d;\n&quot;,audioGetNormalizeValue());
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxAudio.cpp	2009-11-12 15:40:31 UTC (rev 5461)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxAudio.cpp	2009-11-12 15:40:33 UTC (rev 5462)
+@@ -22,6 +22,7 @@
+ #include &quot;ADM_editor/ADM_outputfmt.h&quot;
+ #include &quot;ADM_script/ADM_container.h&quot;
+ #include &quot;ADM_audioFilter/include/ADM_audioFilterInterface.h&quot;
++#include &quot;audioEncoderApi.h&quot;
+ 
+ extern int A_audioSave(char *name);
+ extern int A_loadAC3 (char *name);
+@@ -361,45 +362,63 @@
+ JSBool ADM_JSAvidemuxAudio::Codec(JSContext *cx, JSObject *obj, uintN argc, 
+                                       jsval *argv, jsval *rval)
+ {// begin Codec
+-#if 0
+         ADM_JSAvidemuxAudio *p = (ADM_JSAvidemuxAudio *)JS_GetPrivate(cx, obj);
+         // default return value
+         *rval = BOOLEAN_TO_JSVAL(false);
+-        if(argc != 4)
++        if(argc &lt; 2)
+                 return JS_FALSE;
+-        if(JSVAL_IS_STRING(argv[0]) == false || JSVAL_IS_INT(argv[1]) == false || JSVAL_IS_INT(argv[2]) == false  ||  JSVAL_IS_STRING(argv[3]) == false  )
+-                return JS_FALSE;
++        if(JSVAL_IS_STRING(argv[0]) == false || JSVAL_IS_INT(argv[1]) == false )            return JS_FALSE;
++        for(int i=2;i&lt;argc;i++)  if(JSVAL_IS_STRING(argv[i]) == false) return JS_FALSE;
++
++        // Get Codec...
+         char *name = JS_GetStringBytes(JSVAL_TO_STRING(argv[0]));
+         ADM_LowerCase(name);
+         enterLock();
+         // First search the codec by its name
+         if(!audioCodecSetByName(name))
++        {
+                 *rval = BOOLEAN_TO_JSVAL(false);
++                ADM_error(&quot;Cannot set audio codec %s\n&quot;,name);
++        }
+         else
+-        {// begin set bitrate
+-        //audioFilter_SetBitrate(JSVAL_TO_INT(argv[1]));
+-          uint32_t bitrate,size;
+-          char  *extra;
+-          uint8_t *data=NULL;
+-                bitrate=JSVAL_TO_INT(argv[1]);
+-                size=JSVAL_TO_INT(argv[2]);
+-                extra=JS_GetStringBytes(JSVAL_TO_STRING(argv[3])); 
+-                if(size)
++        {
++        // begin set bitrate
++        uint32_t bitrate=JSVAL_TO_INT(argv[1]);
++        // Construct couples
++        CONFcouple *c=NULL;
++        if(argc&gt;2)
++        {
++            int nb=argc-2;
++            c=new CONFcouple(nb);
++            for(int i=0;i&lt;nb;i++)
++            {
++                char *param = JS_GetStringBytes(JSVAL_TO_STRING(argv[2+i]));
++                char *dupe=   ADM_strdup(param);
++                char *name,*value;
++                // dupe is in the form name=value
++                name=dupe;
++                value=name;
++                char *tail=dupe+strlen(dupe);
++                while(value&lt;tail)
+                 {
+-                          data=new uint8_t[size];
+-                          for (uint32_t k = 0; k &lt; size; k++)
+-                            {
+-                              data[k] = mk_hex (*extra, *(extra + 1));
+-                              extra += 3;
+-                            }
+-                        setAudioExtraConf(bitrate,size,data);
+-                        delete [] data; 
++                    if(*value=='=') 
++                        {
++                            *value=0;
++                            value++;
++                            break;
++                        }
++                    value++;
+                 }
++                c-&gt;setCouple(name,value);
++                //printf(&quot;%s -&gt; [%s,%s]\n&quot;,param,name,value);
++                ADM_dezalloc(dupe);
++            }
+ 
+-                *rval = BOOLEAN_TO_JSVAL(true);
++        }
++
++            *rval = BOOLEAN_TO_JSVAL(setAudioExtraConf(bitrate,c));
+         }// end set bitrate
+         leaveLock();
+-#endif
+         return JS_TRUE;
+ }// end Codec
+ JSBool ADM_JSAvidemuxAudio::getNbTracks(JSContext *cx, JSObject *obj, uintN argc, 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002672.html">[Avidemux-svn-commit] r5461 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils:	include src
+</A></li>
+	<LI>Next message: <A HREF="002674.html">[Avidemux-svn-commit] r5463 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders:	faac lame lavcodec twolame vorbis
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2673">[ date ]</a>
+              <a href="thread.html#2673">[ thread ]</a>
+              <a href="subject.html#2673">[ subject ]</a>
+              <a href="author.html#2673">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,145 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5054 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5054%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200907120818.n6C8IXtY000481%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002268.html">
+   <LINK REL="Next"  HREF="002270.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5054 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5054%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200907120818.n6C8IXtY000481%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5054 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jul 12 10:18:33 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002268.html">[Avidemux-svn-commit] r5053 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_infoExtractor
+</A></li>
+        <LI>Next message: <A HREF="002270.html">[Avidemux-svn-commit] r5055 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src avidemux/gtk/ADM_UIs/src	avidemux_core/ADM_coreImage/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2269">[ date ]</a>
+              <a href="thread.html#2269">[ thread ]</a>
+              <a href="subject.html#2269">[ subject ]</a>
+              <a href="author.html#2269">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-07-12 10:18:33 +0200 (Sun, 12 Jul 2009)
+New Revision: 5054
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+Log:
+[TS demuxer] Autoprobe TS1/TS2 (hackish)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-07-12 08:18:32 UTC (rev 5053)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-07-12 08:18:33 UTC (rev 5054)
+@@ -46,6 +46,23 @@
+     close();
+ }
+ /**
++    \fn score
++    \return the number of TS packet of size TS_PACKET_SIZE+extraData in a raw, nbTry tries
++
++*/
++static int score(fileParser *parser, int nbTry, int extraData)
++{
++int count=0;
++int round=nbTry;
++    while(round--)
++    {
++        if(parser-&gt;read8i()!=TS_MARKER) break;
++        count++;
++        parser-&gt;forward(TS_PACKET_LEN-1+extraData);
++    }
++    return count;
++}
++/**
+     \fn open
+     \brief dtor
+ */
+@@ -60,7 +77,44 @@
+         return false;
+     }
+     _size=_file-&gt;getSize();
+-    return true;
++
++    // Detect TS1/TS2...
++        printf(&quot;[TsPacket] Detecting TS/TS2...\n&quot;);
++
++        uint8_t r;
++        int tryMe=250;
++        while(tryMe--)
++        {
++            r=_file-&gt;read8i();
++            if(r==TS_MARKER) break;
++            if(_file-&gt;end()) 
++            {
++                tryMe=0;
++            }
++        }
++        if(!tryMe) 
++        {
++            printf(&quot;[TsPacket] Cannot sync ???\n&quot;);
++            return true;
++        }
++        uint64_t startPos=getPos()-1;
++        int score1,score2;
++
++        setPos(startPos);
++        score1=score(_file,20,0);
++        setPos(startPos);
++        score2=score(_file,20,4);
++        printf(&quot;[TsPacket] Score : 188:%d, 192:%d out of 20\n&quot;,score1,score2);
++        if(score2 &amp;&amp; score2&gt;score1)
++        {
++            printf(&quot;[TsPacket] Probably TS2 (192)...\n&quot;);
++            extraCrap=4;
++        }else
++        {
++            printf(&quot;[TsPacket] Probably TS1 (188)...\n&quot;);
++        }
++        setPos(0);
++        return true;
+ }
+ /**
+     \fn close
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002268.html">[Avidemux-svn-commit] r5053 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_infoExtractor
+</A></li>
+	<LI>Next message: <A HREF="002270.html">[Avidemux-svn-commit] r5055 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src avidemux/gtk/ADM_UIs/src	avidemux_core/ADM_coreImage/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2269">[ date ]</a>
+              <a href="thread.html#2269">[ thread ]</a>
+              <a href="subject.html#2269">[ subject ]</a>
+              <a href="author.html#2269">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

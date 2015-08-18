@@ -1,0 +1,160 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6024 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src	avidemux/common/ADM_videoFilter2/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6024%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_audioFilter/src%0A%09avidemux/common/ADM_videoFilter2/src%0A%09avidemux_core/ADM_coreUtils/include%20avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C201003231455.o2NEt0sl009011%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003227.html">
+   <LINK REL="Next"  HREF="003229.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6024 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src	avidemux/common/ADM_videoFilter2/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6024%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_audioFilter/src%0A%09avidemux/common/ADM_videoFilter2/src%0A%09avidemux_core/ADM_coreUtils/include%20avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C201003231455.o2NEt0sl009011%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6024 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src	avidemux/common/ADM_videoFilter2/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Mar 23 15:55:00 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003227.html">[Avidemux-svn-commit] r6023 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264
+</A></li>
+        <LI>Next message: <A HREF="003229.html">[Avidemux-svn-commit] r6025 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3228">[ date ]</a>
+              <a href="thread.html#3228">[ thread ]</a>
+              <a href="subject.html#3228">[ subject ]</a>
+              <a href="author.html#3228">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-03-23 15:55:00 +0100 (Tue, 23 Mar 2010)
+New Revision: 6024
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_thread.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterThread.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_threadQueue.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_threadQueue.cpp
+Log:
+[threads] Properly stop video/audio encoding thread
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_thread.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_thread.cpp	2010-03-23 14:54:58 UTC (rev 6023)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_thread.cpp	2010-03-23 14:55:00 UTC (rev 6024)
+@@ -51,8 +51,7 @@
+ 
+ ADM_audioAccess_thread::~ADM_audioAccess_thread()
+ {
+-    ADM_info(&quot;Killing audio thread and son\n&quot;);
+-   
++    stopThread();
+     // Empty the list...
+     int nb=list.size();
+     for(int i=0;i&lt;nb;i++)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterThread.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterThread.cpp	2010-03-23 14:54:58 UTC (rev 6023)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_filterThread.cpp	2010-03-23 14:55:00 UTC (rev 6024)
+@@ -39,7 +39,7 @@
+ */
+ ADM_videoFilterQueue::~ADM_videoFilterQueue()
+ {
+-        ADM_info(&quot;Destroying video threadQueue\n&quot;);
++        stopThread();
+         int fCount;
+         fCount=freeList.size();
+         for(int j=0;j&lt;fCount;j++)
+@@ -49,7 +49,7 @@
+         }
+         freeList.clear();
+         int count=list.size();
+-        for(int j=0;j&lt;fCount;j++)
++        for(int j=0;j&lt;count;j++)
+         {
+             ADMImage *image=(ADMImage *)list[j].data;
+             delete image;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_threadQueue.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_threadQueue.h	2010-03-23 14:54:58 UTC (rev 6023)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_threadQueue.h	2010-03-23 14:55:00 UTC (rev 6024)
+@@ -66,6 +66,7 @@
+ protected:
+         virtual bool                runAction(void)=0; 
+                 bool                startThread(void);
++                bool                stopThread(void);
+ };
+ 
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_threadQueue.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_threadQueue.cpp	2010-03-23 14:54:58 UTC (rev 6023)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_threadQueue.cpp	2010-03-23 14:55:00 UTC (rev 6024)
+@@ -100,4 +100,30 @@
+         started=true;
+         return true;
+ }
++
++/**
++    \fn stopThread
++*/
++bool ADM_threadQueue::stopThread(void)
++{
++        ADM_info(&quot;Destroying threadQueue\n&quot;);
++        int clockDown=10;
++        mutex-&gt;lock();
++        if(threadState==RunStateRunning)
++        {
++            threadState=RunStateStopOrder;
++            mutex-&gt;unlock();
++            while(threadState!=RunStateStopped &amp;&amp; clockDown)
++            {
++                
++                ADM_usleep(50*1000);
++                clockDown--;
++            };
++            ADM_info(&quot;Thread stopped, continuing dtor\n&quot;);
++        }else   
++        {
++                mutex-&gt;unlock();
++        }
++        return true;
++}
+ // EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003227.html">[Avidemux-svn-commit] r6023 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264
+</A></li>
+	<LI>Next message: <A HREF="003229.html">[Avidemux-svn-commit] r6025 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3228">[ date ]</a>
+              <a href="thread.html#3228">[ thread ]</a>
+              <a href="subject.html#3228">[ subject ]</a>
+              <a href="author.html#3228">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,179 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7690 - in branches/avidemux_2.6_branch_mean:	avidemux_core cmake cmake_compile_check
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7690%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core%20cmake%20cmake_compile_check&In-Reply-To=%3C20111205065638.BD9B3481219%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004833.html">
+   <LINK REL="Next"  HREF="004835.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7690 - in branches/avidemux_2.6_branch_mean:	avidemux_core cmake cmake_compile_check</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7690%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core%20cmake%20cmake_compile_check&In-Reply-To=%3C20111205065638.BD9B3481219%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7690 - in branches/avidemux_2.6_branch_mean:	avidemux_core cmake cmake_compile_check">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Dec  5 07:56:38 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004833.html">[Avidemux-svn-commit] r7689 - in branches:	avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_render	avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+        <LI>Next message: <A HREF="004835.html">[Avidemux-svn-commit] r7691 -	branches/avidemux_2.6_branch_mean/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4834">[ date ]</a>
+              <a href="thread.html#4834">[ thread ]</a>
+              <a href="subject.html#4834">[ subject ]</a>
+              <a href="author.html#4834">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-12-05 07:56:38 +0100 (Mon, 05 Dec 2011)
+New Revision: 7690
+
+Added:
+   branches/avidemux_2.6_branch_mean/cmake/admCheckFtello.cmake
+   branches/avidemux_2.6_branch_mean/cmake_compile_check/ftello.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/cmake/ADM_coreConfig.h.cmake
+   branches/avidemux_2.6_branch_mean/cmake/admCheckRequiredLibs.cmake
+Log:
+[core] Check if ftello is present (win32), use ftello64 if not
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/CMakeLists.txt	2011-12-04 13:48:20 UTC (rev 7689)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/CMakeLists.txt	2011-12-05 06:56:38 UTC (rev 7690)
+@@ -21,6 +21,7 @@
+ 
+ ADD_DEFINITIONS(-D_FILE_OFFSET_BITS=64 -D_LARGE_FILES)
+ include(admMainChecks)
++include(admCheckFtello)
+ include(admAsNeeded)
+ ########################################
+ # VDPAU
+@@ -36,8 +37,12 @@
+ 	INCLUDE(adm_log)
+ 	MESSAGE(&quot;&quot;)
+ ENDIF (VERBOSE)
+-
+ ########################################
++# Checking if we should use ftello
++# or ftello64 (win32)
++########################################
++checkFtello()
++########################################
+ # Generate config.h
+ ########################################
+ CONFIGURE_FILE(&quot;${AVIDEMUX_TOP_SOURCE_DIR}/cmake/ADM_coreConfig.h.cmake&quot; &quot;${CMAKE_BINARY_DIR}/config/ADM_coreConfig.h&quot;)
+
+Modified: branches/avidemux_2.6_branch_mean/cmake/ADM_coreConfig.h.cmake
+===================================================================
+--- branches/avidemux_2.6_branch_mean/cmake/ADM_coreConfig.h.cmake	2011-12-04 13:48:20 UTC (rev 7689)
++++ branches/avidemux_2.6_branch_mean/cmake/ADM_coreConfig.h.cmake	2011-12-05 06:56:38 UTC (rev 7690)
+@@ -37,10 +37,10 @@
+ #ifdef __MINGW32__
+ #define rindex strrchr
+ #define index strchr
+-#ifdef CROSS_COMPILE
++#if !${USE_FTELLO}
+         #define ftello ftello64 // not defined on every mingw64_w32 version (e.g. set 2011-11-03 does not have it)
+         #define fseeko fseeko64
+-#endif // CROSS_COMPILE
++#endif // FTELLO
+ #endif
+ 
+ #endif
+
+Added: branches/avidemux_2.6_branch_mean/cmake/admCheckFtello.cmake
+===================================================================
+--- branches/avidemux_2.6_branch_mean/cmake/admCheckFtello.cmake	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/cmake/admCheckFtello.cmake	2011-12-05 06:56:38 UTC (rev 7690)
+@@ -0,0 +1,21 @@
++MACRO(checkFtello)
++	IF (NOT FTELLO_CHECKED)
++		OPTION(FTELLO &quot;&quot; ON)
++
++		MESSAGE(STATUS &quot;Checking for ftello &quot;)
++		MESSAGE(STATUS &quot;********************&quot;)
++
++		IF (FTELLO)
++                        ADM_COMPILE(ftello.cpp &quot;&quot; &quot;&quot; &quot;&quot; GOT_FTELLO outputWithoutLibintl)
++
++                        IF (GOT_FTELLO)
++                                SET(USE_FTELLO 1)
++                                MESSAGE(STATUS &quot;ftello present&quot;)
++                        ENDIF (GOT_FTELLO)
++		ELSE (FTELLO)
++			MESSAGE(&quot;${MSG_DISABLE_OPTION}&quot;)
++		ENDIF (FTELLO)
++		SET(FTELLO_CHECKED 1)
++		MESSAGE(&quot;&quot;)
++	ENDIF (NOT FTELLO_CHECKED)
++ENDMACRO(checkFtello)
+
+Modified: branches/avidemux_2.6_branch_mean/cmake/admCheckRequiredLibs.cmake
+===================================================================
+--- branches/avidemux_2.6_branch_mean/cmake/admCheckRequiredLibs.cmake	2011-12-04 13:48:20 UTC (rev 7689)
++++ branches/avidemux_2.6_branch_mean/cmake/admCheckRequiredLibs.cmake	2011-12-05 06:56:38 UTC (rev 7690)
+@@ -1,10 +1,6 @@
+ #
+ #
+ #
+-IF(CROSS)
+-        ADD_DEFINITIONS(&quot;-DCROSS_COMPILE&quot;)
+-ENDIF(CROSS)
+-
+ ########################################
+ # pkg-config
+ ########################################
+
+Added: branches/avidemux_2.6_branch_mean/cmake_compile_check/ftello.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/cmake_compile_check/ftello.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/cmake_compile_check/ftello.cpp	2011-12-05 06:56:38 UTC (rev 7690)
+@@ -0,0 +1,10 @@
++#include &lt;stdint.h&gt;
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++
++int main(int argc, char **argv)
++{
++        FILE *handle=NULL;
++        uint64_t offset=ftello(handle);
++        return 0;
++}
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004833.html">[Avidemux-svn-commit] r7689 - in branches:	avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_render	avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+	<LI>Next message: <A HREF="004835.html">[Avidemux-svn-commit] r7691 -	branches/avidemux_2.6_branch_mean/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4834">[ date ]</a>
+              <a href="thread.html#4834">[ thread ]</a>
+              <a href="subject.html#4834">[ subject ]</a>
+              <a href="author.html#4834">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

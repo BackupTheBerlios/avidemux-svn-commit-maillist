@@ -1,0 +1,540 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4765 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_coreDemuxerMpeg/src	avidemux/ADM_coreUtils/include plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4765%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/ADM_coreDemuxerMpeg/src%0A%09avidemux/ADM_coreUtils/include%20plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904261230.n3QCUZF6017354%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001992.html">
+   <LINK REL="Next"  HREF="001994.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4765 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_coreDemuxerMpeg/src	avidemux/ADM_coreUtils/include plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4765%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/ADM_coreDemuxerMpeg/src%0A%09avidemux/ADM_coreUtils/include%20plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904261230.n3QCUZF6017354%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4765 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_coreDemuxerMpeg/src	avidemux/ADM_coreUtils/include plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Apr 26 14:30:35 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001992.html">[Avidemux-svn-commit] r4764 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="001994.html">[Avidemux-svn-commit] r4766 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1993">[ date ]</a>
+              <a href="thread.html#1993">[ thread ]</a>
+              <a href="subject.html#1993">[ subject ]</a>
+              <a href="author.html#1993">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-04-26 14:30:35 +0200 (Sun, 26 Apr 2009)
+New Revision: 4765
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/src/ADM_indexFile.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_coreUtils/include/ADM_videoInfoExtractor.h
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.h
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsReadIndex.cpp
+Log:
+[tsDemuxer] H264 indexer + refine frame type instead of just IDR/non IDR + fix readAsString
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/src/ADM_indexFile.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/src/ADM_indexFile.cpp	2009-04-26 12:30:32 UTC (rev 4764)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/src/ADM_indexFile.cpp	2009-04-26 12:30:35 UTC (rev 4765)
+@@ -170,12 +170,14 @@
+         if(!tail) 
+         {
+             printf(&quot;[psIndexer]Weird line :%s\n&quot;,buffer);
++            break;
++        }else
++        {
++            *tail=0;
++            tail++;
++            dmxToken *tk=new dmxToken(head,tail);
++            ListOfTokens.push_back(tk);
+         }
+-        *tail=0;
+-        tail++;
+-        dmxToken *tk=new dmxToken(head,tail);
+-        ListOfTokens.push_back(tk);
+-
+     }
+     return true;
+ }
+@@ -230,6 +232,19 @@
+ {
+     if(!fgets((char *)buffer,maxLen,file)) return false;
+     buffer[maxLen-1]=0;
++    if(buffer[0])
++        while(1)
++        {
++            int l=strlen((char *)buffer);
++            if(!l) break;
++            char c=buffer[l-1];
++            if(c==0xa || c==0xd)
++            {
++                   buffer[l-1]=0;
++                   continue;
++            }
++            break;
++        }
+     return true;
+ }
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_coreUtils/include/ADM_videoInfoExtractor.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_coreUtils/include/ADM_videoInfoExtractor.h	2009-04-26 12:30:32 UTC (rev 4764)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_coreUtils/include/ADM_videoInfoExtractor.h	2009-04-26 12:30:35 UTC (rev 4765)
+@@ -18,7 +18,7 @@
+ uint8_t extractMpeg4Info(uint8_t *data,uint32_t dataSize,uint32_t *w,uint32_t *h,uint32_t *time_inc);
+ uint8_t extractH263Info(uint8_t *data,uint32_t dataSize,uint32_t *w,uint32_t *h);
+ uint8_t extractVopInfo(uint8_t *data, uint32_t len,uint32_t timeincbits,uint32_t *vopType,uint32_t *modulo, uint32_t *time_inc);
+-uint8_t extractSPSInfo(uint8_t *data, uint32_t len,uint32_t *wwidth,uint32_t *hheight);
++uint8_t extractSPSInfo(uint8_t *data, uint32_t len,uint32_t *wwidth,uint32_t *hheight, uint32_t *fps1000, uint32_t *darNum, uint32_t *darDen);
+ uint8_t extractH264FrameType(uint32_t nalSize,uint8_t *buffer,uint32_t len,uint32_t *flags);
+ uint8_t extractH264FrameType_startCode(uint32_t nalSize,uint8_t *buffer,uint32_t len,uint32_t *flags);
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.h	2009-04-26 12:30:32 UTC (rev 4764)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.h	2009-04-26 12:30:35 UTC (rev 4765)
+@@ -63,6 +63,7 @@
+                 tsPacket        demuxer;
+                 uint8_t         pid;
+                 uint64_t        dtsOffset;
++                uint32_t        videoCodec;
+                 
+ public:
+                 bool            setTimeOffset(uint64_t of) {dtsOffset=of;return true;}
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-26 12:30:32 UTC (rev 4764)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-26 12:30:35 UTC (rev 4765)
+@@ -26,7 +26,20 @@
+ #include &quot;ADM_tsAudioProbe.h&quot;
+ #include &quot;DIA_working.h&quot;
+ #include &quot;ADM_tsPatPmt.h&quot;
++#include &quot;ADM_videoInfoExtractor.h&quot;
++#include &quot;ADM_h264_tag.h&quot;
+ 
++extern &quot;C&quot;
++{
++#define ADM_NO_CONFIG_H
++#include &quot;libavutil/common.h&quot;
++#include &quot;libavutil/bswap.h&quot;
++#define INT_MAX (0x7FFFFFFF)
++#include &quot;ADM_lavcodec/bitstream.h&quot;
++#include &quot;ADM_lavcodec/golomb.h&quot;
++}
++
++
+ static const char Type[5]={'X','I','P','B','P'};
+ 
+ static const uint32_t FPS[16]={
+@@ -81,6 +94,12 @@
+     markNow
+ }markType;
+ 
++#if 1
++#define aprintf printf
++#else
++#define aprintf(...) {}
++#endif
++
+ /**
+     \class TsIndexer
+ */
+@@ -95,10 +114,11 @@
+                 TsIndexer(listOfTsAudioTracks *tr);
+                 ~TsIndexer();
+         bool    runMpeg2(const char *file,ADM_TS_TRACK *videoTrac);
+-        bool    writeVideo(PSVideo *video);
++        bool    runH264(const char *file,ADM_TS_TRACK *videoTrac);
++        bool    writeVideo(PSVideo *video,ADM_TS_TRACK_TYPE trkType);
+         bool    writeAudio(void);
+         bool    writeSystem(const char *filename,bool append);
+-        bool    Mark(indexerData *data,dmxPacketInfo *s,markType update);
++        bool    Mark(indexerData *data,dmxPacketInfo *s,markType update,uint32_t formatOffset);
+ 
+ };
+ /**
+@@ -143,6 +163,9 @@
+             case ADM_TS_MPEG2: 
+                             r=dx-&gt;runMpeg2(file,&amp;(tracks[0]));
+                             break;
++            case ADM_TS_H264: 
++                            r=dx-&gt;runH264(file,&amp;(tracks[0]));
++                            break;
+             default:
+                         r=0;
+                         break;
+@@ -175,8 +198,196 @@
+     ui=NULL;
+ }
+ /**
+-    \fn run
++    \fn runH264
++    \brief Index H264 stream
+ */  
++bool TsIndexer::runH264(const char *file,ADM_TS_TRACK *videoTrac)
++{
++bool    pic_started=false;
++bool    seq_found=false;
++
++PSVideo video;
++indexerData  data;    
++uint64_t fullSize;
++dmxPacketInfo info;
++
++    printf(&quot;Starting H264 indexer\n&quot;);
++    if(!videoTrac) return false;
++    if(videoTrac[0].trackType!=ADM_TS_H264)
++    {
++        printf(&quot;[Ts Indexer] Only H264 video supported\n&quot;);
++        return false;
++    }
++    video.pid=videoTrac[0].trackPid;
++
++    memset(&amp;data,0,sizeof(data));
++    char indexName[strlen(file)+5];
++    sprintf(indexName,&quot;%s.idx&quot;,file);
++    index=qfopen(indexName,&quot;wt&quot;);
++    if(!index)
++    {
++        printf(&quot;[PsIndex] Cannot create %s\n&quot;,indexName);
++        return false;
++    }
++
++    writeSystem(file,true);
++    pkt=new tsPacketLinearTracker(videoTrac-&gt;trackPid, audioTracks);
++
++    FP_TYPE append=FP_APPEND;
++    pkt-&gt;open(file,append);
++    data.pkt=pkt;
++    fullSize=pkt-&gt;getSize();
++      while(1)
++      {
++
++        uint32_t code=0xffff+0xffff0000;
++        while((code!=1) &amp;&amp; pkt-&gt;stillOk())
++        {
++            code=(code&lt;&lt;8)+pkt-&gt;readi8();
++        }
++        if(!pkt-&gt;stillOk()) break;
++        uint8_t startCode=pkt-&gt;readi8();
++
++        pkt-&gt;getInfo(&amp;info);
++        info.offset-=5;
++
++//  1:0 2:Nal ref idc 5:Nal Type
++        if(startCode&amp;0x80) continue; // Marker missing
++        
++
++#define T(x) case NAL_##x: aprintf(#x&quot; found\n&quot;);break;
++        startCode&amp;=0x1f;
++#ifdef ADM_H264_VERBOSE
++        switch(startCode)
++        {
++            T(NON_IDR);
++            T(IDR);
++            T(SPS);
++            T(PPS);
++            T(SEI);
++            T(AU_DELIMITER);
++            T(FILLER);
++          default :aprintf(&quot;0x%02x ?\n&quot;,startCode);
++        }
++#endif
++          
++              /* Till we have a SPS no need to continue */
++              if(!seq_found &amp;&amp; startCode!=NAL_SPS) continue;
++              if(!seq_found) // It is a SPS
++              {
++                    // Our firt frame is here
++                    // Important to initialize the H264 decoder !
++                      uint8_t buffer[60] ; // should be enough
++                      uint32_t xA,xR;
++                      // Get info
++                      pkt-&gt;read(60,buffer);
++                      if (extractSPSInfo(buffer, 60, &amp;video.w,&amp;video.h,&amp;video.fps,&amp;xA,&amp;xR))
++                      {
++						  
++                          printf(&quot;[TsIndexer] Found video %&quot;LU&quot;x%&quot;LU&quot;, fps=%&quot;LU&quot;\n&quot;,video.w,video.h,video.fps);
++                          seq_found=1;
++                          Mark(&amp;data,&amp;info,markStart,4);
++                          data.state=idx_startAtGopOrSeq;
++                          writeVideo(&amp;video,ADM_TS_H264);
++                          writeAudio();
++                          qfprintf(index,&quot;[Data]&quot;);
++                          // Rewind
++#warning TODO
++                      }
++                      continue;
++              }
++              
++              // Ignore multiple chunk of the same pic
++              if((startCode==NAL_NON_IDR || startCode==NAL_IDR)&amp;&amp;pic_started) 
++              {
++                aprintf(&quot;Still capturing, ignore\n&quot;);
++                continue;
++              }
++           
++              
++              switch(startCode)
++                      {
++                      case NAL_AU_DELIMITER:
++							  pic_started = false;
++                              break;
++                      case NAL_SPS:
++                              pic_started = false;
++                              aprintf(&quot;Sps \n&quot;);
++							  Mark(&amp;data,&amp;info,markStart,4);
++                              data.state=idx_startAtGopOrSeq;
++							  break;
++                      case NAL_IDR:
++                        {
++                          markType update=markNow;
++						  uint32_t frameType = 1 ;
++                          if(data.state==idx_startAtGopOrSeq) 
++                          {
++                                update=markEnd;
++                          }
++						 
++						  data.frameType=frameType;
++                          pkt-&gt;readi8();
++                          pkt-&gt;readi8();
++                          pkt-&gt;readi8();
++                          pkt-&gt;readi8();
++                          Mark(&amp;data,&amp;info,update,4);
++                          data.state=idx_startAtImage;
++                          data.nbPics++;
++						  pic_started = true;
++                        }
++					  case NAL_NON_IDR:
++                        {
++                            #define NON_IDR_PRE_READ 8
++                          uint8_t header[NON_IDR_PRE_READ+4];
++                          GetBitContext s;
++
++                          markType update=markNow;
++						  uint32_t frameType = 2;
++                          if(data.state==idx_startAtGopOrSeq) 
++                          {
++                                update=markEnd;
++                          }
++#warning : need un-escaping!!!						 
++						  data.frameType=frameType;
++                          // Let's refine a bit the frame type...
++                          pkt-&gt;read(4,header);
++                          init_get_bits(&amp;s, header, NON_IDR_PRE_READ*8);
++                          int first_mb_in_slice,slice_type;
++
++                            first_mb_in_slice= get_ue_golomb(&amp;s);
++                            slice_type= get_ue_golomb_31(&amp;s);
++                            if(slice_type&gt;4) slice_type-=5;
++                            switch(slice_type)
++                            {
++
++                                case 0 : data.frameType=2;break; // P
++                                case 1 : data.frameType=3;break; // B
++                                case 2 : data.frameType=1;break; // I
++                                default : data.frameType=2;break; // SP/SI
++                            }
++                          Mark(&amp;data,&amp;info,update,4);
++                          data.state=idx_startAtImage;
++                          data.nbPics++;
++						  pic_started = true;
++                        }
++						  break;
++					  default:
++						  break;
++			  }
++      }
++        printf(&quot;\n&quot;);
++        Mark(&amp;data,&amp;info,markStart,0);
++        qfprintf(index,&quot;\n[End]\n&quot;);
++        qfclose(index);
++        index=NULL;
++        audioTracks=NULL;
++        delete pkt;
++        pkt=NULL;
++        return true; 
++}
++/**
++    \fn runMpeg2
++*/  
+ bool TsIndexer::runMpeg2(const char *file,ADM_TS_TRACK *videoTrac)
+ {
+ uint32_t temporal_ref,val;
+@@ -228,7 +439,7 @@
+           switch(startCode)
+                   {
+                   case 0xB3: // sequence start
+-                          Mark(&amp;data,&amp;info,markStart);
++                          Mark(&amp;data,&amp;info,markStart,2);
+                           data.state=idx_startAtGopOrSeq;
+                           if(seq_found)
+                           {
+@@ -247,7 +458,7 @@
+                           
+                           video.fps= FPS[val &amp; 0xf];
+                           pkt-&gt;forward(4);
+-                          writeVideo(&amp;video);
++                          writeVideo(&amp;video,ADM_TS_MPEG2);
+                           writeAudio();
+                           //pkt-&gt;resetStats();
+                           qfprintf(index,&quot;[Data]&quot;);
+@@ -268,7 +479,7 @@
+                                   continue;;
+                           }
+                           
+-                          Mark(&amp;data,&amp;info,markStart);
++                          Mark(&amp;data,&amp;info,markStart,2);
+                           data.state=idx_startAtGopOrSeq;
+                           break;
+                   case 0x00 : // picture
+@@ -297,7 +508,7 @@
+                                 update=markEnd;
+                           }
+                           data.frameType=type;
+-                          Mark(&amp;data,&amp;info,update);
++                          Mark(&amp;data,&amp;info,update,2);
+                           data.state=idx_startAtImage;
+                           data.nbPics++;
+                         }
+@@ -308,7 +519,7 @@
+       }
+     
+         printf(&quot;\n&quot;);
+-        Mark(&amp;data,&amp;info,markStart);
++        Mark(&amp;data,&amp;info,markStart,2);
+         qfprintf(index,&quot;\n[End]\n&quot;);
+         qfclose(index);
+         index=NULL;
+@@ -326,14 +537,16 @@
+     If the beginning is not a pic, but a gop start for example, we had to add/remove those.
+ 
+ */
+-bool  TsIndexer::Mark(indexerData *data,dmxPacketInfo *info,markType update)
++bool  TsIndexer::Mark(indexerData *data,dmxPacketInfo *info,markType update,uint32_t formatOffset)
+ {
+     int offset=data-&gt;nextOffset;
+     data-&gt;nextOffset=0;
+     
++
++ 
+      if( update==markStart)
+      {
+-                offset=2;
++                offset=formatOffset;
+      }
+     if(update==markStart || update==markNow)
+     {
+@@ -368,7 +581,7 @@
+             }
+             // start a new line
+             qfprintf(index,&quot;\nVideo at:%08&quot;LLX&quot;:%04&quot;LX&quot; Pts:%08&quot;LLD&quot;:%08&quot;LLD&quot; &quot;,data-&gt;startAt,data-&gt;offset,info-&gt;pts,info-&gt;dts);
+-            data-&gt;nextOffset=-2;
++            data-&gt;nextOffset=-formatOffset;
+         }
+     
+         qfprintf(index,&quot;%c&quot;,Type[data-&gt;frameType]);
+@@ -389,7 +602,7 @@
+     \fn writeVideo
+     \brief Write Video section of index file
+ */
+-bool TsIndexer::writeVideo(PSVideo *video)
++bool TsIndexer::writeVideo(PSVideo *video,ADM_TS_TRACK_TYPE trkType)
+ {
+     qfprintf(index,&quot;[Video]\n&quot;);
+     qfprintf(index,&quot;Width=%d\n&quot;,video-&gt;w);
+@@ -398,6 +611,13 @@
+     qfprintf(index,&quot;Interlaced=%d\n&quot;,video-&gt;interlaced);
+     qfprintf(index,&quot;AR=%d\n&quot;,video-&gt;ar);
+     qfprintf(index,&quot;Pid=%d\n&quot;,video-&gt;pid);
++ switch(trkType)
++    {
++        case ADM_TS_MPEG2: qfprintf(index,&quot;VideoCodec=Mpeg2\n&quot;);break;;
++        case ADM_TS_H264: qfprintf(index,&quot;VideoCodec=H264\n&quot;);break;
++        default: printf(&quot;[TsIndexer] Unsupported video codec\n&quot;);return false;
++
++    }
+     return true;
+ }
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsReadIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsReadIndex.cpp	2009-04-26 12:30:32 UTC (rev 4764)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsReadIndex.cpp	2009-04-26 12:30:35 UTC (rev 4765)
+@@ -174,6 +174,21 @@
+     w=index-&gt;getAsUint32(&quot;Width&quot;);
+     h=index-&gt;getAsUint32(&quot;height&quot;);
+     fps=index-&gt;getAsUint32(&quot;Fps&quot;);
++    char *type=index-&gt;getAsString(&quot;VideoCodec&quot;);
++    if(type)
++    {
++        printf(&quot;[TsIndex] codec :&lt;%s&gt;\n&quot;,type);
++        if(!strcmp(type,&quot;H264&quot;))
++        {
++             _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;H264&quot;);
++        }else
++        {
++            _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;MPEG&quot;);
++        }
++    }else
++    {
++       _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;MPEG&quot;);
++    }
+     videoPid=index-&gt;getAsUint32(&quot;Pid&quot;);
+     if(!videoPid)
+     {
+@@ -189,9 +204,6 @@
+     _video_bih.biHeight=_mainaviheader.dwHeight=h;             
+     _videostream.dwScale=1000;
+     _videostream.dwRate=fps;
+-
+-    _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;MPEG&quot;);
+-
+     return true;
+ }
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001992.html">[Avidemux-svn-commit] r4764 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="001994.html">[Avidemux-svn-commit] r4766 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1993">[ date ]</a>
+              <a href="thread.html#1993">[ thread ]</a>
+              <a href="subject.html#1993">[ subject ]</a>
+              <a href="author.html#1993">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

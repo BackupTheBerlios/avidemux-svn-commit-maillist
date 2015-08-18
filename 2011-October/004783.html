@@ -1,0 +1,218 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7638 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7638%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv&In-Reply-To=%3C20111031065432.29C7148140E%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004782.html">
+   
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7638 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7638%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv&In-Reply-To=%3C20111031065432.29C7148140E%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7638 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Oct 31 07:54:31 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004782.html">[Avidemux-svn-commit] r7637 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy
+</A></li>
+        
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4783">[ date ]</a>
+              <a href="thread.html#4783">[ thread ]</a>
+              <a href="subject.html#4783">[ subject ]</a>
+              <a href="author.html#4783">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-10-31 07:54:31 +0100 (Mon, 31 Oct 2011)
+New Revision: 7638
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flv.cpp
+Log:
+[Flv] Fix parsing of metadata in some cases
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flv.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flv.cpp	2011-10-30 16:38:57 UTC (rev 7637)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flv.cpp	2011-10-31 06:54:31 UTC (rev 7638)
+@@ -24,7 +24,11 @@
+ #include &quot;ADM_flv.h&quot;
+ 
+ #include &lt;math.h&gt;
+-
++#if 0
++    #define aprintf printf
++#else
++    #define aprintf(...) {}
++#endif
+ // Borrowed from lavformt/flv.h
+ #include &quot;libavformat/flv.h&quot;
+ // Borrowed from lavformt/flv.h
+@@ -85,13 +89,27 @@
+     \fn     readFlvString
+     \brief  read pascal like string
+ */
++#define FLV_MAX_STRING 255
+ char *flvHeader::readFlvString(void)
+ {
+-static char stringz[255];
++static uint8_t stringz[FLV_MAX_STRING+1];
+     int size=read16();
+-    read(size,(uint8_t *)stringz);
++    if(size&gt;FLV_MAX_STRING)
++    {
++        int pre=FLV_MAX_STRING;
++        read(pre,stringz);
++        ADM_warning(&quot;String way too large :%d\n&quot;,size);
++        mixDump(stringz,pre);
++        stringz[0]='X';
++        stringz[1]='X';
++        stringz[2]=0;
++        stringz[FLV_MAX_STRING]=0;
++        Skip(size-FLV_MAX_STRING);
++        return (char *)stringz;
++    }
++    read(size,stringz);
+     stringz[size]=0;
+-    return stringz;
++    return (char *)stringz;
+ }
+ extern &quot;C&quot; {
+ double av_int2dbl(int64_t v);
+@@ -121,7 +139,7 @@
+ /**
+     \fn parseOneMeta
+ */
+-bool flvHeader::parseOneMeta(const char *s,uint64_t endPos)
++bool flvHeader::parseOneMeta(const char *stri,uint64_t endPos)
+ {
+             int type=read8();
+             printf(&quot;type :%d : &quot;,type);
+@@ -176,7 +194,7 @@
+                                             hi=(hi&lt;&lt;32)+lo;
+                                             val=(float)av_int2dbl(hi);
+                                             printf(&quot;-&gt;%f&quot;,val);
+-                                            setProperties(s,val);
++                                            setProperties(stri,val);
+                                         }
+                                         ;break;
+                 case AMF_DATA_TYPE_STRING: {int r=read16();Skip(r);}break;
+@@ -210,25 +228,20 @@
+ uint8_t flvHeader::parseMetaData(uint32_t remaining)
+ {
+     uint32_t endPos=ftello(_fd)+remaining;
++    // Check the first one is onMetaData...
++    uint8_t type=read8();
++    char *z;
++    if(type!=AMF_DATA_TYPE_STRING) // String!
++        goto endit;
++    z=readFlvString();
++    printf(&quot;[FlashString] %s\n&quot;,z);
++    if(z &amp;&amp; strncmp(z,&quot;onMetaData&quot;,10)) goto endit;
++    // Normally the next one is mixed array
++    while(ftello(_fd)&lt;endPos-4)
+     {
+-        // Check the first one is onMetaData...
+-        uint8_t type=read8();
+-        if(type!=AMF_DATA_TYPE_STRING) // String!
+-            goto endit;
+-        char *z=readFlvString();
+-        printf(&quot;[FlashString] %s\n&quot;,z);
+-        if(z &amp;&amp; strncmp(z,&quot;onMetaData&quot;,10)) goto endit;
+-        // Normally the next one is mixed array
+-        Skip(4);
+-        Skip(1);
+-        while(ftello(_fd)&lt;endPos-4)
+-        {
+-            char *s=readFlvString();
+-            printf(&quot;[FlvType]  String : %s &quot;,s);
+-            
+-            if(false==parseOneMeta(s,endPos)) goto endit;
+-        }
++        if(false==parseOneMeta(&quot;meta&quot;,endPos)) goto endit;
+     }
++
+ endit:
+     fseeko(_fd,endPos,SEEK_SET);
+     updateDimensionWithMeta(videoCodec);
+@@ -346,8 +359,6 @@
+   uint32_t skip=read32();
+   fseeko(_fd,skip,SEEK_SET);
+   printf(&quot;[FLV] Skipping %u header bytes\n&quot;,skip);
+-
+-
+   pos=ftello(_fd);;
+   printf(&quot;pos:%u/%u\n&quot;,pos,fileSize);
+   // Create our video index
+@@ -368,6 +379,11 @@
+     size=read24();
+     dts=read24();
+     read32(); // ???
++    aprintf(&quot;--------\n&quot;);
++    aprintf(&quot;prevLen=%d\n&quot;,(int)prevLen);
++    aprintf(&quot;type  =%d\n&quot;,(int)type);
++    aprintf(&quot;size  =%d\n&quot;,(int)size);
++    aprintf(&quot;dts   =%d\n&quot;,(int)dts);
+     if(!size) continue;
+     uint32_t remaining=size;
+     //printf(&quot;[FLV] At %08x found type %x size %u pts%u\n&quot;,pos,type,size,dts);
+@@ -375,6 +391,7 @@
+     {
+       case FLV_TAG_TYPE_AUDIO:
+           {
++            aprintf(&quot;** Audio **\n&quot;);
+             if(!_isaudiopresent)
+             {
+                 audioTrack=new flvTrak(50);
+@@ -400,13 +417,14 @@
+           }
+           break;
+       case FLV_TAG_TYPE_META:
++                aprintf(&quot;** Meta **\n&quot;);
+                 parseMetaData(remaining);
+                 remaining=0;
+                 break;
+       case FLV_TAG_TYPE_VIDEO:
+           {
+             int of=1+4+3+3+1+4;
+-            
++            aprintf(&quot;** Video **\n&quot;);
+             uint8_t flags=read8();
+             remaining--;
+             int frameType=flags&gt;&gt;4;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004782.html">[Avidemux-svn-commit] r7637 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy
+</A></li>
+	
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4783">[ date ]</a>
+              <a href="thread.html#4783">[ thread ]</a>
+              <a href="subject.html#4783">[ subject ]</a>
+              <a href="author.html#4783">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

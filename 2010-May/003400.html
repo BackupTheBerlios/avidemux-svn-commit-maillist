@@ -1,0 +1,167 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6199 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/src	avidemux_core/ADM_coreVideoCodec/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6199%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_videoCodec/src%0A%09avidemux_core/ADM_coreVideoCodec/src&In-Reply-To=%3C201005201522.o4KFMWaE014197%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003399.html">
+   <LINK REL="Next"  HREF="003401.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6199 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/src	avidemux_core/ADM_coreVideoCodec/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6199%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_videoCodec/src%0A%09avidemux_core/ADM_coreVideoCodec/src&In-Reply-To=%3C201005201522.o4KFMWaE014197%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6199 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/src	avidemux_core/ADM_coreVideoCodec/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu May 20 17:22:32 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003399.html">[Avidemux-svn-commit] r6198 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/ffmpeg_config
+</A></li>
+        <LI>Next message: <A HREF="003401.html">[Avidemux-svn-commit] r6200 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3400">[ date ]</a>
+              <a href="thread.html#3400">[ thread ]</a>
+              <a href="subject.html#3400">[ subject ]</a>
+              <a href="author.html#3400">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-05-20 17:22:32 +0200 (Thu, 20 May 2010)
+New Revision: 6199
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_videoCodec.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/src/ADM_ffmp43.cpp
+Log:
+[vdpau] If vdpau is enabled, use vdpau to decode
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2010-05-20 15:22:30 UTC (rev 6198)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2010-05-20 15:22:32 UTC (rev 6199)
+@@ -52,6 +52,14 @@
+ 
+ #define aprintf(...) {}
+ 
++typedef enum 
++{
++    ADM_VDPAU_INVALID=0,
++    ADM_VDPAU_H264=1,
++    ADM_VDPAU_MPEG2=2,
++    ADM_VDPAU_VC1=3
++}ADM_VDPAU_TYPE;
++
+ /**
+     \fn vdpauUsable
+     \brief Return true if  vdpau can be used...
+@@ -218,13 +226,32 @@
+ 
+         vdpau=(void *)new vdpauContext;
+         VDPAU-&gt;vdpDecoder=VDP_INVALID_HANDLE;
+-        WRAP_OpenByName(h264_vdpau,CODEC_ID_H264);
++        ADM_VDPAU_TYPE vdpauType=ADM_VDPAU_INVALID;
++        if(isH264Compatible(fcc))
++        {
++            vdpauType=ADM_VDPAU_H264;
++        }else if(isMpeg12Compatible(fcc))
++        {
++            vdpauType=ADM_VDPAU_MPEG2;
++        }else ADM_assert(0);
++        int vdpDecoder;
++        switch(vdpauType)
++        {
++            case ADM_VDPAU_H264 : vdpDecoder=VDP_DECODER_PROFILE_H264_HIGH;
++                                  WRAP_OpenByName(h264_vdpau,CODEC_ID_H264);
++                                  break;
++            case ADM_VDPAU_MPEG2: 
++                                  vdpDecoder=VDP_DECODER_PROFILE_MPEG2_MAIN;
++                                  WRAP_OpenByName(mpegvideo_vdpau,CODEC_ID_MPEG2VIDEO);
++                                  break;
++            default: ADM_assert(0);
++        }
+         ADM_info(&quot;[VDPAU] Decoder created \n&quot;);
+         // Now instantiate our VDPAU surface &amp; decoder
+         for(int i=0;i&lt;NB_SURFACE;i++)
+             VDPAU-&gt;renders[i]=NULL;
+-
+-        if(VDP_STATUS_OK!=funcs.decoderCreate(vdpDevice,VDP_DECODER_PROFILE_H264_HIGH,
++        
++        if(VDP_STATUS_OK!=funcs.decoderCreate(vdpDevice,vdpDecoder,
+                                 w,h,15,&amp;(VDPAU-&gt;vdpDecoder)))
+         {
+             ADM_error(&quot;Cannot create VDPAU decoder\n&quot;);
+@@ -295,7 +322,7 @@
+         return 0;
+     }
+     // other part will be done in goOn
+-  struct vdpau_render_state *rndr = (struct vdpau_render_state *)scratch-&gt;GetWritePtr(PLANAR_Y);
++  struct vdpau_render_state *rndr = (struct vdpau_render_state *)scratch-&gt;GetReadPtr(PLANAR_Y);
+    VdpVideoSurface  surface;
+ 
+     surface=rndr-&gt;surface;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_videoCodec.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_videoCodec.cpp	2010-05-20 15:22:30 UTC (rev 6198)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_videoCodec.cpp	2010-05-20 15:22:32 UTC (rev 6199)
+@@ -37,7 +37,7 @@
+ decoders *ADM_getDecoder (uint32_t fcc, uint32_t w, uint32_t h, uint32_t extraLen, uint8_t * extraData,uint32_t bpp)
+ {
+   ADM_info(&quot;Searching decoder in coreVideoCodec(%d x %d, extradataSize:%d)...\n&quot;,w,h,extraLen);
+-  if (isH264Compatible (fcc))
++  if (isH264Compatible (fcc) || isMpeg12Compatible(fcc))
+     {
+ #if defined(USE_VDPAU) 
+         if(vdpauUsable()==true)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/src/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/src/ADM_ffmp43.cpp	2010-05-20 15:22:30 UTC (rev 6198)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/src/ADM_ffmp43.cpp	2010-05-20 15:22:32 UTC (rev 6199)
+@@ -439,6 +439,10 @@
+     case PIX_FMT_RGB555:
+       out-&gt;_colorspace = ADM_COLOR_RGB555;
+       break;
++    case PIX_FMT_VDPAU_MPEG1:
++    case PIX_FMT_VDPAU_MPEG2:
++    case PIX_FMT_VDPAU_WMV3:
++    case PIX_FMT_VDPAU_VC1:
+     case PIX_FMT_VDPAU_H264:
+         out-&gt;_colorspace=ADM_COLOR_VDPAU;
+         break;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003399.html">[Avidemux-svn-commit] r6198 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/ffmpeg_config
+</A></li>
+	<LI>Next message: <A HREF="003401.html">[Avidemux-svn-commit] r6200 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3400">[ date ]</a>
+              <a href="thread.html#3400">[ thread ]</a>
+              <a href="subject.html#3400">[ subject ]</a>
+              <a href="author.html#3400">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

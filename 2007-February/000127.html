@@ -1,0 +1,287 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2802 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2802%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui&In-Reply-To=%3C200702050726.l157QccI003333%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000126.html">
+   <LINK REL="Next"  HREF="000128.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2802 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2802%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui&In-Reply-To=%3C200702050726.l157QccI003333%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2802 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Feb  5 08:26:38 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000126.html">[Avidemux-svn-commit] r2801 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2
+</A></li>
+        <LI>Next message: <A HREF="000128.html">[Avidemux-svn-commit] r2803 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#127">[ date ]</a>
+              <a href="thread.html#127">[ thread ]</a>
+              <a href="subject.html#127">[ subject ]</a>
+              <a href="author.html#127">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-02-05 08:26:37 +0100 (Mon, 05 Feb 2007)
+New Revision: 2802
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp
+Log:
+factorize display code (part II)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp	2007-02-05 07:11:49 UTC (rev 2801)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp	2007-02-05 07:26:37 UTC (rev 2802)
+@@ -90,8 +90,6 @@
+ */
+ static uint8_t *rgbDataBuffer=NULL;
+ static uint32_t displayW=0,displayH=0;
+-static ColYuvRgb rgbConverter(640,480,1);
+-static uint8_t GUI_ConvertRGB(uint8_t * in, uint8_t * out, uint32_t w, uint32_t h);
+ //****************************************************************************************************
+ /*
+   This is the class that will display the video images.
+@@ -150,177 +148,53 @@
+    videoWindow-&gt;show();
+    
+ }
+-uint8_t renderInit( void )
++//*************************
++/**
++    \brief return pointer to the drawing widget that displays video
++*/
++void *UI_getDrawWidget(void)
+ {
+-  return 1;
++  return (void *) videoWindow;
+ }
+-//****************************************************************************************************
+-uint8_t renderResize(uint32_t w, uint32_t h,renderZoom newzoom)
++/**
++    \brief Display to widget in RGB32
++*/
++void UI_rgbDraw(void *widg,uint32_t w, uint32_t h,uint8_t *ptr)
+ {
+-  if(displayW==w &amp;&amp; displayH==h &amp;&amp; rgbDataBuffer) return 1;
++      memcpy(rgbDataBuffer,ptr,w*h*4);
++      videoWindow-&gt;paintEvent(NULL);
++    
++}
++/**
++      \brief Resize the window
++*/
++void  UI_updateDrawWindowSize(void *win,uint32_t w,uint32_t h)
++{
++  if(displayW==w &amp;&amp; displayH==h &amp;&amp; rgbDataBuffer) return ;
+   if(rgbDataBuffer) delete [] rgbDataBuffer;
+   rgbDataBuffer=NULL;
+   rgbDataBuffer=new uint8_t [w*h*4]; // 32 bits / color
+   displayW=w;
+   displayH=h;
+-  rgbConverter.reset(w,h);
+   hostFrame-&gt;resize(displayW,displayH);
+   videoWindow-&gt;resize(displayW,displayH);
+   printf(&quot;[RDR] Resizing to %u x %u\n&quot;,displayW,displayH);
+-  return 1;
++  return ;
+ }
+ /**
+-    \fn renderRefresh(void)
+-    \brief Force a redraw of the screen
++      \brief Retrieve info from window, needed for accel layer
+ */
+-uint8_t renderRefresh(void)
++void UI_getWindowInfo(void *draw, GUI_WindowInfo *xinfo)
+ {
+-  
+-        if(accelRender)
+-        {
+-            if(lastImage)
+-                accelRender-&gt;display(lastImage, displayW, displayH);
+-        }
+-        else
+-        {
+-                renderExpose();
+-        }
+-  return 1;
+-}
+-//****************************************************************************************************
+-uint8_t renderExpose(void)
+-{
+-// TODO   if(videoWindow)
+-  if(!accelRender)
+-     videoWindow-&gt;repaint();
+-  return 1;
+-}
+-/**
+-      \fn renderUpdateImage(uint8_t *ptr)
+-      \brief Update display with the content of the pointer given as arg
+-*/
+-uint8_t renderUpdateImage(uint8_t *ptr)
+-{
+-  if(!accelRender) // Only needed for unaccelerated display
+-  {
+-      rgbConverter.scale(ptr,rgbDataBuffer);
+-      renderExpose();
+-  }else
+-  {
+-      accelRender-&gt;display(ptr,displayW,displayH);
+-      lastImage=ptr;
+-  }
+-  return 1;
+-}
+-uint8_t renderUpdateImageBlit(uint8_t *ptr,uint32_t startx, uint32_t starty, uint32_t w, uint32_t h,uint32_t primary)
+-{
+-  return 1; 
+-}
+-
+-/**
+-    \fn renderStartPlaying( void )
+-    \brief Start playing, create an alternate renderer (preferably hw accelerated such as Xv or SDL)
+-*/
+-  uint8_t renderStartPlaying( void )
+-{
+-char *displ;
+-unsigned int renderI;
+-ADM_RENDER_TYPE render;
+-        ADM_assert(!accelRender);
+-        // First check if local
+-        // We do it in a very wrong way : If DISPLAY!=:0.0 we assume remote display
+-        // in that case we do not even try to use accel
+-        
+-        // Win32 does not have display
+-#ifndef CYG_MANGLING	
+-        displ=getenv(&quot;DISPLAY&quot;);
+-        if(!displ)
+-        {
+-                return 0;
+-        }
+-        if(strcmp(displ,&quot;:0&quot;) &amp;&amp; strcmp(displ,&quot;:0.0&quot;))
+-        {
+-                printf(&quot;Looks like remote display, no Xv :%s\n&quot;,displ);
+-                return 1;
+-        }
+-#endif	
+- 
+-        if(prefs-&gt;get(DEVICE_VIDEODEVICE,&amp;renderI)!=RC_OK)
+-        {       
+-                render=RENDER_GTK;
+-        }else
+-        {
+-                render=(ADM_RENDER_TYPE)renderI;
+-        }
+-        GUI_Info xinfo;
+ #ifndef CYG_MANGLING
+         const QX11Info &amp;info=videoWindow-&gt;x11Info();
+-        xinfo.display=info.display();
+-        xinfo.window=videoWindow-&gt;winId();
++        xinfo-&gt;display=info.display();
++        xinfo-&gt;window=videoWindow-&gt;winId();
+          
+ #endif 
+-        switch(render)
+-        {
+-        
+-#if defined(USE_XV)
+-              case RENDER_XV:
+-                accelRender=new XvAccelRender();
+-                if(!accelRender-&gt;init(&amp;xinfo,displayW,displayH))
+-                {
+-                        delete accelRender;
+-                        accelRender=NULL;
+-                        printf(&quot;Xv init failed\n&quot;);
+-                }
+-                else
+-                {
+-                        printf(&quot;Xv init ok\n&quot;);
+-                }
+-                break;
+-#endif
+-#if defined(USE_SDL)
+-              case RENDER_SDL:
+-                printf(&quot;Trying SDL\n&quot;);
+-                accelRender=new sdlAccelRender();
+-                if(!accelRender-&gt;init(&amp;xinfo,displayW,displayH))
+-                {
+-                        delete accelRender;
+-                        accelRender=NULL;
+-                        printf(&quot;sdl init failed\n&quot;);
+-                }
+-                else
+-                {
+-                        printf(&quot;SDL init ok\n&quot;);
+-                }
+-                break;
+-#endif
+-                default:break;
+-        }
+-        if(!accelRender)
+-        {
+-                rgbConverter.reset(displayW,displayH);
+-                printf(&quot;No accel used for rendering\n&quot;);
+-        }
+-	else printf(&quot;Using accelerated rendering\n&quot;);
+-	return 1;
+-}
+ 
+-/**
+-    \fn renderStopPlaying(void)
+-    \brief Switch back to regular slow display, destroy accelerated renderer if exists
+-*/
+-uint8_t renderStopPlaying( void )
+-{
+-      if(accelRender)
+-      {
+-            accelRender-&gt;end();
+-              delete accelRender;
+-      }
+-      accelRender=NULL;
+-      lastImage=NULL;
+-      return 1;
+ }
+ 
+ 
+-
+ //****************************************************************************************************
+ //EOF 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000126.html">[Avidemux-svn-commit] r2801 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2
+</A></li>
+	<LI>Next message: <A HREF="000128.html">[Avidemux-svn-commit] r2803 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#127">[ date ]</a>
+              <a href="thread.html#127">[ thread ]</a>
+              <a href="subject.html#127">[ subject ]</a>
+              <a href="author.html#127">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

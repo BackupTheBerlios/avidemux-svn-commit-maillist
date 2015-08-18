@@ -1,0 +1,121 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5234 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/lavDeinterlace
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5234%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/lavDeinterlace&In-Reply-To=%3C200908120906.n7C96Xtx025637%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002446.html">
+   <LINK REL="Next"  HREF="002448.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5234 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/lavDeinterlace</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5234%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/lavDeinterlace&In-Reply-To=%3C200908120906.n7C96Xtx025637%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5234 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/lavDeinterlace">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Wed Aug 12 11:06:33 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002446.html">[Avidemux-svn-commit] r5233 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/ASharp:	gtk qt4
+</A></li>
+        <LI>Next message: <A HREF="002448.html">[Avidemux-svn-commit] r5235 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders/lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2447">[ date ]</a>
+              <a href="thread.html#2447">[ thread ]</a>
+              <a href="subject.html#2447">[ subject ]</a>
+              <a href="author.html#2447">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-08-12 11:06:28 +0200 (Wed, 12 Aug 2009)
+New Revision: 5234
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/lavDeinterlace/ADM_lavpp_deint.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/lavDeinterlace/ADM_lavpp_deintparam.h
+Log:
+[lavDeinterlace] add lowpass5 support (patch by torrentss; fixes #22)
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/lavDeinterlace/ADM_lavpp_deint.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/lavDeinterlace/ADM_lavpp_deint.cpp	2009-08-12 09:03:01 UTC (rev 5233)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/lavDeinterlace/ADM_lavpp_deint.cpp	2009-08-12 09:06:28 UTC (rev 5234)
+@@ -103,16 +103,17 @@
+   _in=in;
+   
+   
+-   diaMenuEntry menuField[6]={{PP_BM_NONE,        QT_TR_NOOP(&quot;None&quot;),NULL},
++   diaMenuEntry menuField[7]={{PP_BM_NONE,        QT_TR_NOOP(&quot;None&quot;),NULL},
+                              {PP_BM_LINEAR_BLEND, QT_TR_NOOP(&quot;Linear blend&quot;),NULL},
+                              {PP_BM_LINEAR_INTER, QT_TR_NOOP(&quot;Linear interpolate&quot;),NULL},
+                              {PP_BM_CUBIC_INTER, QT_TR_NOOP(&quot;Cubic interpolate&quot;),NULL},
+                              {PP_BM_MEDIAN_INTER, QT_TR_NOOP(&quot;Median interpolate&quot;),NULL},
+                              {PP_BM_FFMPEG_DEINT, QT_TR_NOOP(&quot;FFmpeg deint&quot;),NULL},
++                             {PP_BM_LOWPASS5_DEINT, QT_TR_NOOP(&quot;Lowpass5 deint&quot;),NULL},
+                           };
+   
+     
+-    diaElemMenu     menu1(PX(deintType),QT_TR_NOOP(&quot;_Deinterlacing:&quot;), 6,menuField);
++    diaElemMenu     menu1(PX(deintType),QT_TR_NOOP(&quot;_Deinterlacing:&quot;), 7,menuField);
+     diaElemToggle   autolevel(PX(autolevel),QT_TR_NOOP(&quot;_Autolevel&quot;));
+     
+     diaElem *elems[2]={&amp;menu1,&amp;autolevel};
+@@ -202,7 +203,8 @@
+           case PP_BM_LINEAR_INTER: ADD(li);break;
+           case PP_BM_CUBIC_INTER: ADD(ci);break;
+           case PP_BM_MEDIAN_INTER: ADD(md);break;
+-          case PP_BM_FFMPEG_DEINT: ADD(fd);break;                             
++          case PP_BM_FFMPEG_DEINT: ADD(fd);break;
++          case PP_BM_LOWPASS5_DEINT: ADD(l5);break;
+         }        
+ 
+ 
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/lavDeinterlace/ADM_lavpp_deintparam.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/lavDeinterlace/ADM_lavpp_deintparam.h	2009-08-12 09:03:01 UTC (rev 5233)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/lavDeinterlace/ADM_lavpp_deintparam.h	2009-08-12 09:06:28 UTC (rev 5234)
+@@ -16,7 +16,8 @@
+   PP_BM_LINEAR_INTER   =0x0002, 
+   PP_BM_CUBIC_INTER    =0x0003, 
+   PP_BM_MEDIAN_INTER   =0x0004, 
+-  PP_BM_FFMPEG_DEINT   =0x0005,  
++  PP_BM_FFMPEG_DEINT   =0x0005, 
++  PP_BM_LOWPASS5_DEINT   =0x0006, 
+ };
+ 
+ typedef struct 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002446.html">[Avidemux-svn-commit] r5233 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/ASharp:	gtk qt4
+</A></li>
+	<LI>Next message: <A HREF="002448.html">[Avidemux-svn-commit] r5235 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders/lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2447">[ date ]</a>
+              <a href="thread.html#2447">[ thread ]</a>
+              <a href="subject.html#2447">[ subject ]</a>
+              <a href="author.html#2447">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

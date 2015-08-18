@@ -1,0 +1,610 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2803 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2803%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%0A%09ADM_userInterfaces/ADM_QT4/ADM_gui%20ADM_userInterfaces/ADM_commonUI&In-Reply-To=%3C200702051953.l15JrbjH004775%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000127.html">
+   <LINK REL="Next"  HREF="000129.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2803 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2803%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%0A%09ADM_userInterfaces/ADM_QT4/ADM_gui%20ADM_userInterfaces/ADM_commonUI&In-Reply-To=%3C200702051953.l15JrbjH004775%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2803 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Feb  5 20:53:37 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000127.html">[Avidemux-svn-commit] r2802 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui
+</A></li>
+        <LI>Next message: <A HREF="000129.html">[Avidemux-svn-commit] r2804 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#128">[ date ]</a>
+              <a href="thread.html#128">[ thread ]</a>
+              <a href="subject.html#128">[ subject ]</a>
+              <a href="author.html#128">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-02-05 20:53:37 +0100 (Mon, 05 Feb 2007)
+New Revision: 2803
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_preview.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/GUI_render.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/GUI_render.h
+   branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp
+Log:
+fix zoom, not optimal
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_preview.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_preview.cpp	2007-02-05 07:26:37 UTC (rev 2802)
++++ branches/avidemux_2.4_branch/avidemux/ADM_preview.cpp	2007-02-05 19:53:37 UTC (rev 2803)
+@@ -51,20 +51,27 @@
+ #include &quot;ADM_osSupport/ADM_debugID.h&quot;
+ #define MODULE_NAME MODULE_PREVIEW
+ #include &quot;ADM_osSupport/ADM_debug.h&quot;
++#include &quot;ADM_libraries/ADM_libswscale/ADM_mp.h&quot;
+ 
+-
+ #include &quot;GUI_ui.h&quot;
+ #define MAX(a,b) ( (a)&gt;(b) ? (a) : (b) )
+ 
+ extern FILTER  videofilters[MAX_FILTER];
+ extern uint32_t nb_active_filter;
+ 
++static void previewBlit(ADMImage *from,ADMImage *to,uint32_t startx,uint32_t starty);
++
+ static   AVDMGenericVideoStream *preview=NULL;
+ static ADMImage *previewImage;
+ static ADM_PREVIEW_MODE previewMode=ADM_PREVIEW_NONE;
+ static uint32_t _mainW=0,_mainH=0;
+ static uint32_t _displayW=0,_displayH=0;
+ static uint32_t defered_display=0;
++static renderZoom zoom=ZOOM_1_1;
++static ADMImage             *resized=NULL;
++static ADM_MplayerResize    *resizer=NULL;
++static ADMImage             *original=NULL;
++static uint32_t _resizedW=0,_resizedH=0;
+ /**
+       \fn getPreviewMode
+       \brief returns current preview mode
+@@ -77,8 +84,14 @@
+   return previewMode; 
+ }
+ 
++void changePreviewZoom(renderZoom nzoom)
++{
++    admPreview::stop();
++    zoom=nzoom;
++    admPreview::start();
++  
++}
+ 
+-
+ /**
+       \fn setPreviewMode
+       \brief set current preview mode an update UI
+@@ -128,7 +141,7 @@
+                 
+             previewImage=new ADMImage(preview-&gt;getInfo()-&gt;width,preview-&gt;getInfo()-&gt;height);
+             
+-            
++            ADM_assert(!original);
+             switch(previewMode)
+             {
+               case  ADM_PREVIEW_SEPARATE:
+@@ -149,6 +162,7 @@
+                   
+                   _displayH=MAX(_mainH,preview-&gt;getInfo()-&gt;height);
+                   _displayW=_mainW+preview-&gt;getInfo()-&gt;width;
++                  original=new ADMImage(_displayW,_displayH);
+                   break;
+               }
+               case  ADM_PREVIEW_TOP:
+@@ -156,11 +170,38 @@
+                   
+                   _displayW=MAX(_mainW,preview-&gt;getInfo()-&gt;width);
+                   _displayH=_mainH+preview-&gt;getInfo()-&gt;height;
++                  original=new ADMImage(_displayW,_displayH);
+                   break;
+               }
+               default: ADM_assert(0);
+             }
+-            renderResize(_displayW,_displayH,ZOOM_1_1);
++        if(zoom!=ZOOM_1_1)
++        {
++            int mul;
++            switch(zoom)
++            {
++                    case ZOOM_1_4: mul=1;break;
++                    case ZOOM_1_2: mul=2;break;
++                    case ZOOM_1_1: mul=4;break;
++                    case ZOOM_2:   mul=8;break;
++                    case ZOOM_4:   mul=16;break;
++                    default : ADM_assert(0);
++    
++            }
++            _resizedW=(_displayW*mul+3)/4;
++            _resizedH=(_displayH*mul+3)/4;
++    
++            if(_resizedW&amp;1) _resizedW++;
++            if(_resizedH&amp;1) _resizedH++;
++            ADM_assert(!resized);
++            resized=new ADMImage(_resizedW,_resizedH);
++            ADM_assert(!resizer);
++            resizer=new  ADM_MplayerResize(_displayW,_displayH,_resizedW,_resizedH);
++            renderResize(_resizedW,_resizedH);
++        }else
++        {
++             renderResize(_displayW,_displayH);
++        }
+ }
+ /**
+       \fn admPreview::stop
+@@ -171,18 +212,26 @@
+ {
+       if(previewMode==ADM_PREVIEW_SEPARATE)
+                 GUI_PreviewEnd();
+-      if(previewMode!=ADM_PREVIEW_NONE)
++      if(  previewMode==ADM_PREVIEW_SIDE || previewMode==ADM_PREVIEW_TOP)
+       {
+-          if(previewImage)
+-            delete previewImage;
+-          previewImage=NULL;
++        ADM_assert(original);
++        original=NULL; 
+       }
+-      renderResize(_mainW,_mainH,ZOOM_1_1);
++      renderResize(_mainW,_mainH);
+       if(previewImage)
+       {
+         delete  previewImage; 
+         previewImage=NULL;
+       }
++      if(zoom!=ZOOM_1_1)
++      {
++          ADM_assert(resized);
++          ADM_assert(resizer);
++          delete resized;
++          delete resizer;
++          resized=NULL;
++          resizer=NULL;
++      }
+ }
+ /**
+       \fn admPreview::updateFilters
+@@ -234,7 +283,7 @@
+   _mainH=h;
+   _displayW=w;
+   _displayH=h;
+-  renderResize(w,h,ZOOM_1_1);
++  renderResize(w,h);
+   
+ }
+ /**
+@@ -251,20 +300,52 @@
+     switch(previewMode)
+     {
+       case ADM_PREVIEW_NONE:
+-        if(image &amp;&amp; !defered_display) renderUpdateImage(image-&gt;data);
++        if(image)
++        {
++            if(zoom==ZOOM_1_1 )
++            {
++               if(!defered_display) 
++                  renderUpdateImage(image-&gt;data);
++            }else
++            {
++                ADM_assert(resizer);
++                ADM_assert(resized);
++                resizer-&gt;resize(image-&gt;data,resized-&gt;data);
++                if(!defered_display) 
++                  renderUpdateImage(resized-&gt;data);
++            }
++        }
+         break;
+       case ADM_PREVIEW_OUTPUT:
+             if(framenum&lt;=preview-&gt;getInfo()-&gt;nb_frames-1)
+                   {
+-                          preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
+-                          if(!defered_display) renderUpdateImage(previewImage-&gt;data);
++                          if(!preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl)) return;
++                          if(zoom==ZOOM_1_1)
++                          {
++                            if(!defered_display) renderUpdateImage(previewImage-&gt;data);
++                          }
++                          else
++                          {
++                             resizer-&gt;resize(previewImage-&gt;data,resized-&gt;data);
++                             if(!defered_display) 
++                                  renderUpdateImage(resized-&gt;data);
++                          }
+                   }
+             break;
+       case ADM_PREVIEW_SEPARATE:
+             ADM_assert(preview);
+             ADM_assert(previewImage);
+-
+-          if(image &amp;&amp; !defered_display) renderUpdateImage(image-&gt;data);
++            if(zoom==ZOOM_1_1)
++            {
++              if(image &amp;&amp; !defered_display) renderUpdateImage(image-&gt;data);
++            }else
++            {
++                ADM_assert(resizer);
++                ADM_assert(resized);
++                resizer-&gt;resize(image-&gt;data,resized-&gt;data);
++                if(!defered_display) 
++                  renderUpdateImage(resized-&gt;data);
++            }
+           if( GUI_PreviewStillAlive())
+           {
+                   aprintf(&quot;Preview: Ask for frame %lu\n&quot;,framenum);
+@@ -278,26 +359,62 @@
+       case ADM_PREVIEW_SIDE:
+               ADM_assert(preview);
+               ADM_assert(previewImage);
+-  
+-              if(!defered_display) renderUpdateImageBlit(image-&gt;data,0,0,_mainW,_mainH,0); // Main
+-              preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
+-              if(!defered_display) 
+-                  renderUpdateImageBlit(previewImage-&gt;data,_mainW,0,previewImage-&gt;_width,previewImage-&gt;_height,1);
++              ADM_assert(original);
++              
++              
++              previewBlit(image,original,0,0);
++              if(preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl))
++              {
++                previewBlit(previewImage,original,_mainW,0);
++              }
++              if(zoom==ZOOM_1_1)
++              {
++                if(!defered_display)
++                  renderUpdateImage(original-&gt;data);
++              }else
++              {
++                resizer-&gt;resize(original-&gt;data,resized-&gt;data);
++                if(!defered_display) 
++                  renderUpdateImage(resized-&gt;data);
++              }
+               break;
+         
+       case ADM_PREVIEW_TOP:
+               ADM_assert(preview);
+               ADM_assert(previewImage);
+-  
+-              if(!defered_display) renderUpdateImageBlit(image-&gt;data,0,0,_mainW,_mainH,0); // Main
+-              preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
+-              if(!defered_display)
+-                  renderUpdateImageBlit(previewImage-&gt;data,0,_mainH,previewImage-&gt;_width,previewImage-&gt;_height,1);
++              ADM_assert(original);
++              
++              previewBlit(image,original,0,0);
++              if(preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl))
++              {
++                previewBlit(previewImage,original,0,_mainH);
++              }
++              if(zoom==ZOOM_1_1)
++              {
++                if(!defered_display)
++                  renderUpdateImage(original-&gt;data);
++              }else
++              {
++                resizer-&gt;resize(original-&gt;data,resized-&gt;data);
++                if(!defered_display) 
++                  renderUpdateImage(resized-&gt;data);
++              }
+               break;
+       default: ADM_assert(0);
+     }
+ }
+ /**
++      \fn previewBlit(ADMImage *from,ADMImage *to,uint32_t startx,uint32_t starty)
++      \brief Blit &quot;from&quot; to &quot;to&quot; at position startx,starty
++*/
++
++void previewBlit(ADMImage *from,ADMImage *to,uint32_t startx,uint32_t starty)
++{
++  
++  from-&gt;copyTo(to,startx,starty);
++  
++}
++/**
+       \fn displayNow
+       \brief display on screen immediately
+ */
+@@ -309,31 +426,49 @@
+     switch(previewMode)
+     {
+       case ADM_PREVIEW_NONE:
+-        if(image ) renderUpdateImage(image-&gt;data);
++           
++           if(zoom==ZOOM_1_1 )
++            {
++                renderUpdateImage(image-&gt;data);
++            }else
++            {
++                ADM_assert(resized);
++                renderUpdateImage(resized-&gt;data);
++            }
+         break;
+       case ADM_PREVIEW_OUTPUT:
+-            renderUpdateImage(previewImage-&gt;data);
++            if(zoom==ZOOM_1_1 )
++            {
++                renderUpdateImage(previewImage-&gt;data);
++            }else
++            {
++                ADM_assert(resized);
++                renderUpdateImage(resized-&gt;data);
++            }
+             break;
+       case ADM_PREVIEW_SEPARATE:
+-          if(image) renderUpdateImage(image-&gt;data);
+-          if( GUI_PreviewStillAlive())
+-          {
+-              GUI_PreviewUpdate(previewImage-&gt;data);
+-          }
++            if(zoom==ZOOM_1_1 )
++            {
++                renderUpdateImage(image-&gt;data);
++            }else{
++                ADM_assert(resized);
++                renderUpdateImage(resized-&gt;data);
++            }
++            if( GUI_PreviewStillAlive())
++            {
++                GUI_PreviewUpdate(previewImage-&gt;data);
++            }
+           break;
+       case ADM_PREVIEW_SIDE:
+-              ADM_assert(preview);
+-              ADM_assert(previewImage);
+-              renderUpdateImageBlit(image-&gt;data,0,0,_mainW,_mainH,0); // Main
+-              renderUpdateImageBlit(previewImage-&gt;data,_mainW,0,previewImage-&gt;_width,previewImage-&gt;_height,1);
+-              break;
+-        
+       case ADM_PREVIEW_TOP:
+-              ADM_assert(preview);
+-              ADM_assert(previewImage);
+-  
+-              renderUpdateImageBlit(image-&gt;data,0,0,_mainW,_mainH,0); // Main
+-              renderUpdateImageBlit(previewImage-&gt;data,0,_mainH,previewImage-&gt;_width,previewImage-&gt;_height,1);
++            if(zoom==ZOOM_1_1)
++            {
++               renderUpdateImage(original-&gt;data);
++            }else
++            {
++              ADM_assert(resized);
++              renderUpdateImage(resized-&gt;data);
++            }
+               break;
+       default: ADM_assert(0);
+     }
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp	2007-02-05 07:26:37 UTC (rev 2802)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/T_preview.cpp	2007-02-05 19:53:37 UTC (rev 2803)
+@@ -162,7 +162,7 @@
+ void UI_rgbDraw(void *widg,uint32_t w, uint32_t h,uint8_t *ptr)
+ {
+       memcpy(rgbDataBuffer,ptr,w*h*4);
+-      videoWindow-&gt;paintEvent(NULL);
++      videoWindow-&gt;repaint();
+     
+ }
+ /**
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/GUI_render.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/GUI_render.cpp	2007-02-05 07:26:37 UTC (rev 2802)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/GUI_render.cpp	2007-02-05 19:53:37 UTC (rev 2803)
+@@ -47,8 +47,8 @@
+ 
+ #include &quot;../prefs.h&quot;
+ #include &quot;../../ADM_colorspace/ADM_rgb.h&quot;
+-#include &quot;../../ADM_libraries/ADM_libswscale/ADM_mp.h&quot;
+ 
++
+ extern uint8_t BitBlit(uint8_t *dst, uint32_t pitchDest,uint8_t *src,uint32_t pitchSrc,uint32_t width, uint32_t height);
+ extern void UI_purge(void);
+ 
+@@ -62,8 +62,8 @@
+ 
+ extern uint8_t UI_shrink(uint32_t w,uint32_t h);
+ //_____________________________________
+-static renderZoom zoom=ZOOM_1_1;
+ 
++
+ static ColYuvRgb rgbConverter(640,480);
+ static ColYuvRgb rgbConverter2(640,480);
+ 
+@@ -73,8 +73,6 @@
+ //_______________________________________
+ 
+ static uint8_t 	            *screenBuffer=NULL;
+-static ADMImage             *resized=NULL;
+-static ADM_MplayerResize    *resizer=NULL;
+ static uint8_t		    *lastImage=NULL;
+ static void                 *draw=NULL;
+ static uint32_t 	     renderW=0,renderH=0;
+@@ -95,7 +93,7 @@
+ 
+ */
+ //----------------------------------------
+-uint8_t renderResize(uint32_t w, uint32_t h,renderZoom newzoom)
++uint8_t renderResize(uint32_t w, uint32_t h)
+ {
+ int mul,xx,yy;
+ 
+@@ -104,42 +102,9 @@
+ 			delete  [] screenBuffer;
+ 			screenBuffer=NULL;
+ 		}
+-        if(resized)
+-        {
+-                        delete resized;
+-                        resized=NULL;
+-        }
+-        if(resizer)
+-        {
+-                delete resizer;
+-                resizer=NULL;
+-        }
+-        zoom=newzoom;
+-        switch(zoom)
+-        {
+-                case ZOOM_1_4: mul=1;break;
+-                case ZOOM_1_2: mul=2;break;
+-                case ZOOM_1_1: mul=4;break;
+-                case ZOOM_2:   mul=8;break;
+-                case ZOOM_4:   mul=16;break;
+-                default : ADM_assert(0);
++        screenBuffer=new uint8_t[w*h*4];
+ 
+-        }
+-        xx=(w*mul+3)/4;
+-        yy=(h*mul+3)/4;
+-
+-        if(xx&amp;1) xx++;
+-        if(yy&amp;1) yy++;
+-
+-        screenBuffer=new uint8_t[xx*yy*4];
+-
+-        if(zoom!=ZOOM_1_1)
+-        {
+-                 resizer=new ADM_MplayerResize(w,h,xx,yy);
+-                 resized=new ADMImage(xx,yy);
+-        }
+-
+-	updateWindowSize( draw,xx,yy);
++	updateWindowSize( draw,w,h);
+ 	UI_purge();
+ 	return 1;
+ 
+@@ -154,18 +119,8 @@
+ {
+ 	
+         ADM_assert(screenBuffer);
+-        if(zoom!=ZOOM_1_1)
+-        {
+-                ADM_assert(resizer);
+-                ADM_assert(resized);
+-                resizer-&gt;resize(ptr,resized-&gt;data);
+-                lastImage=resized-&gt;data;
+-                ptr=lastImage;
+-        }
+-        else
+-        {
+-                lastImage=ptr;
+-        }
++        lastImage=ptr;
++
+ 	if(!accel_mode)
+ 	 	GUI_ConvertRGB(ptr,screenBuffer, renderW,renderH);
+ 	renderRefresh();
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/GUI_render.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/GUI_render.h	2007-02-05 07:26:37 UTC (rev 2802)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/GUI_render.h	2007-02-05 19:53:37 UTC (rev 2803)
+@@ -36,8 +36,20 @@
+     ADM_PREVIEW_SEPARATE
+ };
+ 
++typedef enum renderZoom
++{
++        ZOOM_1_4,
++        ZOOM_1_2,
++        ZOOM_1_1,
++        ZOOM_2,
++        ZOOM_4,
++        ZOOM_INVALID
++};
++
++
+ ADM_PREVIEW_MODE getPreviewMode(void);
+ void             setPreviewMode(ADM_PREVIEW_MODE preview);
++void changePreviewZoom(renderZoom nzoom);
+ 
+ class admPreview
+ {
+@@ -54,19 +66,10 @@
+ 
+ 
+ 
+-typedef enum renderZoom
+-{
+-        ZOOM_1_4,
+-        ZOOM_1_2,
+-        ZOOM_1_1,
+-        ZOOM_2,
+-        ZOOM_4,
+-        ZOOM_INVALID
+-};
+ 
+ 
+ uint8_t renderInit( void );
+-uint8_t renderResize(uint32_t w, uint32_t h,renderZoom newzoom);
++uint8_t renderResize(uint32_t w, uint32_t h);
+ uint8_t renderRefresh(void);
+ uint8_t renderExpose(void);
+ uint8_t renderUpdateImage(uint8_t *ptr);
+
+Modified: branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp	2007-02-05 07:26:37 UTC (rev 2802)
++++ branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp	2007-02-05 19:53:37 UTC (rev 2803)
+@@ -458,12 +458,8 @@
+         case ACT_ZOOM_1_1:
+         case ACT_ZOOM_2_1:
+         case ACT_ZOOM_4_1:
+-#if 0
+                 currentZoom=(renderZoom)((action-ACT_ZOOM_1_4)+ZOOM_1_4);
+-                renderResize (avifileinfo-&gt;width, avifileinfo-&gt;height,currentZoom);
+-                renderUpdateImage (rdr_decomp_buffer-&gt;data);
+-                renderRefresh ();
+-#endif
++                changePreviewZoom(currentZoom);
+                 break;
+ 
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000127.html">[Avidemux-svn-commit] r2802 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui
+</A></li>
+	<LI>Next message: <A HREF="000129.html">[Avidemux-svn-commit] r2804 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#128">[ date ]</a>
+              <a href="thread.html#128">[ thread ]</a>
+              <a href="subject.html#128">[ subject ]</a>
+              <a href="author.html#128">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

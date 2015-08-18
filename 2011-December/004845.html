@@ -1,0 +1,110 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7703 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7703%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src&In-Reply-To=%3C20111218193722.0E4F04828FC%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004844.html">
+   <LINK REL="Next"  HREF="004846.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7703 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7703%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src&In-Reply-To=%3C20111218193722.0E4F04828FC%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7703 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sun Dec 18 20:37:21 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004844.html">[Avidemux-svn-commit] r7700 -	branches/avidemux_2.5_branch_gruntster/cmake/patches
+</A></li>
+        <LI>Next message: <A HREF="004846.html">[Avidemux-svn-commit] r7704 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4:	ADM_UIs/include ADM_UIs/src ADM_jobs/src ADM_userInterfaces	ADM_userInterfaces/ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4845">[ date ]</a>
+              <a href="thread.html#4845">[ thread ]</a>
+              <a href="subject.html#4845">[ subject ]</a>
+              <a href="author.html#4845">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2011-12-18 20:37:21 +0100 (Sun, 18 Dec 2011)
+New Revision: 7703
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageUtils.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/CMakeLists.txt
+Log:
+[apple] use a more elegant workaround for buggy llvm-link rather than disabling optimisations
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageUtils.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageUtils.cpp	2011-12-17 15:13:06 UTC (rev 7702)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageUtils.cpp	2011-12-18 19:37:21 UTC (rev 7703)
+@@ -309,7 +309,7 @@
+         return df;
+ }
+ #ifdef ADM_CPU_X86
+-static uint64_t FUNNY_MANGLE(noise64);
++static uint64_t __attribute__((used)) FUNNY_MANGLE(noise64);
+ static uint32_t computeDiffMMX(uint8_t  *s1,uint8_t *s2,uint32_t noise,uint32_t l)
+ {
+ uint32_t df=0;
+@@ -596,9 +596,8 @@
+ #ifdef ADM_CPU_X86
+ static inline void yuv444_MMX(uint8_t *src,uint8_t *dst,int w,int h,int s)
+ {
+-static uint64_t FUNNY_MANGLE(mask);
+-    mask=0x00ff000000ff0000LL;
+-  //mask=0x0000ff000000ff00LL;
++static uint64_t __attribute__((used)) FUNNY_MANGLE(mask) = 0x00ff000000ff0000LL;
++
+     __asm__(&quot; movq &quot;Mangle(mask)&quot;, %%mm7\n&quot; ::);
+     __asm__(&quot; pxor %%mm6,%%mm6\n&quot; ::);
+     
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/CMakeLists.txt	2011-12-17 15:13:06 UTC (rev 7702)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/CMakeLists.txt	2011-12-18 19:37:21 UTC (rev 7703)
+@@ -22,7 +22,6 @@
+ ADM_ADD_SHARED_LIBRARY(ADM_coreImage6 ${ADM_coreImage_SRCS})
+ ADD_SOURCE_CFLAGS(DIA_flyDialog.cpp &quot; -DADM_UI_TYPE_BUILD=99&quot;)
+ IF (APPLE)
+-    SET_SOURCE_FILES_PROPERTIES(&quot;ADM_imageUtils.cpp&quot; PROPERTIES COMPILE_FLAGS -O0)
+     IF (NOT ADM_CPU_X86_64)
+         TARGET_LINK_LIBRARIES(ADM_coreImage6 -Wl,-read_only_relocs,suppress)
+     ENDIF (NOT ADM_CPU_X86_64)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004844.html">[Avidemux-svn-commit] r7700 -	branches/avidemux_2.5_branch_gruntster/cmake/patches
+</A></li>
+	<LI>Next message: <A HREF="004846.html">[Avidemux-svn-commit] r7704 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4:	ADM_UIs/include ADM_UIs/src ADM_jobs/src ADM_userInterfaces	ADM_userInterfaces/ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4845">[ date ]</a>
+              <a href="thread.html#4845">[ thread ]</a>
+              <a href="subject.html#4845">[ subject ]</a>
+              <a href="author.html#4845">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

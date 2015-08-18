@@ -1,0 +1,347 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7720 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7720%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser%3A%0A%09include%20src&In-Reply-To=%3C20111231150034.441164813AD%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004861.html">
+   
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7720 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7720%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser%3A%0A%09include%20src&In-Reply-To=%3C20111231150034.441164813AD%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7720 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Dec 31 16:00:34 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004861.html">[Avidemux-svn-commit] r7719 - in	branches/avidemux_2.6_branch_mean/avidemux:	cli/ADM_userInterfaces common common/ADM_commonUI	gtk/ADM_userInterfaces qt4/ADM_userInterfaces
+</A></li>
+        
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4862">[ date ]</a>
+              <a href="thread.html#4862">[ thread ]</a>
+              <a href="subject.html#4862">[ subject ]</a>
+              <a href="author.html#4862">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-12-31 16:00:33 +0100 (Sat, 31 Dec 2011)
+New Revision: 7720
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacadts.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacadts.cpp
+Log:
+[ADTS] Dont use lav* to parse adts frames. Add support for non aligned ADTS frames (freebox)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacadts.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacadts.h	2011-12-30 18:08:54 UTC (rev 7719)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacadts.h	2011-12-31 15:00:33 UTC (rev 7720)
+@@ -17,11 +17,14 @@
+ /**
+     \class ADM_adts2aac
+ */
++#define ADTS_BUFFER_SIZE 16000
+ class ADM_adts2aac
+ {
+ private:
+-		void * cookie;
+-        void * codec;
++        bool    hasExtra;
++        uint8_t extra[2];
++        uint8_t buffer[ADTS_BUFFER_SIZE*2];
++        int     head,tail;
+ 		
+ public:
+ 		bool getExtraData(uint32_t *len,uint8_t **data);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacadts.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacadts.cpp	2011-12-30 18:08:54 UTC (rev 7719)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacadts.cpp	2011-12-31 15:00:33 UTC (rev 7720)
+@@ -14,13 +14,14 @@
+ 
+ #include &lt;math.h&gt;
+ #include &quot;ADM_default.h&quot;
+-extern &quot;C&quot; {
+-#include &quot;libavcodec/avcodec.h&quot;
+-}
+ #include &quot;ADM_aacadts.h&quot;
+-#define COOKIE   ((AVBitStreamFilterContext *)cookie)
+-#define CONTEXT  ((AVCodecContext *)codec)
+ 
++#if 0
++    #define aprintf printf
++#else
++    #define aprintf(...) {}
++#endif
++
+ static const int aacChannels[16]=
+ {
+ 0, //0: Defined in AOT Specifc Config
+@@ -48,9 +49,13 @@
+ */
+ bool ADM_adts2aac::getExtraData(uint32_t *len,uint8_t **data)
+ {
+-    *data=CONTEXT-&gt;extradata;
+-    *len=CONTEXT-&gt;extradata_size;
+-    return true;
++    if(hasExtra)
++    {
++        *data=extra;
++        *len=2;
++        return true;
++    }
++    return false;
+ }
+ /**
+     \fn getFrequency
+@@ -58,12 +63,12 @@
+ */
+ int ADM_adts2aac::getFrequency(void)
+ {
+-    if(!(CONTEXT-&gt;extradata))
++    if(!hasExtra)
+     {
+             ADM_error(&quot;No extradata in aac! using default of 48 kHz&quot;);
+             return 48000;
+     }
+-    uint8_t *p=CONTEXT-&gt;extradata ;
++    uint8_t *p=extra;
+     int dex=((p[0]&amp;7)&lt;&lt;1)+(p[1]&gt;&gt;7);
+     return aacSampleRate[dex];
+ }
+@@ -73,12 +78,12 @@
+ */
+ int ADM_adts2aac::getChannels(void)
+ {
+-    if(!(CONTEXT-&gt;extradata))
++    if(!hasExtra)
+     {
+             ADM_error(&quot;No extradata in aac! using default of 2 channels&quot;);
+             return 2;
+     }
+-    uint8_t *p=CONTEXT-&gt;extradata ;
++    uint8_t *p=extra;
+     int dex=((p[1]&gt;&gt;3)&amp;0xf);
+     return aacChannels[dex];
+ }
+@@ -90,16 +95,130 @@
+ 
+ bool ADM_adts2aac::convert(int incomingLen,uint8_t *inData,int *outLen,uint8_t *out)
+ {
++    bool r=false;
++    // Step 1 : append to our buffer...
++    *outLen=0;
++    if(head==tail)
++    {
++        head=tail=0;
++    }
++    if(tail&gt;ADTS_BUFFER_SIZE)
++    {
++        int size=head-tail;
++        memmove(buffer,buffer+tail,size);
++        head=size;
++        tail=0;
++    }
++    if(head+incomingLen&gt;ADTS_BUFFER_SIZE*2)
++    {
++        ADM_error(&quot;Head=%d tail=%d bufferSize=%d\n&quot;,head,tail,ADTS_BUFFER_SIZE*2);
++        ADM_error(&quot;Adts buffer overflow\n&quot;);
++        ADM_assert(0);
++    }
++    memcpy(buffer+head,inData,incomingLen);
++    head+=incomingLen;
++    // ok , done
++    aprintf(&quot;********** LOOP *******\n&quot;);
++again:
++    aprintf(&quot;*** head=%d tail=%d size=%d***\n&quot;,head,tail,head-tail);
++    if(tail+7&gt;head) // we neeed at least 7 bytes...
++    {
++        aprintf(&quot;Adts: Not enough data \n&quot;);
++        return r;
++    }
++    // now search for sync....
++    bool found=false;
++    uint8_t *p=NULL;
++    int packetLen=0;
++    int nbFrames=0;
++    bool crc=false;
++    int match;
++    for( p=(buffer+tail);p&lt;(buffer+head-2);p++)
++    {
++        if(p[0]==0xff &amp;&amp; p[1]&amp;0xf0==0xf0)
++        {
++            match=p-buffer; // offset of syncword
++            packetLen=((p[3]&amp;0x3)&lt;&lt;11)+(p[4]&lt;&lt;3)+(p[5]&gt;&gt;5);
++            nbFrames=1+(p[6]&amp;3);
++            if(!p[1]&amp;1)
++            {
++                crc=true;
++            }
++            aprintf(&quot;Packet len=%d, nbframes=%d\n&quot;,packetLen,nbFrames);
++            aprintf(&quot;Found sync at offset %d, buffer size=%d\n&quot;,(int)(p-buffer),(int)(head-tail));
++            aprintf(&quot;Dropping %d bytes\n&quot;,(int)(p-buffer-tail));
++            if(match==tail &amp;&amp; match+packetLen==head)
++            {
++                aprintf(&quot;Perfect match\n&quot;);
++                found=true;
++                break;
++            }
++            if(match+packetLen+2&gt;head &amp;&amp; match+packetLen!=head)
++            {
++                aprintf(&quot;** not enough data **\n&quot;);
++                return r;
++            }
++            // do we have sync at the end ?
++            if(p[packetLen]!=0xff)
++            {
++                aprintf(&quot;no ff marker at the end\n&quot;);
++                continue;
++            }
++            aprintf(&quot;End marker found\n&quot;);
++            found=true;
++            break;
++        }
++    }
++    if(found==false)
++    {
++        aprintf(&quot;No sync\n&quot;);
++        tail=head-1;
++        return r;
++    }
++    if(!hasExtra)
++    { // build codec specific info, thanks vlc  
++        int i_profile=p[3]&gt;&gt;6;
++        int i_sample_rate_idx=(p[3]&gt;&gt;2)&amp;0x0f;
++        int pi_channels=(p[3]&gt;&gt;7)+((p[4]&gt;&gt;6)&lt;&lt;2);
++      extra[0] =   (i_profile + 1) &lt;&lt; 3 | (i_sample_rate_idx &gt;&gt; 1);
++      extra[1] =   ((i_sample_rate_idx &amp; 0x01) &lt;&lt; 7) | (pi_channels &lt;&lt;3);
++      hasExtra=true;
++    }
++    // size ?
+     uint8_t *o;
+-    *outLen=0;
+-    av_bitstream_filter_filter(COOKIE,CONTEXT,NULL,
+-                            &amp;o,outLen,inData,incomingLen,0);
+-    if(!*outLen)
+-        return false;
++    int produced=0;
++    // filter!
++    //-------
++
++        if(crc) 
++            {
++                o=p+9;
++                produced=packetLen-9;
++            }else
++            {
++                o=p+7;
++                produced=packetLen-7;
++            }
++    //
++    //---------
++    if(!produced)
++    {
++        tail=match+1;
++        printf(&quot;No data produced\n&quot;);
++        goto again;
++    }
++    aprintf(&quot;Found adts packet of size %d, extradataLen=%d\n&quot;,produced,2);
+     if(out)
+-        memcpy(out,o,*outLen);
++    {
++        memcpy(out,o,produced);
++        out+=produced;
++        *outLen+=produced;
++    }
++    r=true; // we have found something
+     //printf(&quot;In : %d out %d\n&quot;,incomingLen,*outLen);
+-    return true;
++    tail=match+packetLen; // ~ skip 
++    ADM_assert(tail&lt;=head);
++    goto again;
+ }
+ /**
+     \fn ctor
+@@ -107,22 +226,9 @@
+ 
+ ADM_adts2aac::ADM_adts2aac(void)
+ {
+-    AVBitStreamFilterContext *bsfc= av_bitstream_filter_init(&quot;aac_adtstoasc&quot;);
+-    if (!bsfc) 
+-    {
+-        ADM_error(&quot;Cannot get adts filter...\n&quot;);
+-        ADM_assert(0);
+-    }
+-    cookie=(void *)bsfc;
+-    //****
+-    AVCodecContext *context = avcodec_alloc_context ();
+-    AVCodec *dec=avcodec_find_decoder(CODEC_ID_AAC);
+-    if (avcodec_open(context, dec) &lt; 0)
+-    {
+-        ADM_error(&quot;Cannot get aac codec...\n&quot;);
+-        ADM_assert(0);
+-    }
+-    codec=(void *)context;
++    hasExtra=false;
++    extra[0]=extra[1]=0;
++    head=tail=0;
+ }
+ /**
+     \fn dtor
+@@ -130,17 +236,7 @@
+ 
+ ADM_adts2aac::~ADM_adts2aac()
+ {
+-    if(cookie)
+-    {
+-        av_bitstream_filter_close(COOKIE);  
+-        cookie=NULL;
+-    }
+-    if(codec)
+-    {
+-        avcodec_close(CONTEXT);
+-        av_free(CONTEXT);
+-        codec=NULL;
+-    }
++   
+ }
+ 
+ //EOF
+\ No newline at end of file
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004861.html">[Avidemux-svn-commit] r7719 - in	branches/avidemux_2.6_branch_mean/avidemux:	cli/ADM_userInterfaces common common/ADM_commonUI	gtk/ADM_userInterfaces qt4/ADM_userInterfaces
+</A></li>
+	
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4862">[ date ]</a>
+              <a href="thread.html#4862">[ thread ]</a>
+              <a href="subject.html#4862">[ subject ]</a>
+              <a href="author.html#4862">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

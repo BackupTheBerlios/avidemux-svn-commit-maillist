@@ -1,0 +1,239 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5403 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5403%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%20ADM_editor&In-Reply-To=%3C200910231809.n9NI9Nx8023529%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002613.html">
+   <LINK REL="Next"  HREF="002615.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5403 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5403%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%20ADM_editor&In-Reply-To=%3C200910231809.n9NI9Nx8023529%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5403 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Oct 23 20:09:23 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002613.html">[Avidemux-svn-commit] r5402 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="002615.html">[Avidemux-svn-commit] r5404 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2614">[ date ]</a>
+              <a href="thread.html#2614">[ thread ]</a>
+              <a href="subject.html#2614">[ subject ]</a>
+              <a href="author.html#2614">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-10-23 20:09:22 +0200 (Fri, 23 Oct 2009)
+New Revision: 5403
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp
+Log:
+[Editor] preliminary support for cutting (incomplete)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2009-10-23 18:09:20 UTC (rev 5402)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2009-10-23 18:09:22 UTC (rev 5403)
+@@ -568,5 +568,13 @@
+     _VIDEOS *vid=_segments.getRefVideo(seg-&gt;_reference);
+     return vid-&gt;lastDecodedPts;
+ }
++/**
++    \fn remove
++    \brief Remove part of the video
++*/
++bool            ADM_Composer::remove(uint64_t start,uint64_t end)
++{
++    return _segments.removeChunk(start,end);
++}
+ //
+ //
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-10-23 18:09:20 UTC (rev 5402)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-10-23 18:09:22 UTC (rev 5403)
+@@ -194,7 +194,10 @@
+ /******************************* Post Processing ************************************/
+ 					uint8_t 		setPostProc( uint32_t type, uint32_t strength,	uint32_t swapuv);
+ 					uint8_t 		getPostProc( uint32_t *type, uint32_t *strength,uint32_t *swapuv);
+-/******************************* /Post Processing ************************************/										
++/******************************* /Post Processing ************************************/	
++/******************************* Editing ************************************/	
++                    bool            remove(uint64_t start,uint64_t end);
++/******************************* /Editing **********************************/										
+ /******************************* Misc ************************************/				
+ 					uint8_t			setEnv(_ENV_EDITOR_FLAGS newflag);
+ 					uint8_t			getEnv(_ENV_EDITOR_FLAGS newflag);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2009-10-23 18:09:20 UTC (rev 5402)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2009-10-23 18:09:22 UTC (rev 5403)
+@@ -355,4 +355,67 @@
+         if(flags &amp; AVI_KEY_FRAME) return true;
+         return false;
+ }
++/**
++    \fn removeChunk
++    \brief 
++*/
++bool        ADM_EditorSegment::removeChunk(uint64_t from, uint64_t to)
++{
++    uint32_t startSeg,endSeg;
++    uint64_t startOffset,endOffset;
++    if(false==convertLinearTimeToSeg( from,&amp;startSeg,&amp;startOffset))
++    {
++        ADM_warning(&quot;Cannot get starting point (%&quot;LLU&quot; ms\n&quot;,from/1000);
++        return false;
++    }
++    if(false==convertLinearTimeToSeg( to,&amp;endSeg,&amp;endOffset))
++    {
++        ADM_warning(&quot;Cannot get starting point (%&quot;LLU&quot; ms\n&quot;,from/1000);
++        return false;
++    }
++    _SEGMENT *first=getSegment(startSeg);
++    if(startSeg==endSeg)
++    {
++        // Split the seg int two..
++        segments.push_back(*first); 
++        endSeg=startSeg+1;
++#warning FiXME! they are not necessarily the last
++    }
++      // Span over several seg...
++    // 1- shorten the start segment..
++  
++    first-&gt;_durationUs=startOffset;
++    // 2- Kill the segment in between
++    for(int i=startSeg+1;i&lt;endSeg;i++)
++    {
++        segments.erase(segments.begin()+i);
++    }
++    // 3- Shorten last segment
++    _SEGMENT *last=getSegment(endSeg);
++    last-&gt;_refStartTimeUs+=endOffset;
++    last-&gt;_durationUs-=endOffset;
++
++    updateStartTime();
++    dump();
++    return true;
++}
++/**
++    \fn dump
++    \brief Dump the segment content
++*/
++void ADM_EditorSegment::dump(void)
++{
++    int n=segments.size();
++    printf(&quot;We have %d segments\n&quot;,n);
++    for(int i=0;i&lt;n;i++)
++    {
++        _SEGMENT *s=getSegment(i);
++        printf(&quot;Segment :%d/%d\n&quot;,i,n);
++        printf(&quot;\tReference    :%&quot;LU&quot;\n&quot;,s-&gt;_reference);
++        printf(&quot;\tstartLinear  :%&quot;LLU&quot;\n&quot;,s-&gt;_startTimeUs);
++        printf(&quot;\tduration     :%&quot;LLU&quot;\n&quot;,s-&gt;_durationUs);
++        printf(&quot;\trefStart     :%&quot;LLU&quot;\n&quot;,s-&gt;_refStartTimeUs);
++
++    }
++}
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h	2009-10-23 18:09:20 UTC (rev 5402)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h	2009-10-23 18:09:22 UTC (rev 5403)
+@@ -98,6 +98,7 @@
+         ListOfSegments segments;
+         ListOfVideos   videos;
+         bool           updateStartTime(void);
++        void           dump(void);
+ 
+ public:
+                         ADM_EditorSegment(void);
+@@ -123,6 +124,7 @@
+ 
+             uint32_t    intraTimeToFrame(uint32_t refVideo,uint64_t seekTime);       
+             bool        isKeyFrameByTime(uint32_t refVideo,uint64_t seekTime);
++            bool        removeChunk(uint64_t from, uint64_t to);
+ };
+ 
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp	2009-10-23 18:09:20 UTC (rev 5402)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp	2009-10-23 18:09:22 UTC (rev 5403)
+@@ -429,20 +429,15 @@
+ 
+     case ACT_Delete:
+     case ACT_Cut:
+-
+-#if 0
+-      old=frameStart;
+-      if( A_delete(frameStart,frameEnd))
+-      {
+-      	if (old &gt;= avifileinfo-&gt;nb_frames)
+-	{			// we removed too much
+-	  old = avifileinfo-&gt;nb_frames - 1;
+-	}
+-      	curframe=old;
+-      	GUI_GoToFrame (old);
+-      }
+-
+-#endif
++        {
++            uint64_t a=video_body-&gt;getMarkerAPts();
++            uint64_t b=video_body-&gt;getMarkerBPts();
++            if(false==video_body-&gt;remove(a,b))
++            {
++                GUI_Error_HIG(&quot;Cutting&quot;,&quot;Error while cutting out.&quot;);
++            }
++        }
++        
+       break;
+ 
+     case ACT_ChangeFPS:
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002613.html">[Avidemux-svn-commit] r5402 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="002615.html">[Avidemux-svn-commit] r5404 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2614">[ date ]</a>
+              <a href="thread.html#2614">[ thread ]</a>
+              <a href="subject.html#2614">[ subject ]</a>
+              <a href="author.html#2614">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

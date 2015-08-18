@@ -1,0 +1,159 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3206 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3206%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_videoFilter&In-Reply-To=%3C200706061844.l56IiRVi022760%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000500.html">
+   <LINK REL="Next"  HREF="000502.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3206 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3206%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_videoFilter&In-Reply-To=%3C200706061844.l56IiRVi022760%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3206 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Jun  6 20:44:27 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000500.html">[Avidemux-svn-commit] r3205 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter
+</A></li>
+        <LI>Next message: <A HREF="000502.html">[Avidemux-svn-commit] r3207 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#501">[ date ]</a>
+              <a href="thread.html#501">[ thread ]</a>
+              <a href="subject.html#501">[ subject ]</a>
+              <a href="author.html#501">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-06-06 20:44:26 +0200 (Wed, 06 Jun 2007)
+New Revision: 3206
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidDeintASM.cpp
+Log:
+dont clobber ebx (macOsX)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidDeintASM.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidDeintASM.cpp	2007-06-06 18:38:48 UTC (rev 3205)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidDeintASM.cpp	2007-06-06 18:44:26 UTC (rev 3206)
+@@ -124,50 +124,44 @@
+ #if !defined(DEBUG_DEINT)
+ void myDeintASM(void)
+ {
++                    __asm__ __volatile__ (
++                            &quot;push &quot;REG_bx&quot;\n\t&quot; // Dont clobber ebx for macOsX
++                            &quot;mov &quot;Mangle(_l_c)&quot;,	&quot;REG_ax&quot;\n\t&quot;
++                            &quot;mov &quot;Mangle(_l_p)&quot;,	&quot;REG_bx&quot;\n\t&quot;
++                            &quot;mov &quot;Mangle(_l_n)&quot;,	&quot;REG_cx&quot;\n\t&quot;
++                            &quot;mov &quot;Mangle(_l_all)&quot;,	&quot;REG_si&quot;\n\t&quot;
++                            &quot;7:&quot;
++                            &quot;movd (&quot;REG_ax&quot;),	%%mm0\n\t&quot;
++                            &quot;movd (&quot;REG_bx&quot;),	%%mm1\n\t&quot;
++                            &quot;movd (&quot;REG_cx&quot;),	%%mm2\n\t&quot;
++                            :
++                            :
++                            : &quot;eax&quot;,&quot;ecx&quot;,&quot;edx&quot;,&quot;esi&quot; 
++                            );
+ 
+-	//printf(&quot;\n using  MMX \n&quot;);
++                            COMPUTE_MMX; // Doint it like that should be safe as there should be no extra code inserted (...)
+ 
++                            /* store result in e, e2 */
+ 
+-        	{
++                    __asm__ __volatile__(
++                            &quot;mov 	&quot;Mangle(_l_e)&quot;,	&quot;REG_dx&quot;\n\t&quot;
++                            &quot;movd	%%mm3,(&quot;REG_dx&quot;)\n\t&quot;
+ 
+-			__asm__ __volatile__ (
+-				&quot;mov &quot;Mangle(_l_c)&quot;,	&quot;REG_ax&quot;\n\t&quot;
+-				&quot;mov &quot;Mangle(_l_p)&quot;,	&quot;REG_bx&quot;\n\t&quot;
+-				&quot;mov &quot;Mangle(_l_n)&quot;,	&quot;REG_cx&quot;\n\t&quot;
+-				&quot;mov &quot;Mangle(_l_all)&quot;,	&quot;REG_si&quot;\n\t&quot;
+-				&quot;7:&quot;
+-				&quot;movd (&quot;REG_ax&quot;),	%%mm0\n\t&quot;
+-				&quot;movd (&quot;REG_bx&quot;),	%%mm1\n\t&quot;
+-				&quot;movd (&quot;REG_cx&quot;),	%%mm2\n\t&quot;
+-				:
+-				:
+-				: &quot;eax&quot;,&quot;ebx&quot;,&quot;ecx&quot;,&quot;edx&quot;,&quot;esi&quot; 
+-				);
++                            &quot;mov 	&quot;Mangle(_l_e2)&quot;,	&quot;REG_dx&quot;\n\t&quot;
++                            &quot;movd	%%mm0,(&quot;REG_dx&quot;)\n\t&quot;
+ 
+-				COMPUTE_MMX;
+-
+-				/* store result in e, e2 */
+-
+-			__asm__ __volatile__(
+-				&quot;mov 	&quot;Mangle(_l_e)&quot;,	&quot;REG_dx&quot;\n\t&quot;
+-				&quot;movd	%%mm3,(&quot;REG_dx&quot;)\n\t&quot;
+-
+-				&quot;mov 	&quot;Mangle(_l_e2)&quot;,	&quot;REG_dx&quot;\n\t&quot;
+-				&quot;movd	%%mm0,(&quot;REG_dx&quot;)\n\t&quot;
+-
+-				&quot;add 	$4,	&quot;REG_ax&quot;\n\t&quot;
+-				&quot;add 	$4,	&quot;REG_bx&quot;\n\t&quot;
+-				&quot;add 	$4,	&quot;REG_cx&quot;\n\t&quot;
+-				&quot;add 	$4,	&quot;Mangle(_l_e)&quot;\n\t&quot;
+-				&quot;add 	$4,	&quot;Mangle(_l_e2)&quot;\n\t&quot;
+-				&quot;sub 	$1,	&quot;REG_si&quot;\n\t&quot;
+-				&quot;jnz 7b\n\t&quot;
+-
+-				:
+-				:
+-				: &quot;eax&quot;, &quot;ebx&quot;,&quot;ecx&quot;,&quot;edx&quot;,&quot;esi&quot;
+-				);
+-	           	}
++                            &quot;add 	$4,	&quot;REG_ax&quot;\n\t&quot;
++                            &quot;add 	$4,	&quot;REG_bx&quot;\n\t&quot;
++                            &quot;add 	$4,	&quot;REG_cx&quot;\n\t&quot;
++                            &quot;add 	$4,	&quot;Mangle(_l_e)&quot;\n\t&quot;
++                            &quot;add 	$4,	&quot;Mangle(_l_e2)&quot;\n\t&quot;
++                            &quot;sub 	$1,	&quot;REG_si&quot;\n\t&quot;
++                            &quot;jnz 7b\n\t&quot;
++                            &quot;pop &quot;REG_bx&quot;\n\t&quot; // Dont clobber ebx for macOsX
++                            :
++                            :
++                            : &quot;eax&quot;, &quot;ecx&quot;,&quot;edx&quot;,&quot;esi&quot;
++                            );
+ 	   emms();
+ 
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000500.html">[Avidemux-svn-commit] r3205 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter
+</A></li>
+	<LI>Next message: <A HREF="000502.html">[Avidemux-svn-commit] r3207 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#501">[ date ]</a>
+              <a href="thread.html#501">[ thread ]</a>
+              <a href="subject.html#501">[ subject ]</a>
+              <a href="author.html#501">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

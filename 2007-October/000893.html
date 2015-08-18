@@ -1,0 +1,266 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3621 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_editor	ADM_libraries/ADM_lavcodec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3621%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_editor%0A%09ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200710051818.l95IIMxp026021%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000892.html">
+   <LINK REL="Next"  HREF="000894.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3621 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_editor	ADM_libraries/ADM_lavcodec</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3621%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_editor%0A%09ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200710051818.l95IIMxp026021%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3621 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_editor	ADM_libraries/ADM_lavcodec">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Oct  5 20:18:22 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000892.html">[Avidemux-svn-commit] r3620 - in	branches/avidemux_2.4_branch/avidemux: . ADM_audiofilter	ADM_script ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_commonUI ADM_videoFilter
+</A></li>
+        <LI>Next message: <A HREF="000894.html">[Avidemux-svn-commit] r3622 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory	ADM_userInterfaces/ADM_commonUI ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#893">[ date ]</a>
+              <a href="thread.html#893">[ thread ]</a>
+              <a href="subject.html#893">[ subject ]</a>
+              <a href="author.html#893">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-10-05 20:18:21 +0200 (Fri, 05 Oct 2007)
+New Revision: 3621
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codec.h
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h
+   branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_Video.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_Video.h
+   branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/huffyuv.c
+Log:
+[Codec] Fix huff with 16 bpp + camtasia + enhance  i/f to give that bpp information
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codec.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codec.h	2007-10-05 18:01:07 UTC (rev 3620)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codec.h	2007-10-05 18:18:21 UTC (rev 3621)
+@@ -104,7 +104,7 @@
+ };
+ 
+ decoders *getDecoder (uint32_t fcc, uint32_t w, uint32_t h, uint32_t extraLen,
+-		      uint8_t * extraData);
++		      uint8_t * extraData,uint32_t bpp=0);
+ decoders *getDecoderVopPacked (uint32_t fcc, uint32_t w, uint32_t h,
+ 			       uint32_t extraLen, uint8_t * extraData);
+ decoders *getDecoderH264noLogic (uint32_t fcc, uint32_t w, uint32_t h, uint32_t extraLen,
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp	2007-10-05 18:01:07 UTC (rev 3620)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp	2007-10-05 18:18:21 UTC (rev 3621)
+@@ -203,9 +203,9 @@
+ }
+ decoders *
+ getDecoder (uint32_t fcc, uint32_t w, uint32_t h, uint32_t extraLen,
+-	    uint8_t * extraData)
++	    uint8_t * extraData,uint32_t bpp)
+ {
+-
++  printf(&quot;\nSearching decoder (%d x %d, extradataSize:%d)...\n&quot;,w,h,extraLen);
+   if (isMSMpeg4Compatible (fcc) == 1)
+     {
+       // For div3, no problem we take ffmpeg
+@@ -242,7 +242,7 @@
+   if (fourCC::check (fcc, (uint8_t *) &quot;HFYU&quot;))
+     {
+ 
+-      return (decoders *) (new decoderFFhuff (w, h, extraLen, extraData));
++      return (decoders *) (new decoderFFhuff (w, h, extraLen, extraData,bpp));
+     }
+ #ifdef USE_PNG
+   if (fourCC::check (fcc, (uint8_t *) &quot;PNG &quot;))
+@@ -259,7 +259,7 @@
+   if (fourCC::check (fcc, (uint8_t *) &quot;FFVH&quot;))
+     {
+ 
+-      return (decoders *) (new decoderFF_ffhuff (w, h, extraLen, extraData));
++      return (decoders *) (new decoderFF_ffhuff (w, h, extraLen, extraData,bpp));
+     }
+   if (fourCC::check (fcc, (uint8_t *) &quot;SVQ3&quot;))
+     {
+@@ -269,8 +269,7 @@
+   if (fourCC::check (fcc, (uint8_t *) &quot;tscc&quot;))
+     {
+ 
+-      return (decoders *) (new decoderCamtasia (w, h, 16));
+-//stream-&gt;biBitCount)); // Fixme should be bit per pixel
++      return (decoders *) (new decoderCamtasia (w, h, bpp));
+     }
+ 
+      if (fourCC::check (fcc, (uint8_t *) &quot;CRAM&quot;))
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2007-10-05 18:01:07 UTC (rev 3620)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2007-10-05 18:18:21 UTC (rev 3621)
+@@ -513,11 +513,12 @@
+   _refCopy = 1;			// YUV420 only
+   WRAP_Open (CODEC_ID_FFV1);
+ }
+-decoderFF_ffhuff::decoderFF_ffhuff (uint32_t w, uint32_t h, uint32_t l, uint8_t * d):decoderFF (w,
++decoderFF_ffhuff::decoderFF_ffhuff (uint32_t w, uint32_t h, uint32_t l, uint8_t * d,uint32_t bpp):decoderFF (w,
+ 	   h)
+ {
+   _context-&gt;extradata = (uint8_t *) d;
+   _context-&gt;extradata_size = (int) l;
++  _context-&gt;bits_per_sample=bpp;
+   printf (&quot;[lavc] FFhuff: We have %d bytes of extra data\n&quot;, l);
+   WRAP_Open (CODEC_ID_FFVHUFF);
+ 
+@@ -553,12 +554,12 @@
+   }
+ }
+ //*********************
+-decoderFFhuff::decoderFFhuff (uint32_t w, uint32_t h, uint32_t l, uint8_t * d):decoderFF (w,
++decoderFFhuff::decoderFFhuff (uint32_t w, uint32_t h, uint32_t l, uint8_t * d,uint32_t bpp):decoderFF (w,
+ 	   h)
+ {
+   _context-&gt;extradata = (uint8_t *) d;
+   _context-&gt;extradata_size = (int) l;
+-
++  _context-&gt;bits_per_sample = bpp;
+   WRAP_Open (CODEC_ID_HUFFYUV);
+ }
+ decoderFFWMV2::decoderFFWMV2 (uint32_t w, uint32_t h, uint32_t l, uint8_t * d):decoderFF (w,
+@@ -613,8 +614,7 @@
+   WRAP_Open (CODEC_ID_SNOW);
+ }
+ //*************
+-decoderCamtasia::decoderCamtasia (uint32_t w, uint32_t h, uint32_t bpp):decoderFF (w,
+-	   h)
++decoderCamtasia::decoderCamtasia (uint32_t w, uint32_t h,uint32_t bpp):decoderFF (w,  h)
+ {
+   _context-&gt;bits_per_sample = bpp;
+   WRAP_Open (CODEC_ID_TSCC);
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h	2007-10-05 18:01:07 UTC (rev 3620)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h	2007-10-05 18:18:21 UTC (rev 3621)
+@@ -190,7 +190,7 @@
+ 
+ 
+ public:
+-  decoderFFhuff (uint32_t w, uint32_t h, uint32_t l, uint8_t * d);
++  decoderFFhuff (uint32_t w, uint32_t h, uint32_t l, uint8_t * d,uint32_t bpp);
+ 
+ };
+ class decoderFF_ffhuff:public decoderFF
+@@ -199,7 +199,7 @@
+ 
+ 
+ public:
+-  decoderFF_ffhuff (uint32_t w, uint32_t h, uint32_t l, uint8_t * d);
++  decoderFF_ffhuff (uint32_t w, uint32_t h, uint32_t l, uint8_t * d,uint32_t bpp);
+ 
+ };
+ class decoderFFWMV2:public decoderFF
+@@ -272,7 +272,7 @@
+ 
+ 
+ public:
+-  decoderCamtasia (uint32_t w, uint32_t h, uint32_t bpp);
++  decoderCamtasia (uint32_t w, uint32_t h,uint32_t bpp);
+ 
+ };
+ class decoderFFTheora:public decoderFF
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_Video.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_Video.cpp	2007-10-05 18:01:07 UTC (rev 3620)
++++ branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_Video.cpp	2007-10-05 18:18:21 UTC (rev 3621)
+@@ -88,6 +88,7 @@
+   info-&gt;height = _video_bih.biHeight;
+   info-&gt;nb_frames = _mainaviheader.dwTotalFrames;
+   info-&gt;fcc = _videostream.fccHandler;
++  info-&gt;bpp = _video_bih.biBitCount;
+   u = _videostream.dwRate;
+   u *= 1000.F;
+   d = _videostream.dwScale;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_Video.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_Video.h	2007-10-05 18:01:07 UTC (rev 3620)
++++ branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_Video.h	2007-10-05 18:18:21 UTC (rev 3621)
+@@ -41,6 +41,7 @@
+ 	uint32_t   fps1000;
+ 	uint32_t   nb_frames;
+   	uint32_t   fcc;	
++        uint32_t   bpp;
+ } aviInfo;
+ 
+ uint8_t WAV2AudioInfo(WAVHeader *hdr,audioInfo *info);
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edit.cpp	2007-10-05 18:01:07 UTC (rev 3620)
++++ branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edit.cpp	2007-10-05 18:18:21 UTC (rev 3621)
+@@ -525,7 +525,7 @@
+   uint8_t 	*d;
+   _videos[_nb_video]._aviheader-&gt;getExtraHeaderData (&amp;l, &amp;d);
+   _videos[_nb_video].decoder = getDecoder (info.fcc,
+-					   info.width, info.height, l, d);
++					   info.width, info.height, l, d,info.bpp);
+ 
+   _videos[_nb_video]._videoCache   =   new EditorCache(10,info.width,info.height) ;
+   //
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/huffyuv.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/huffyuv.c	2007-10-05 18:01:07 UTC (rev 3620)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/huffyuv.c	2007-10-05 18:18:21 UTC (rev 3621)
+@@ -312,7 +312,7 @@
+             len[i] = len[up[i]] + 1;
+         for(i=0; i&lt;size; i++) {
+             dst[i] = len[up[i]] + 1;
+-            if(dst[i] &gt; 32) break;
++            if(dst[i] &gt;= 32) break;
+         }
+         if(i==size) break;
+     }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000892.html">[Avidemux-svn-commit] r3620 - in	branches/avidemux_2.4_branch/avidemux: . ADM_audiofilter	ADM_script ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_commonUI ADM_videoFilter
+</A></li>
+	<LI>Next message: <A HREF="000894.html">[Avidemux-svn-commit] r3622 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory	ADM_userInterfaces/ADM_commonUI ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#893">[ date ]</a>
+              <a href="thread.html#893">[ thread ]</a>
+              <a href="subject.html#893">[ subject ]</a>
+              <a href="author.html#893">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

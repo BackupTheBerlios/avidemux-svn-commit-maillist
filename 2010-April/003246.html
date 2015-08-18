@@ -1,0 +1,436 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6042 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDenoise3D
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6042%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDenoise3D&In-Reply-To=%3C201004011810.o31IA9i6023837%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003245.html">
+   <LINK REL="Next"  HREF="003247.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6042 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDenoise3D</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6042%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDenoise3D&In-Reply-To=%3C201004011810.o31IA9i6023837%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6042 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDenoise3D">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Apr  1 20:10:09 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003245.html">[Avidemux-svn-commit] r6041 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+        <LI>Next message: <A HREF="003247.html">[Avidemux-svn-commit] r6043 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3246">[ date ]</a>
+              <a href="thread.html#3246">[ thread ]</a>
+              <a href="subject.html#3246">[ subject ]</a>
+              <a href="author.html#3246">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-04-01 20:10:09 +0200 (Thu, 01 Apr 2010)
+New Revision: 6042
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDenoise3D/ADM_vidMPLD3Dlow.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDenoise3D/ADM_vidMPLD3Dlow.h
+Log:
+[Mpl3Dlow] Add empty Mplayer3D non hq filter
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDenoise3D/ADM_vidMPLD3Dlow.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDenoise3D/ADM_vidMPLD3Dlow.cpp	2010-04-01 18:10:08 UTC (rev 6041)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDenoise3D/ADM_vidMPLD3Dlow.cpp	2010-04-01 18:10:09 UTC (rev 6042)
+@@ -0,0 +1,294 @@
++/***************************************************************************
++                          ADM_vidMPLD3D.cpp  -  description
++                             -------------------
++Mplayer HQDenoise3d port to avidemux2
++Original Authors
++Copyright (C) 2003
++Daniel Moreno &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">comac at comac.darktech.org</A>&gt;
++	&amp; A'rpi
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &lt;math.h&gt;
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_coreVideoFilterInternal.h&quot;
++#include &quot;ADM_videoFilterCache.h&quot;
++#include &quot;DIA_factory.h&quot;
++
++#include &quot;ADM_vidMPLD3Dlow.h&quot;
++#include &quot;denoise3d_desc.cpp&quot;
++
++#include &quot;DIA_factory.h&quot;
++#define aprintf(...) {}
++
++DECLARE_VIDEO_FILTER(   ADMVideoMPD3Dlow,   // Class
++                        1,0,0,              // Version
++                        ADM_UI_ALL,         // UI
++                        VF_NOISE,            // Category
++                        &quot;MplayerDenoise3D&quot;,            // internal name (must be uniq!)
++                        &quot;Mplayer Denoise 3D&quot;,            // Display name
++                        &quot;Reduce noise, smooth image, increase compressibility.&quot; // Description
++                    );
++
++#define PARAM1_DEFAULT 4.0
++#define PARAM2_DEFAULT 3.0
++#define PARAM3_DEFAULT 6.0
++/**
++    \fn getConfiguration
++*/
++const char 	*ADMVideoMPD3Dlow::getConfiguration(void)
++ {
++      static char str[1024];
++	  snprintf(str,1023,&quot; MPlayer Denoise 3D (%2.1f - %2.1f - %2.1f)'&quot;,
++						param.luma,param.chroma,param.temporal);
++      return str;
++        
++}
++/**
++    \fn configure
++*/
++bool ADMVideoMPD3Dlow::configure(void)
++{
++
++        
++        ELEM_TYPE_FLOAT fluma,fchroma,ftemporal;
++#define PX(x) &amp;x
++#define OOP(x,y) f##x=(ELEM_TYPE_FLOAT )param.x;
++        
++        OOP(luma,Luma);
++        OOP(chroma,Chroma);
++        OOP(temporal,Temporal);
++        
++        diaElemFloat   luma(PX(fluma),QT_TR_NOOP(&quot;_Spatial luma strength:&quot;),0.,100.);
++        diaElemFloat   chroma(PX(fchroma),QT_TR_NOOP(&quot;S_patial chroma strength:&quot;),0.,100.);
++        diaElemFloat   temporal(PX(ftemporal),QT_TR_NOOP(&quot;_Temporal strength:&quot;),0.,100.);
++    
++        diaElem *elems[3]={&amp;luma,&amp;chroma,&amp;temporal};
++  
++        if(  diaFactoryRun(QT_TR_NOOP(&quot;MPlayer denoise3d&quot;),3,elems))
++        {
++#undef OOP
++#define OOP(x,y) param.x=(float) f##x
++                OOP(luma,Luma);
++                OOP(chroma,Chroma);
++                OOP(temporal,Temporal);
++          
++                setup();
++                return 1;
++        }
++        return 0;
++}
++/**
++    \fn dtor
++*/
++ADMVideoMPD3Dlow::~ADMVideoMPD3Dlow()
++{
++	delete [] Line;
++	Line=NULL;
++}
++
++
++#define LowPass(Prev, Curr, Coef) (Curr + Coef[Prev - Curr])
++
++/**
++    \fn deNoise
++*/
++void ADMVideoMPD3Dlow::deNoise(unsigned char *Frame,        // mpi-&gt;planes[x]
++                    unsigned char *FramePrev,    // pmpi-&gt;planes[x]
++                    unsigned char *FrameDest,    // dmpi-&gt;planes[x]
++                    unsigned char *LineAnt,      // vf-&gt;priv-&gt;Line (width bytes)
++                    int W, int H, int sStride, int pStride, int dStride,
++                    int *Horizontal, int *Vertical, int *Temporal)
++{
++    int X, Y;
++    int sLineOffs = 0, pLineOffs = 0, dLineOffs = 0;
++    unsigned char PixelAnt;
++
++    /* First pixel has no left nor top neightbour. Only previous frame */
++    LineAnt[0] = PixelAnt = Frame[0];
++    FrameDest[0] = LowPass(FramePrev[0], LineAnt[0], Temporal);
++
++    /* Fist line has no top neightbour. Only left one for each pixel and
++     * last frame */
++    for (X = 1; X &lt; W; X++)
++    {
++        PixelAnt = LowPass(PixelAnt, Frame[X], Horizontal);
++        LineAnt[X] = PixelAnt;
++        FrameDest[X] = LowPass(FramePrev[X], LineAnt[X], Temporal);
++    }
++
++    for (Y = 1; Y &lt; H; Y++)
++    {
++	sLineOffs += sStride, pLineOffs += pStride, dLineOffs += dStride;
++        /* First pixel on each line doesn't have previous pixel */
++        PixelAnt = Frame[sLineOffs];
++        LineAnt[0] = LowPass(LineAnt[0], PixelAnt, Vertical);
++        FrameDest[dLineOffs] = LowPass(FramePrev[pLineOffs], LineAnt[0], Temporal);
++
++        for (X = 1; X &lt; W; X++)
++        {
++            /* The rest are normal */
++            PixelAnt = LowPass(PixelAnt, Frame[sLineOffs+X], Horizontal);
++            LineAnt[X] = LowPass(LineAnt[X], PixelAnt, Vertical);
++            FrameDest[dLineOffs+X] = LowPass(FramePrev[pLineOffs+X], LineAnt[X], Temporal);
++        }
++    }
++}
++
++
++/**
++    \fn setup
++*/
++uint8_t  ADMVideoMPD3Dlow::setup(void)
++{
++ double LumSpac, LumTmp, ChromSpac, ChromTmp;
++
++        LumSpac = param.luma;
++        LumTmp = param.temporal;
++
++        ChromSpac = param.chroma;
++        ChromTmp = LumTmp * ChromSpac / LumSpac;
++
++        PrecalcCoefs((int *)Coefs[0], LumSpac);
++        PrecalcCoefs((int *)Coefs[1], LumTmp);
++        PrecalcCoefs((int *)Coefs[2], ChromSpac);
++        PrecalcCoefs((int *)Coefs[3], ChromTmp);
++
++        aprintf(&quot;\n Param : %lf %lf %lf \n&quot;,
++            param.luma,
++            param.chroma,
++            param.temporal);
++
++       return 1;
++}
++/**
++    \fn ctor
++*/
++ADMVideoMPD3Dlow::ADMVideoMPD3Dlow(	ADM_coreVideoFilter *in,CONFcouple *couples) 
++        : ADM_coreVideoFilter(in,couples)
++{
++uint32_t page;
++  vidCache=new VideoCache(3,in);
++  Line=new uint8_t [in-&gt;getInfo()-&gt;width];
++  page=info.width*info.height;
++  
++  if(!couples || !ADM_paramLoad(couples,denoise3d_param,&amp;param))
++  {  			
++			param.luma=PARAM1_DEFAULT;
++			param.chroma=PARAM2_DEFAULT;
++			param.temporal=PARAM3_DEFAULT;
++  }
++  setup();
++
++}
++
++/**
++    \fn getCoupledConf
++*/
++bool	ADMVideoMPD3Dlow::getCoupledConf( CONFcouple **couples)
++{
++    return ADM_paramSave(couples, denoise3d_param,&amp;param);
++	
++}
++/**
++    \fn getNextFrame
++*/
++bool ADMVideoMPD3Dlow::getNextFrame(uint32_t *fn,ADMImage *image)
++{
++	int cw= info.width&gt;&gt;1;
++	int ch= info.height&gt;&gt;1;
++    int W = info.width;
++	int H  = info.height;
++	uint32_t dlen,dflags;
++
++    ADMImage *src, *dst, * prev, *next;
++    
++        *fn=nextFrame;
++        uint32_t n = nextFrame;
++printf(&quot;MP3d: next frame= %d\n&quot;,(int)n);
++        src = vidCache-&gt;getImage(n);
++        if(!src) return false;
++        // If possible get previous image...
++        if (n&gt;0)
++                prev =  vidCache-&gt;getImage( n-1); // get previous frame
++        else
++                prev=src;
++        
++		uint8_t *c,*d,*p;
++
++		d=YPLANE(image);
++		c=YPLANE(src);
++		p=YPLANE(prev);
++//
++
++        deNoise(c,p, d,
++                Line, W, H,
++                W,W,W,
++               	Coefs[0] + 256,
++                Coefs[0] + 256,
++                Coefs[1] + 256);
++	
++		d=UPLANE(image);
++		c=UPLANE(src);
++		p=UPLANE(prev);
++
++        deNoise(c,p, d,
++                Line, cw, ch,
++                cw,cw,cw,
++               	Coefs[2] + 256,
++                Coefs[2] + 256,
++                Coefs[3] + 256);
++
++        d=VPLANE(image);
++        c=VPLANE(src);
++        p=VPLANE(prev);
++
++        deNoise(c,p, d,
++                    Line, cw, ch,
++                    cw,cw,cw,
++                    Coefs[2] + 256,
++                    Coefs[2] + 256,
++                    Coefs[3] + 256);
++
++
++	nextFrame++;
++	image-&gt;copyInfo(src);
++    vidCache-&gt;unlockAll();
++	return 1;
++}
++
++#define ABS(A) ( (A) &gt; 0 ? (A) : -(A) )
++/**
++    \fn PrecalcCoefs
++*/
++void ADMVideoMPD3Dlow::PrecalcCoefs(int *Ct, double Dist25)
++{
++ int i;
++    double Gamma, Simil, C;
++    double d;
++    Gamma = log(0.25) / log(1.0 - Dist25/255.0);
++
++    for (i = -256; i &lt;= 255; i++)
++    {
++    	if(i&gt;0) d=(double)i/255.;
++		else d=(double)-i/255.;
++        Simil = 1.0 - d;
++//        Ct[256+i] = lround(pow(Simil, Gamma) * (double)i);
++ 	C= (double)i;
++        C *= pow(Simil, Gamma);
++
++  	Ct[256+i] = (int)((C&lt;0) ? (C-0.5) : (C+0.5));
++
++    }
++}
++
++// EOF
++
++
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDenoise3D/ADM_vidMPLD3Dlow.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDenoise3D/ADM_vidMPLD3Dlow.h	2010-04-01 18:10:08 UTC (rev 6041)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDenoise3D/ADM_vidMPLD3Dlow.h	2010-04-01 18:10:09 UTC (rev 6042)
+@@ -0,0 +1,59 @@
++/***************************************************************************
++                          ADM_vidMPLD3D.h  -  description
++                             -------------------
++Mplayer Denoise3d port to avidemux2
++Original Authors
++Copyright (C) 2003
++Daniel Moreno &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">comac at comac.darktech.org</A>&gt;
++
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#ifndef __D3DLOW__
++#define __D3DLOW__
++
++#include &quot;denoise3d.h&quot;
++
++/**
++    \class ADMVideoMPD3Dlow
++*/
++class ADMVideoMPD3Dlow : public  ADM_coreVideoFilter
++{
++protected:
++                ADMImage        *original;
++                denoise3d       param;
++                uint32_t        last;
++                uint8_t         *Line;
++                int				Coefs[4][512];
++                void 	    PrecalcCoefs(int *Ct, double Dist25);
++				uint8_t  	setup(void);
++				void 	    deNoise(unsigned char *Frame,        // mpi-&gt;planes[x]
++                    						unsigned char *FramePrev,    // pmpi-&gt;planes[x]
++                    						unsigned char *FrameDest,    // dmpi-&gt;planes[x]
++                    						unsigned char *LineAnt,      // vf-&gt;priv-&gt;Line (width bytes)
++                    						int W, int H, int sStride, int pStride, int dStride,
++                    						int *Horizontal, int *Vertical, int *Temporal);
++
++                    
++public:
++                    ADMVideoMPD3Dlow(ADM_coreVideoFilter *previous,CONFcouple *conf);
++                    ~ADMVideoMPD3Dlow();
++
++        virtual const char   *getConfiguration(void);                 /// Return  current configuration as a human readable string
++        virtual bool         getNextFrame(uint32_t *fn,ADMImage *image);           /// Return the next image
++        virtual bool         getCoupledConf(CONFcouple **couples) ;   /// Return the current filter configuration
++        virtual bool         configure(void) ;                        /// Start graphical user interface
++};
++
++			
++
++#endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003245.html">[Avidemux-svn-commit] r6041 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+	<LI>Next message: <A HREF="003247.html">[Avidemux-svn-commit] r6043 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3246">[ date ]</a>
+              <a href="thread.html#3246">[ thread ]</a>
+              <a href="subject.html#3246">[ subject ]</a>
+              <a href="author.html#3246">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

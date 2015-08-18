@@ -1,0 +1,508 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4531 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_plugin plugins/ADM_videoEncoder/ADM_vidEnc_x264	plugins/ADM_videoEncoder/ADM_vidEnc_xvid
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4531%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09avidemux/ADM_plugin%20plugins/ADM_videoEncoder/ADM_vidEnc_x264%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_xvid&In-Reply-To=%3C200901111303.n0BD3CdA005408%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001763.html">
+   <LINK REL="Next"  HREF="001765.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4531 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_plugin plugins/ADM_videoEncoder/ADM_vidEnc_x264	plugins/ADM_videoEncoder/ADM_vidEnc_xvid</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4531%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09avidemux/ADM_plugin%20plugins/ADM_videoEncoder/ADM_vidEnc_x264%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_xvid&In-Reply-To=%3C200901111303.n0BD3CdA005408%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4531 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_plugin plugins/ADM_videoEncoder/ADM_vidEnc_x264	plugins/ADM_videoEncoder/ADM_vidEnc_xvid">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sun Jan 11 14:03:12 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001763.html">[Avidemux-svn-commit] r4530 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4
+</A></li>
+        <LI>Next message: <A HREF="001765.html">[Avidemux-svn-commit] r4532 -	branches/avidemux_2.4_branch/avidemux/ADM_toolkit
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1764">[ date ]</a>
+              <a href="thread.html#1764">[ thread ]</a>
+              <a href="subject.html#1764">[ subject ]</a>
+              <a href="author.html#1764">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-01-11 14:03:03 +0100 (Sun, 11 Jan 2009)
+New Revision: 4531
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_pluginLoad.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_pluginLoad.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/interface.c
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/interface.c
+Log:
+[vidEnc] support flushing of external video encoders
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp	2009-01-11 13:00:18 UTC (rev 4530)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp	2009-01-11 13:03:03 UTC (rev 4531)
+@@ -14,11 +14,12 @@
+  *                                                                         *
+  ***************************************************************************/
+ 
++#define __STDC_LIMIT_MACROS
++
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_externalEncoder.h&quot;
+ #include &quot;ADM_plugin/ADM_vidEnc_plugin.h&quot;
+ 
+-
+ externalEncoder::externalEncoder(COMPRES_PARAMS *params, bool globalHeader)
+ {
+ 	_plugin = getVideoEncoderPlugin(params-&gt;extra_param);
+@@ -83,15 +84,25 @@
+ 	int64_t ptsFrame;
+ 	vidEncEncodeParameters params;
+ 
+-	if (!_in-&gt;getFrameNumberNoAlloc(frame, &amp;l, _vbuffer, &amp;f))
++	if (frame != UINT32_MAX &amp;&amp; !_in-&gt;getFrameNumberNoAlloc(frame, &amp;l, _vbuffer, &amp;f))
+ 	{
+ 		printf (&quot;[externalEncoder] Error reading incoming frame\n&quot;);
+ 		return 0;
+ 	}
+ 
+ 	params.structSize = sizeof(vidEncEncodeParameters);
+-	params.frameData = _vbuffer-&gt;data;
+-	params.frameDataSize = ((_w + 15) &amp; 0xffffff0) * ((_h + 15) &amp; 0xfffffff0) * 2;
++
++	if (frame == UINT32_MAX)
++	{
++		params.frameData = NULL;
++		params.frameDataSize = 0;
++	}
++	else
++	{
++		params.frameData = _vbuffer-&gt;data;
++		params.frameDataSize = ((_w + 15) &amp; 0xffffff0) * ((_h + 15) &amp; 0xfffffff0) * 2;
++	}
++
+ 	params.encodedData = NULL;
+ 	params.encodedDataSize = 0;
+ 
+@@ -105,6 +116,8 @@
+ 
+ 		switch (params.frameType)
+ 		{
++			case ADM_VIDENC_FRAMETYPE_NULL:
++				break;
+ 			case ADM_VIDENC_FRAMETYPE_IDR:
+ 				out-&gt;flags = AVI_KEY_FRAME;
+ 				break;
+@@ -142,8 +155,10 @@
+ 
+ int externalEncoder::getRequirements(void)
+ {
+-	// FIXME
+-	return 0;
++	int req = _plugin-&gt;getEncoderRequirements(_plugin-&gt;encoderId);
++
++	if (req == ADM_VIDENC_REQ_NULL_FLUSH)
++		return ADM_ENC_REQ_NULL_FLUSH;
+ }
+ 
+ uint8_t externalEncoder::isDualPass(void)
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.h	2009-01-11 13:00:18 UTC (rev 4530)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.h	2009-01-11 13:03:03 UTC (rev 4531)
+@@ -38,7 +38,7 @@
+ public:
+ 	externalEncoder(COMPRES_PARAMS *params, bool globalHeader);
+ 	~externalEncoder();
+-	virtual int getRequirements (void);
++	virtual int getRequirements(void);
+ 	virtual uint8_t isDualPass(void);
+ 	virtual uint8_t configure(AVDMGenericVideoStream * instream, int useExistingLogFile);
+ 	virtual uint8_t encode(uint32_t frame, ADMBitstream *out);
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_pluginLoad.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_pluginLoad.cpp	2009-01-11 13:00:18 UTC (rev 4530)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_pluginLoad.cpp	2009-01-11 13:03:03 UTC (rev 4531)
+@@ -36,12 +36,13 @@
+ 
+ ADM_vidEnc_plugin::ADM_vidEnc_plugin(const char *file) : ADM_LibWrapper()
+ {
+-	initialised = (loadLibrary(file) &amp;&amp; getSymbols(20,
++	initialised = (loadLibrary(file) &amp;&amp; getSymbols(21,
+ 		&amp;getEncoders, &quot;vidEncGetEncoders&quot;,
+ 		&amp;getEncoderName, &quot;vidEncGetEncoderName&quot;,
+ 		&amp;getEncoderType, &quot;vidEncGetEncoderType&quot;,
+ 		&amp;getEncoderDescription, &quot;vidEncGetEncoderDescription&quot;,
+ 		&amp;getFourCC, &quot;vidEncGetFourCC&quot;,
++		&amp;getEncoderRequirements, &quot;vidEncGetEncoderRequirements&quot;,
+ 		&amp;getEncoderApiVersion, &quot;vidEncGetEncoderApiVersion&quot;,
+ 		&amp;getEncoderVersion, &quot;vidEncGetEncoderVersion&quot;,
+ 		&amp;getEncoderGuid, &quot;vidEncGetEncoderGuid&quot;,
+@@ -59,39 +60,39 @@
+ 		&amp;close, &quot;vidEncClose&quot;));
+ }
+ 
+-std::vector&lt;ADM_vidEnc_plugin *&gt; ADM_videoEncoderPlugins;
+-/**
+-    \fn ADM_ve_getNbEncoders
+-    \brief get the number of encoder plugin loaded
+-    @return the number of encoder plugins
++std::vector&lt;ADM_vidEnc_plugin *&gt; ADM_videoEncoderPlugins;
++/**
++    \fn ADM_ve_getNbEncoders
++    \brief get the number of encoder plugin loaded
++    @return the number of encoder plugins
+ */
+-uint32_t ADM_ve_getNbEncoders(void)
+-{
+-    return ADM_videoEncoderPlugins.size();
+-
+-}
+-/**
+-     \fn ADM_ve_getEncoderInfo
+-     \brief Get info about an encoder plugin
+-     @param filter [in] Encoder index, between 0 and ADM_ve_getNbEncoders-1 included
+-     @param name [out] Name + info of the encoder
+-     @param major,minor,patch [out] Version number of the encoder
+-     @return true
+-*/
+-bool     ADM_ve_getEncoderInfo(int filter, const char **name, uint32_t *major,uint32_t *minor,uint32_t *patch)
+-{
+-    ADM_assert(filter&gt;=0 &amp;&amp; filter&lt;ADM_videoEncoderPlugins.size());
+-    ADM_vidEnc_plugin *plugin =ADM_videoEncoderPlugins[filter];
+-        *name=plugin-&gt;getEncoderDescription(0);
+-    int ma,mi,pa;
+-        plugin-&gt;getEncoderVersion(0,&amp;ma,&amp;mi,&amp;pa);
+-        *major=(uint32_t)ma;
+-        *minor=(uint32_t)mi;
+-        *patch=(uint32_t)pa;
+-        return true;
+-
+-}
++uint32_t ADM_ve_getNbEncoders(void)
++{
++    return ADM_videoEncoderPlugins.size();
+ 
++}
++/**
++     \fn ADM_ve_getEncoderInfo
++     \brief Get info about an encoder plugin
++     @param filter [in] Encoder index, between 0 and ADM_ve_getNbEncoders-1 included
++     @param name [out] Name + info of the encoder
++     @param major,minor,patch [out] Version number of the encoder
++     @return true
++*/
++bool     ADM_ve_getEncoderInfo(int filter, const char **name, uint32_t *major,uint32_t *minor,uint32_t *patch)
++{
++    ADM_assert(filter&gt;=0 &amp;&amp; filter&lt;ADM_videoEncoderPlugins.size());
++    ADM_vidEnc_plugin *plugin =ADM_videoEncoderPlugins[filter];
++        *name=plugin-&gt;getEncoderDescription(0);
++    int ma,mi,pa;
++        plugin-&gt;getEncoderVersion(0,&amp;ma,&amp;mi,&amp;pa);
++        *major=(uint32_t)ma;
++        *minor=(uint32_t)mi;
++        *patch=(uint32_t)pa;
++        return true;
++
++}
++
+ static int loadVideoEncoderPlugin(int uiType, const char *file)
+ {
+ 	ADM_vidEnc_plugin *plugin = new ADM_vidEnc_plugin(file);
+@@ -315,7 +316,3 @@
+ 
+ 	return ADM_videoEncoderPlugins[index];
+ }
+-/**
+-
+-*/
+-//EOF
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_pluginLoad.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_pluginLoad.h	2009-01-11 13:00:18 UTC (rev 4530)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_pluginLoad.h	2009-01-11 13:03:03 UTC (rev 4531)
+@@ -26,6 +26,7 @@
+ typedef const char* _vidEncGetEncoderType(int encoderId);
+ typedef const char* _vidEncGetEncoderDescription(int encoderId);
+ typedef const char* _vidEncGetFourCC(int encoderId);
++typedef int _vidEncGetEncoderRequirements(int encoderId);
+ typedef int _vidEncGetEncoderApiVersion(int encoderId);
+ typedef void _vidEncGetEncoderVersion(int encoderId, int *major, int *minor, int *patch);
+ typedef const char* _vidEncGetEncoderGuid(int encoderId);
+@@ -52,6 +53,7 @@
+ 		_vidEncGetEncoderType *getEncoderType;
+ 		_vidEncGetEncoderDescription *getEncoderDescription;
+ 		_vidEncGetFourCC *getFourCC;
++		_vidEncGetEncoderRequirements *getEncoderRequirements;
+ 		_vidEncGetEncoderApiVersion *getEncoderApiVersion;
+ 		_vidEncGetEncoderVersion *getEncoderVersion;
+ 		_vidEncGetEncoderGuid *getEncoderGuid;
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h	2009-01-11 13:00:18 UTC (rev 4530)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h	2009-01-11 13:03:03 UTC (rev 4531)
+@@ -34,10 +34,13 @@
+ #define ADM_VIDENC_MODE_2PASS_SIZE 4
+ #define ADM_VIDENC_MODE_2PASS_ABR 5
+ 
+-#define ADM_VIDENC_FRAMETYPE_IDR 1
+-#define ADM_VIDENC_FRAMETYPE_B 2
+-#define ADM_VIDENC_FRAMETYPE_P 3
++#define ADM_VIDENC_FRAMETYPE_NULL 1
++#define ADM_VIDENC_FRAMETYPE_IDR 2
++#define ADM_VIDENC_FRAMETYPE_B 3
++#define ADM_VIDENC_FRAMETYPE_P 4
+ 
++#define ADM_VIDENC_REQ_NULL_FLUSH 1
++
+ #include &quot;DIA_uiTypes.h&quot;
+ 
+ #define ADM_VIDENC_FLAG_GLOBAL_HEADER 1
+@@ -97,6 +100,7 @@
+ int vidEncGetEncoderApiVersion(int encoderId);
+ void vidEncGetEncoderVersion(int encoderId, int *major, int *minor, int *patch);
+ const char* vidEncGetEncoderGuid(int encoderId);
++int vidEncGetEncoderRequirements(int encoderId);
+ 
+ int vidEncIsConfigurable(int encoderId);
+ int vidEncConfigure(int encoderId, vidEncConfigParameters *configParameters, vidEncVideoProperties *properties);
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-01-11 13:00:18 UTC (rev 4530)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-01-11 13:03:03 UTC (rev 4531)
+@@ -27,7 +27,7 @@
+ 
+ extern &quot;C&quot;
+ {
+-	void *encoders_getPointer(int uiType) { encoder.setUiType(uiType); return &encoders; } 
++	void *encoders_getPointer(int uiType) { encoder.setUiType(uiType); return &encoders; }
+ 	int x264Encoder_isConfigurable(void) { return encoder.isConfigurable(); }
+ 	int x264Encoder_configure(vidEncConfigParameters *configParameters, vidEncVideoProperties *properties) { return encoder.configure(configParameters, properties); }
+ 	int x264Encoder_getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize) { return encoder.getOptions(encodeOptions, pluginOptions, bufferSize); };
+@@ -41,7 +41,9 @@
+ 	void x264Encoder_close(void) { encoder.close(); }
+ }
+ 
++#ifdef __WIN32
+ extern void convertPathToAnsi(const char *path, char **ansiPath);
++#endif
+ 
+ x264Encoder::x264Encoder(void)
+ {
+@@ -302,21 +304,27 @@
+ 
+ 	_picture.img.i_csp = X264_CSP_I420;
+ 	_picture.img.i_plane = 3;
+-	_picture.img.plane[0] = encodeParams-&gt;frameData;	// Y
+-	_picture.img.plane[2] = encodeParams-&gt;frameData + _param.i_width * _param.i_height;	// U
+-	_picture.img.plane[1] = encodeParams-&gt;frameData + ((_param.i_width * _param.i_height * 5) &gt;&gt; 2);	// V
+-	_picture.img.i_stride[0] = _param.i_width;
+-	_picture.img.i_stride[1] = _param.i_width &gt;&gt; 1;
+-	_picture.img.i_stride[2] = _param.i_width &gt;&gt; 1;
+-	_picture.i_type = X264_TYPE_AUTO;
+-	_picture.i_pts = _currentFrame++;
+ 
++	if (encodeParams-&gt;frameData)
++	{
++		_picture.img.plane[0] = encodeParams-&gt;frameData;	// Y
++		_picture.img.plane[2] = encodeParams-&gt;frameData + _param.i_width * _param.i_height;	// U
++		_picture.img.plane[1] = encodeParams-&gt;frameData + ((_param.i_width * _param.i_height * 5) &gt;&gt; 2);	// V
++		_picture.img.i_stride[0] = _param.i_width;
++		_picture.img.i_stride[1] = _param.i_width &gt;&gt; 1;
++		_picture.img.i_stride[2] = _param.i_width &gt;&gt; 1;
++		_picture.i_type = X264_TYPE_AUTO;
++		_picture.i_pts = _currentFrame;
++	}
++
+ 	if (x264_encoder_encode(_handle, &amp;nal, &amp;nalCount, &amp;_picture, &amp;picture_out) &lt; 0)
+ 	{
+ 		printf(&quot;[x264] Error encoding\n&quot;);
+ 		return ADM_VIDENC_ERR_FAILED;
+ 	}
+ 
++	_currentFrame++;
++
+ 	// Write
+ 	int size = 0;
+ 	int currentNal, sizemax;
+@@ -345,10 +353,6 @@
+ 	encodeParams-&gt;encodedDataSize = size;
+ 	encodeParams-&gt;ptsFrame = picture_out.i_pts;	// In fact it is the picture number in out case
+ 
+-	// Delay for b-pyramid
+-	if (_param.b_bframe_pyramid)
+-		encodeParams-&gt;ptsFrame += _param.i_bframe;
+-
+ 	switch (picture_out.i_type)
+ 	{
+ 		case X264_TYPE_IDR:
+@@ -384,7 +388,7 @@
+ 			encodeParams-&gt;frameType = ADM_VIDENC_FRAMETYPE_B;
+ 			break;
+ 		default:
+-			printf(&quot;[x264] Unknown image type: %d\n&quot;, picture_out.i_type);
++			encodeParams-&gt;frameType = ADM_VIDENC_FRAMETYPE_NULL;
+ 	}
+ 
+ 	encodeParams-&gt;quantiser = picture_out.i_qpplus1 - 1;
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/interface.c
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/interface.c	2009-01-11 13:00:18 UTC (rev 4530)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/interface.c	2009-01-11 13:03:03 UTC (rev 4531)
+@@ -52,6 +52,11 @@
+ 	return &quot;H264&quot;;
+ }
+ 
++int vidEncGetEncoderRequirements(int encoderId)
++{
++	return ADM_VIDENC_REQ_NULL_FLUSH;
++}
++
+ int vidEncGetEncoderApiVersion(int encoderId)
+ {
+ 	return ADM_VIDENC_API_VERSION;
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp	2009-01-11 13:00:18 UTC (rev 4530)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp	2009-01-11 13:03:03 UTC (rev 4531)
+@@ -89,8 +89,12 @@
+ 	PRINT_CPU_FLAG(MMXEXT);
+ 	PRINT_CPU_FLAG(SSE);
+ 	PRINT_CPU_FLAG(SSE2);
++
++#if XVID_API &gt;= XVID_MAKE_API(4, 2)
+ 	PRINT_CPU_FLAG(SSE3);
+ 	PRINT_CPU_FLAG(SSE41);
++#endif
++
+ 	PRINT_CPU_FLAG(3DNOW);
+ 	PRINT_CPU_FLAG(3DNOWEXT);
+ 	PRINT_CPU_FLAG(ALTIVEC);
+@@ -98,6 +102,8 @@
+ 
+ XvidEncoder::~XvidEncoder(void)
+ {
++	close();
++
+ 	if (_logFileName)
+ 		delete [] _logFileName;
+ 
+@@ -311,15 +317,24 @@
+ 
+ 	xvid_enc_stats.version = XVID_VERSION;
+ 	_xvid_enc_frame.bitstream = _buffer;
+-	_xvid_enc_frame.length = 0;
+-	_xvid_enc_frame.input.csp = XVID_CSP_YV12;
+-	_xvid_enc_frame.input.stride[0] = _xvid_enc_create.width;
+-	_xvid_enc_frame.input.stride[1] = _xvid_enc_create.width &gt;&gt; 1;
+-	_xvid_enc_frame.input.stride[2] = _xvid_enc_create.width &gt;&gt; 1;
+-	_xvid_enc_frame.input.plane[0] = encodeParams-&gt;frameData;
+-	_xvid_enc_frame.input.plane[1] = encodeParams-&gt;frameData + (_xvid_enc_create.width * _xvid_enc_create.height);
+-	_xvid_enc_frame.input.plane[2] = encodeParams-&gt;frameData + ((_xvid_enc_create.width * _xvid_enc_create.height * 5) &gt;&gt; 2);
+ 
++	if (encodeParams-&gt;frameData)
++	{
++		_xvid_enc_frame.length = 0;
++		_xvid_enc_frame.input.csp = XVID_CSP_YV12;
++		_xvid_enc_frame.input.stride[0] = _xvid_enc_create.width;
++		_xvid_enc_frame.input.stride[1] = _xvid_enc_create.width &gt;&gt; 1;
++		_xvid_enc_frame.input.stride[2] = _xvid_enc_create.width &gt;&gt; 1;
++		_xvid_enc_frame.input.plane[0] = encodeParams-&gt;frameData;
++		_xvid_enc_frame.input.plane[1] = encodeParams-&gt;frameData + (_xvid_enc_create.width * _xvid_enc_create.height);
++		_xvid_enc_frame.input.plane[2] = encodeParams-&gt;frameData + ((_xvid_enc_create.width * _xvid_enc_create.height * 5) &gt;&gt; 2);
++	}
++	else
++	{
++		_xvid_enc_frame.length = -1;
++		_xvid_enc_frame.input.csp = XVID_CSP_NULL;
++	}
++
+ 	int size = xvid_encore(_xvid_enc_create.handle, XVID_ENC_ENCODE, &amp;_xvid_enc_frame, &amp;xvid_enc_stats);
+ 
+     if (size &lt; 0)
+@@ -492,11 +507,19 @@
+ 	printf(&quot;[Xvid] vol_flags = %d\n&quot;, xvid_enc_frame-&gt;vol_flags);
+ 
+ 	printf(&quot;[Xvid] quant_intra_matrix = &quot;);
+-	printArray(xvid_enc_frame-&gt;quant_intra_matrix, 64);
+ 
++	if (xvid_enc_frame-&gt;quant_intra_matrix)
++		printArray(xvid_enc_frame-&gt;quant_intra_matrix, 64);
++	else
++		printf(&quot;NULL&quot;);
++
+ 	printf(&quot;\n[Xvid] quant_inter_matrix = &quot;);
+-	printArray(xvid_enc_frame-&gt;quant_inter_matrix, 64);
+ 
++	if (xvid_enc_frame-&gt;quant_inter_matrix)
++		printArray(xvid_enc_frame-&gt;quant_inter_matrix, 64);
++	else
++		printf(&quot;NULL&quot;);
++
+ 	printf(&quot;\n[Xvid] par = %d\n&quot;, xvid_enc_frame-&gt;par);
+ 	printf(&quot;[Xvid] par_width = %d\n&quot;, xvid_enc_frame-&gt;par_width);
+ 	printf(&quot;[Xvid] par_height = %d\n&quot;, xvid_enc_frame-&gt;par_height);
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/interface.c
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/interface.c	2009-01-11 13:00:18 UTC (rev 4530)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/interface.c	2009-01-11 13:03:03 UTC (rev 4531)
+@@ -52,6 +52,11 @@
+ 	return &quot;XVID&quot;;
+ }
+ 
++int vidEncGetEncoderRequirements(int encoderId)
++{
++	return ADM_VIDENC_REQ_NULL_FLUSH;
++}
++
+ int vidEncGetEncoderApiVersion(int encoderId)
+ {
+ 	return ADM_VIDENC_API_VERSION;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001763.html">[Avidemux-svn-commit] r4530 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4
+</A></li>
+	<LI>Next message: <A HREF="001765.html">[Avidemux-svn-commit] r4532 -	branches/avidemux_2.4_branch/avidemux/ADM_toolkit
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1764">[ date ]</a>
+              <a href="thread.html#1764">[ thread ]</a>
+              <a href="subject.html#1764">[ subject ]</a>
+              <a href="author.html#1764">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

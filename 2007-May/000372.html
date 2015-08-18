@@ -1,0 +1,744 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3071 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_dialog ADM_filters
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3071%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK%3A%0A%09ADM_dialog%20ADM_filters&In-Reply-To=%3C200705121814.l4CIEGmO023741%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000371.html">
+   <LINK REL="Next"  HREF="000373.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3071 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_dialog ADM_filters</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3071%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK%3A%0A%09ADM_dialog%20ADM_filters&In-Reply-To=%3C200705121814.l4CIEGmO023741%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3071 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_dialog ADM_filters">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat May 12 20:14:16 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000371.html">[Avidemux-svn-commit] r3070 - branches/avidemux_2.4_branch/po
+</A></li>
+        <LI>Next message: <A HREF="000373.html">[Avidemux-svn-commit] r3072 - in	branches/avidemux_2.4_branch/avidemux: ADM_filter ADM_video
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#372">[ date ]</a>
+              <a href="thread.html#372">[ thread ]</a>
+              <a href="subject.html#372">[ subject ]</a>
+              <a href="author.html#372">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-05-12 20:14:15 +0200 (Sat, 12 May 2007)
+New Revision: 3071
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog/DIA_crop.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog/Makefile.am
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters/gui_filter.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters/gui_filtermanager.cpp
+Log:
+flyDialog base class, factorize code between QT/GTK/.. and among filters that have a preview
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog/DIA_crop.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog/DIA_crop.cpp	2007-05-12 10:38:08 UTC (rev 3070)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog/DIA_crop.cpp	2007-05-12 18:14:15 UTC (rev 3071)
+@@ -7,7 +7,7 @@
+ 			     +Autocrop now in RGB space (more accurate)
+ 
+     begin                : Fri May 3 2002
+-    copyright            : (C) 2002 by mean
++    copyright            : (C) 2002/2007 by mean
+     email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+  ***************************************************************************/
+ 
+@@ -20,14 +20,9 @@
+  *                                                                         *
+  ***************************************************************************/
+ 
+-
+-
+ #include &lt;config.h&gt;
+-
+-
+ #include &lt;string.h&gt;
+ #include &lt;stdio.h&gt;
+-
+ #include &lt;gdk/gdkkeysyms.h&gt;
+ #include &lt;gtk/gtk.h&gt;
+ 
+@@ -45,466 +40,189 @@
+ #include &quot;ADM_video/ADM_genvideo.hxx&quot;
+ #include &quot;ADM_colorspace/ADM_rgb.h&quot;
+ #include &quot;ADM_assert.h&quot;
++#include &quot;DIA_flyDialog.h&quot;
++#include &quot;DIA_flyCrop.h&quot;
+ 
+ static GtkWidget	*create_dialog1 (void);
+-static void  		ui_read ( void);
+-static void  		ui_update ( void);
+ static void 		draw (GtkWidget *dialog,uint32_t w,uint32_t h );
+-static gboolean 	gui_draw( void );
+-static void 		autocrop (void );
+-static void 		reset( void );
+-static void 		ui_upload(void);
+-static gboolean		ui_changed(void);
+ 
+-static uint8_t 		Metrics( uint8_t *in, uint32_t width,uint32_t *avg, uint32_t *eqt);
+-static uint8_t 		MetricsV( uint8_t *in, uint32_t width,uint32_t *avg, uint32_t *eqt);
+ 
+-static void		prepare(uint32_t img);
+-static void 		frame_changed( void );
++/* Link between UI and core */
++static gboolean 	ui_draw( void );
++static void 		ui_autocrop (void );
++static void 		ui_reset( void );
++static void 		ui_upload(void);
++static void  		ui_read ( void);
++static void  		ui_update ( void);
++static void 		ui_frame_changed( void );
+ 
+-extern void GUI_RGBDisplay(uint8_t * dis, uint32_t w, uint32_t h, void *widg);
+-
+-static ColYuvRgb    *rgbConv=NULL;
+-static uint8_t *working=NULL;
+-static uint8_t *original=NULL;
+ static GtkWidget *dialog=NULL;
+-static uint32_t left,right,top,bottom,width,height;
+ 
+-static AVDMGenericVideoStream *incoming=NULL;
+-static ADMImage *imgsrc=NULL;
++/* Prevent loop when updating value */
+ 
+ static int lock=0;
+-/*
+-	W: Left
+-	W2: Right
+-	h: Top
+-	h2: Bottom
+-	Th: total height
+-	TW: total width
+-
+-	video : Incoming video in RGB colorspace
+-
+-
+-*/
+-
+-
+-
++static flyCrop *myCrop=NULL;
+ //
+ //	Video is in YV12 Colorspace
+ //
+ //
+ int DIA_getCropParams(	char *name,CROP_PARAMS *param,AVDMGenericVideoStream *in)
+ {
+-	// Allocate space for green-ised video
+-	width=in-&gt;getInfo()-&gt;width;
+-	height=in-&gt;getInfo()-&gt;height;
+-	
+-	
+-	working=new uint8_t [width*height*4];	
+-	original=NULL;
+-
+-	uint8_t ret=0;
+-
+-	dialog=create_dialog1();
+-//	gtk_transient(dialog);
++  uint32_t width,height;
++        // Allocate space for green-ised video
++        width=in-&gt;getInfo()-&gt;width;
++        height=in-&gt;getInfo()-&gt;height;
++        
++        
++  
++        uint8_t ret=0;
++  
++        dialog=create_dialog1();
+         gtk_register_dialog(dialog);
++        
++        gtk_widget_set_usize(WID(drawingarea1), width,height);
++        gtk_window_set_title (GTK_WINDOW (dialog), name);
++        gtk_widget_show(dialog);
+ 	
+-	left=param-&gt;left;
+-	right=param-&gt;right;
+-	top=param-&gt;top;
+-	bottom=param-&gt;bottom;
+-	
+-	imgsrc=new ADMImage(width,height);
+-	incoming=in;
+-	
+-	 rgbConv=new ColYuvRgb(width,height);
+-     rgbConv-&gt;reset(width,height);
+-	
+-	gtk_widget_set_usize(WID(drawingarea1), width,height);
+-	gtk_window_set_title (GTK_WINDOW (dialog), name);
+-	prepare(0);
+-	gtk_widget_show(dialog);
+-	
+-
+-	ui_upload();
+-
+-	ui_update();
+-	
+ #define CONNECT(x,y,z) 	gtk_signal_connect(GTK_OBJECT(WID(x)), #y,GTK_SIGNAL_FUNC(z),   NULL);
+ 
+-	CONNECT(drawingarea1,expose_event,gui_draw);
+-	CONNECT(buttonAutocrop,clicked,autocrop);
+-	CONNECT(buttonReset,clicked,reset);
+-	CONNECT(scale,value_changed,frame_changed);
+-			      
+-	  gtk_dialog_add_action_widget (GTK_DIALOG (dialog), WID(buttonCancel), GTK_RESPONSE_CANCEL);
+-	  gtk_dialog_add_action_widget (GTK_DIALOG (dialog), WID(buttonOk),      GTK_RESPONSE_OK);
+-	  gtk_dialog_add_action_widget (GTK_DIALOG (dialog), WID(buttonApply),  GTK_RESPONSE_APPLY);
+-		      
+-#define CONNECT_SPIN(x) CONNECT(spinbutton##x, value_changed,ui_changed)
+-      	  
+-	  CONNECT_SPIN(Top);
+-	  CONNECT_SPIN(Left);
+-	  CONNECT_SPIN(Right);
+-	  CONNECT_SPIN(Bottom);
+-	  
+-	  
+-	draw(dialog,width,height);
++        CONNECT(drawingarea1,expose_event,ui_draw);
++        CONNECT(buttonAutocrop,clicked,ui_autocrop);
++        CONNECT(buttonReset,clicked,ui_reset);
++        CONNECT(scale,value_changed,ui_frame_changed);
++                              
++          gtk_dialog_add_action_widget (GTK_DIALOG (dialog), WID(buttonCancel), GTK_RESPONSE_CANCEL);
++          gtk_dialog_add_action_widget (GTK_DIALOG (dialog), WID(buttonOk),      GTK_RESPONSE_OK);
++          gtk_dialog_add_action_widget (GTK_DIALOG (dialog), WID(buttonApply),  GTK_RESPONSE_APPLY);
+ 
+-	ret=0;
+-	int response;
+-	while( (response=gtk_dialog_run(GTK_DIALOG(dialog)))==GTK_RESPONSE_APPLY)
+-	{
+-		ui_changed();
+-		
+-	}
+-	if(response==GTK_RESPONSE_OK)
++#define CONNECT_SPIN(x) CONNECT(spinbutton##x, value_changed,ui_update)
++          
++          CONNECT_SPIN(Top);
++          CONNECT_SPIN(Left);
++          CONNECT_SPIN(Right);
++          CONNECT_SPIN(Bottom);
++          
++        myCrop=new flyCrop( width, height,in,WID(drawingarea1),WID(scale));
++        myCrop-&gt;left=param-&gt;left;
++        myCrop-&gt;right=param-&gt;right;
++        myCrop-&gt;top=param-&gt;top;
++        myCrop-&gt;bottom=param-&gt;bottom;
++        myCrop-&gt;upload();
++        myCrop-&gt;sliderChanged();
++        ret=0;
++        int response;
++        while( (response=gtk_dialog_run(GTK_DIALOG(dialog)))==GTK_RESPONSE_APPLY)
+         {
+-		ui_read( );
+-		param-&gt;left=left;
+-		param-&gt;right=right;
+-		param-&gt;top=top;
+-		param-&gt;bottom=bottom;
+-		ret=1;
+-	}
++          ui_update();
++        }
++        if(response==GTK_RESPONSE_OK)
++        {
++                ui_read( );
++                param-&gt;left=myCrop-&gt;left;
++                param-&gt;right=myCrop-&gt;right;
++                param-&gt;top=myCrop-&gt;top;
++                param-&gt;bottom=myCrop-&gt;bottom;
++                ret=1;
++        }
+         gtk_unregister_dialog(dialog);
+-	gtk_widget_destroy(dialog);
+-	delete working;	
+-	delete imgsrc;
+-	delete rgbConv;
+-	working=NULL;
+-	dialog=NULL;
+-	original=NULL;
+-	imgsrc=NULL;
+-	return ret;
++        gtk_widget_destroy(dialog);
++        delete myCrop;
++        return ret;
+ }
+-void frame_changed( void )
++/*
++      Link GTK dialog and core
++*/
++void ui_frame_changed( void )
+ {
+-uint32_t new_frame,max,l,f;
+-double   percent;
+-GtkWidget *wid;	
+-GtkAdjustment *adj;
+-	
+-	max=incoming-&gt;getInfo()-&gt;nb_frames;
+-	wid=WID(scale);
+-	adj=gtk_range_get_adjustment (GTK_RANGE(wid));
+-	new_frame=0;
+-	
+-	percent=(double)GTK_ADJUSTMENT(adj)-&gt;value;
+-	percent*=max;
+-	percent/=100.;
+-	new_frame=(uint32_t)floor(percent);
+-	
+-	if(new_frame&gt;=max) new_frame=max-1;
+-	
+-	prepare(new_frame);
+-	ui_update();
+-	gui_draw();
+-	
+-
++  myCrop-&gt;sliderChanged();
+ }
+-void prepare(uint32_t img)
++void ui_update(void)
+ {
+-	uint32_t l,f;
+-	
+-	ADM_assert(incoming-&gt;getFrameNumberNoAlloc(img,&amp;l,imgsrc,&amp;f));
+-	original=imgsrc-&gt;data;
+-	
+-
++  if(lock) return;
++  myCrop-&gt;download();
++  myCrop-&gt;process();
++  myCrop-&gt;display();
+ }
+-gboolean ui_changed(void)
+-{
+-	if(!lock)
+-	{
+-		ui_read();
+-		memcpy(working,original,(width*height*3)&gt;&gt;1);
+-		ui_update();
+-		draw(dialog,width,height);
+-	}
+-		return true;
+-}
+-
+-
+ /*---------------------------------------------------------------------------
+ 	Actually draw the working frame on screen
+ */
+-gboolean gui_draw( void )
++gboolean ui_draw( void )
+ {
+-	draw(dialog,width,height);
+-	return true;
++        myCrop-&gt;display();
+ }
+-void draw (GtkWidget *dialog,uint32_t w,uint32_t h )
+-{
+-	GtkWidget *draw;
+-	draw=WID(drawingarea1);
+-
+-	GUI_RGBDisplay(working, w,h, (void *)draw);
+-}
+-/*---------------------------------------------------------------------------
+-	Read entried from dialog box
+-*/
+-
+-#define SPIN_GET(x,y) {x= gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(WID(spinbutton##y))) ;}
+-#define SPIN_SET(x,y)  {gtk_spin_button_set_value(GTK_SPIN_BUTTON(WID(spinbutton##y)),(gfloat)x) ;}
+-
+-
+ void ui_read (void )
+ {
+-	int reject=0;
+-	
+-			SPIN_GET(left,Left);
+-			SPIN_GET(right,Right);
+-			SPIN_GET(top,Top);
+-			SPIN_GET(bottom,Bottom);
+-			
+-			printf(&quot;%d %d %d %d\n&quot;,left,right,top,bottom);
+-			
+-			left&amp;=0xffffe;
+-			right&amp;=0xffffe;
+-			top&amp;=0xffffe;
+-			bottom&amp;=0xffffe;
+-			
+-			if((top+bottom)&gt;height)
+-				{
+-					top=bottom=0;
+-					reject=1;
+-				}
+-			if((left+right)&gt;width)
+-				{
+-					left=right=0;
+-					reject=1;
+-				}
+-			if(reject)
+-				ui_upload();
++        myCrop-&gt;download();
+ }
+-
+ void ui_upload(void)
+ {
+-	lock++;
+-	SPIN_SET(left,Left);
+-	SPIN_SET(right,Right);
+-	SPIN_SET(top,Top);
+-	SPIN_SET(bottom,Bottom);
+-	lock--;
++    myCrop-&gt;upload();
+ }
+-//____________________________________
+-void reset( void )
++void ui_autocrop( void )
+ {
+-	
+-	top=bottom=left=right=0;
+-	ui_upload();
+-	ui_update();
+-	gui_draw();
+-	
+-
++  myCrop-&gt;autocrop();
+ }
++void ui_reset( void )
++{
++        myCrop-&gt;left=0;
++        myCrop-&gt;right=0;
++        myCrop-&gt;bottom=0;
++        myCrop-&gt;top=0;
++        
++	myCrop-&gt;upload();
++        myCrop-&gt;process();
++        myCrop-&gt;display();
++}
++
+ /*---------------------------------------------------------------------------
+-	Green-ify the displayed frame on cropped parts
++	Read entried from dialog box
+ */
+-void ui_update( )
+-{
+-	uint32_t x,y;
+-	uint8_t  *in;
+-	uint32_t w=width,h=height;
+-	uint8_t *buffer=working;
+-	
+-	//
+-	//COL_yv12rgb(  w,   h,original,buffer );
+-	rgbConv-&gt;scale(original,buffer);
+-	// do top
+-	in=buffer;
+-	for(y=0;y&lt;top;y++)
+-	{
+-		for(x=0;x&lt;w;x++)
+-		{
+-			*in++=0;
+-			
+-			
+-			*in++=0xff;
+-			
+-			*in++=0;
+-			*in++=0;
+-		}
+-	}
+-	// bottom
+-	in=buffer+(w*4)*(h-bottom);
+-	for(y=0;y&lt;bottom;y++)
+-	{
+-		for(x=0;x&lt;w;x++)
+-		{
+-			*in++=0;
+-			
+-			
+-			*in++=0xff;
+-			*in++=0;
+-			*in++=0;
+-		}
+-	}
+-	// left
+-	in=buffer;
+-	uint32_t stride=4*w-4;
+-	for(y=0;y&lt;h;y++)
+-	{
+-		for(x=0;x&lt;left;x++)
+-		{
+-			*(in+4*x)=0;
+-			
+-			
+-			*(in+4*x+1)=0xff;
+-			*(in+4*x+2)=0;
+-			*(in+4*x+3)=0;
+-		}
+-		for(x=0;x&lt;right;x++)
+-		{
+-			*(in-4*x+stride-4)=0;
+-			
+-			
+-			*(in-4*x+stride-3)=0xff;
+-			*(in-4*x+stride-2)=0;
+-			*(in-4*x+stride-1)=0;
+-			
+-		}
+-		in+=4*w;
+ 
+-	}
++#define SPIN_GET(x,y) {x= gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(WID(spinbutton##y))) ;}
++#define SPIN_SET(x,y)  {gtk_spin_button_set_value(GTK_SPIN_BUTTON(WID(spinbutton##y)),(gfloat)x) ;}
+ 
+-	//right
+-}
+ 
+-/*----------------------------------
+-  autocrop
+------------------------------------*/
+-void autocrop( void )
++//____________________________________
++uint8_t flyCrop::upload(void)
+ {
+-uint8_t *in;
+-uint32_t y,avg,eqt;
+-	// Top
+-	
+-#define THRESH_AVG   30
+-#define THRESH_EQT   50
+-	
+-	in=original;
+-	for(y=0;y&lt;((height&gt;&gt;1)-2);y++)	
+-	{
+-		Metrics(in,width,&amp;avg,&amp;eqt);
+-		in+=width;
+-		//printf(&quot;LineT :%d avg: %d eqt: %d\n&quot;,y,avg,eqt);
+-		if(avg&gt; THRESH_AVG || eqt &gt; THRESH_EQT)
+-			break;
+-	}
+-//gotcha_:	
+-	if(y)
+-		top=y-1;
+-	else 
+-		top=0;
+-		
+-	in=original+width*(height-1);
+-	for(y=0;y&lt;((height&gt;&gt;1)-2);y++)	
+-	{
+-		Metrics(in,width,&amp;avg,&amp;eqt);
+-		in-=width;
+-		//printf(&quot;Line B :%d avg: %d eqt: %d\n&quot;,y,avg,eqt);
+-		if(avg&gt; THRESH_AVG || eqt &gt; THRESH_EQT)
+-				break;
+-	}
+-//gotcha_:	
+-	if(y)
+-		bottom=y-1;
+-	else
+-		bottom=0;
+-
+-		
+-// Left
+-	in=original;
+-	for(y=0;y&lt;((width&gt;&gt;1)-2);y++)	
+-	{
+-		MetricsV(in,height,&amp;avg,&amp;eqt);
+-		in++;
+-		//printf(&quot;Line L :%d avg: %d eqt: %d\n&quot;,y,avg,eqt);
+-		if(avg&gt; THRESH_AVG || eqt &gt; THRESH_EQT)
+-				break;
+-	}
+-//gotcha_:	
+-	if(y)
+-		left=y-1;
+-	else
+-		left=0;		
+-// Right
+-	in=original+width-1;
+-	for(y=0;y&lt;((width&gt;&gt;1)-2);y++)	
+-	{
+-		MetricsV(in,height,&amp;avg,&amp;eqt);
+-		in--;
+-		//printf(&quot;Line R :%d avg: %d eqt: %d\n&quot;,y,avg,eqt);
+-		if(avg&gt; THRESH_AVG || eqt &gt; THRESH_EQT)
+-				break;
+-	}
+-//gotcha_:	
+-	if(y)
+-		right=y-1;
+-	else
+-		right=0;
+-
+-		
+-	// Update display
+-	top=top &amp; 0xfffe;
+-	bottom=bottom &amp; 0xfffe;
+-	ui_upload();
+-	ui_update();
+-	draw(dialog,width,height);
+-	
+-	
++        lock++;
++        SPIN_SET(left,Left);
++        SPIN_SET(right,Right);
++        SPIN_SET(top,Top);
++        SPIN_SET(bottom,Bottom);
++        lock--;
++        return 1;
+ }
+-/*---------------------------------------------
+-	Compute the average value of pixels
+-	and eqt is the &quot;ecart type&quot;
+-*/
+-uint8_t Metrics( uint8_t *in, uint32_t width,uint32_t *avg, uint32_t *eqt)
++uint8_t flyCrop::download(void)
+ {
+-
+-uint32_t x;
+-uint32_t sum=0,eq=0;
+-uint8_t v;
+-		for(x=0;x&lt;width;x++)
+-		{
+-			sum+=*(in+x);
+-		}
+-		sum=sum/width;
+-		*avg=sum;
+-		for(x=0;x&lt;width;x++)
+-		{
+-			v=*(in+x)-sum;
+-			eq+=v*v;
+-		}
+-		eq=eq/(width*width);
+-		*eqt=eq;
+-		return 1;
++        int reject=0;
++        
++                        SPIN_GET(left,Left);
++                        SPIN_GET(right,Right);
++                        SPIN_GET(top,Top);
++                        SPIN_GET(bottom,Bottom);
++                        
++                        printf(&quot;%d %d %d %d\n&quot;,left,right,top,bottom);
++                        
++                        left&amp;=0xffffe;
++                        right&amp;=0xffffe;
++                        top&amp;=0xffffe;
++                        bottom&amp;=0xffffe;
++                        
++                        if((top+bottom)&gt;_h)
++                                {
++                                        top=bottom=0;
++                                        reject=1;
++                                }
++                        if((left+right)&gt;_w)
++                                {
++                                        left=right=0;
++                                        reject=1;
++                                }
++                        if(reject)
++                                upload();
+ }
+-/*---------------------------------------------
+-	Compute the average value of pixels
+-	and eqt is the &quot;ecart type&quot;
+-*/
+-uint8_t MetricsV( uint8_t *in, uint32_t height,uint32_t *avg, uint32_t *eqt)
+-{
+-
+-uint32_t x;
+-uint32_t sum=0,eq=0;
+-uint8_t v;
+-		for(x=0;x&lt;height;x++)
+-		{
+-			sum+=*(in+x*width);
+-		}
+-		sum=sum/height;
+-		*avg=sum;
+-		for(x=0;x&lt;height;x++)
+-		{
+-			v=*(in+x*width)-sum;
+-			eq+=v*v;
+-		}
+-		eq=eq/(height*height);
+-		*eqt=eq;
+-		return 1;
+-}
++// End common part
+ //--------------------------------------------
+ GtkWidget*
+ create_dialog1 (void)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog/Makefile.am
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog/Makefile.am	2007-05-12 10:38:08 UTC (rev 3070)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialog/Makefile.am	2007-05-12 18:14:15 UTC (rev 3071)
+@@ -29,7 +29,8 @@
+ 	DIA_coloryuv.cpp \
+ 	DIA_quota.cpp \
+ 	DIA_animated.cpp \
+-	DIA_partial.cpp 
++	DIA_partial.cpp  \
++	DIA_flyDialog.cpp
+ 
+ 
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters/gui_filter.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters/gui_filter.cpp	2007-05-12 10:38:08 UTC (rev 3070)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters/gui_filter.cpp	2007-05-12 18:14:15 UTC (rev 3071)
+@@ -32,7 +32,7 @@
+ #include &quot;avi_vars.h&quot;
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+ #include &quot;ADM_video/ADM_genvideo.hxx&quot;
+-
++#include &quot;ADM_video/ADM_videoNull.h&quot;
+ #include &quot;../ADM_userInterfaces/ADM_GTK/ADM_toolkit_gtk/toolkit_gtk.h&quot;
+ 
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters/gui_filtermanager.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters/gui_filtermanager.cpp	2007-05-12 10:38:08 UTC (rev 3070)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_filters/gui_filtermanager.cpp	2007-05-12 18:14:15 UTC (rev 3071)
+@@ -15,6 +15,7 @@
+ #include &lt;ADM_assert.h&gt;
+ #include &quot;ADM_toolkit/filesel.h&quot;
+ #include &quot;ADM_video/ADM_genvideo.hxx&quot;
++#include &quot;ADM_video/ADM_videoNull.h&quot;
+ #include &quot;ADM_filter/video_filters.h&quot;
+ #include &quot;ADM_video/ADM_vidPartial.h&quot;
+ #include &quot;ADM_toolkit_gtk/ADM_gladeSupport.h&quot;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000371.html">[Avidemux-svn-commit] r3070 - branches/avidemux_2.4_branch/po
+</A></li>
+	<LI>Next message: <A HREF="000373.html">[Avidemux-svn-commit] r3072 - in	branches/avidemux_2.4_branch/avidemux: ADM_filter ADM_video
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#372">[ date ]</a>
+              <a href="thread.html#372">[ thread ]</a>
+              <a href="subject.html#372">[ subject ]</a>
+              <a href="author.html#372">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

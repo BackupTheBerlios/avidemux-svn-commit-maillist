@@ -1,0 +1,170 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4503 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_inputs/ADM_inpics
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4503%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%0A%09ADM_inputs/ADM_inpics&In-Reply-To=%3C200812302021.mBUKLruM010923%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001738.html">
+   <LINK REL="Next"  HREF="001740.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4503 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_inputs/ADM_inpics</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4503%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%0A%09ADM_inputs/ADM_inpics&In-Reply-To=%3C200812302021.mBUKLruM010923%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4503 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_inputs/ADM_inpics">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Dec 30 21:21:53 CET 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001738.html">[Avidemux-svn-commit] r4502 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mp4
+</A></li>
+        <LI>Next message: <A HREF="001740.html">[Avidemux-svn-commit] r4504 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libswscale
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1739">[ date ]</a>
+              <a href="thread.html#1739">[ thread ]</a>
+              <a href="subject.html#1739">[ subject ]</a>
+              <a href="author.html#1739">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-12-30 21:21:38 +0100 (Tue, 30 Dec 2008)
+New Revision: 4503
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_inpics/ADM_pics.cpp
+Log:
+[rawvid] use libavcodec decoder instead of internal for raw video and support BGR24 colourspace
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp	2008-12-27 20:38:45 UTC (rev 4502)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp	2008-12-30 20:21:38 UTC (rev 4503)
+@@ -396,21 +396,18 @@
+       return (decoders *) (new decoderFFVP6F (w, h,extraLen,extraData));
+     }
+ 
++  if (fourCC::check (fcc, (uint8_t *) &quot;BMP &quot;))
++  {
++	  printf (&quot;\n using RGB codec\n&quot;);
++	  return (decoders *) (new decoderRGB16(w, h, 1, bpp));
++  }
+ 
+-  if ((fcc == 0) || fourCC::check (fcc, (uint8_t *) &quot;RGB &quot;))
+-    {
+-      // RGB 16 Codecs
+-      printf (&quot;\n using RGB codec\n&quot;);
+-      return (decoders *) (new decoderRGB16 (w, h, 1, bpp));
++  if (fcc == 0 || fourCC::check(fcc, (uint8_t *) &quot;RGB &quot;) || fourCC::check(fcc, (uint8_t *) &quot;DIB &quot;))
++  {
++	  printf (&quot;\n using Rawvideo codec, BPP: %d\n&quot;, bpp);
++	  return (decoders *) (new decoderFFRaw(w, h, bpp));
++  }
+ 
+-    }
+- if ((fcc == 0) || fourCC::check (fcc, (uint8_t *) &quot;DIB &quot;))
+-    {
+-      // RGB 16 Codecs
+-      printf (&quot;\n using DIB codec\n&quot;);
+-      return (decoders *) (new decoderRGB16 (w, h, 0, bpp));
+-
+-    }
+   if (isMpeg12Compatible (fcc))
+     {
+       uint32_t lavcodec_mpeg = 0;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2008-12-27 20:38:45 UTC (rev 4502)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2008-12-30 20:21:38 UTC (rev 4503)
+@@ -417,6 +417,9 @@
+       // we do it or not
+       out-&gt;_colorspace = ADM_COLOR_YV12;
+       break;
++	case PIX_FMT_BGR24:
++	  out-&gt;_colorspace = ADM_COLOR_BGR24;
++	  break;
+ 	case PIX_FMT_RGB24:
+ 	  out-&gt;_colorspace = ADM_COLOR_RGB24;
+ 	  break;
+@@ -558,6 +561,12 @@
+   _context-&gt;pix_fmt = PIX_FMT_GRAY8;
+ }
+ 
++decoderFFRaw::decoderFFRaw(uint32_t w, uint32_t h, uint32_t bpp) : decoderFF (w, h)
++{
++	_context-&gt;bits_per_sample = bpp;
++	WRAP_Open (CODEC_ID_RAWVIDEO);
++}
++
+ decoderFFPng::decoderFFPng (uint32_t w, uint32_t h):decoderFF (w, h)
+ {
+   WRAP_Open (CODEC_ID_PNG);
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h	2008-12-27 20:38:45 UTC (rev 4502)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h	2008-12-30 20:21:38 UTC (rev 4503)
+@@ -261,6 +261,12 @@
+   decoderFFY800 (uint32_t w, uint32_t h);
+ };
+ 
++class decoderFFRaw : public decoderFF
++{
++public:
++	decoderFFRaw(uint32_t w, uint32_t h, uint32_t bpp);
++};
++
+ class decoderFFPng : public decoderFF
+ {
+ public:
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_inpics/ADM_pics.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_inpics/ADM_pics.cpp	2008-12-27 20:38:45 UTC (rev 4502)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_inpics/ADM_pics.cpp	2008-12-30 20:21:38 UTC (rev 4503)
+@@ -407,7 +407,7 @@
+ 	        break;
+ 	    case PIC_BMP:
+ 	    case PIC_BMP2:
+-	        _video_bih.biCompression = _videostream.fccHandler = fourCC::get((uint8_t *) &quot;DIB &quot;);
++	        _video_bih.biCompression = _videostream.fccHandler = fourCC::get((uint8_t *) &quot;BMP &quot;);
+ 	        break;
+ 	    case PIC_PNG:
+ 	        _video_bih.biCompression = _videostream.fccHandler =
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001738.html">[Avidemux-svn-commit] r4502 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mp4
+</A></li>
+	<LI>Next message: <A HREF="001740.html">[Avidemux-svn-commit] r4504 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libswscale
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1739">[ date ]</a>
+              <a href="thread.html#1739">[ thread ]</a>
+              <a href="subject.html#1739">[ subject ]</a>
+              <a href="author.html#1739">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

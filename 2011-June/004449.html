@@ -1,0 +1,896 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7295 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7295%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src&In-Reply-To=%3C20110617130242.23F2F480F06%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004448.html">
+   <LINK REL="Next"  HREF="004450.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7295 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7295%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src&In-Reply-To=%3C20110617130242.23F2F480F06%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7295 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Fri Jun 17 15:02:41 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004448.html">[Avidemux-svn-commit] r7294 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="004450.html">[Avidemux-svn-commit] r7296 - in	branches/avidemux_2.5_branch_gruntster/avidemux: . ADM_core/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4449">[ date ]</a>
+              <a href="thread.html#4449">[ thread ]</a>
+              <a href="subject.html#4449">[ subject ]</a>
+              <a href="author.html#4449">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2011-06-17 15:02:41 +0200 (Fri, 17 Jun 2011)
+New Revision: 7295
+
+Added:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_apple.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_mswin.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_unix.cpp
+Removed:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump.cpp
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/CMakeLists.txt
+Log:
+[log] separate files for backtrace by platform
+
+Deleted: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump.cpp	2011-06-17 05:52:52 UTC (rev 7294)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump.cpp	2011-06-17 13:02:41 UTC (rev 7295)
+@@ -1,363 +0,0 @@
+-/***************************************************************************
+-  Try to display interesting crash dump
+-
+-    copyright            : (C) 2007 by mean, (C) 2007 Gruntster
+-    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+- ***************************************************************************/
+-
+-/***************************************************************************
+- *                                                                         *
+- *   This program is free software; you can redistribute it and/or modify  *
+- *   it under the terms of the GNU General Public License as published by  *
+- *   the Free Software Foundation; either version 2 of the License, or     *
+- *   (at your option) any later version.                                   *
+- *                                                                         *
+- ***************************************************************************/
+-
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+-#include &lt;stdarg.h&gt;
+-#include &lt;string.h&gt;
+-#include &lt;unistd.h&gt;
+-#include &lt;math.h&gt;
+-
+-#ifdef __MINGW32__
+-#include &lt;windows.h&gt;
+-#include &lt;excpt.h&gt;
+-#include &lt;imagehlp.h&gt;
+-#else
+-#include &lt;cxxabi.h&gt;
+-#endif
+-
+-#include &quot;ADM_default.h&quot;
+-
+-// Our callback to give UI formatted informations....
+-static ADM_saveFunction *mysaveFunction=NULL;
+-static ADM_fatalFunction *myFatalFunction=NULL;
+-/**
+-        \fn ADM_setCrashHook
+-        \brief install crash handlers (save + display)
+-*/
+-void ADM_setCrashHook(ADM_saveFunction *save, ADM_fatalFunction *fatal)
+-{
+-        mysaveFunction=save;
+-        myFatalFunction=fatal;
+-}
+-
+-extern char *ADM_getBaseDir(void);
+-extern void A_parseECMAScript(const char *name);
+-
+-#ifdef __APPLE__
+-void installSigHandler() {}
+-
+-void ADM_backTrack(const char *info,int lineno,const char *file)
+-{
+-	char bfr[1024];
+-
+-	if (mysaveFunction)
+-		mysaveFunction();
+-
+-	snprintf(bfr,1024,&quot;%s\n file %s, line %d\n&quot;, info, file, lineno);
+-
+-	if(myFatalFunction)
+-		myFatalFunction(&quot;Crash&quot;,bfr);
+-
+-	exit(-1);
+-}
+-#elif defined(__MINGW32__)
+-typedef struct STACK_FRAME
+-{
+-    STACK_FRAME* ebp;	// address of the calling function frame
+-    uint8_t* retAddr;	// return address
+-    uint32_t param[0];	// parameter list (could be empty)
+-} STACK_FRAME;
+-
+-static void dumpFrame(void* processId, void* frameAddr)
+-{
+-#ifdef ADM_CPU_X86_64
+-#define ARCH_DWORD DWORD64
+-#else
+-#define ARCH_DWORD DWORD
+-#endif
+-
+-	MEMORY_BASIC_INFORMATION mbi;
+-	char moduleName[MAX_PATH];
+-	HMODULE moduleAddr;
+-	ARCH_DWORD symDisplacement;
+-	IMAGEHLP_SYMBOL* pSymbol;
+-
+-	if (VirtualQuery(frameAddr, &amp;mbi, sizeof(mbi)))
+-	{
+-		moduleName[0] = 0;
+-		moduleAddr = (HMODULE)mbi.AllocationBase;
+-		
+-		GetModuleFileName(moduleAddr, moduleName, MAX_PATH);
+-
+-		printf(&quot;%s(&quot;, moduleName);
+-
+-		if (SymGetSymFromAddr(processId, (ARCH_DWORD)frameAddr, &amp;symDisplacement, pSymbol))
+-			printf(&quot;%s&quot;, pSymbol-&gt;Name);
+-		else
+-			printf(&quot;&lt;unknown&gt;&quot;);
+-
+-		printf(&quot;+0x%X) [0x%08X]\n&quot;, (ARCH_DWORD)frameAddr - (ARCH_DWORD)moduleAddr, frameAddr);
+-
+-		fflush(stdout);
+-	}
+-}
+-	
+-static void dumpExceptionInfo(void* processId, struct _EXCEPTION_RECORD* pExceptionRec, struct _CONTEXT* pContextRecord)
+-{
+-	printf(&quot;\n*********** EXCEPTION **************\n&quot;);
+-	printf(&quot;Registers:\n&quot;);
+-#ifdef ADM_CPU_X86_64
+-	printf(&quot;RAX: %08X  RBX: %08X  RCX: %08X  RDX: %08X  RSI: %08X  RDI: %08X  RSP: %08X  RBP: %08X\n&quot;, pContextRecord-&gt;Rax, pContextRecord-&gt;Rbx, pContextRecord-&gt;Rcx, pContextRecord-&gt;Rdx, pContextRecord-&gt;Rsi, pContextRecord-&gt;Rdi, pContextRecord-&gt;Rsp, pContextRecord-&gt;Rbp);
+-	printf(&quot;R8: %08X  R9: %08X  R10: %08X  R11: %08X  R12: %08X  R13: %08X  R14: %08X  R15: %08X\n&quot;, pContextRecord-&gt;R8, pContextRecord-&gt;R9, pContextRecord-&gt;R10, pContextRecord-&gt;R11, pContextRecord-&gt;R12, pContextRecord-&gt;R13, pContextRecord-&gt;R14, pContextRecord-&gt;R15);
+-	printf(&quot;RIP: %08X  EFlags: %08X\n\n&quot;, pContextRecord-&gt;Rip, pContextRecord-&gt;EFlags);
+-#else
+-	printf(&quot;EAX: %08X  EBX: %08X  ECX: %08X  EDX: %08X  ESI: %08X\n&quot;, pContextRecord-&gt;Eax, pContextRecord-&gt;Ebx, pContextRecord-&gt;Ecx, pContextRecord-&gt;Edx, pContextRecord-&gt;Esi);
+-	printf(&quot;EDI: %08X  ESP: %08X  EBP: %08X  EIP: %08X  EFlags: %08X\n\n&quot;, pContextRecord-&gt;Edi, pContextRecord-&gt;Esp, pContextRecord-&gt;Ebp, pContextRecord-&gt;Eip, pContextRecord-&gt;EFlags);
+-#endif
+-
+-	printf(&quot;Exception Code: &quot;);
+-
+-	switch (pExceptionRec-&gt;ExceptionCode)
+-	{
+-		case EXCEPTION_ACCESS_VIOLATION:
+-			printf(&quot;EXCEPTION_ACCESS_VIOLATION&quot;);
+-			break;
+-		case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
+-			printf(&quot;EXCEPTION_ARRAY_BOUNDS_EXCEEDED&quot;);
+-			break;
+-		case EXCEPTION_BREAKPOINT:
+-			printf(&quot;EXCEPTION_BREAKPOINT&quot;);
+-			break;
+-		case EXCEPTION_DATATYPE_MISALIGNMENT:
+-			printf(&quot;EXCEPTION_DATATYPE_MISALIGNMENT&quot;);
+-			break;
+-		case EXCEPTION_FLT_DENORMAL_OPERAND:
+-			printf(&quot;EXCEPTION_FLT_DENORMAL_OPERAND&quot;);
+-			break;
+-		case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+-			printf(&quot;EXCEPTION_FLT_DIVIDE_BY_ZERO&quot;);
+-			break;
+-		case EXCEPTION_FLT_INEXACT_RESULT:
+-			printf(&quot;EXCEPTION_FLT_INEXACT_RESULT&quot;);
+-			break;
+-		case EXCEPTION_FLT_INVALID_OPERATION:
+-			printf(&quot;EXCEPTION_FLT_INVALID_OPERATION&quot;);
+-			break;
+-		case EXCEPTION_FLT_OVERFLOW:
+-			printf(&quot;EXCEPTION_FLT_OVERFLOW&quot;);
+-			break;
+-		case EXCEPTION_FLT_STACK_CHECK:
+-			printf(&quot;EXCEPTION_FLT_STACK_CHECK&quot;);
+-			break;
+-		case EXCEPTION_FLT_UNDERFLOW:
+-			printf(&quot;EXCEPTION_FLT_UNDERFLOW&quot;);
+-			break;
+-		case EXCEPTION_ILLEGAL_INSTRUCTION:
+-			printf(&quot;EXCEPTION_ILLEGAL_INSTRUCTION&quot;);
+-			break;
+-		case EXCEPTION_IN_PAGE_ERROR:
+-			printf(&quot;EXCEPTION_IN_PAGE_ERROR&quot;);
+-			break;
+-		case EXCEPTION_INT_DIVIDE_BY_ZERO:
+-			printf(&quot;EXCEPTION_INT_DIVIDE_BY_ZERO&quot;);
+-			break;
+-		case EXCEPTION_INT_OVERFLOW:
+-			printf(&quot;EXCEPTION_INT_OVERFLOW&quot;);
+-			break;
+-		case EXCEPTION_INVALID_DISPOSITION:
+-			printf(&quot;EXCEPTION_INVALID_DISPOSITION&quot;);
+-			break;
+-		case EXCEPTION_NONCONTINUABLE_EXCEPTION:
+-			printf(&quot;EXCEPTION_NONCONTINUABLE_EXCEPTION&quot;);
+-			break;
+-		case EXCEPTION_PRIV_INSTRUCTION:
+-			printf(&quot;EXCEPTION_PRIV_INSTRUCTION&quot;);
+-			break;
+-		case EXCEPTION_SINGLE_STEP:
+-			printf(&quot;EXCEPTION_SINGLE_STEP&quot;);
+-			break;
+-		case EXCEPTION_STACK_OVERFLOW:
+-			printf(&quot;EXCEPTION_STACK_OVERFLOW&quot;);
+-			break;
+-		default:
+-			printf(&quot;UNKNOWN&quot;);
+-	}
+-	
+-	printf(&quot; (%08X)\n&quot;, pExceptionRec-&gt;ExceptionCode);
+-	printf(&quot;Exception Flags: %08X\n&quot;, pExceptionRec-&gt;ExceptionFlags);
+-
+-	printf(&quot;\nOrigin:\n&quot;);
+-
+-#ifdef ADM_CPU_X86_64
+-	dumpFrame(processId, (void*)pContextRecord-&gt;Rip);
+-#else
+-	dumpFrame(processId, (void*)pContextRecord-&gt;Eip);
+-#endif
+-
+-	printf(&quot;*********** EXCEPTION **************\n&quot;);
+-	fflush(stdout);
+-}
+-
+-extern &quot;C&quot;
+-{
+-void dumpBackTrace(void* processId)
+-{
+-	if (!processId)
+-		processId = GetCurrentProcess();
+-
+-	const int maxAddrCount = 32;
+-
+-	printf(&quot;\n*********** BACKTRACE **************\n&quot;);
+-
+-	// Get frame address using builtin GCC function.
+-	STACK_FRAME* stackFrame = (STACK_FRAME*)__builtin_frame_address(0);
+-
+-    for (int retAddrCount = 0; (retAddrCount &lt; maxAddrCount) &amp;&amp; !IsBadReadPtr(stackFrame, sizeof(STACK_FRAME)) &amp;&amp; !IsBadCodePtr(FARPROC(stackFrame-&gt;retAddr)); retAddrCount++, stackFrame = stackFrame-&gt;ebp)
+-    {
+-		printf(&quot;Frame %2d: &quot;, retAddrCount);
+-		dumpFrame(processId, stackFrame-&gt;retAddr);
+-		fflush(stdout);
+-    }
+-
+-	printf(&quot;*********** BACKTRACE **************\n\n&quot;);
+-}
+-}
+-
+-void ADM_backTrack(const char *info,int lineno,const char *file)
+-{	
+-	fflush(stderr);
+-	fflush(stdout);
+-
+-	if (mysaveFunction)
+-		mysaveFunction();
+-
+-	if (myFatalFunction)
+-		myFatalFunction(&quot;Crash&quot;, &quot;Press OK to build crash info&quot;);
+-
+-	void* currentProcessId = GetCurrentProcess();
+-
+-	SymInitialize(currentProcessId, NULL, TRUE);
+-	dumpBackTrace(currentProcessId);
+-	SymCleanup(currentProcessId);
+-
+-	printf(&quot;Assert failed at file %s, line %d\n\n&quot;,file,lineno);
+-
+-	exit(-1);
+-}
+-
+-EXCEPTION_DISPOSITION exceptionHandler(struct _EXCEPTION_RECORD* pExceptionRec, void* pEstablisherFrame, struct _CONTEXT* pContextRecord, void* pDispatcherContext)
+-{
+-	fflush(stderr);
+-	fflush(stdout);
+-	static int running=0;
+-
+-	if(running)
+-		exit(1);
+-
+-	running=1;
+-
+-	if (mysaveFunction)
+-		mysaveFunction();
+-
+-	if (myFatalFunction)
+-		myFatalFunction(&quot;Crash&quot;, &quot;Press OK to build crash info&quot;);
+-
+-	void* currentProcessId = GetCurrentProcess();
+-
+-	SymInitialize(currentProcessId, NULL, TRUE);
+-
+-	dumpExceptionInfo(currentProcessId, pExceptionRec, pContextRecord);
+-	fflush(stdout);
+-	dumpBackTrace(currentProcessId);
+-
+-	SymCleanup(currentProcessId);
+-
+-	exit(1);
+-}
+-#else
+-#include &lt;signal.h&gt;
+-
+-#ifndef __CYGWIN__
+-#include &lt;execinfo.h&gt;
+-#endif
+-
+-void sig_segfault_handler(int signo);
+-void installSigHandler()
+-{
+-    signal(11, sig_segfault_handler); // show stacktrace on default
+-}
+-
+-
+-/**
+-      \fn sig_segfault_handler
+-      \brief our segfault handler
+-
+-*/
+-void sig_segfault_handler(int signo)
+-{
+-     
+-     static int running=0;
+-      if(running) 
+-      {
+-        signo=0;
+-        exit(1);
+-      }
+-      running=0; 
+-      ADM_backTrack(&quot;Segfault&quot;,0,&quot;??&quot;);
+-}
+-
+-void ADM_backTrack(const char *info,int lineno,const char *file)
+-{
+-	char wholeStuff[2048];
+-    char buffer[2048];
+-    char in[2048];
+-	void *stack[20];
+-	char **functions;
+-	int count, i;
+-
+-	wholeStuff[0]=0;
+-
+-	if(mysaveFunction)
+-		mysaveFunction();
+-
+-#ifndef __CYGWIN__
+-	printf(&quot;\n*********** BACKTRACK **************\n&quot;);
+-
+-	count = backtrace(stack, 20);
+-	functions = backtrace_symbols(stack, count);
+-	sprintf(wholeStuff,&quot;%s\n at line %d, file %s&quot;,info,lineno,file);
+-    int status;
+-    size_t size=2047;
+-    // it looks like that xxxx (functionName+0x***) XXXX
+-	for (i=0; i &lt; count; i++) 
+-	{
+-        char *s=strstr(functions[i],&quot;(&quot;);
+-        buffer[0]=0;
+-        if(s &amp;&amp; strstr(s+1,&quot;+&quot;))
+-        {
+-            strcpy(in,s+1);
+-            char *e=strstr(in,&quot;+&quot;);
+-            *e=0;                
+-            __cxxabiv1::__cxa_demangle(in,buffer,&amp;size,&amp;status);
+-            if(status) strcpy(buffer,in);
+-        }else       
+-            strcpy(buffer,functions[i]);
+-        printf(&quot;%s:%d:&lt;%s&gt;:%d\n&quot;,functions[i],i,buffer,status);
+-		strcat(wholeStuff,buffer);
+-		strcat(wholeStuff,&quot;\n&quot;);
+-	}
+-
+-	printf(&quot;*********** BACKTRACK **************\n&quot;);
+-
+-	if(myFatalFunction)
+-		myFatalFunction(&quot;Crash&quot;, wholeStuff); // FIXME
+-#endif	//__CYGWIN__
+-
+-	exit(-1); // _exit(1) ???
+-}
+-#endif
+-//EOF
+
+Added: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_apple.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_apple.cpp	                        (rev 0)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_apple.cpp	2011-06-17 13:02:41 UTC (rev 7295)
+@@ -0,0 +1,54 @@
++/***************************************************************************
++  Try to display interesting crash dump
++
++    copyright            : (C) 2007 by mean, (C) 2007 Gruntster
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++#include &lt;stdarg.h&gt;
++#include &lt;string.h&gt;
++#include &lt;unistd.h&gt;
++#include &lt;cxxabi.h&gt;
++
++#include &quot;ADM_default.h&quot;
++
++// Our callback to give UI formatted informations....
++static ADM_saveFunction *mysaveFunction=NULL;
++static ADM_fatalFunction *myFatalFunction=NULL;
++/**
++        \fn ADM_setCrashHook
++        \brief install crash handlers (save + display)
++*/
++void ADM_setCrashHook(ADM_saveFunction *save, ADM_fatalFunction *fatal)
++{
++        mysaveFunction=save;
++        myFatalFunction=fatal;
++}
++
++void installSigHandler() {}
++
++void ADM_backTrack(const char *info,int lineno,const char *file)
++{
++	char bfr[1024];
++
++	if (mysaveFunction)
++		mysaveFunction();
++
++	snprintf(bfr,1024,&quot;%s\n file %s, line %d\n&quot;, info, file, lineno);
++
++	if(myFatalFunction)
++		myFatalFunction(&quot;Crash&quot;,bfr);
++
++	exit(-1);
++}
+
+Added: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_mswin.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_mswin.cpp	                        (rev 0)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_mswin.cpp	2011-06-17 13:02:41 UTC (rev 7295)
+@@ -0,0 +1,247 @@
++/***************************************************************************
++  Try to display interesting crash dump
++
++    copyright            : (C) 2007 by mean, (C) 2007 Gruntster
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include &lt;windows.h&gt;
++#include &lt;imagehlp.h&gt;
++
++#include &quot;ADM_default.h&quot;
++
++// Our callback to give UI formatted informations....
++static ADM_saveFunction *mysaveFunction=NULL;
++static ADM_fatalFunction *myFatalFunction=NULL;
++/**
++        \fn ADM_setCrashHook
++        \brief install crash handlers (save + display)
++*/
++void ADM_setCrashHook(ADM_saveFunction *save, ADM_fatalFunction *fatal)
++{
++        mysaveFunction=save;
++        myFatalFunction=fatal;
++}
++
++typedef struct STACK_FRAME
++{
++    STACK_FRAME* ebp;	// address of the calling function frame
++    uint8_t* retAddr;	// return address
++    uint32_t param[0];	// parameter list (could be empty)
++} STACK_FRAME;
++
++static void dumpFrame(void* processId, void* frameAddr)
++{
++#ifdef ADM_CPU_X86_64
++#define ARCH_DWORD DWORD64
++#else
++#define ARCH_DWORD DWORD
++#endif
++
++	MEMORY_BASIC_INFORMATION mbi;
++	char moduleName[MAX_PATH];
++	HMODULE moduleAddr;
++	ARCH_DWORD symDisplacement;
++	IMAGEHLP_SYMBOL* pSymbol;
++
++	if (VirtualQuery(frameAddr, &amp;mbi, sizeof(mbi)))
++	{
++		moduleName[0] = 0;
++		moduleAddr = (HMODULE)mbi.AllocationBase;
++		
++		GetModuleFileName(moduleAddr, moduleName, MAX_PATH);
++
++		printf(&quot;%s(&quot;, moduleName);
++
++		if (SymGetSymFromAddr(processId, (ARCH_DWORD)frameAddr, &amp;symDisplacement, pSymbol))
++			printf(&quot;%s&quot;, pSymbol-&gt;Name);
++		else
++			printf(&quot;&lt;unknown&gt;&quot;);
++
++		printf(&quot;+0x%X) [0x%08X]\n&quot;, (ARCH_DWORD)frameAddr - (ARCH_DWORD)moduleAddr, frameAddr);
++
++		fflush(stdout);
++	}
++}
++	
++static void dumpExceptionInfo(void* processId, struct _EXCEPTION_RECORD* pExceptionRec, struct _CONTEXT* pContextRecord)
++{
++	printf(&quot;\n*********** EXCEPTION **************\n&quot;);
++	printf(&quot;Registers:\n&quot;);
++#ifdef ADM_CPU_X86_64
++	printf(&quot;RAX: %08X  RBX: %08X  RCX: %08X  RDX: %08X  RSI: %08X  RDI: %08X  RSP: %08X  RBP: %08X\n&quot;, pContextRecord-&gt;Rax, pContextRecord-&gt;Rbx, pContextRecord-&gt;Rcx, pContextRecord-&gt;Rdx, pContextRecord-&gt;Rsi, pContextRecord-&gt;Rdi, pContextRecord-&gt;Rsp, pContextRecord-&gt;Rbp);
++	printf(&quot;R8: %08X  R9: %08X  R10: %08X  R11: %08X  R12: %08X  R13: %08X  R14: %08X  R15: %08X\n&quot;, pContextRecord-&gt;R8, pContextRecord-&gt;R9, pContextRecord-&gt;R10, pContextRecord-&gt;R11, pContextRecord-&gt;R12, pContextRecord-&gt;R13, pContextRecord-&gt;R14, pContextRecord-&gt;R15);
++	printf(&quot;RIP: %08X  EFlags: %08X\n\n&quot;, pContextRecord-&gt;Rip, pContextRecord-&gt;EFlags);
++#else
++	printf(&quot;EAX: %08X  EBX: %08X  ECX: %08X  EDX: %08X  ESI: %08X\n&quot;, pContextRecord-&gt;Eax, pContextRecord-&gt;Ebx, pContextRecord-&gt;Ecx, pContextRecord-&gt;Edx, pContextRecord-&gt;Esi);
++	printf(&quot;EDI: %08X  ESP: %08X  EBP: %08X  EIP: %08X  EFlags: %08X\n\n&quot;, pContextRecord-&gt;Edi, pContextRecord-&gt;Esp, pContextRecord-&gt;Ebp, pContextRecord-&gt;Eip, pContextRecord-&gt;EFlags);
++#endif
++
++	printf(&quot;Exception Code: &quot;);
++
++	switch (pExceptionRec-&gt;ExceptionCode)
++	{
++		case EXCEPTION_ACCESS_VIOLATION:
++			printf(&quot;EXCEPTION_ACCESS_VIOLATION&quot;);
++			break;
++		case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
++			printf(&quot;EXCEPTION_ARRAY_BOUNDS_EXCEEDED&quot;);
++			break;
++		case EXCEPTION_BREAKPOINT:
++			printf(&quot;EXCEPTION_BREAKPOINT&quot;);
++			break;
++		case EXCEPTION_DATATYPE_MISALIGNMENT:
++			printf(&quot;EXCEPTION_DATATYPE_MISALIGNMENT&quot;);
++			break;
++		case EXCEPTION_FLT_DENORMAL_OPERAND:
++			printf(&quot;EXCEPTION_FLT_DENORMAL_OPERAND&quot;);
++			break;
++		case EXCEPTION_FLT_DIVIDE_BY_ZERO:
++			printf(&quot;EXCEPTION_FLT_DIVIDE_BY_ZERO&quot;);
++			break;
++		case EXCEPTION_FLT_INEXACT_RESULT:
++			printf(&quot;EXCEPTION_FLT_INEXACT_RESULT&quot;);
++			break;
++		case EXCEPTION_FLT_INVALID_OPERATION:
++			printf(&quot;EXCEPTION_FLT_INVALID_OPERATION&quot;);
++			break;
++		case EXCEPTION_FLT_OVERFLOW:
++			printf(&quot;EXCEPTION_FLT_OVERFLOW&quot;);
++			break;
++		case EXCEPTION_FLT_STACK_CHECK:
++			printf(&quot;EXCEPTION_FLT_STACK_CHECK&quot;);
++			break;
++		case EXCEPTION_FLT_UNDERFLOW:
++			printf(&quot;EXCEPTION_FLT_UNDERFLOW&quot;);
++			break;
++		case EXCEPTION_ILLEGAL_INSTRUCTION:
++			printf(&quot;EXCEPTION_ILLEGAL_INSTRUCTION&quot;);
++			break;
++		case EXCEPTION_IN_PAGE_ERROR:
++			printf(&quot;EXCEPTION_IN_PAGE_ERROR&quot;);
++			break;
++		case EXCEPTION_INT_DIVIDE_BY_ZERO:
++			printf(&quot;EXCEPTION_INT_DIVIDE_BY_ZERO&quot;);
++			break;
++		case EXCEPTION_INT_OVERFLOW:
++			printf(&quot;EXCEPTION_INT_OVERFLOW&quot;);
++			break;
++		case EXCEPTION_INVALID_DISPOSITION:
++			printf(&quot;EXCEPTION_INVALID_DISPOSITION&quot;);
++			break;
++		case EXCEPTION_NONCONTINUABLE_EXCEPTION:
++			printf(&quot;EXCEPTION_NONCONTINUABLE_EXCEPTION&quot;);
++			break;
++		case EXCEPTION_PRIV_INSTRUCTION:
++			printf(&quot;EXCEPTION_PRIV_INSTRUCTION&quot;);
++			break;
++		case EXCEPTION_SINGLE_STEP:
++			printf(&quot;EXCEPTION_SINGLE_STEP&quot;);
++			break;
++		case EXCEPTION_STACK_OVERFLOW:
++			printf(&quot;EXCEPTION_STACK_OVERFLOW&quot;);
++			break;
++		default:
++			printf(&quot;UNKNOWN&quot;);
++	}
++	
++	printf(&quot; (%08X)\n&quot;, pExceptionRec-&gt;ExceptionCode);
++	printf(&quot;Exception Flags: %08X\n&quot;, pExceptionRec-&gt;ExceptionFlags);
++
++	printf(&quot;\nOrigin:\n&quot;);
++
++#ifdef ADM_CPU_X86_64
++	dumpFrame(processId, (void*)pContextRecord-&gt;Rip);
++#else
++	dumpFrame(processId, (void*)pContextRecord-&gt;Eip);
++#endif
++
++	printf(&quot;*********** EXCEPTION **************\n&quot;);
++	fflush(stdout);
++}
++
++extern &quot;C&quot;
++{
++void dumpBackTrace(void* processId)
++{
++	if (!processId)
++		processId = GetCurrentProcess();
++
++	const int maxAddrCount = 32;
++
++	printf(&quot;\n*********** BACKTRACE **************\n&quot;);
++
++	// Get frame address using builtin GCC function.
++	STACK_FRAME* stackFrame = (STACK_FRAME*)__builtin_frame_address(0);
++
++    for (int retAddrCount = 0; (retAddrCount &lt; maxAddrCount) &amp;&amp; !IsBadReadPtr(stackFrame, sizeof(STACK_FRAME)) &amp;&amp; !IsBadCodePtr(FARPROC(stackFrame-&gt;retAddr)); retAddrCount++, stackFrame = stackFrame-&gt;ebp)
++    {
++		printf(&quot;Frame %2d: &quot;, retAddrCount);
++		dumpFrame(processId, stackFrame-&gt;retAddr);
++		fflush(stdout);
++    }
++
++	printf(&quot;*********** BACKTRACE **************\n\n&quot;);
++}
++}
++
++void ADM_backTrack(const char *info,int lineno,const char *file)
++{	
++	fflush(stderr);
++	fflush(stdout);
++
++	if (mysaveFunction)
++		mysaveFunction();
++
++	if (myFatalFunction)
++		myFatalFunction(&quot;Crash&quot;, &quot;Press OK to build crash info&quot;);
++
++	void* currentProcessId = GetCurrentProcess();
++
++	SymInitialize(currentProcessId, NULL, TRUE);
++	dumpBackTrace(currentProcessId);
++	SymCleanup(currentProcessId);
++
++	printf(&quot;Assert failed at file %s, line %d\n\n&quot;,file,lineno);
++
++	exit(-1);
++}
++
++EXCEPTION_DISPOSITION exceptionHandler(struct _EXCEPTION_RECORD* pExceptionRec, void* pEstablisherFrame, struct _CONTEXT* pContextRecord, void* pDispatcherContext)
++{
++	fflush(stderr);
++	fflush(stdout);
++	static int running=0;
++
++	if(running)
++		exit(1);
++
++	running=1;
++
++	if (mysaveFunction)
++		mysaveFunction();
++
++	if (myFatalFunction)
++		myFatalFunction(&quot;Crash&quot;, &quot;Press OK to build crash info&quot;);
++
++	void* currentProcessId = GetCurrentProcess();
++
++	SymInitialize(currentProcessId, NULL, TRUE);
++
++	dumpExceptionInfo(currentProcessId, pExceptionRec, pContextRecord);
++	fflush(stdout);
++	dumpBackTrace(currentProcessId);
++
++	SymCleanup(currentProcessId);
++
++	exit(1);
++}
+
+Copied: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_unix.cpp (from rev 7286, branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump.cpp)
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_unix.cpp	                        (rev 0)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_unix.cpp	2011-06-17 13:02:41 UTC (rev 7295)
+@@ -0,0 +1,109 @@
++/***************************************************************************
++  Try to display interesting crash dump
++
++    copyright            : (C) 2007 by mean, (C) 2007 Gruntster
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++#include &lt;stdarg.h&gt;
++#include &lt;string.h&gt;
++#include &lt;unistd.h&gt;
++#include &lt;cxxabi.h&gt;
++#include &lt;signal.h&gt;
++#include &lt;execinfo.h&gt;
++
++#include &quot;ADM_default.h&quot;
++
++// Our callback to give UI formatted informations....
++static ADM_saveFunction *mysaveFunction=NULL;
++static ADM_fatalFunction *myFatalFunction=NULL;
++
++/**
++        \fn ADM_setCrashHook
++        \brief install crash handlers (save + display)
++*/
++void ADM_setCrashHook(ADM_saveFunction *save, ADM_fatalFunction *fatal)
++{
++        mysaveFunction=save;
++        myFatalFunction=fatal;
++}
++
++/**
++      \fn sig_segfault_handler
++      \brief our segfault handler
++*/
++void sig_segfault_handler(int signo)
++{
++     static int running=0;
++      if(running) 
++      {
++        signo=0;
++        exit(1);
++      }
++      running=0; 
++      ADM_backTrack(&quot;Segfault&quot;,0,&quot;??&quot;);
++}
++
++void installSigHandler()
++{
++    signal(11, sig_segfault_handler); // show stacktrace on default
++}
++
++void ADM_backTrack(const char *info,int lineno,const char *file)
++{
++	char wholeStuff[2048];
++    char buffer[2048];
++    char in[2048];
++	void *stack[20];
++	char **functions;
++	int count, i;
++
++	wholeStuff[0]=0;
++
++	if(mysaveFunction)
++		mysaveFunction();
++
++	printf(&quot;\n*********** BACKTRACK **************\n&quot;);
++
++	count = backtrace(stack, 20);
++	functions = backtrace_symbols(stack, count);
++	sprintf(wholeStuff,&quot;%s\n at line %d, file %s&quot;,info,lineno,file);
++    int status;
++    size_t size=2047;
++    // it looks like that xxxx (functionName+0x***) XXXX
++	for (i=0; i &lt; count; i++) 
++	{
++        char *s=strstr(functions[i],&quot;(&quot;);
++        buffer[0]=0;
++        if(s &amp;&amp; strstr(s+1,&quot;+&quot;))
++        {
++            strcpy(in,s+1);
++            char *e=strstr(in,&quot;+&quot;);
++            *e=0;                
++            __cxxabiv1::__cxa_demangle(in,buffer,&amp;size,&amp;status);
++            if(status) strcpy(buffer,in);
++        }else       
++            strcpy(buffer,functions[i]);
++        printf(&quot;%s:%d:&lt;%s&gt;:%d\n&quot;,functions[i],i,buffer,status);
++		strcat(wholeStuff,buffer);
++		strcat(wholeStuff,&quot;\n&quot;);
++	}
++
++	printf(&quot;*********** BACKTRACK **************\n&quot;);
++
++	if(myFatalFunction)
++		myFatalFunction(&quot;Crash&quot;, wholeStuff); // FIXME
++
++	exit(-1); // _exit(1) ???
++}
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/CMakeLists.txt	2011-06-17 05:52:52 UTC (rev 7294)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/CMakeLists.txt	2011-06-17 13:02:41 UTC (rev 7295)
+@@ -1,8 +1,15 @@
+ SET(ADM_core_SRCS 
+ 	ADM_cpuCap.cpp  ADM_memcpy.cpp  ADM_memsupport.cpp  ADM_threads.cpp  ADM_win32.cpp  ADM_translate.cpp
+-	ADM_memory.cpp  ADM_misc.cpp  TLK_clock.cpp  ADM_crashdump.cpp  ADM_fileio.cpp ADM_dynamicLoading.cpp
+-)
++	ADM_memory.cpp  ADM_misc.cpp  TLK_clock.cpp  ADM_fileio.cpp ADM_dynamicLoading.cpp)
+ 
++IF (MINGW)
++	SET(ADM_core_SRCS ${ADM_core_SRCS} ADM_crashdump_mswin.cpp)
++ELSEIF (APPLE)
++	SET(ADM_core_SRCS ${ADM_core_SRCS} ADM_crashdump_apple.cpp)
++ELSE (MINGW)
++	SET(ADM_core_SRCS ${ADM_core_SRCS} ADM_crashdump_unix.cpp)
++ENDIF (MINGW)
++
+ ADD_LIBRARY(ADM_core SHARED ${ADM_core_SRCS})
+ ADD_TARGET_DEFINITIONS(ADM_core ADM_DEBUG FIND_LEAKS)
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004448.html">[Avidemux-svn-commit] r7294 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="004450.html">[Avidemux-svn-commit] r7296 - in	branches/avidemux_2.5_branch_gruntster/avidemux: . ADM_core/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4449">[ date ]</a>
+              <a href="thread.html#4449">[ thread ]</a>
+              <a href="subject.html#4449">[ subject ]</a>
+              <a href="author.html#4449">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

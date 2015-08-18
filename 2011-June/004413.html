@@ -1,0 +1,421 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7259 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_editor avidemux/common/ADM_render	avidemux/common/ADM_videoCodec/src	avidemux_core/ADM_coreImage/include avidemux_core/ADM_coreImage/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7259%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_editor%20avidemux/common/ADM_render%0A%09avidemux/common/ADM_videoCodec/src%0A%09avidemux_core/ADM_coreImage/include%20avidemux_core/ADM_coreImage/src&In-Reply-To=%3C20110609180412.F198C4812F0%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004412.html">
+   <LINK REL="Next"  HREF="004414.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7259 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_editor avidemux/common/ADM_render	avidemux/common/ADM_videoCodec/src	avidemux_core/ADM_coreImage/include avidemux_core/ADM_coreImage/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7259%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_editor%20avidemux/common/ADM_render%0A%09avidemux/common/ADM_videoCodec/src%0A%09avidemux_core/ADM_coreImage/include%20avidemux_core/ADM_coreImage/src&In-Reply-To=%3C20110609180412.F198C4812F0%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7259 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_editor avidemux/common/ADM_render	avidemux/common/ADM_videoCodec/src	avidemux_core/ADM_coreImage/include avidemux_core/ADM_coreImage/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jun  9 20:04:12 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004412.html">[Avidemux-svn-commit] r7258 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/crop
+</A></li>
+        <LI>Next message: <A HREF="004414.html">[Avidemux-svn-commit] r7260 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/src	avidemux/common/ADM_videoFilter2/include	avidemux/common/ADM_videoFilter2/src	avidemux_core/ADM_coreVideoFilter/include	avidemux_core/ADM_coreVideoFilter/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4413">[ date ]</a>
+              <a href="thread.html#4413">[ thread ]</a>
+              <a href="subject.html#4413">[ subject ]</a>
+              <a href="author.html#4413">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-06-09 20:04:12 +0200 (Thu, 09 Jun 2011)
+New Revision: 7259
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/include/ADM_image.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_image.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageOperation.cpp
+Log:
+[image] Introduce hw ref image, reference to an hw surface (e.g. vdpau). For the moment it is used as side information to the real image.
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2011-06-07 18:08:18 UTC (rev 7258)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2011-06-09 18:04:12 UTC (rev 7259)
+@@ -317,7 +317,9 @@
+         }
+         aprintf(&quot;[::Decompress] in:%&quot;LU&quot; out:%&quot;LU&quot; flags:%x\n&quot;,in-&gt;demuxerPts,out-&gt;Pts,out-&gt;flags);
+ 	// If not quant and it is already YV12, we can stop here
+-	if((!tmpImage-&gt;quant || !tmpImage-&gt;_qStride) &amp;&amp; tmpImage-&gt;_colorspace==ADM_COLOR_YV12)
++    // Also, if the image is decoded through hw, dont do post proc
++	if(tmpImage-&gt;refType!=ADM_HW_NONE || 
++                    (!tmpImage-&gt;quant || !tmpImage-&gt;_qStride) &amp;&amp; tmpImage-&gt;_colorspace==ADM_COLOR_YV12)
+ 	{
+ 		out-&gt;_Qp=2;
+ 		out-&gt;duplicate(tmpImage);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp	2011-06-07 18:08:18 UTC (rev 7258)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp	2011-06-09 18:04:12 UTC (rev 7259)
+@@ -16,12 +16,18 @@
+ 
+ #include &quot;ADM_default.h&quot;
+ #ifdef USE_VDPAU
++extern &quot;C&quot; {
++#include &quot;libavcodec/avcodec.h&quot;
++#include &quot;libavcodec/vdpau.h&quot;
++}
++
++
+ #include &quot;GUI_render.h&quot;
+ 
+ #include &quot;GUI_accelRender.h&quot;
+ #include &quot;GUI_vdpauRender.h&quot;
+ #include &quot;ADM_coreVdpau/include/ADM_coreVdpau.h&quot;
+-
++#include &quot;ADM_videoCodec/include/ADM_ffmpeg_vdpau_internal.h&quot;
+ static VdpOutputSurface     surface[2]={VDP_INVALID_HANDLE,VDP_INVALID_HANDLE};
+ static VdpVideoSurface      input=VDP_INVALID_HANDLE;
+ static VdpVideoMixer        mixer=VDP_INVALID_HANDLE;
+@@ -127,6 +133,7 @@
+ bool vdpauRender::displayImage(ADMImage *pic)
+ {
+     // Blit pic into our video Surface
++    VdpVideoSurface myInput=input;
+     int next=currentSurface^1;
+     uint32_t pitches[3];
+     uint8_t *planes[3];
+@@ -134,17 +141,25 @@
+     pic-&gt;GetReadPlanes(planes);
+ 
+     // Put out stuff in input...
+-
+-    if(VDP_STATUS_OK!=admVdpau::surfacePutBits( 
+-            input,
+-            planes,pitches))
++    // if input is already a VDPAU surface, no need to reupload it...
++    if(pic-&gt;refType==ADM_HW_VDPAU)
+     {
+-        ADM_warning(&quot;[Vdpau] video surface : Cannot putbits\n&quot;);
+-        return false;
++        // cookie is a render...
++        struct vdpau_render_state *rndr = (struct vdpau_render_state *)pic-&gt;refDescriptor.refCookie;
++        myInput=rndr-&gt;surface;
++        printf(&quot;Skipping blit surface=%d\n&quot;,(int)myInput);
++    }else
++    {
++        if(VDP_STATUS_OK!=admVdpau::surfacePutBits( 
++                input,
++                planes,pitches))
++        {
++            ADM_warning(&quot;[Vdpau] video surface : Cannot putbits\n&quot;);
++            return false;
++        }
+     }
+-
+     // Call mixer...
+-    if(VDP_STATUS_OK!=admVdpau::mixerRender( mixer,input,surface[next], pic-&gt;_width,pic-&gt;_height))
++    if(VDP_STATUS_OK!=admVdpau::mixerRender( mixer,myInput,surface[next], pic-&gt;_width,pic-&gt;_height))
+ 
+     {
+         ADM_warning(&quot;[Vdpau] Cannot mixerRender\n&quot;);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2011-06-07 18:08:18 UTC (rev 7258)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2011-06-09 18:04:12 UTC (rev 7259)
+@@ -53,7 +53,32 @@
+     ADM_VDPAU_MPEG2=2,
+     ADM_VDPAU_VC1=3
+ }ADM_VDPAU_TYPE;
++/**
++    \fn markSurfaceUsed
++    \brief mark the surfave as used. Can be called multiple time.
++*/
++static bool vdpauMarkSurfaceUsed(void *v, void * cookie)
++{
++    vdpauContext *vd=(vdpauContext*)v;
++    vdpau_render_state *render=(vdpau_render_state *)cookie;
++    render-&gt;refCount++;
++    return true;
++}
++/**
++    \fn markSurfaceUnused
++    \brief mark the surfave as unused by the caller. Can be called multiple time.
++*/
++static bool vdpauMarkSurfaceUnused(void *v, void * cookie)
++{
++    vdpauContext *vd=(vdpauContext*)v;
++    vdpau_render_state *render=(vdpau_render_state *)cookie;
++    render-&gt;refCount--;
++    if(!render-&gt;refCount)
++        vd-&gt;freeQueue.push_back(render);
++    return true;
++}
+ 
++
+ /**
+     \fn vdpauUsable
+     \brief Return true if  vdpau can be used...
+@@ -116,7 +141,9 @@
+     }
+     // Get an image   
+     render=VDPAU-&gt;freeQueue.front();
++    render-&gt;refCount=0;
+     VDPAU-&gt;freeQueue.erase(VDPAU-&gt;freeQueue.begin());
++    vdpauMarkSurfaceUsed(VDPAU,(void *)render);
+     render-&gt;state=0;
+     pic-&gt;data[0]=(uint8_t *)render;
+     pic-&gt;data[1]=(uint8_t *)render;
+@@ -152,12 +179,12 @@
+   if(destroying==true) return; // They are already freed...
+   render=(vdpau_render_state*)pic-&gt;data[0];
+   ADM_assert(render);
+-
++  ADM_assert(render-&gt;refCount);
+   render-&gt;state &amp;= ~FF_VDPAU_STATE_USED_FOR_REFERENCE;
+   for(i=0; i&lt;4; i++){
+     pic-&gt;data[i]= NULL;
+   }
+-  VDPAU-&gt;freeQueue.push_back(render);
++  vdpauMarkSurfaceUnused(VDPAU,(void *)render);
+ }
+ /**
+     \fn ADM_VDPAUreleaseBuffer
+@@ -307,6 +334,13 @@
+     // First let ffmpeg prepare datas...
+     vdpau_copy=out;
+     decode_status=false;
++
++    if(out-&gt;refType==ADM_HW_VDPAU)
++    {
++            vdpauMarkSurfaceUnused(VDPAU,out-&gt;refDescriptor.refCookie);
++            out-&gt;refType=ADM_HW_NONE;
++    }
++
+     if(!decoderFF::uncompress (in, scratch))
+     {
+         aprintf(&quot;[VDPAU] No data from libavcodec\n&quot;);
+@@ -329,7 +363,8 @@
+ 
+     
+    // Copy back the decoded image to our output ADM_image
+-   aprintf(&quot;[VDPAU] Getting datas from surface %d\n&quot;,surface);
++    aprintf(&quot;[VDPAU] Getting datas from surface %d\n&quot;,surface);
++ 
+     status=admVdpau::getDataSurface(surface,planes, stride );
+     if(VDP_STATUS_OK!=status)
+     {
+@@ -338,6 +373,15 @@
+         decode_status=false;
+         return 0 ;
+     }
++    if(decode_status)
++    {
++        out-&gt;refType=ADM_HW_VDPAU;
++        out-&gt;refDescriptor.refCookie=(void *)rndr;
++        out-&gt;refDescriptor.refInstance=VDPAU;
++        out-&gt;refDescriptor.refMarkUsed=vdpauMarkSurfaceUsed;
++        out-&gt;refDescriptor.refMarkUnused=vdpauMarkSurfaceUnused;
++        vdpauMarkSurfaceUsed(VDPAU,(void *)rndr);
++    }
+     out-&gt;Pts=scratch-&gt;Pts;
+     out-&gt;flags=scratch-&gt;flags;
+     return (uint8_t)decode_status;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/include/ADM_image.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/include/ADM_image.h	2011-06-07 18:08:18 UTC (rev 7258)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/include/ADM_image.h	2011-06-09 18:04:12 UTC (rev 7259)
+@@ -51,9 +51,31 @@
+ typedef enum
+ {
+     ADM_IMAGE_DEFAULT,
+-    ADM_IMAGE_REF,
+-    ADM_IMAGE_VDPAU
++    ADM_IMAGE_REF    
+ }ADM_IMAGE_TYPE;
++
++typedef enum
++{
++        ADM_HW_NONE,
++        ADM_HW_VDPAU
++}ADM_HW_IMAGE;
++
++
++typedef bool refFunction(void *instance,void *cookie);
++typedef bool refDownloadFunction(ADMImage *image, void *instance, void *cookie);
++/**
++    \struct hwRefDescriptor
++    \brief  Used to deal with hw accelerated stuff
++*/
++typedef struct
++{
++        void            *refInstance;  ///
++        void            *refCookie;  /// Ref to a hw image
++        refFunction     *refMarkUsed;   ///
++        refFunction     *refMarkUnused; ///
++        refDownloadFunction     *refDownload;
++}hwRefDescriptor;
++
+ #define YPLANE(x) ((x)-&gt;GetReadPtr(PLANAR_Y))
+ #define UPLANE(x) ((x)-&gt;GetReadPtr(PLANAR_U))
+ #define VPLANE(x) ((x)-&gt;GetReadPtr(PLANAR_V))
+@@ -79,6 +101,9 @@
+         ADM_colorspace  _colorspace;    /// Colorspace we are moving, default is YV12
+         uint8_t         _noPicture;     /// No picture to display
+         ADM_ASPECT	    _aspect;	/// Aspect ratio
++        //
++        ADM_HW_IMAGE    refType;    /// if not none, it means the field below is a ref to a hw image
++        hwRefDescriptor refDescriptor;
+         // Quant info
+         uint8_t         *quant;
+         int             _qStride;
+@@ -100,6 +125,10 @@
+ protected:
+         ADMImage(uint32_t width, uint32_t height,ADM_IMAGE_TYPE type);
+ public:
++                     bool            hwIncRefCount(void);
++                     bool            hwDecRefCount(void);
++                     bool            hwDownloadFromRef(void);
++public:
+         virtual      uint32_t        GetPitch(ADM_PLANE plane)=0;
+         virtual      uint8_t        *GetWritePtr(ADM_PLANE plane)=0;
+         virtual      uint8_t        *GetReadPtr(ADM_PLANE plane)=0;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_image.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_image.cpp	2011-06-07 18:08:18 UTC (rev 7258)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_image.cpp	2011-06-09 18:04:12 UTC (rev 7259)
+@@ -38,6 +38,9 @@
+ */
+ ADMImage::ADMImage(uint32_t width, uint32_t height,ADM_IMAGE_TYPE type)
+ {
++        refType=ADM_HW_NONE;
++        memset(&amp;refDescriptor,0,sizeof(refDescriptor));
++
+         _width=width;
+         _height=height;
+         _Qp=2;
+@@ -60,11 +63,53 @@
+ ADMImage::~ADMImage()
+ {
+ 	imgCurNb--;
++    hwDecRefCount();
++}
++/**
++    \fn hwIncRefCount
++    \brief hwIncRefCount
+ 
++*/
++
++ bool            ADMImage::hwIncRefCount(void)
++{
++        if(refType==ADM_HW_NONE) return true;
++        ADM_assert(refDescriptor.refMarkUsed);
++        return refDescriptor.refMarkUsed(refDescriptor.refInstance,refDescriptor.refCookie); 
+ }
++/**
++    \fn hwDecRefCount
++    \brief hwDecRefCount
+ 
++*/
+ 
++ bool            ADMImage::hwDecRefCount(void)
++{
++        if(refType==ADM_HW_NONE) return true;
++        ADM_assert(refDescriptor.refMarkUnused);
++        bool r=refDescriptor.refMarkUnused(refDescriptor.refInstance,refDescriptor.refCookie); 
++        refType=ADM_HW_NONE;
++        return r;
++        
++}
+ /**
++    \fn    hwDownloadFromRef
++    \brief Convert an HW ref image to a regular image
++
++*/
++ bool            ADMImage::hwDownloadFromRef(void)
++{
++bool r=false;
++        if(refType==ADM_HW_NONE) return true;
++        ADM_assert(refDescriptor.refDownload);
++        r=refDescriptor.refDownload(this,refDescriptor.refInstance,refDescriptor.refCookie);
++        hwDecRefCount();
++        refType=ADM_HW_NONE;
++        return r;
++
++}
++
++/**
+  * 		\fn BitBlitAlpha
+  * 		\brief Alpha blit from dst to src
+  */
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageOperation.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageOperation.cpp	2011-06-07 18:08:18 UTC (rev 7258)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageOperation.cpp	2011-06-09 18:04:12 UTC (rev 7259)
+@@ -30,6 +30,8 @@
+         uint32_t sourceStride,destStride;
+         uint8_t  *source,*dest;
+ 
++        hwDecRefCount(); // free hw ref image if any..
++
+         for(int plane=PLANAR_Y;plane&lt;PLANAR_LAST;plane++)
+         {
+             source=src-&gt;GetReadPtr((ADM_PLANE)plane);
+@@ -45,6 +47,16 @@
+             }
+             BitBlit(dest, destStride,source,sourceStride,opWidth, opHeight);
+         }
++        if(src-&gt;refType!=ADM_HW_NONE)
++        {
++            refType      =src-&gt;refType;
++            refDescriptor.refCookie    =src-&gt;refDescriptor.refCookie;
++            refDescriptor.refInstance  =src-&gt;refDescriptor.refInstance;
++            refDescriptor.refMarkUsed  =src-&gt;refDescriptor.refMarkUsed;
++            refDescriptor.refMarkUnused=src-&gt;refDescriptor.refMarkUnused;
++            refDescriptor.refDownload  =src-&gt;refDescriptor.refDownload;
++            hwIncRefCount();
++        }
+         return true;
+ }
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004412.html">[Avidemux-svn-commit] r7258 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/crop
+</A></li>
+	<LI>Next message: <A HREF="004414.html">[Avidemux-svn-commit] r7260 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/src	avidemux/common/ADM_videoFilter2/include	avidemux/common/ADM_videoFilter2/src	avidemux_core/ADM_coreVideoFilter/include	avidemux_core/ADM_coreVideoFilter/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4413">[ date ]</a>
+              <a href="thread.html#4413">[ thread ]</a>
+              <a href="subject.html#4413">[ subject ]</a>
+              <a href="author.html#4413">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

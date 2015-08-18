@@ -1,0 +1,195 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3487 - in	branches/avidemux_2.4_branch/avidemux: . ADM_libraries/ADM_utilities
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3487%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%20ADM_libraries/ADM_utilities&In-Reply-To=%3C200708071756.l77HuqL9009690%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000760.html">
+   <LINK REL="Next"  HREF="000762.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3487 - in	branches/avidemux_2.4_branch/avidemux: . ADM_libraries/ADM_utilities</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3487%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%20ADM_libraries/ADM_utilities&In-Reply-To=%3C200708071756.l77HuqL9009690%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3487 - in	branches/avidemux_2.4_branch/avidemux: . ADM_libraries/ADM_utilities">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Aug  7 19:56:52 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000760.html">[Avidemux-svn-commit] r3486 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_utilities ADM_videoFilter
+</A></li>
+        <LI>Next message: <A HREF="000762.html">[Avidemux-svn-commit] r3488 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#761">[ date ]</a>
+              <a href="thread.html#761">[ thread ]</a>
+              <a href="subject.html#761">[ subject ]</a>
+              <a href="author.html#761">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-08-07 19:56:51 +0200 (Tue, 07 Aug 2007)
+New Revision: 3487
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_imageLoader.cpp
+   branches/avidemux_2.4_branch/avidemux/CMakeLists.txt
+Log:
+[Filter] Add yuy2 jpg support
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_imageLoader.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_imageLoader.cpp	2007-08-07 17:23:58 UTC (rev 3486)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_imageLoader.cpp	2007-08-07 17:56:51 UTC (rev 3487)
+@@ -30,9 +30,9 @@
+ #include &quot;ADM_codecs/ADM_codec.h&quot;
+ #include &quot;ADM_codecs/ADM_ffmp43.h&quot;
+ #include &quot;ADM_toolkit/toolkit.hxx&quot;
+-
+-
+-
++//**********************************
++static ADMImage *createImageFromFile_jpeg(const char *filename);
++//***********************************
+ static uint8_t read8(FILE *fd)
+ {
+ 	return fgetc(fd);
+@@ -53,12 +53,9 @@
+ */
+ ADMImage *createImageFromFile(const char *filename)
+ {
+-		int32_t nnum;
+ 	    uint32_t *fcc;
+ 	    uint8_t fcc_tab[4];
+ 	    FILE *fd;
+-	    uint32_t _imgSize;
+-	    uint32_t w = 0, h = 0;
+ 
+ 	    // 1- identity the file type
+ 	    //
+@@ -71,13 +68,25 @@
+ 	    }
+ 	    fread(fcc_tab, 4, 1, fd);
+ 	    fclose(fd);
+-	   if (fcc_tab[0] == 0xff &amp;&amp; fcc_tab[1] == 0xd8) 
+-	   {
+-		
+-		} else {
+-			printf(&quot;[imageLoader] Unrecognized file!\n&quot;);
+-			return NULL;
+-		    }
++	    if (fcc_tab[0] == 0xff &amp;&amp; fcc_tab[1] == 0xd8) 
++	    {
++		   	return createImageFromFile_jpeg(filename);
++		} 
++	    printf(&quot;[imageLoader] Unrecognized file!\n&quot;);
++	    return NULL;
++}
++/**
++ * 	\fn createImageFromFile_jpeg
++ *  \brief Create image from jpeg file
++ */
++ADMImage *createImageFromFile_jpeg(const char *filename)
++{
++	
++	FILE *fd;
++	uint32_t _imgSize;
++	uint32_t w = 0, h = 0;
++	   
++
+ 		fd = fopen(filename, &quot;rb&quot;);
+ 		fseek(fd, 0, SEEK_END);
+ 		_imgSize = ftell(fd);
+@@ -145,14 +154,25 @@
+ 		    decoder-&gt;uncompress (&amp;bin, &amp;tmpImage);
+ 		    //
+ 		    ADMImage *image=NULL;
+-		    if(tmpImage._colorspace!=ADM_COLOR_YV12)
++		    switch(tmpImage._colorspace)
+ 		    {
+-		    	GUI_Error_HIG(_(&quot;Wrong Colorspace&quot;),_(&quot;Only YV12/I420 JPegs are supported&quot;));
+-		    }else
+-		    {		    
+-		    		image=new ADMImage(w,h);
+-		    		image-&gt;duplicate(&amp;tmpImage);
++		    case ADM_COLOR_YV12:
++		    {
++		    	printf(&quot;[imageLoader] YV12\n&quot;);
++	    		image=new ADMImage(w,h);
++	    		image-&gt;duplicate(&amp;tmpImage);
++	    		break;
+ 		    }
++		    case ADM_COLOR_YUV422:
++		    {
++		    	printf(&quot;[imageLoader] YUY2\n&quot;);
++		    	image=new ADMImage(w,h);
++		    	COL_422_YV12(tmpImage._planes, tmpImage._planeStride,  image-&gt;data,w,h);
++		    	break;
++		    }
++		    default:
++		    	GUI_Error_HIG(_(&quot;Wrong Colorspace&quot;),_(&quot;Only YV12/I420 or YUY2/I422 JPegs are supported&quot;));
++		    }
+ 		    // Cannot destroy decoder earlier as tmpImage has pointers to its internals
+ 		    delete decoder;
+ 		    decoder=NULL;
+
+Modified: branches/avidemux_2.4_branch/avidemux/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/CMakeLists.txt	2007-08-07 17:23:58 UTC (rev 3486)
++++ branches/avidemux_2.4_branch/avidemux/CMakeLists.txt	2007-08-07 17:56:51 UTC (rev 3487)
+@@ -71,13 +71,12 @@
+ ADM_audiocodec 
+ ADM_audio
+ ADM_script 
+-
+ ADM_videoFilter
+ ADM_filter
+ ADM_video 
+-ADM_colorspace 
+ ADM_audiodevice
+ ADM_ocr  
++ADM_colorspace 
+ )
+ 
+ 
+@@ -181,6 +180,7 @@
+ ADM_lvemux
+ ADM_smjs
+ ADM_utilities
++ADM_colorspace 
+ ADM_xvidratectl
+ ADM_libpostproc
+ )
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000760.html">[Avidemux-svn-commit] r3486 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_utilities ADM_videoFilter
+</A></li>
+	<LI>Next message: <A HREF="000762.html">[Avidemux-svn-commit] r3488 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#761">[ date ]</a>
+              <a href="thread.html#761">[ thread ]</a>
+              <a href="subject.html#761">[ subject ]</a>
+              <a href="author.html#761">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

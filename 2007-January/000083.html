@@ -1,0 +1,2675 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2757 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2757%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200701211834.l0LIY4dr021420%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000082.html">
+   <LINK REL="Next"  HREF="000084.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2757 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2757%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200701211834.l0LIY4dr021420%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2757 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jan 21 19:34:04 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000082.html">[Avidemux-svn-commit] r2756 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+        <LI>Next message: <A HREF="000084.html">[Avidemux-svn-commit] r2758 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#83">[ date ]</a>
+              <a href="thread.html#83">[ thread ]</a>
+              <a href="subject.html#83">[ subject ]</a>
+              <a href="author.html#83">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-01-21 19:34:00 +0100 (Sun, 21 Jan 2007)
+New Revision: 2757
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp5.c
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56.c
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56.h
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56data.c
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56data.h
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp5data.h
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp6.c
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp6data.h
+Log:
+new files
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp5.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp5.c	2007-01-21 18:32:13 UTC (rev 2756)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp5.c	2007-01-21 18:34:00 UTC (rev 2757)
+@@ -0,0 +1,290 @@
++/**
++ * @file vp5.c
++ * VP5 compatible video decoder
++ *
++ * Copyright (C) 2006  Aurelien Jacobs &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">aurel at gnuage.org</A>&gt;
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++ */
++
++#include &lt;stdlib.h&gt;
++#include &lt;string.h&gt;
++
++#include &quot;avcodec.h&quot;
++#include &quot;dsputil.h&quot;
++#include &quot;bitstream.h&quot;
++#include &quot;mpegvideo.h&quot;
++
++#include &quot;vp56.h&quot;
++#include &quot;vp56data.h&quot;
++#include &quot;vp5data.h&quot;
++
++
++static int vp5_parse_header(vp56_context_t *s, uint8_t *buf, int buf_size,
++                            int *golden_frame)
++{
++    vp56_range_coder_t *c = &amp;s-&gt;c;
++    int rows, cols;
++
++    vp56_init_range_decoder(&amp;s-&gt;c, buf, buf_size);
++    s-&gt;frames[VP56_FRAME_CURRENT].key_frame = !vp56_rac_get(c);
++    vp56_rac_get(c);
++    vp56_init_dequant(s, vp56_rac_gets(c, 6));
++    if (s-&gt;frames[VP56_FRAME_CURRENT].key_frame)
++    {
++        vp56_rac_gets(c, 8);
++        if(vp56_rac_gets(c, 5) &gt; 5)
++            return 0;
++        vp56_rac_gets(c, 2);
++        if (vp56_rac_get(c)) {
++            av_log(s-&gt;avctx, AV_LOG_ERROR, &quot;interlacing not supported\n&quot;);
++            return 0;
++        }
++        rows = vp56_rac_gets(c, 8);  /* number of stored macroblock rows */
++        cols = vp56_rac_gets(c, 8);  /* number of stored macroblock cols */
++        vp56_rac_gets(c, 8);  /* number of displayed macroblock rows */
++        vp56_rac_gets(c, 8);  /* number of displayed macroblock cols */
++        vp56_rac_gets(c, 2);
++        if (16*cols != s-&gt;avctx-&gt;coded_width ||
++            16*rows != s-&gt;avctx-&gt;coded_height) {
++            avcodec_set_dimensions(s-&gt;avctx, 16*cols, 16*rows);
++            return 2;
++        }
++    }
++    return 1;
++}
++
++/* Gives very similar result than the vp6 version except in a few cases */
++static int vp5_adjust(int v, int t)
++{
++    int s2, s1 = v &gt;&gt; 31;
++    v ^= s1;
++    v -= s1;
++    v *= v &lt; 2*t;
++    v -= t;
++    s2 = v &gt;&gt; 31;
++    v ^= s2;
++    v -= s2;
++    v = t - v;
++    v += s1;
++    v ^= s1;
++    return v;
++}
++
++static void vp5_parse_vector_adjustment(vp56_context_t *s, vp56_mv_t *vect)
++{
++    vp56_range_coder_t *c = &amp;s-&gt;c;
++    int comp, di;
++
++    for (comp=0; comp&lt;2; comp++) {
++        int delta = 0;
++        if (vp56_rac_get_prob(c, s-&gt;vector_model_dct[comp])) {
++            int sign = vp56_rac_get_prob(c, s-&gt;vector_model_sig[comp]);
++            di  = vp56_rac_get_prob(c, s-&gt;vector_model_pdi[comp][0]);
++            di |= vp56_rac_get_prob(c, s-&gt;vector_model_pdi[comp][1]) &lt;&lt; 1;
++            delta = vp56_rac_get_tree(c, vp56_pva_tree,
++                                      s-&gt;vector_model_pdv[comp]);
++            delta = di | (delta &lt;&lt; 2);
++            delta = (delta ^ -sign) + sign;
++        }
++        if (!comp)
++            vect-&gt;x = delta;
++        else
++            vect-&gt;y = delta;
++    }
++}
++
++static void vp5_parse_vector_models(vp56_context_t *s)
++{
++    vp56_range_coder_t *c = &amp;s-&gt;c;
++    int comp, node;
++
++    for (comp=0; comp&lt;2; comp++) {
++        if (vp56_rac_get_prob(c, vp5_vmc_pct[comp][0]))
++            s-&gt;vector_model_dct[comp] = vp56_rac_gets_nn(c, 7);
++        if (vp56_rac_get_prob(c, vp5_vmc_pct[comp][1]))
++            s-&gt;vector_model_sig[comp] = vp56_rac_gets_nn(c, 7);
++        if (vp56_rac_get_prob(c, vp5_vmc_pct[comp][2]))
++            s-&gt;vector_model_pdi[comp][0] = vp56_rac_gets_nn(c, 7);
++        if (vp56_rac_get_prob(c, vp5_vmc_pct[comp][3]))
++            s-&gt;vector_model_pdi[comp][1] = vp56_rac_gets_nn(c, 7);
++    }
++
++    for (comp=0; comp&lt;2; comp++)
++        for (node=0; node&lt;7; node++)
++            if (vp56_rac_get_prob(c, vp5_vmc_pct[comp][4 + node]))
++                s-&gt;vector_model_pdv[comp][node] = vp56_rac_gets_nn(c, 7);
++}
++
++static void vp5_parse_coeff_models(vp56_context_t *s)
++{
++    vp56_range_coder_t *c = &amp;s-&gt;c;
++    uint8_t def_prob[11];
++    int node, cg, ctx;
++    int ct;    /* code type */
++    int pt;    /* plane type (0 for Y, 1 for U or V) */
++
++    memset(def_prob, 0x80, sizeof(def_prob));
++
++    for (pt=0; pt&lt;2; pt++)
++        for (node=0; node&lt;11; node++)
++            if (vp56_rac_get_prob(c, vp5_dccv_pct[pt][node])) {
++                def_prob[node] = vp56_rac_gets_nn(c, 7);
++                s-&gt;coeff_model_dccv[pt][node] = def_prob[node];
++            } else if (s-&gt;frames[VP56_FRAME_CURRENT].key_frame) {
++                s-&gt;coeff_model_dccv[pt][node] = def_prob[node];
++            }
++
++    for (ct=0; ct&lt;3; ct++)
++        for (pt=0; pt&lt;2; pt++)
++            for (cg=0; cg&lt;6; cg++)
++                for (node=0; node&lt;11; node++)
++                    if (vp56_rac_get_prob(c, vp5_ract_pct[ct][pt][cg][node])) {
++                        def_prob[node] = vp56_rac_gets_nn(c, 7);
++                        s-&gt;coeff_model_ract[pt][ct][cg][node] = def_prob[node];
++                    } else if (s-&gt;frames[VP56_FRAME_CURRENT].key_frame) {
++                        s-&gt;coeff_model_ract[pt][ct][cg][node] = def_prob[node];
++                    }
++
++    /* coeff_model_dcct is a linear combination of coeff_model_dccv */
++    for (pt=0; pt&lt;2; pt++)
++        for (ctx=0; ctx&lt;36; ctx++)
++            for (node=0; node&lt;5; node++)
++                s-&gt;coeff_model_dcct[pt][ctx][node] = clip(((s-&gt;coeff_model_dccv[pt][node] * vp5_dccv_lc[node][ctx][0] + 128) &gt;&gt; 8) + vp5_dccv_lc[node][ctx][1], 1, 254);
++
++    /* coeff_model_acct is a linear combination of coeff_model_ract */
++    for (ct=0; ct&lt;3; ct++)
++        for (pt=0; pt&lt;2; pt++)
++            for (cg=0; cg&lt;3; cg++)
++                for (ctx=0; ctx&lt;6; ctx++)
++                    for (node=0; node&lt;5; node++)
++                        s-&gt;coeff_model_acct[pt][ct][cg][ctx][node] = clip(((s-&gt;coeff_model_ract[pt][ct][cg][node] * vp5_ract_lc[ct][cg][node][ctx][0] + 128) &gt;&gt; 8) + vp5_ract_lc[ct][cg][node][ctx][1], 1, 254);
++}
++
++static void vp5_parse_coeff(vp56_context_t *s)
++{
++    vp56_range_coder_t *c = &amp;s-&gt;c;
++    uint8_t *permute = s-&gt;scantable.permutated;
++    uint8_t *model, *model2;
++    int coeff, sign, coeff_idx;
++    int b, i, cg, idx, ctx, ctx_last;
++    int pt = 0;    /* plane type (0 for Y, 1 for U or V) */
++
++    for (b=0; b&lt;6; b++) {
++        int ct = 1;    /* code type */
++
++        if (b &gt; 3) pt = 1;
++
++        ctx = 6*s-&gt;coeff_ctx[vp56_b6to4[b]][0]
++              + s-&gt;above_blocks[s-&gt;above_block_idx[b]].not_null_dc;
++        model = s-&gt;coeff_model_dccv[pt];
++        model2 = s-&gt;coeff_model_dcct[pt][ctx];
++
++        for (coeff_idx=0; coeff_idx&lt;64; ) {
++            if (vp56_rac_get_prob(c, model2[0])) {
++                if (vp56_rac_get_prob(c, model2[2])) {
++                    if (vp56_rac_get_prob(c, model2[3])) {
++                        s-&gt;coeff_ctx[vp56_b6to4[b]][coeff_idx] = 4;
++                        idx = vp56_rac_get_tree(c, vp56_pc_tree, model);
++                        sign = vp56_rac_get(c);
++                        coeff = vp56_coeff_bias[idx];
++                        for (i=vp56_coeff_bit_length[idx]; i&gt;=0; i--)
++                            coeff += vp56_rac_get_prob(c, vp56_coeff_parse_table[idx][i]) &lt;&lt; i;
++                    } else {
++                        if (vp56_rac_get_prob(c, model2[4])) {
++                            coeff = 3 + vp56_rac_get_prob(c, model[5]);
++                            s-&gt;coeff_ctx[vp56_b6to4[b]][coeff_idx] = 3;
++                        } else {
++                            coeff = 2;
++                            s-&gt;coeff_ctx[vp56_b6to4[b]][coeff_idx] = 2;
++                        }
++                        sign = vp56_rac_get(c);
++                    }
++                    ct = 2;
++                } else {
++                    ct = 1;
++                    s-&gt;coeff_ctx[vp56_b6to4[b]][coeff_idx] = 1;
++                    sign = vp56_rac_get(c);
++                    coeff = 1;
++                }
++                coeff = (coeff ^ -sign) + sign;
++                if (coeff_idx)
++                    coeff *= s-&gt;dequant_ac;
++                s-&gt;block_coeff[b][permute[coeff_idx]] = coeff;
++            } else {
++                if (ct &amp;&amp; !vp56_rac_get_prob(c, model2[1]))
++                    break;
++                ct = 0;
++                s-&gt;coeff_ctx[vp56_b6to4[b]][coeff_idx] = 0;
++            }
++
++            cg = vp5_coeff_groups[++coeff_idx];
++            ctx = s-&gt;coeff_ctx[vp56_b6to4[b]][coeff_idx];
++            model = s-&gt;coeff_model_ract[pt][ct][cg];
++            model2 = cg &gt; 2 ? model : s-&gt;coeff_model_acct[pt][ct][cg][ctx];
++        }
++
++        ctx_last = FFMIN(s-&gt;coeff_ctx_last[vp56_b6to4[b]], 24);
++        s-&gt;coeff_ctx_last[vp56_b6to4[b]] = coeff_idx;
++        if (coeff_idx &lt; ctx_last)
++            for (i=coeff_idx; i&lt;=ctx_last; i++)
++                s-&gt;coeff_ctx[vp56_b6to4[b]][i] = 5;
++        s-&gt;above_blocks[s-&gt;above_block_idx[b]].not_null_dc = s-&gt;coeff_ctx[vp56_b6to4[b]][0];
++    }
++}
++
++static void vp5_default_models_init(vp56_context_t *s)
++{
++    int i;
++
++    for (i=0; i&lt;2; i++) {
++        s-&gt;vector_model_sig[i] = 0x80;
++        s-&gt;vector_model_dct[i] = 0x80;
++        s-&gt;vector_model_pdi[i][0] = 0x55;
++        s-&gt;vector_model_pdi[i][1] = 0x80;
++    }
++    memcpy(s-&gt;mb_types_stats, vp56_def_mb_types_stats, sizeof(s-&gt;mb_types_stats));
++    memset(s-&gt;vector_model_pdv, 0x80, sizeof(s-&gt;vector_model_pdv));
++}
++
++static int vp5_decode_init(AVCodecContext *avctx)
++{
++    vp56_context_t *s = avctx-&gt;priv_data;
++
++    vp56_init(s, avctx, 1);
++    s-&gt;vp56_coord_div = vp5_coord_div;
++    s-&gt;parse_vector_adjustment = vp5_parse_vector_adjustment;
++    s-&gt;adjust = vp5_adjust;
++    s-&gt;parse_coeff = vp5_parse_coeff;
++    s-&gt;default_models_init = vp5_default_models_init;
++    s-&gt;parse_vector_models = vp5_parse_vector_models;
++    s-&gt;parse_coeff_models = vp5_parse_coeff_models;
++    s-&gt;parse_header = vp5_parse_header;
++
++    return 0;
++}
++
++AVCodec vp5_decoder = {
++    &quot;vp5&quot;,
++    CODEC_TYPE_VIDEO,
++    CODEC_ID_VP5,
++    sizeof(vp56_context_t),
++    vp5_decode_init,
++    NULL,
++    vp56_free,
++    vp56_decode_frame,
++};
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56.c	2007-01-21 18:32:13 UTC (rev 2756)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56.c	2007-01-21 18:34:00 UTC (rev 2757)
+@@ -0,0 +1,665 @@
++/**
++ * @file vp56.c
++ * VP5 and VP6 compatible video decoder (common features)
++ *
++ * Copyright (C) 2006  Aurelien Jacobs &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">aurel at gnuage.org</A>&gt;
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++ */
++
++#include &quot;avcodec.h&quot;
++
++#include &quot;vp56.h&quot;
++#include &quot;vp56data.h&quot;
++
++
++void vp56_init_dequant(vp56_context_t *s, int quantizer)
++{
++    s-&gt;quantizer = quantizer;
++    s-&gt;dequant_dc = vp56_dc_dequant[quantizer] &lt;&lt; 2;
++    s-&gt;dequant_ac = vp56_ac_dequant[quantizer] &lt;&lt; 2;
++}
++
++static int vp56_get_vectors_predictors(vp56_context_t *s, int row, int col,
++                                       vp56_frame_t ref_frame)
++{
++    int nb_pred = 0;
++    vp56_mv_t vect[2] = {{0,0}, {0,0}};
++    int pos, offset;
++    vp56_mv_t mvp;
++
++    for (pos=0; pos&lt;12; pos++) {
++        mvp.x = col + vp56_candidate_predictor_pos[pos][0];
++        mvp.y = row + vp56_candidate_predictor_pos[pos][1];
++        if (mvp.x &lt; 0 || mvp.x &gt;= s-&gt;mb_width ||
++            mvp.y &lt; 0 || mvp.y &gt;= s-&gt;mb_height)
++            continue;
++        offset = mvp.x + s-&gt;mb_width*mvp.y;
++
++        if (vp56_reference_frame[s-&gt;macroblocks[offset].type] != ref_frame)
++            continue;
++        if ((s-&gt;macroblocks[offset].mv.x == vect[0].x &amp;&amp;
++             s-&gt;macroblocks[offset].mv.y == vect[0].y) ||
++            (s-&gt;macroblocks[offset].mv.x == 0 &amp;&amp;
++             s-&gt;macroblocks[offset].mv.y == 0))
++            continue;
++
++        vect[nb_pred++] = s-&gt;macroblocks[offset].mv;
++        if (nb_pred &gt; 1) {
++            nb_pred = -1;
++            break;
++        }
++        s-&gt;vector_candidate_pos = pos;
++    }
++
++    s-&gt;vector_candidate[0] = vect[0];
++    s-&gt;vector_candidate[1] = vect[1];
++
++    return nb_pred+1;
++}
++
++static void vp56_parse_mb_type_models(vp56_context_t *s)
++{
++    vp56_range_coder_t *c = &amp;s-&gt;c;
++    int i, ctx, type;
++
++    for (ctx=0; ctx&lt;3; ctx++) {
++        if (vp56_rac_get_prob(c, 174)) {
++            int idx = vp56_rac_gets(c, 4);
++            memcpy(s-&gt;mb_types_stats[ctx],vp56_pre_def_mb_type_stats[idx][ctx],
++                   sizeof(s-&gt;mb_types_stats[ctx]));
++        }
++        if (vp56_rac_get_prob(c, 254)) {
++            for (type=0; type&lt;10; type++) {
++                for(i=0; i&lt;2; i++) {
++                    if (vp56_rac_get_prob(c, 205)) {
++                        int delta, sign = vp56_rac_get(c);
++
++                        delta = vp56_rac_get_tree(c, vp56_pmbtm_tree,
++                                                  vp56_mb_type_model_model);
++                        if (!delta)
++                            delta = 4 * vp56_rac_gets(c, 7);
++                        s-&gt;mb_types_stats[ctx][type][i] += (delta ^ -sign) + sign;
++                    }
++                }
++            }
++        }
++    }
++
++    /* compute MB type probability tables based on previous MB type */
++    for (ctx=0; ctx&lt;3; ctx++) {
++        int p[10];
++
++        for (type=0; type&lt;10; type++)
++            p[type] = 100 * s-&gt;mb_types_stats[ctx][type][1];
++
++        for (type=0; type&lt;10; type++) {
++            int p02, p34, p0234, p17, p56, p89, p5689, p156789;
++
++            /* conservative MB type probability */
++            s-&gt;mb_type_model[ctx][type][0] = 255 - (255 * s-&gt;mb_types_stats[ctx][type][0]) / (1 + s-&gt;mb_types_stats[ctx][type][0] + s-&gt;mb_types_stats[ctx][type][1]);
++
++            p[type] = 0;    /* same MB type =&gt; weight is null */
++
++            /* binary tree parsing probabilities */
++            p02 = p[0] + p[2];
++            p34 = p[3] + p[4];
++            p0234 = p02 + p34;
++            p17 = p[1] + p[7];
++            p56 = p[5] + p[6];
++            p89 = p[8] + p[9];
++            p5689 = p56 + p89;
++            p156789 = p17 + p5689;
++
++            s-&gt;mb_type_model[ctx][type][1] = 1 + 255 * p0234/(1+p0234+p156789);
++            s-&gt;mb_type_model[ctx][type][2] = 1 + 255 * p02  / (1+p0234);
++            s-&gt;mb_type_model[ctx][type][3] = 1 + 255 * p17  / (1+p156789);
++            s-&gt;mb_type_model[ctx][type][4] = 1 + 255 * p[0] / (1+p02);
++            s-&gt;mb_type_model[ctx][type][5] = 1 + 255 * p[3] / (1+p34);
++            s-&gt;mb_type_model[ctx][type][6] = 1 + 255 * p[1] / (1+p17);
++            s-&gt;mb_type_model[ctx][type][7] = 1 + 255 * p56  / (1+p5689);
++            s-&gt;mb_type_model[ctx][type][8] = 1 + 255 * p[5] / (1+p56);
++            s-&gt;mb_type_model[ctx][type][9] = 1 + 255 * p[8] / (1+p89);
++
++            /* restore initial value */
++            p[type] = 100 * s-&gt;mb_types_stats[ctx][type][1];
++        }
++    }
++}
++
++static vp56_mb_t vp56_parse_mb_type(vp56_context_t *s,
++                                    vp56_mb_t prev_type, int ctx)
++{
++    uint8_t *mb_type_model = s-&gt;mb_type_model[ctx][prev_type];
++    vp56_range_coder_t *c = &amp;s-&gt;c;
++
++    if (vp56_rac_get_prob(c, mb_type_model[0]))
++        return prev_type;
++    else
++        return vp56_rac_get_tree(c, vp56_pmbt_tree, mb_type_model);
++}
++
++static void vp56_decode_4mv(vp56_context_t *s, int row, int col)
++{
++    vp56_mv_t mv = {0,0};
++    int type[4];
++    int b;
++
++    /* parse each block type */
++    for (b=0; b&lt;4; b++) {
++        type[b] = vp56_rac_gets(&amp;s-&gt;c, 2);
++        if (type[b])
++            type[b]++;  /* only returns 0, 2, 3 or 4 (all INTER_PF) */
++    }
++
++    /* get vectors */
++    for (b=0; b&lt;4; b++) {
++        switch (type[b]) {
++            case VP56_MB_INTER_NOVEC_PF:
++                s-&gt;mv[b] = (vp56_mv_t) {0,0};
++                break;
++            case VP56_MB_INTER_DELTA_PF:
++                s-&gt;parse_vector_adjustment(s, &amp;s-&gt;mv[b]);
++                break;
++            case VP56_MB_INTER_V1_PF:
++                s-&gt;mv[b] = s-&gt;vector_candidate[0];
++                break;
++            case VP56_MB_INTER_V2_PF:
++                s-&gt;mv[b] = s-&gt;vector_candidate[1];
++                break;
++        }
++        mv.x += s-&gt;mv[b].x;
++        mv.y += s-&gt;mv[b].y;
++    }
++
++    /* this is the one selected for the whole MB for prediction */
++    s-&gt;macroblocks[row * s-&gt;mb_width + col].mv = s-&gt;mv[3];
++
++    /* chroma vectors are average luma vectors */
++    if (s-&gt;avctx-&gt;codec-&gt;id == CODEC_ID_VP5) {
++        s-&gt;mv[4].x = s-&gt;mv[5].x = RSHIFT(mv.x,2);
++        s-&gt;mv[4].y = s-&gt;mv[5].y = RSHIFT(mv.y,2);
++    } else {
++        s-&gt;mv[4] = s-&gt;mv[5] = (vp56_mv_t) {mv.x/4, mv.y/4};
++    }
++}
++
++static vp56_mb_t vp56_decode_mv(vp56_context_t *s, int row, int col)
++{
++    vp56_mv_t *mv, vect = {0,0};
++    int ctx, b;
++
++    ctx = vp56_get_vectors_predictors(s, row, col, VP56_FRAME_PREVIOUS);
++    s-&gt;mb_type = vp56_parse_mb_type(s, s-&gt;mb_type, ctx);
++    s-&gt;macroblocks[row * s-&gt;mb_width + col].type = s-&gt;mb_type;
++
++    switch (s-&gt;mb_type) {
++        case VP56_MB_INTER_V1_PF:
++            mv = &amp;s-&gt;vector_candidate[0];
++            break;
++
++        case VP56_MB_INTER_V2_PF:
++            mv = &amp;s-&gt;vector_candidate[1];
++            break;
++
++        case VP56_MB_INTER_V1_GF:
++            vp56_get_vectors_predictors(s, row, col, VP56_FRAME_GOLDEN);
++            mv = &amp;s-&gt;vector_candidate[0];
++            break;
++
++        case VP56_MB_INTER_V2_GF:
++            vp56_get_vectors_predictors(s, row, col, VP56_FRAME_GOLDEN);
++            mv = &amp;s-&gt;vector_candidate[1];
++            break;
++
++        case VP56_MB_INTER_DELTA_PF:
++            s-&gt;parse_vector_adjustment(s, &amp;vect);
++            mv = &vect;
++            break;
++
++        case VP56_MB_INTER_DELTA_GF:
++            vp56_get_vectors_predictors(s, row, col, VP56_FRAME_GOLDEN);
++            s-&gt;parse_vector_adjustment(s, &amp;vect);
++            mv = &vect;
++            break;
++
++        case VP56_MB_INTER_4V:
++            vp56_decode_4mv(s, row, col);
++            return s-&gt;mb_type;
++
++        default:
++            mv = &vect;
++            break;
++    }
++
++    s-&gt;macroblocks[row*s-&gt;mb_width + col].mv = *mv;
++
++    /* same vector for all blocks */
++    for (b=0; b&lt;6; b++)
++        s-&gt;mv[b] = *mv;
++
++    return s-&gt;mb_type;
++}
++
++static void vp56_add_predictors_dc(vp56_context_t *s, vp56_frame_t ref_frame)
++{
++    int idx = s-&gt;scantable.permutated[0];
++    int i;
++
++    for (i=0; i&lt;6; i++) {
++        vp56_ref_dc_t *ab = &amp;s-&gt;above_blocks[s-&gt;above_block_idx[i]];
++        vp56_ref_dc_t *lb = &amp;s-&gt;left_block[vp56_b6to4[i]];
++        int count = 0;
++        int dc = 0;
++
++        if (ref_frame == lb-&gt;ref_frame) {
++            dc += lb-&gt;dc_coeff;
++            count++;
++        }
++        if (ref_frame == ab-&gt;ref_frame) {
++            dc += ab-&gt;dc_coeff;
++            count++;
++        }
++        if (s-&gt;avctx-&gt;codec-&gt;id == CODEC_ID_VP5) {
++            if (count &lt; 2 &amp;&amp; ref_frame == ab[-1].ref_frame) {
++                dc += ab[-1].dc_coeff;
++                count++;
++            }
++            if (count &lt; 2 &amp;&amp; ref_frame == ab[1].ref_frame) {
++                dc += ab[1].dc_coeff;
++                count++;
++            }
++        }
++        if (count == 0)
++            dc = s-&gt;prev_dc[vp56_b6to3[i]][ref_frame];
++        else if (count == 2)
++            dc /= 2;
++
++        s-&gt;block_coeff[i][idx] += dc;
++        s-&gt;prev_dc[vp56_b6to3[i]][ref_frame] = s-&gt;block_coeff[i][idx];
++        ab-&gt;dc_coeff = s-&gt;block_coeff[i][idx];
++        ab-&gt;ref_frame = ref_frame;
++        lb-&gt;dc_coeff = s-&gt;block_coeff[i][idx];
++        lb-&gt;ref_frame = ref_frame;
++        s-&gt;block_coeff[i][idx] *= s-&gt;dequant_dc;
++    }
++}
++
++static void vp56_edge_filter(vp56_context_t *s, uint8_t *yuv,
++                             int pix_inc, int line_inc, int t)
++{
++    int pix2_inc = 2 * pix_inc;
++    int i, v;
++
++    for (i=0; i&lt;12; i++) {
++        v = (yuv[-pix2_inc] + 3*(yuv[0]-yuv[-pix_inc]) - yuv[pix_inc] + 4) &gt;&gt;3;
++        v = s-&gt;adjust(v, t);
++        yuv[-pix_inc] = clip_uint8(yuv[-pix_inc] + v);
++        yuv[0] = clip_uint8(yuv[0] - v);
++        yuv += line_inc;
++    }
++}
++
++static void vp56_deblock_filter(vp56_context_t *s, uint8_t *yuv,
++                                int stride, int dx, int dy)
++{
++    int t = vp56_filter_threshold[s-&gt;quantizer];
++    if (dx)  vp56_edge_filter(s, yuv +         10-dx ,      1, stride, t);
++    if (dy)  vp56_edge_filter(s, yuv + stride*(10-dy), stride,      1, t);
++}
++
++static void vp56_mc(vp56_context_t *s, int b, uint8_t *src,
++                    int stride, int x, int y)
++{
++    int plane = vp56_b6to3[b];
++    uint8_t *dst= s-&gt;frames[VP56_FRAME_CURRENT].data[plane]+s-&gt;block_offset[b];
++    uint8_t *src_block;
++    int src_offset;
++    int overlap_offset = 0;
++    int mask = s-&gt;vp56_coord_div[b] - 1;
++    int deblock_filtering = s-&gt;deblock_filtering;
++    int dx;
++    int dy;
++
++    if (s-&gt;avctx-&gt;skip_loop_filter &gt;= AVDISCARD_ALL ||
++        (s-&gt;avctx-&gt;skip_loop_filter &gt;= AVDISCARD_NONKEY
++         &amp;&amp; !s-&gt;frames[VP56_FRAME_CURRENT].key_frame))
++        deblock_filtering = 0;
++
++    dx = s-&gt;mv[b].x / s-&gt;vp56_coord_div[b];
++    dy = s-&gt;mv[b].y / s-&gt;vp56_coord_div[b];
++
++    if (b &gt;= 4) {
++        x /= 2;
++        y /= 2;
++    }
++    x += dx - 2;
++    y += dy - 2;
++
++    if (x&lt;0 || x+12&gt;=s-&gt;plane_width[plane] ||
++        y&lt;0 || y+12&gt;=s-&gt;plane_height[plane]) {
++        ff_emulated_edge_mc(s-&gt;edge_emu_buffer,
++                            src + s-&gt;block_offset[b] + (dy-2)*stride + (dx-2),
++                            stride, 12, 12, x, y,
++                            s-&gt;plane_width[plane],
++                            s-&gt;plane_height[plane]);
++        src_block = s-&gt;edge_emu_buffer;
++        src_offset = 2 + 2*stride;
++    } else if (deblock_filtering) {
++        /* only need a 12x12 block, but there is no such dsp function, */
++        /* so copy a 16x12 block */
++        s-&gt;dsp.put_pixels_tab[0][0](s-&gt;edge_emu_buffer,
++                                    src + s-&gt;block_offset[b] + (dy-2)*stride + (dx-2),
++                                    stride, 12);
++        src_block = s-&gt;edge_emu_buffer;
++        src_offset = 2 + 2*stride;
++    } else {
++        src_block = src;
++        src_offset = s-&gt;block_offset[b] + dy*stride + dx;
++    }
++
++    if (deblock_filtering)
++        vp56_deblock_filter(s, src_block, stride, dx&amp;7, dy&amp;7);
++
++    if (s-&gt;mv[b].x &amp; mask)
++        overlap_offset += (s-&gt;mv[b].x &gt; 0) ? 1 : -1;
++    if (s-&gt;mv[b].y &amp; mask)
++        overlap_offset += (s-&gt;mv[b].y &gt; 0) ? stride : -stride;
++
++    if (overlap_offset) {
++        if (s-&gt;filter)
++            s-&gt;filter(s, dst, src_block, src_offset, src_offset+overlap_offset,
++                      stride, s-&gt;mv[b], mask, s-&gt;filter_selection, b&lt;4);
++        else
++            s-&gt;dsp.put_no_rnd_pixels_l2[1](dst, src_block+src_offset,
++                                           src_block+src_offset+overlap_offset,
++                                           stride, 8);
++    } else {
++        s-&gt;dsp.put_pixels_tab[1][0](dst, src_block+src_offset, stride, 8);
++    }
++}
++
++static void vp56_decode_mb(vp56_context_t *s, int row, int col)
++{
++    AVFrame *frame_current, *frame_ref;
++    vp56_mb_t mb_type;
++    vp56_frame_t ref_frame;
++    int b, plan, off;
++
++    if (s-&gt;frames[VP56_FRAME_CURRENT].key_frame)
++        mb_type = VP56_MB_INTRA;
++    else
++        mb_type = vp56_decode_mv(s, row, col);
++    ref_frame = vp56_reference_frame[mb_type];
++
++    memset(s-&gt;block_coeff, 0, sizeof(s-&gt;block_coeff));
++
++    s-&gt;parse_coeff(s);
++
++    vp56_add_predictors_dc(s, ref_frame);
++
++    frame_current = &amp;s-&gt;frames[VP56_FRAME_CURRENT];
++    frame_ref = &amp;s-&gt;frames[ref_frame];
++
++    switch (mb_type) {
++        case VP56_MB_INTRA:
++            for (b=0; b&lt;6; b++) {
++                plan = vp56_b6to3[b];
++                s-&gt;dsp.idct_put(frame_current-&gt;data[plan] + s-&gt;block_offset[b],
++                                s-&gt;stride[plan], s-&gt;block_coeff[b]);
++            }
++            break;
++
++        case VP56_MB_INTER_NOVEC_PF:
++        case VP56_MB_INTER_NOVEC_GF:
++            for (b=0; b&lt;6; b++) {
++                plan = vp56_b6to3[b];
++                off = s-&gt;block_offset[b];
++                s-&gt;dsp.put_pixels_tab[1][0](frame_current-&gt;data[plan] + off,
++                                            frame_ref-&gt;data[plan] + off,
++                                            s-&gt;stride[plan], 8);
++                s-&gt;dsp.idct_add(frame_current-&gt;data[plan] + off,
++                                s-&gt;stride[plan], s-&gt;block_coeff[b]);
++            }
++            break;
++
++        case VP56_MB_INTER_DELTA_PF:
++        case VP56_MB_INTER_V1_PF:
++        case VP56_MB_INTER_V2_PF:
++        case VP56_MB_INTER_DELTA_GF:
++        case VP56_MB_INTER_4V:
++        case VP56_MB_INTER_V1_GF:
++        case VP56_MB_INTER_V2_GF:
++            for (b=0; b&lt;6; b++) {
++                int x_off = b==1 || b==3 ? 8 : 0;
++                int y_off = b==2 || b==3 ? 8 : 0;
++                plan = vp56_b6to3[b];
++                vp56_mc(s, b, frame_ref-&gt;data[plan], s-&gt;stride[plan],
++                        16*col+x_off, 16*row+y_off);
++                s-&gt;dsp.idct_add(frame_current-&gt;data[plan] + s-&gt;block_offset[b],
++                                s-&gt;stride[plan], s-&gt;block_coeff[b]);
++            }
++            break;
++    }
++}
++
++static int vp56_size_changed(AVCodecContext *avctx, vp56_context_t *s)
++{
++    int stride = s-&gt;frames[VP56_FRAME_CURRENT].linesize[0];
++    int i;
++
++    s-&gt;plane_width[0] = s-&gt;avctx-&gt;coded_width;
++    s-&gt;plane_width[1] = s-&gt;plane_width[2] = s-&gt;avctx-&gt;coded_width/2;
++    s-&gt;plane_height[0] = s-&gt;avctx-&gt;coded_height;
++    s-&gt;plane_height[1] = s-&gt;plane_height[2] = s-&gt;avctx-&gt;coded_height/2;
++
++    for (i=0; i&lt;3; i++)
++        s-&gt;stride[i] = s-&gt;flip * s-&gt;frames[VP56_FRAME_CURRENT].linesize[i];
++
++    s-&gt;mb_width = (s-&gt;avctx-&gt;coded_width+15) / 16;
++    s-&gt;mb_height = (s-&gt;avctx-&gt;coded_height+15) / 16;
++
++    if (s-&gt;mb_width &gt; 1000 || s-&gt;mb_height &gt; 1000) {
++        av_log(avctx, AV_LOG_ERROR, &quot;picture too big\n&quot;);
++        return -1;
++    }
++
++    s-&gt;above_blocks = av_realloc(s-&gt;above_blocks,
++                                 (4*s-&gt;mb_width+6) * sizeof(*s-&gt;above_blocks));
++    s-&gt;macroblocks = av_realloc(s-&gt;macroblocks,
++                                s-&gt;mb_width*s-&gt;mb_height*sizeof(*s-&gt;macroblocks));
++    av_free(s-&gt;edge_emu_buffer_alloc);
++    s-&gt;edge_emu_buffer_alloc = av_malloc(16*stride);
++    s-&gt;edge_emu_buffer = s-&gt;edge_emu_buffer_alloc;
++    if (s-&gt;flip &lt; 0)
++        s-&gt;edge_emu_buffer += 15 * stride;
++
++    return 0;
++}
++
++int vp56_decode_frame(AVCodecContext *avctx, void *data, int *data_size,
++                      uint8_t *buf, int buf_size)
++{
++    vp56_context_t *s = avctx-&gt;priv_data;
++    AVFrame *const p = &amp;s-&gt;frames[VP56_FRAME_CURRENT];
++    AVFrame *picture = data;
++    int mb_row, mb_col, mb_row_flip, mb_offset = 0;
++    int block, y, uv, stride_y, stride_uv;
++    int golden_frame = 0;
++    int res;
++
++    res = s-&gt;parse_header(s, buf, buf_size, &amp;golden_frame);
++    if (!res)
++        return -1;
++
++    p-&gt;reference = 1;
++    if (avctx-&gt;get_buffer(avctx, p) &lt; 0) {
++        av_log(avctx, AV_LOG_ERROR, &quot;get_buffer() failed\n&quot;);
++        return -1;
++    }
++
++    if (res == 2)
++        if (vp56_size_changed(avctx, s)) {
++            avctx-&gt;release_buffer(avctx, p);
++            return -1;
++        }
++
++    if (p-&gt;key_frame) {
++        p-&gt;pict_type = FF_I_TYPE;
++        s-&gt;default_models_init(s);
++        for (block=0; block&lt;s-&gt;mb_height*s-&gt;mb_width; block++)
++            s-&gt;macroblocks[block].type = VP56_MB_INTRA;
++    } else {
++        p-&gt;pict_type = FF_P_TYPE;
++        vp56_parse_mb_type_models(s);
++        s-&gt;parse_vector_models(s);
++        s-&gt;mb_type = VP56_MB_INTER_NOVEC_PF;
++    }
++
++    s-&gt;parse_coeff_models(s);
++
++    memset(s-&gt;prev_dc, 0, sizeof(s-&gt;prev_dc));
++    s-&gt;prev_dc[1][VP56_FRAME_CURRENT] = 128;
++    s-&gt;prev_dc[2][VP56_FRAME_CURRENT] = 128;
++
++    for (block=0; block &lt; 4*s-&gt;mb_width+6; block++) {
++        s-&gt;above_blocks[block].ref_frame = -1;
++        s-&gt;above_blocks[block].dc_coeff = 0;
++        s-&gt;above_blocks[block].not_null_dc = 0;
++    }
++    s-&gt;above_blocks[2*s-&gt;mb_width + 2].ref_frame = 0;
++    s-&gt;above_blocks[3*s-&gt;mb_width + 4].ref_frame = 0;
++
++    stride_y  = p-&gt;linesize[0];
++    stride_uv = p-&gt;linesize[1];
++
++    if (s-&gt;flip &lt; 0)
++        mb_offset = 7;
++
++    /* main macroblocks loop */
++    for (mb_row=0; mb_row&lt;s-&gt;mb_height; mb_row++) {
++        if (s-&gt;flip &lt; 0)
++            mb_row_flip = s-&gt;mb_height - mb_row - 1;
++        else
++            mb_row_flip = mb_row;
++
++        for (block=0; block&lt;4; block++) {
++            s-&gt;left_block[block].ref_frame = -1;
++            s-&gt;left_block[block].dc_coeff = 0;
++            s-&gt;left_block[block].not_null_dc = 0;
++            memset(s-&gt;coeff_ctx[block], 0, 64*sizeof(s-&gt;coeff_ctx[block][0]));
++        }
++        memset(s-&gt;coeff_ctx_last, 24, sizeof(s-&gt;coeff_ctx_last));
++
++        s-&gt;above_block_idx[0] = 1;
++        s-&gt;above_block_idx[1] = 2;
++        s-&gt;above_block_idx[2] = 1;
++        s-&gt;above_block_idx[3] = 2;
++        s-&gt;above_block_idx[4] = 2*s-&gt;mb_width + 2 + 1;
++        s-&gt;above_block_idx[5] = 3*s-&gt;mb_width + 4 + 1;
++
++        s-&gt;block_offset[s-&gt;frbi] = (mb_row_flip*16 + mb_offset) * stride_y;
++        s-&gt;block_offset[s-&gt;srbi] = s-&gt;block_offset[s-&gt;frbi] + 8*stride_y;
++        s-&gt;block_offset[1] = s-&gt;block_offset[0] + 8;
++        s-&gt;block_offset[3] = s-&gt;block_offset[2] + 8;
++        s-&gt;block_offset[4] = (mb_row_flip*8 + mb_offset) * stride_uv;
++        s-&gt;block_offset[5] = s-&gt;block_offset[4];
++
++        for (mb_col=0; mb_col&lt;s-&gt;mb_width; mb_col++) {
++            vp56_decode_mb(s, mb_row, mb_col);
++
++            for (y=0; y&lt;4; y++) {
++                s-&gt;above_block_idx[y] += 2;
++                s-&gt;block_offset[y] += 16;
++            }
++
++            for (uv=4; uv&lt;6; uv++) {
++                s-&gt;above_block_idx[uv] += 1;
++                s-&gt;block_offset[uv] += 8;
++            }
++        }
++    }
++
++    if (s-&gt;frames[VP56_FRAME_PREVIOUS].data[0]
++        &amp;&amp; (s-&gt;frames[VP56_FRAME_PREVIOUS].data[0]
++            != s-&gt;frames[VP56_FRAME_GOLDEN].data[0])) {
++        avctx-&gt;release_buffer(avctx, &amp;s-&gt;frames[VP56_FRAME_PREVIOUS]);
++    }
++    if (p-&gt;key_frame || golden_frame) {
++        if (s-&gt;frames[VP56_FRAME_GOLDEN].data[0])
++            avctx-&gt;release_buffer(avctx, &amp;s-&gt;frames[VP56_FRAME_GOLDEN]);
++        s-&gt;frames[VP56_FRAME_GOLDEN] = *p;
++    }
++    s-&gt;frames[VP56_FRAME_PREVIOUS] = *p;
++
++    *picture = *p;
++    *data_size = sizeof(AVPicture);
++
++    return buf_size;
++}
++
++void vp56_init(vp56_context_t *s, AVCodecContext *avctx, int flip)
++{
++    int i;
++
++    s-&gt;avctx = avctx;
++    avctx-&gt;pix_fmt = PIX_FMT_YUV420P;
++
++    if (s-&gt;avctx-&gt;idct_algo == FF_IDCT_AUTO)
++        s-&gt;avctx-&gt;idct_algo = FF_IDCT_VP3;
++    dsputil_init(&amp;s-&gt;dsp, s-&gt;avctx);
++    ff_init_scantable(s-&gt;dsp.idct_permutation, &amp;s-&gt;scantable,ff_zigzag_direct);
++
++    avcodec_set_dimensions(s-&gt;avctx, 0, 0);
++
++    for (i=0; i&lt;3; i++)
++        s-&gt;frames[i].data[0] = NULL;
++    s-&gt;edge_emu_buffer_alloc = NULL;
++
++    s-&gt;above_blocks = NULL;
++    s-&gt;macroblocks = NULL;
++    s-&gt;quantizer = -1;
++    s-&gt;deblock_filtering = 1;
++
++    s-&gt;filter = NULL;
++
++    if (flip) {
++        s-&gt;flip = -1;
++        s-&gt;frbi = 2;
++        s-&gt;srbi = 0;
++    } else {
++        s-&gt;flip = 1;
++        s-&gt;frbi = 0;
++        s-&gt;srbi = 2;
++    }
++}
++
++int vp56_free(AVCodecContext *avctx)
++{
++    vp56_context_t *s = avctx-&gt;priv_data;
++
++    av_free(s-&gt;above_blocks);
++    av_free(s-&gt;macroblocks);
++    av_free(s-&gt;edge_emu_buffer_alloc);
++    if (s-&gt;frames[VP56_FRAME_GOLDEN].data[0]
++        &amp;&amp; (s-&gt;frames[VP56_FRAME_PREVIOUS].data[0]
++            != s-&gt;frames[VP56_FRAME_GOLDEN].data[0]))
++        avctx-&gt;release_buffer(avctx, &amp;s-&gt;frames[VP56_FRAME_GOLDEN]);
++    if (s-&gt;frames[VP56_FRAME_PREVIOUS].data[0])
++        avctx-&gt;release_buffer(avctx, &amp;s-&gt;frames[VP56_FRAME_PREVIOUS]);
++    return 0;
++}
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56.h	2007-01-21 18:32:13 UTC (rev 2756)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56.h	2007-01-21 18:34:00 UTC (rev 2757)
+@@ -0,0 +1,252 @@
++/**
++ * @file vp56.h
++ * VP5 and VP6 compatible video decoder (common features)
++ *
++ * Copyright (C) 2006  Aurelien Jacobs &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">aurel at gnuage.org</A>&gt;
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++ */
++
++#ifndef VP56_H
++#define VP56_H
++
++#include &quot;vp56data.h&quot;
++#include &quot;dsputil.h&quot;
++#include &quot;mpegvideo.h&quot;
++
++
++typedef struct vp56_context vp56_context_t;
++typedef struct vp56_mv vp56_mv_t;
++
++typedef void (*vp56_parse_vector_adjustment_t)(vp56_context_t *s,
++                                               vp56_mv_t *vect);
++typedef int (*vp56_adjust_t)(int v, int t);
++typedef void (*vp56_filter_t)(vp56_context_t *s, uint8_t *dst, uint8_t *src,
++                              int offset1, int offset2, int stride,
++                              vp56_mv_t mv, int mask, int select, int luma);
++typedef void (*vp56_parse_coeff_t)(vp56_context_t *s);
++typedef void (*vp56_default_models_init_t)(vp56_context_t *s);
++typedef void (*vp56_parse_vector_models_t)(vp56_context_t *s);
++typedef void (*vp56_parse_coeff_models_t)(vp56_context_t *s);
++typedef int (*vp56_parse_header_t)(vp56_context_t *s, uint8_t *buf,
++                                   int buf_size, int *golden_frame);
++
++typedef struct {
++    int high;
++    int bits;
++    const uint8_t *buffer;
++    unsigned long code_word;
++} vp56_range_coder_t;
++
++typedef struct {
++    uint8_t not_null_dc;
++    vp56_frame_t ref_frame;
++    DCTELEM dc_coeff;
++} vp56_ref_dc_t;
++
++struct vp56_mv {
++    int x;
++    int y;
++};
++
++typedef struct {
++    uint8_t type;
++    vp56_mv_t mv;
++} vp56_macroblock_t;
++
++struct vp56_context {
++    AVCodecContext *avctx;
++    DSPContext dsp;
++    ScanTable scantable;
++    AVFrame frames[3];
++    uint8_t *edge_emu_buffer_alloc;
++    uint8_t *edge_emu_buffer;
++    vp56_range_coder_t c;
++    vp56_range_coder_t cc;
++    vp56_range_coder_t *ccp;
++    int sub_version;
++
++    /* frame info */
++    int plane_width[3];
++    int plane_height[3];
++    int mb_width;   /* number of horizontal MB */
++    int mb_height;  /* number of vertical MB */
++    int block_offset[6];
++
++    int quantizer;
++    uint16_t dequant_dc;
++    uint16_t dequant_ac;
++
++    /* DC predictors management */
++    vp56_ref_dc_t *above_blocks;
++    vp56_ref_dc_t left_block[4];
++    int above_block_idx[6];
++    DCTELEM prev_dc[3][3];    /* [plan][ref_frame] */
++
++    /* blocks / macroblock */
++    vp56_mb_t mb_type;
++    vp56_macroblock_t *macroblocks;
++    DECLARE_ALIGNED_16(DCTELEM, block_coeff[6][64]);
++    uint8_t coeff_reorder[64];       /* used in vp6 only */
++    uint8_t coeff_index_to_pos[64];  /* used in vp6 only */
++
++    /* motion vectors */
++    vp56_mv_t mv[6];  /* vectors for each block in MB */
++    vp56_mv_t vector_candidate[2];
++    int vector_candidate_pos;
++
++    /* filtering hints */
++    int filter_header;               /* used in vp6 only */
++    int deblock_filtering;
++    int filter_selection;
++    int filter_mode;
++    int max_vector_length;
++    int sample_variance_threshold;
++
++    /* AC models */
++    uint8_t vector_model_sig[2];           /* delta sign */
++    uint8_t vector_model_dct[2];           /* delta coding types */
++    uint8_t vector_model_pdi[2][2];        /* predefined delta init */
++    uint8_t vector_model_pdv[2][7];        /* predefined delta values */
++    uint8_t vector_model_fdv[2][8];        /* 8 bit delta value definition */
++    uint8_t mb_type_model[3][10][10];      /* model for decoding MB type */
++    uint8_t coeff_model_dccv[2][11];       /* DC coeff value */
++    uint8_t coeff_model_ract[2][3][6][11]; /* Run/AC coding type and AC coeff value */
++    uint8_t coeff_model_acct[2][3][3][6][5];/* vp5 only AC coding type for coding group &lt; 3 */
++    uint8_t coeff_model_dcct[2][36][5];    /* DC coeff coding type */
++    uint8_t coeff_model_runv[2][14];       /* run value (vp6 only) */
++    uint8_t mb_types_stats[3][10][2];      /* contextual, next MB type stats */
++    uint8_t coeff_ctx[4][64];              /* used in vp5 only */
++    uint8_t coeff_ctx_last[4];             /* used in vp5 only */
++
++    /* upside-down flipping hints */
++    int flip;  /* are we flipping ? */
++    int frbi;  /* first row block index in MB */
++    int srbi;  /* second row block index in MB */
++    int stride[3];  /* stride for each plan */
++
++    const uint8_t *vp56_coord_div;
++    vp56_parse_vector_adjustment_t parse_vector_adjustment;
++    vp56_adjust_t adjust;
++    vp56_filter_t filter;
++    vp56_parse_coeff_t parse_coeff;
++    vp56_default_models_init_t default_models_init;
++    vp56_parse_vector_models_t parse_vector_models;
++    vp56_parse_coeff_models_t parse_coeff_models;
++    vp56_parse_header_t parse_header;
++};
++
++
++void vp56_init(vp56_context_t *s, AVCodecContext *avctx, int flip);
++int vp56_free(AVCodecContext *avctx);
++void vp56_init_dequant(vp56_context_t *s, int quantizer);
++int vp56_decode_frame(AVCodecContext *avctx, void *data, int *data_size,
++                      uint8_t *buf, int buf_size);
++
++
++/**
++ * vp56 specific range coder implementation
++ */
++
++static inline void vp56_init_range_decoder(vp56_range_coder_t *c,
++                                           const uint8_t *buf, int buf_size)
++{
++    c-&gt;high = 255;
++    c-&gt;bits = 8;
++    c-&gt;buffer = buf;
++    c-&gt;code_word = *c-&gt;buffer++ &lt;&lt; 8;
++    c-&gt;code_word |= *c-&gt;buffer++;
++}
++
++static inline int vp56_rac_get_prob(vp56_range_coder_t *c, uint8_t prob)
++{
++    unsigned int low = 1 + (((c-&gt;high - 1) * prob) / 256);
++    unsigned int low_shift = low &lt;&lt; 8;
++    int bit = c-&gt;code_word &gt;= low_shift;
++
++    if (bit) {
++        c-&gt;high -= low;
++        c-&gt;code_word -= low_shift;
++    } else {
++        c-&gt;high = low;
++    }
++
++    /* normalize */
++    while (c-&gt;high &lt; 128) {
++        c-&gt;high &lt;&lt;= 1;
++        c-&gt;code_word &lt;&lt;= 1;
++        if (--c-&gt;bits == 0) {
++            c-&gt;bits = 8;
++            c-&gt;code_word |= *c-&gt;buffer++;
++        }
++    }
++    return bit;
++}
++
++static inline int vp56_rac_get(vp56_range_coder_t *c)
++{
++    /* equiprobable */
++    int low = (c-&gt;high + 1) &gt;&gt; 1;
++    unsigned int low_shift = low &lt;&lt; 8;
++    int bit = c-&gt;code_word &gt;= low_shift;
++    if (bit) {
++        c-&gt;high = (c-&gt;high - low) &lt;&lt; 1;
++        c-&gt;code_word -= low_shift;
++    } else {
++        c-&gt;high = low &lt;&lt; 1;
++    }
++
++    /* normalize */
++    c-&gt;code_word &lt;&lt;= 1;
++    if (--c-&gt;bits == 0) {
++        c-&gt;bits = 8;
++        c-&gt;code_word |= *c-&gt;buffer++;
++    }
++    return bit;
++}
++
++static inline int vp56_rac_gets(vp56_range_coder_t *c, int bits)
++{
++    int value = 0;
++
++    while (bits--) {
++        value = (value &lt;&lt; 1) | vp56_rac_get(c);
++    }
++
++    return value;
++}
++
++static inline int vp56_rac_gets_nn(vp56_range_coder_t *c, int bits)
++{
++    int v = vp56_rac_gets(c, 7) &lt;&lt; 1;
++    return v + !v;
++}
++
++static inline int vp56_rac_get_tree(vp56_range_coder_t *c,
++                                    const vp56_tree_t *tree,
++                                    const uint8_t *probs)
++{
++    while (tree-&gt;val &gt; 0) {
++        if (vp56_rac_get_prob(c, probs[tree-&gt;prob_idx]))
++            tree += tree-&gt;val;
++        else
++            tree++;
++    }
++    return -tree-&gt;val;
++}
++
++#endif /* VP56_H */
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56data.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56data.c	2007-01-21 18:32:13 UTC (rev 2756)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56data.c	2007-01-21 18:34:00 UTC (rev 2757)
+@@ -0,0 +1,66 @@
++/**
++ * @file vp56data.c
++ * VP5 and VP6 compatible video decoder (common data)
++ *
++ * Copyright (C) 2006  Aurelien Jacobs &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">aurel at gnuage.org</A>&gt;
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++ */
++
++#include &quot;vp56data.h&quot;
++
++const uint8_t vp56_b6to3[] = { 0, 0, 0, 0, 1, 2 };
++const uint8_t vp56_b6to4[] = { 0, 0, 1, 1, 2, 3 };
++
++const uint8_t vp56_coeff_parse_table[6][11] = {
++    { 159,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
++    { 145, 165,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
++    { 140, 148, 173,   0,   0,   0,   0,   0,   0,   0,   0 },
++    { 135, 140, 155, 176,   0,   0,   0,   0,   0,   0,   0 },
++    { 130, 134, 141, 157, 180,   0,   0,   0,   0,   0,   0 },
++    { 129, 130, 133, 140, 153, 177, 196, 230, 243, 254, 254 },
++};
++
++const uint8_t vp56_def_mb_types_stats[3][10][2] = {
++    { {  69, 42 }, {   1,  2 }, {  1,   7 }, {  44, 42 }, {  6, 22 },
++      {   1,  3 }, {   0,  2 }, {  1,   5 }, {   0,  1 }, {  0,  0 }, },
++    { { 229,  8 }, {   1,  1 }, {  0,   8 }, {   0,  0 }, {  0,  0 },
++      {   1,  2 }, {   0,  1 }, {  0,   0 }, {   1,  1 }, {  0,  0 }, },
++    { { 122, 35 }, {   1,  1 }, {  1,   6 }, {  46, 34 }, {  0,  0 },
++      {   1,  2 }, {   0,  1 }, {  0,   1 }, {   1,  1 }, {  0,  0 }, },
++};
++
++const vp56_tree_t vp56_pva_tree[] = {
++    { 8, 0},
++    { 4, 1},
++    { 2, 2}, {-0}, {-1},
++    { 2, 3}, {-2}, {-3},
++    { 4, 4},
++    { 2, 5}, {-4}, {-5},
++    { 2, 6}, {-6}, {-7},
++};
++
++const vp56_tree_t vp56_pc_tree[] = {
++    { 4, 6},
++    { 2, 7}, {-0}, {-1},
++    { 4, 8},
++    { 2, 9}, {-2}, {-3},
++    { 2,10}, {-4}, {-5},
++};
++
++const uint8_t vp56_coeff_bias[] = { 5, 7, 11, 19, 35, 67 };
++const uint8_t vp56_coeff_bit_length[] = { 0, 1, 2, 3, 4, 10 };
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56data.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56data.h	2007-01-21 18:32:13 UTC (rev 2756)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp56data.h	2007-01-21 18:34:00 UTC (rev 2757)
+@@ -0,0 +1,248 @@
++/**
++ * @file vp56data.h
++ * VP5 and VP6 compatible video decoder (common data)
++ *
++ * Copyright (C) 2006  Aurelien Jacobs &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">aurel at gnuage.org</A>&gt;
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++ */
++
++#ifndef VP56DATA_H
++#define VP56DATA_H
++
++#include &quot;common.h&quot;
++
++typedef enum {
++    VP56_FRAME_CURRENT  = 0,
++    VP56_FRAME_PREVIOUS = 1,
++    VP56_FRAME_GOLDEN   = 2,
++} vp56_frame_t;
++
++typedef enum {
++    VP56_MB_INTER_NOVEC_PF = 0,  /**&lt; Inter MB, no vector, from previous frame */
++    VP56_MB_INTRA          = 1,  /**&lt; Intra MB */
++    VP56_MB_INTER_DELTA_PF = 2,  /**&lt; Inter MB, above/left vector + delta, from previous frame */
++    VP56_MB_INTER_V1_PF    = 3,  /**&lt; Inter MB, first vector, from previous frame */
++    VP56_MB_INTER_V2_PF    = 4,  /**&lt; Inter MB, second vector, from previous frame */
++    VP56_MB_INTER_NOVEC_GF = 5,  /**&lt; Inter MB, no vector, from golden frame */
++    VP56_MB_INTER_DELTA_GF = 6,  /**&lt; Inter MB, above/left vector + delta, from golden frame */
++    VP56_MB_INTER_4V       = 7,  /**&lt; Inter MB, 4 vectors, from previous frame */
++    VP56_MB_INTER_V1_GF    = 8,  /**&lt; Inter MB, first vector, from golden frame */
++    VP56_MB_INTER_V2_GF    = 9,  /**&lt; Inter MB, second vector, from golden frame */
++} vp56_mb_t;
++
++typedef struct {
++  int8_t val;
++  int8_t prob_idx;
++} vp56_tree_t;
++
++extern const uint8_t vp56_b6to3[];
++extern const uint8_t vp56_b6to4[];
++extern const uint8_t vp56_coeff_parse_table[6][11];
++extern const uint8_t vp56_def_mb_types_stats[3][10][2];
++extern const vp56_tree_t vp56_pva_tree[];
++extern const vp56_tree_t vp56_pc_tree[];
++extern const uint8_t vp56_coeff_bias[];
++extern const uint8_t vp56_coeff_bit_length[];
++
++static const vp56_frame_t vp56_reference_frame[] = {
++    VP56_FRAME_PREVIOUS,  /* VP56_MB_INTER_NOVEC_PF */
++    VP56_FRAME_CURRENT,   /* VP56_MB_INTRA */
++    VP56_FRAME_PREVIOUS,  /* VP56_MB_INTER_DELTA_PF */
++    VP56_FRAME_PREVIOUS,  /* VP56_MB_INTER_V1_PF */
++    VP56_FRAME_PREVIOUS,  /* VP56_MB_INTER_V2_PF */
++    VP56_FRAME_GOLDEN,    /* VP56_MB_INTER_NOVEC_GF */
++    VP56_FRAME_GOLDEN,    /* VP56_MB_INTER_DELTA_GF */
++    VP56_FRAME_PREVIOUS,  /* VP56_MB_INTER_4V */
++    VP56_FRAME_GOLDEN,    /* VP56_MB_INTER_V1_GF */
++    VP56_FRAME_GOLDEN,    /* VP56_MB_INTER_V2_GF */
++};
++
++static const uint8_t vp56_ac_dequant[64] = {
++    94, 92, 90, 88, 86, 82, 78, 74,
++    70, 66, 62, 58, 54, 53, 52, 51,
++    50, 49, 48, 47, 46, 45, 44, 43,
++    42, 40, 39, 37, 36, 35, 34, 33,
++    32, 31, 30, 29, 28, 27, 26, 25,
++    24, 23, 22, 21, 20, 19, 18, 17,
++    16, 15, 14, 13, 12, 11, 10,  9,
++     8,  7,  6,  5,  4,  3,  2,  1,
++};
++
++static const uint8_t vp56_dc_dequant[64] = {
++    47, 47, 47, 47, 45, 43, 43, 43,
++    43, 43, 42, 41, 41, 40, 40, 40,
++    40, 35, 35, 35, 35, 33, 33, 33,
++    33, 32, 32, 32, 27, 27, 26, 26,
++    25, 25, 24, 24, 23, 23, 19, 19,
++    19, 19, 18, 18, 17, 16, 16, 16,
++    16, 16, 15, 11, 11, 11, 10, 10,
++     9,  8,  7,  5,  3,  3,  2,  2,
++};
++
++static const uint8_t vp56_pre_def_mb_type_stats[16][3][10][2] = {
++  { { {   9, 15 }, {  32, 25 }, {  7,  19 }, {   9, 21 }, {  1, 12 },
++      {  14, 12 }, {   3, 18 }, { 14,  23 }, {   3, 10 }, {  0,  4 }, },
++    { {  41, 22 }, {   1,  0 }, {  1,  31 }, {   0,  0 }, {  0,  0 },
++      {   0,  1 }, {   1,  7 }, {  0,   1 }, {  98, 25 }, {  4, 10 }, },
++    { {   2,  3 }, {   2,  3 }, {  0,   2 }, {   0,  2 }, {  0,  0 },
++      {  11,  4 }, {   1,  4 }, {  0,   2 }, {   3,  2 }, {  0,  4 }, }, },
++  { { {  48, 39 }, {   1,  2 }, { 11,  27 }, {  29, 44 }, {  7, 27 },
++      {   1,  4 }, {   0,  3 }, {  1,   6 }, {   1,  2 }, {  0,  0 }, },
++    { { 123, 37 }, {   6,  4 }, {  1,  27 }, {   0,  0 }, {  0,  0 },
++      {   5,  8 }, {   1,  7 }, {  0,   1 }, {  12, 10 }, {  0,  2 }, },
++    { {  49, 46 }, {   3,  4 }, {  7,  31 }, {  42, 41 }, {  0,  0 },
++      {   2,  6 }, {   1,  7 }, {  1,   4 }, {   2,  4 }, {  0,  1 }, }, },
++  { { {  21, 32 }, {   1,  2 }, {  4,  10 }, {  32, 43 }, {  6, 23 },
++      {   2,  3 }, {   1, 19 }, {  1,   6 }, {  12, 21 }, {  0,  7 }, },
++    { {  26, 14 }, {  14, 12 }, {  0,  24 }, {   0,  0 }, {  0,  0 },
++      {  55, 17 }, {   1,  9 }, {  0,  36 }, {   5,  7 }, {  1,  3 }, },
++    { {  26, 25 }, {   1,  1 }, {  2,  10 }, {  67, 39 }, {  0,  0 },
++      {   1,  1 }, {   0, 14 }, {  0,   2 }, {  31, 26 }, {  1,  6 }, }, },
++  { { {  69, 83 }, {   0,  0 }, {  0,   2 }, {  10, 29 }, {  3, 12 },
++      {   0,  1 }, {   0,  3 }, {  0,   3 }, {   2,  2 }, {  0,  0 }, },
++    { { 209,  5 }, {   0,  0 }, {  0,  27 }, {   0,  0 }, {  0,  0 },
++      {   0,  1 }, {   0,  1 }, {  0,   1 }, {   0,  0 }, {  0,  0 }, },
++    { { 103, 46 }, {   1,  2 }, {  2,  10 }, {  33, 42 }, {  0,  0 },
++      {   1,  4 }, {   0,  3 }, {  0,   1 }, {   1,  3 }, {  0,  0 }, }, },
++  { { {  11, 20 }, {   1,  4 }, { 18,  36 }, {  43, 48 }, { 13, 35 },
++      {   0,  2 }, {   0,  5 }, {  3,  12 }, {   1,  2 }, {  0,  0 }, },
++    { {   2,  5 }, {   4,  5 }, {  0, 121 }, {   0,  0 }, {  0,  0 },
++      {   0,  3 }, {   2,  4 }, {  1,   4 }, {   2,  2 }, {  0,  1 }, },
++    { {  14, 31 }, {   9, 13 }, { 14,  54 }, {  22, 29 }, {  0,  0 },
++      {   2,  6 }, {   4, 18 }, {  6,  13 }, {   1,  5 }, {  0,  1 }, }, },
++  { { {  70, 44 }, {   0,  1 }, {  2,  10 }, {  37, 46 }, {  8, 26 },
++      {   0,  2 }, {   0,  2 }, {  0,   2 }, {   0,  1 }, {  0,  0 }, },
++    { { 175,  5 }, {   0,  1 }, {  0,  48 }, {   0,  0 }, {  0,  0 },
++      {   0,  2 }, {   0,  1 }, {  0,   2 }, {   0,  1 }, {  0,  0 }, },
++    { {  85, 39 }, {   0,  0 }, {  1,   9 }, {  69, 40 }, {  0,  0 },
++      {   0,  1 }, {   0,  3 }, {  0,   1 }, {   2,  3 }, {  0,  0 }, }, },
++  { { {   8, 15 }, {   0,  1 }, {  8,  21 }, {  74, 53 }, { 22, 42 },
++      {   0,  1 }, {   0,  2 }, {  0,   3 }, {   1,  2 }, {  0,  0 }, },
++    { {  83,  5 }, {   2,  3 }, {  0, 102 }, {   0,  0 }, {  0,  0 },
++      {   1,  3 }, {   0,  2 }, {  0,   1 }, {   0,  0 }, {  0,  0 }, },
++    { {  31, 28 }, {   0,  0 }, {  3,  14 }, { 130, 34 }, {  0,  0 },
++      {   0,  1 }, {   0,  3 }, {  0,   1 }, {   3,  3 }, {  0,  1 }, }, },
++  { { { 141, 42 }, {   0,  0 }, {  1,   4 }, {  11, 24 }, {  1, 11 },
++      {   0,  1 }, {   0,  1 }, {  0,   2 }, {   0,  0 }, {  0,  0 }, },
++    { { 233,  6 }, {   0,  0 }, {  0,   8 }, {   0,  0 }, {  0,  0 },
++      {   0,  1 }, {   0,  1 }, {  0,   0 }, {   0,  1 }, {  0,  0 }, },
++    { { 171, 25 }, {   0,  0 }, {  1,   5 }, {  25, 21 }, {  0,  0 },
++      {   0,  1 }, {   0,  1 }, {  0,   0 }, {   0,  0 }, {  0,  0 }, }, },
++  { { {   8, 19 }, {   4, 10 }, { 24,  45 }, {  21, 37 }, {  9, 29 },
++      {   0,  3 }, {   1,  7 }, { 11,  25 }, {   0,  2 }, {  0,  1 }, },
++    { {  34, 16 }, { 112, 21 }, {  1,  28 }, {   0,  0 }, {  0,  0 },
++      {   6,  8 }, {   1,  7 }, {  0,   3 }, {   2,  5 }, {  0,  2 }, },
++    { {  17, 21 }, {  68, 29 }, {  6,  15 }, {  13, 22 }, {  0,  0 },
++      {   6, 12 }, {   3, 14 }, {  4,  10 }, {   1,  7 }, {  0,  3 }, }, },
++  { { {  46, 42 }, {   0,  1 }, {  2,  10 }, {  54, 51 }, { 10, 30 },
++      {   0,  2 }, {   0,  2 }, {  0,   1 }, {   0,  1 }, {  0,  0 }, },
++    { { 159, 35 }, {   2,  2 }, {  0,  25 }, {   0,  0 }, {  0,  0 },
++      {   3,  6 }, {   0,  5 }, {  0,   1 }, {   4,  4 }, {  0,  1 }, },
++    { {  51, 39 }, {   0,  1 }, {  2,  12 }, {  91, 44 }, {  0,  0 },
++      {   0,  2 }, {   0,  3 }, {  0,   1 }, {   2,  3 }, {  0,  1 }, }, },
++  { { {  28, 32 }, {   0,  0 }, {  3,  10 }, {  75, 51 }, { 14, 33 },
++      {   0,  1 }, {   0,  2 }, {  0,   1 }, {   1,  2 }, {  0,  0 }, },
++    { {  75, 39 }, {   5,  7 }, {  2,  48 }, {   0,  0 }, {  0,  0 },
++      {   3, 11 }, {   2, 16 }, {  1,   4 }, {   7, 10 }, {  0,  2 }, },
++    { {  81, 25 }, {   0,  0 }, {  2,   9 }, { 106, 26 }, {  0,  0 },
++      {   0,  1 }, {   0,  1 }, {  0,   1 }, {   1,  1 }, {  0,  0 }, }, },
++  { { { 100, 46 }, {   0,  1 }, {  3,   9 }, {  21, 37 }, {  5, 20 },
++      {   0,  1 }, {   0,  2 }, {  1,   2 }, {   0,  1 }, {  0,  0 }, },
++    { { 212, 21 }, {   0,  1 }, {  0,   9 }, {   0,  0 }, {  0,  0 },
++      {   1,  2 }, {   0,  2 }, {  0,   0 }, {   2,  2 }, {  0,  0 }, },
++    { { 140, 37 }, {   0,  1 }, {  1,   8 }, {  24, 33 }, {  0,  0 },
++      {   1,  2 }, {   0,  2 }, {  0,   1 }, {   1,  2 }, {  0,  0 }, }, },
++  { { {  27, 29 }, {   0,  1 }, {  9,  25 }, {  53, 51 }, { 12, 34 },
++      {   0,  1 }, {   0,  3 }, {  1,   5 }, {   0,  2 }, {  0,  0 }, },
++    { {   4,  2 }, {   0,  0 }, {  0, 172 }, {   0,  0 }, {  0,  0 },
++      {   0,  1 }, {   0,  2 }, {  0,   0 }, {   2,  0 }, {  0,  0 }, },
++    { {  14, 23 }, {   1,  3 }, { 11,  53 }, {  90, 31 }, {  0,  0 },
++      {   0,  3 }, {   1,  5 }, {  2,   6 }, {   1,  2 }, {  0,  0 }, }, },
++  { { {  80, 38 }, {   0,  0 }, {  1,   4 }, {  69, 33 }, {  5, 16 },
++      {   0,  1 }, {   0,  1 }, {  0,   0 }, {   0,  1 }, {  0,  0 }, },
++    { { 187, 22 }, {   1,  1 }, {  0,  17 }, {   0,  0 }, {  0,  0 },
++      {   3,  6 }, {   0,  4 }, {  0,   1 }, {   4,  4 }, {  0,  1 }, },
++    { { 123, 29 }, {   0,  0 }, {  1,   7 }, {  57, 30 }, {  0,  0 },
++      {   0,  1 }, {   0,  1 }, {  0,   1 }, {   0,  1 }, {  0,  0 }, }, },
++  { { {  16, 20 }, {   0,  0 }, {  2,   8 }, { 104, 49 }, { 15, 33 },
++      {   0,  1 }, {   0,  1 }, {  0,   1 }, {   1,  1 }, {  0,  0 }, },
++    { { 133,  6 }, {   1,  2 }, {  1,  70 }, {   0,  0 }, {  0,  0 },
++      {   0,  2 }, {   0,  4 }, {  0,   3 }, {   1,  1 }, {  0,  0 }, },
++    { {  13, 14 }, {   0,  0 }, {  4,  20 }, { 175, 20 }, {  0,  0 },
++      {   0,  1 }, {   0,  1 }, {  0,   1 }, {   1,  1 }, {  0,  0 }, }, },
++  { { { 194, 16 }, {   0,  0 }, {  1,   1 }, {   1,  9 }, {  1,  3 },
++      {   0,  0 }, {   0,  1 }, {  0,   1 }, {   0,  0 }, {  0,  0 }, },
++    { { 251,  1 }, {   0,  0 }, {  0,   2 }, {   0,  0 }, {  0,  0 },
++      {   0,  0 }, {   0,  0 }, {  0,   0 }, {   0,  0 }, {  0,  0 }, },
++    { { 202, 23 }, {   0,  0 }, {  1,   3 }, {   2,  9 }, {  0,  0 },
++      {   0,  1 }, {   0,  1 }, {  0,   1 }, {   0,  0 }, {  0,  0 }, }, },
++};
++
++static const uint8_t vp56_filter_threshold[] = {
++    14, 14, 13, 13, 12, 12, 10, 10,
++    10, 10,  8,  8,  8,  8,  8,  8,
++     8,  8,  8,  8,  8,  8,  8,  8,
++     8,  8,  8,  8,  8,  8,  8,  8,
++     8,  8,  8,  8,  7,  7,  7,  7,
++     7,  7,  6,  6,  6,  6,  6,  6,
++     5,  5,  5,  5,  4,  4,  4,  4,
++     4,  4,  4,  3,  3,  3,  3,  2,
++};
++
++static const uint8_t vp56_mb_type_model_model[] = {
++    171, 83, 199, 140, 125, 104,
++};
++
++static const vp56_tree_t vp56_pmbtm_tree[] = {
++    { 4, 0},
++    { 2, 1}, {-8}, {-4},
++    { 8, 2},
++    { 6, 3},
++    { 4, 4},
++    { 2, 5}, {-24}, {-20}, {-16}, {-12}, {-0},
++};
++
++static const vp56_tree_t vp56_pmbt_tree[] = {
++    { 8, 1},
++    { 4, 2},
++    { 2, 4}, {-VP56_MB_INTER_NOVEC_PF}, {-VP56_MB_INTER_DELTA_PF},
++    { 2, 5}, {-VP56_MB_INTER_V1_PF},    {-VP56_MB_INTER_V2_PF},
++    { 4, 3},
++    { 2, 6}, {-VP56_MB_INTRA},          {-VP56_MB_INTER_4V},
++    { 4, 7},
++    { 2, 8}, {-VP56_MB_INTER_NOVEC_GF}, {-VP56_MB_INTER_DELTA_GF},
++    { 2, 9}, {-VP56_MB_INTER_V1_GF},    {-VP56_MB_INTER_V2_GF},
++};
++
++/* relative pos of surrounding blocks, from closest to farthest */
++static const int8_t vp56_candidate_predictor_pos[12][2] = {
++    {  0, -1 },
++    { -1,  0 },
++    { -1, -1 },
++    {  1, -1 },
++    {  0, -2 },
++    { -2,  0 },
++    { -2, -1 },
++    { -1, -2 },
++    {  1, -2 },
++    {  2, -1 },
++    { -2, -2 },
++    {  2, -2 },
++};
++
++#endif /* VP56DATA */
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp5data.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp5data.h	2007-01-21 18:32:13 UTC (rev 2756)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp5data.h	2007-01-21 18:34:00 UTC (rev 2757)
+@@ -0,0 +1,173 @@
++/**
++ * @file vp5data.h
++ * VP5 compatible video decoder
++ *
++ * Copyright (C) 2006  Aurelien Jacobs &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">aurel at gnuage.org</A>&gt;
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++ */
++
++#ifndef VP5DATA_H
++#define VP5DATA_H
++
++static const uint8_t vp5_coeff_groups[] = {
++    -1, 0, 1, 1, 2, 1, 1, 2,
++     2, 1, 1, 2, 2, 2, 1, 2,
++     2, 2, 2, 2, 1, 1, 2, 2,
++     3, 3, 4, 3, 4, 4, 4, 3,
++     3, 3, 3, 3, 4, 3, 3, 3,
++     4, 4, 4, 4, 4, 3, 3, 4,
++     4, 4, 3, 4, 4, 4, 4, 4,
++     4, 4, 5, 5, 5, 5, 5, 5,
++};
++
++static const uint8_t vp5_vmc_pct[2][11] = {
++    { 243, 220, 251, 253, 237, 232, 241, 245, 247, 251, 253 },
++    { 235, 211, 246, 249, 234, 231, 248, 249, 252, 252, 254 },
++};
++
++static const uint8_t vp5_dccv_pct[2][11] = {
++    { 146, 197, 181, 207, 232, 243, 238, 251, 244, 250, 249 },
++    { 179, 219, 214, 240, 250, 254, 244, 254, 254, 254, 254 },
++};
++
++static const uint8_t vp5_ract_pct[3][2][6][11] = {
++    { { { 227, 246, 230, 247, 244, 254, 254, 254, 254, 254, 254 },
++        { 202, 254, 209, 231, 231, 249, 249, 253, 254, 254, 254 },
++        { 206, 254, 225, 242, 241, 251, 253, 254, 254, 254, 254 },
++        { 235, 254, 241, 253, 252, 254, 254, 254, 254, 254, 254 },
++        { 234, 254, 248, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 } },
++      { { 240, 254, 248, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 238, 254, 240, 253, 254, 254, 254, 254, 254, 254, 254 },
++        { 244, 254, 251, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 } } },
++    { { { 206, 203, 227, 239, 247, 254, 253, 254, 254, 254, 254 },
++        { 207, 199, 220, 236, 243, 252, 252, 254, 254, 254, 254 },
++        { 212, 219, 230, 243, 244, 253, 252, 254, 254, 254, 254 },
++        { 236, 237, 247, 252, 253, 254, 254, 254, 254, 254, 254 },
++        { 240, 240, 248, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 } },
++      { { 230, 233, 249, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 238, 238, 250, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 248, 251, 254, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 } } },
++    { { { 225, 239, 227, 231, 244, 253, 243, 254, 254, 253, 254 },
++        { 232, 234, 224, 228, 242, 249, 242, 252, 251, 251, 254 },
++        { 235, 249, 238, 240, 251, 254, 249, 254, 253, 253, 254 },
++        { 249, 253, 251, 250, 254, 254, 254, 254, 254, 254, 254 },
++        { 251, 250, 249, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 } },
++      { { 243, 244, 250, 250, 254, 254, 254, 254, 254, 254, 254 },
++        { 249, 248, 250, 253, 254, 254, 254, 254, 254, 254, 254 },
++        { 253, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 },
++        { 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 } } },
++};
++
++static const int16_t vp5_dccv_lc[5][36][2] = {
++    { {154,  61}, {141,  54}, { 90,  45}, { 54,  34}, { 54,  13}, {128, 109},
++      {136,  54}, {148,  45}, { 92,  41}, { 54,  33}, { 51,  15}, { 87, 113},
++      { 87,  44}, { 97,  40}, { 67,  36}, { 46,  29}, { 41,  15}, { 64,  80},
++      { 59,  33}, { 61,  31}, { 51,  28}, { 44,  22}, { 33,  12}, { 49,  63},
++      { 69,  12}, { 59,  16}, { 46,  14}, { 31,  13}, { 26,   6}, { 92,  26},
++      {128, 108}, { 77, 119}, { 54,  84}, { 26,  71}, { 87,  19}, { 95, 155} },
++    { {154,   4}, {182,   0}, {159,  -8}, {128,  -5}, {143,  -5}, {187,  55},
++      {182,   0}, {228,  -3}, {187,  -7}, {174,  -9}, {189, -11}, {169,  79},
++      {161,  -9}, {192,  -8}, {187,  -9}, {169, -10}, {136,  -9}, {184,  40},
++      {164, -11}, {179, -10}, {174, -10}, {161, -10}, {115,  -7}, {197,  20},
++      {195, -11}, {195, -11}, {146, -10}, {110,  -6}, { 95,  -4}, {195,  39},
++      {182,  55}, {172,  77}, {177,  37}, {169,  29}, {172,  52}, { 92, 162} },
++    { {174,  80}, {164,  80}, { 95,  80}, { 46,  66}, { 56,  24}, { 36, 193},
++      {164,  80}, {166,  77}, {105,  76}, { 49,  68}, { 46,  31}, { 49, 186},
++      { 97,  78}, {110,  74}, { 72,  72}, { 44,  60}, { 33,  30}, { 69, 131},
++      { 61,  61}, { 69,  63}, { 51,  57}, { 31,  48}, { 26,  27}, { 64,  89},
++      { 67,  23}, { 51,  32}, { 36,  33}, { 26,  28}, { 20,  12}, { 44,  68},
++      { 26, 197}, { 41, 189}, { 61, 129}, { 28, 103}, { 49,  52}, {-12, 245} },
++    { {102, 141}, { 79, 166}, { 72, 162}, { 97, 125}, {179,   4}, {307,   0},
++      { 72, 168}, { 69, 175}, { 84, 160}, {105, 127}, {148,  34}, {310,   0},
++      { 84, 151}, { 82, 161}, { 87, 153}, { 87, 135}, {115,  51}, {317,   0},
++      { 97, 125}, {102, 131}, {105, 125}, { 87, 122}, { 84,  64}, { 54, 184},
++      {166,  18}, {146,  43}, {125,  51}, { 90,  64}, { 95,   7}, { 38, 154},
++      {294,   0}, { 13, 225}, { 10, 225}, { 67, 168}, {  0, 167}, {161,  94} },
++    { {172,  76}, {172,  75}, {136,  80}, { 64,  98}, { 74,  67}, {315,   0},
++      {169,  76}, {207,  56}, {164,  66}, { 97,  80}, { 67,  72}, {328,   0},
++      {136,  80}, {187,  53}, {154,  62}, { 72,  85}, { -2, 105}, {305,   0},
++      { 74,  91}, {128,  64}, {113,  64}, { 61,  77}, { 41,  75}, {259,   0},
++      { 46,  84}, { 51,  81}, { 28,  89}, { 31,  78}, { 23,  77}, {202,   0},
++      {323,   0}, {323,   0}, {300,   0}, {236,   0}, {195,   0}, {328,   0} },
++};
++
++static const int16_t vp5_ract_lc[3][3][5][6][2] = {
++    { { { {276,  0}, {238,  0}, {195,  0}, {156,  0}, {113,  0}, {274,  0} },
++        { {  0,  1}, {  0,  1}, {  0,  1}, {  0,  1}, {  0,  1}, {  0,  1} },
++        { {192, 59}, {182, 50}, {141, 48}, {110, 40}, { 92, 19}, {125,128} },
++        { {169, 87}, {169, 83}, {184, 62}, {220, 16}, {184,  0}, {264,  0} },
++        { {212, 40}, {212, 36}, {169, 49}, {174, 27}, {  8,120}, {182, 71} } },
++      { { {259, 10}, {197, 19}, {143, 22}, {123, 16}, {110,  8}, {133, 88} },
++        { {  0,  1}, {256,  0}, {  0,  1}, {  0,  1}, {  0,  1}, {  0,  1} },
++        { {207, 46}, {187, 50}, { 97, 83}, { 23,100}, { 41, 56}, { 56,188} },
++        { {166, 90}, {146,108}, {161, 88}, {136, 95}, {174,  0}, {266,  0} },
++        { {264,  7}, {243, 18}, {184, 43}, {-14,154}, { 20,112}, { 20,199} } },
++      { { {230, 26}, {197, 22}, {159, 20}, {146, 12}, {136,  4}, { 54,162} },
++        { {  0,  1}, {  0,  1}, {  0,  1}, {  0,  1}, {  0,  1}, {  0,  1} },
++        { {192, 59}, {156, 72}, { 84,101}, { 49,101}, { 79, 47}, { 79,167} },
++        { {138,115}, {136,116}, {166, 80}, {238,  0}, {195,  0}, {261,  0} },
++        { {225, 33}, {205, 42}, {159, 61}, { 79, 96}, { 92, 66}, { 28,195} } },
++    }, {
++      { { {200, 37}, {197, 18}, {159, 13}, {143,  7}, {102,  5}, {123,126} },
++        { {197,  3}, {220, -9}, {210,-12}, {187, -6}, {151, -2}, {174, 80} },
++        { {200, 53}, {187, 47}, {159, 40}, {118, 38}, {100, 18}, {141,111} },
++        { {179, 78}, {166, 86}, {197, 50}, {207, 27}, {187,  0}, {115,139} },
++        { {218, 34}, {220, 29}, {174, 46}, {128, 61}, { 54, 89}, {187, 65} } },
++      { { {238, 14}, {197, 18}, {125, 26}, { 90, 25}, { 82, 13}, {161, 86} },
++        { {189,  1}, {205, -2}, {156, -4}, {143, -4}, {146, -4}, {172, 72} },
++        { {230, 31}, {192, 45}, {102, 76}, { 38, 85}, { 56, 41}, { 64,173} },
++        { {166, 91}, {141,111}, {128,116}, {118,109}, {177,  0}, { 23,222} },
++        { {253, 14}, {236, 21}, {174, 49}, { 33,118}, { 44, 93}, { 23,187} } },
++      { { {218, 28}, {179, 28}, {118, 35}, { 95, 30}, { 72, 24}, {128,108} },
++        { {187,  1}, {174, -1}, {125, -1}, {110, -1}, {108, -1}, {202, 52} },
++        { {197, 53}, {146, 75}, { 46,118}, { 33,103}, { 64, 50}, {118,126} },
++        { {138,114}, {128,122}, {161, 86}, {243, -6}, {195,  0}, { 38,210} },
++        { {215, 39}, {179, 58}, { 97,101}, { 95, 85}, { 87, 70}, { 69,152} } },
++    }, {
++      { { {236, 24}, {205, 18}, {172, 12}, {154,  6}, {125,  1}, {169, 75} },
++        { {187,  4}, {230, -2}, {228, -4}, {236, -4}, {241, -2}, {192, 66} },
++        { {200, 46}, {187, 42}, {159, 34}, {136, 25}, {105, 10}, {179, 62} },
++        { {207, 55}, {192, 63}, {192, 54}, {195, 36}, {177,  1}, {143, 98} },
++        { {225, 27}, {207, 34}, {200, 30}, {131, 57}, { 97, 60}, {197, 45} } },
++      { { {271,  8}, {218, 13}, {133, 19}, { 90, 19}, { 72,  7}, {182, 51} },
++        { {179,  1}, {225, -1}, {154, -2}, {110, -1}, { 92,  0}, {195, 41} },
++        { {241, 26}, {189, 40}, { 82, 64}, { 33, 60}, { 67, 17}, {120, 94} },
++        { {192, 68}, {151, 94}, {146, 90}, {143, 72}, {161,  0}, {113,128} },
++        { {256, 12}, {218, 29}, {166, 48}, { 44, 99}, { 31, 87}, {148, 78} } },
++      { { {238, 20}, {184, 22}, {113, 27}, { 90, 22}, { 74,  9}, {192, 37} },
++        { {184,  0}, {215, -1}, {141, -1}, { 97,  0}, { 49,  0}, {264, 13} },
++        { {182, 51}, {138, 61}, { 95, 63}, { 54, 59}, { 64, 25}, {200, 45} },
++        { {179, 75}, {156, 87}, {174, 65}, {177, 44}, {174,  0}, {164, 85} },
++        { {195, 45}, {148, 65}, {105, 79}, { 95, 72}, { 87, 60}, {169, 63} } },
++    }
++};
++
++static const uint8_t vp5_coord_div[] = { 2, 2, 2, 2, 4, 4 };
++
++#endif /* VP5DATA_H */
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp6.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp6.c	2007-01-21 18:32:13 UTC (rev 2756)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp6.c	2007-01-21 18:34:00 UTC (rev 2757)
+@@ -0,0 +1,556 @@
++/**
++ * @file vp6.c
++ * VP6 compatible video decoder
++ *
++ * Copyright (C) 2006  Aurelien Jacobs &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">aurel at gnuage.org</A>&gt;
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++ *
++ *
++ * The VP6F decoder accept an optional 1 byte extradata. It is composed of:
++ *  - upper 4bits: difference between encoded width and visible width
++ *  - lower 4bits: difference between encoded height and visible height
++ */
++
++#include &lt;stdlib.h&gt;
++
++#include &quot;avcodec.h&quot;
++#include &quot;dsputil.h&quot;
++#include &quot;bitstream.h&quot;
++#include &quot;mpegvideo.h&quot;
++
++#include &quot;vp56.h&quot;
++#include &quot;vp56data.h&quot;
++#include &quot;vp6data.h&quot;
++
++
++static int vp6_parse_header(vp56_context_t *s, uint8_t *buf, int buf_size,
++                            int *golden_frame)
++{
++    vp56_range_coder_t *c = &amp;s-&gt;c;
++    int parse_filter_info = 0;
++    int coeff_offset = 0;
++    int vrt_shift = 0;
++    int sub_version;
++    int rows, cols;
++    int res = 1;
++    int separated_coeff = buf[0] &amp; 1;
++
++    s-&gt;frames[VP56_FRAME_CURRENT].key_frame = !(buf[0] &amp; 0x80);
++    vp56_init_dequant(s, (buf[0] &gt;&gt; 1) &amp; 0x3F);
++
++    if (s-&gt;frames[VP56_FRAME_CURRENT].key_frame) {
++        sub_version = buf[1] &gt;&gt; 3;
++        if (sub_version &gt; 8)
++            return 0;
++        s-&gt;filter_header = buf[1] &amp; 0x06;
++        if (buf[1] &amp; 1) {
++            av_log(s-&gt;avctx, AV_LOG_ERROR, &quot;interlacing not supported\n&quot;);
++            return 0;
++        }
++        if (separated_coeff || !s-&gt;filter_header) {
++            coeff_offset = AV_RB16(buf+2) - 2;
++            buf += 2;
++            buf_size -= 2;
++        }
++
++        rows = buf[2];  /* number of stored macroblock rows */
++        cols = buf[3];  /* number of stored macroblock cols */
++        /* buf[4] is number of displayed macroblock rows */
++        /* buf[5] is number of displayed macroblock cols */
++
++        if (16*cols != s-&gt;avctx-&gt;coded_width ||
++            16*rows != s-&gt;avctx-&gt;coded_height) {
++            avcodec_set_dimensions(s-&gt;avctx, 16*cols, 16*rows);
++            if (s-&gt;avctx-&gt;extradata_size == 1) {
++                s-&gt;avctx-&gt;width  -= s-&gt;avctx-&gt;extradata[0] &gt;&gt; 4;
++                s-&gt;avctx-&gt;height -= s-&gt;avctx-&gt;extradata[0] &amp; 0x0F;
++            }
++            res = 2;
++        }
++
++        vp56_init_range_decoder(c, buf+6, buf_size-6);
++        vp56_rac_gets(c, 2);
++
++        parse_filter_info = s-&gt;filter_header;
++        if (sub_version &lt; 8)
++            vrt_shift = 5;
++        s-&gt;sub_version = sub_version;
++    } else {
++        if (!s-&gt;sub_version)
++            return 0;
++
++        if (separated_coeff || !s-&gt;filter_header) {
++            coeff_offset = AV_RB16(buf+1) - 2;
++            buf += 2;
++            buf_size -= 2;
++        }
++        vp56_init_range_decoder(c, buf+1, buf_size-1);
++
++        *golden_frame = vp56_rac_get(c);
++        if (s-&gt;filter_header) {
++            s-&gt;deblock_filtering = vp56_rac_get(c);
++            if (s-&gt;deblock_filtering)
++                vp56_rac_get(c);
++            if (s-&gt;sub_version &gt; 7)
++                parse_filter_info = vp56_rac_get(c);
++        }
++    }
++
++    if (parse_filter_info) {
++        if (vp56_rac_get(c)) {
++            s-&gt;filter_mode = 2;
++            s-&gt;sample_variance_threshold = vp56_rac_gets(c, 5) &lt;&lt; vrt_shift;
++            s-&gt;max_vector_length = 2 &lt;&lt; vp56_rac_gets(c, 3);
++        } else if (vp56_rac_get(c)) {
++            s-&gt;filter_mode = 1;
++        } else {
++            s-&gt;filter_mode = 0;
++        }
++        if (s-&gt;sub_version &gt; 7)
++            s-&gt;filter_selection = vp56_rac_gets(c, 4);
++        else
++            s-&gt;filter_selection = 16;
++    }
++
++    vp56_rac_get(c);
++
++    if (coeff_offset) {
++        vp56_init_range_decoder(&amp;s-&gt;cc, buf+coeff_offset,
++                                buf_size-coeff_offset);
++        s-&gt;ccp = &amp;s-&gt;cc;
++    } else {
++        s-&gt;ccp = &amp;s-&gt;c;
++    }
++
++    return res;
++}
++
++static void vp6_coeff_order_table_init(vp56_context_t *s)
++{
++    int i, pos, idx = 1;
++
++    s-&gt;coeff_index_to_pos[0] = 0;
++    for (i=0; i&lt;16; i++)
++        for (pos=1; pos&lt;64; pos++)
++            if (s-&gt;coeff_reorder[pos] == i)
++                s-&gt;coeff_index_to_pos[idx++] = pos;
++}
++
++static void vp6_default_models_init(vp56_context_t *s)
++{
++    s-&gt;vector_model_dct[0] = 0xA2;
++    s-&gt;vector_model_dct[1] = 0xA4;
++    s-&gt;vector_model_sig[0] = 0x80;
++    s-&gt;vector_model_sig[1] = 0x80;
++
++    memcpy(s-&gt;mb_types_stats, vp56_def_mb_types_stats, sizeof(s-&gt;mb_types_stats));
++    memcpy(s-&gt;vector_model_fdv, vp6_def_fdv_vector_model, sizeof(s-&gt;vector_model_fdv));
++    memcpy(s-&gt;vector_model_pdv, vp6_def_pdv_vector_model, sizeof(s-&gt;vector_model_pdv));
++    memcpy(s-&gt;coeff_model_runv, vp6_def_runv_coeff_model, sizeof(s-&gt;coeff_model_runv));
++    memcpy(s-&gt;coeff_reorder, vp6_def_coeff_reorder, sizeof(s-&gt;coeff_reorder));
++
++    vp6_coeff_order_table_init(s);
++}
++
++static void vp6_parse_vector_models(vp56_context_t *s)
++{
++    vp56_range_coder_t *c = &amp;s-&gt;c;
++    int comp, node;
++
++    for (comp=0; comp&lt;2; comp++) {
++        if (vp56_rac_get_prob(c, vp6_sig_dct_pct[comp][0]))
++            s-&gt;vector_model_dct[comp] = vp56_rac_gets_nn(c, 7);
++        if (vp56_rac_get_prob(c, vp6_sig_dct_pct[comp][1]))
++            s-&gt;vector_model_sig[comp] = vp56_rac_gets_nn(c, 7);
++    }
++
++    for (comp=0; comp&lt;2; comp++)
++        for (node=0; node&lt;7; node++)
++            if (vp56_rac_get_prob(c, vp6_pdv_pct[comp][node]))
++                s-&gt;vector_model_pdv[comp][node] = vp56_rac_gets_nn(c, 7);
++
++    for (comp=0; comp&lt;2; comp++)
++        for (node=0; node&lt;8; node++)
++            if (vp56_rac_get_prob(c, vp6_fdv_pct[comp][node]))
++                s-&gt;vector_model_fdv[comp][node] = vp56_rac_gets_nn(c, 7);
++}
++
++static void vp6_parse_coeff_models(vp56_context_t *s)
++{
++    vp56_range_coder_t *c = &amp;s-&gt;c;
++    int def_prob[11];
++    int node, cg, ctx, pos;
++    int ct;    /* code type */
++    int pt;    /* plane type (0 for Y, 1 for U or V) */
++
++    memset(def_prob, 0x80, sizeof(def_prob));
++
++    for (pt=0; pt&lt;2; pt++)
++        for (node=0; node&lt;11; node++)
++            if (vp56_rac_get_prob(c, vp6_dccv_pct[pt][node])) {
++                def_prob[node] = vp56_rac_gets_nn(c, 7);
++                s-&gt;coeff_model_dccv[pt][node] = def_prob[node];
++            } else if (s-&gt;frames[VP56_FRAME_CURRENT].key_frame) {
++                s-&gt;coeff_model_dccv[pt][node] = def_prob[node];
++            }
++
++    if (vp56_rac_get(c)) {
++        for (pos=1; pos&lt;64; pos++)
++            if (vp56_rac_get_prob(c, vp6_coeff_reorder_pct[pos]))
++                s-&gt;coeff_reorder[pos] = vp56_rac_gets(c, 4);
++        vp6_coeff_order_table_init(s);
++    }
++
++    for (cg=0; cg&lt;2; cg++)
++        for (node=0; node&lt;14; node++)
++            if (vp56_rac_get_prob(c, vp6_runv_pct[cg][node]))
++                s-&gt;coeff_model_runv[cg][node] = vp56_rac_gets_nn(c, 7);
++
++    for (ct=0; ct&lt;3; ct++)
++        for (pt=0; pt&lt;2; pt++)
++            for (cg=0; cg&lt;6; cg++)
++                for (node=0; node&lt;11; node++)
++                    if (vp56_rac_get_prob(c, vp6_ract_pct[ct][pt][cg][node])) {
++                        def_prob[node] = vp56_rac_gets_nn(c, 7);
++                        s-&gt;coeff_model_ract[pt][ct][cg][node] = def_prob[node];
++                    } else if (s-&gt;frames[VP56_FRAME_CURRENT].key_frame) {
++                        s-&gt;coeff_model_ract[pt][ct][cg][node] = def_prob[node];
++                    }
++
++    /* coeff_model_dcct is a linear combination of coeff_model_dccv */
++    for (pt=0; pt&lt;2; pt++)
++        for (ctx=0; ctx&lt;3; ctx++)
++            for (node=0; node&lt;5; node++)
++                s-&gt;coeff_model_dcct[pt][ctx][node] = clip(((s-&gt;coeff_model_dccv[pt][node] * vp6_dccv_lc[ctx][node][0] + 128) &gt;&gt; 8) + vp6_dccv_lc[ctx][node][1], 1, 255);
++}
++
++static void vp6_parse_vector_adjustment(vp56_context_t *s, vp56_mv_t *vect)
++{
++    vp56_range_coder_t *c = &amp;s-&gt;c;
++    int comp;
++
++    *vect = (vp56_mv_t) {0,0};
++    if (s-&gt;vector_candidate_pos &lt; 2)
++        *vect = s-&gt;vector_candidate[0];
++
++    for (comp=0; comp&lt;2; comp++) {
++        int i, delta = 0;
++
++        if (vp56_rac_get_prob(c, s-&gt;vector_model_dct[comp])) {
++            static const uint8_t prob_order[] = {0, 1, 2, 7, 6, 5, 4};
++            for (i=0; i&lt;sizeof(prob_order); i++) {
++                int j = prob_order[i];
++                delta |= vp56_rac_get_prob(c, s-&gt;vector_model_fdv[comp][j])&lt;&lt;j;
++            }
++            if (delta &amp; 0xF0)
++                delta |= vp56_rac_get_prob(c, s-&gt;vector_model_fdv[comp][3])&lt;&lt;3;
++            else
++                delta |= 8;
++        } else {
++            delta = vp56_rac_get_tree(c, vp56_pva_tree,
++                                      s-&gt;vector_model_pdv[comp]);
++        }
++
++        if (delta &amp;&amp; vp56_rac_get_prob(c, s-&gt;vector_model_sig[comp]))
++            delta = -delta;
++
++        if (!comp)
++            vect-&gt;x += delta;
++        else
++            vect-&gt;y += delta;
++    }
++}
++
++static void vp6_parse_coeff(vp56_context_t *s)
++{
++    vp56_range_coder_t *c = s-&gt;ccp;
++    uint8_t *permute = s-&gt;scantable.permutated;
++    uint8_t *model, *model2, *model3;
++    int coeff, sign, coeff_idx;
++    int b, i, cg, idx, ctx;
++    int pt = 0;    /* plane type (0 for Y, 1 for U or V) */
++
++    for (b=0; b&lt;6; b++) {
++        int ct = 1;    /* code type */
++        int run = 1;
++
++        if (b &gt; 3) pt = 1;
++
++        ctx = s-&gt;left_block[vp56_b6to4[b]].not_null_dc
++              + s-&gt;above_blocks[s-&gt;above_block_idx[b]].not_null_dc;
++        model = s-&gt;coeff_model_dccv[pt];
++        model2 = s-&gt;coeff_model_dcct[pt][ctx];
++
++        for (coeff_idx=0; coeff_idx&lt;64; ) {
++            if ((coeff_idx&gt;1 &amp;&amp; ct==0) || vp56_rac_get_prob(c, model2[0])) {
++                /* parse a coeff */
++                if (coeff_idx == 0) {
++                    s-&gt;left_block[vp56_b6to4[b]].not_null_dc = 1;
++                    s-&gt;above_blocks[s-&gt;above_block_idx[b]].not_null_dc = 1;
++                }
++
++                if (vp56_rac_get_prob(c, model2[2])) {
++                    if (vp56_rac_get_prob(c, model2[3])) {
++                        idx = vp56_rac_get_tree(c, vp56_pc_tree, model);
++                        coeff = vp56_coeff_bias[idx];
++                        for (i=vp56_coeff_bit_length[idx]; i&gt;=0; i--)
++                            coeff += vp56_rac_get_prob(c, vp56_coeff_parse_table[idx][i]) &lt;&lt; i;
++                    } else {
++                        if (vp56_rac_get_prob(c, model2[4]))
++                            coeff = 3 + vp56_rac_get_prob(c, model[5]);
++                        else
++                            coeff = 2;
++                    }
++                    ct = 2;
++                } else {
++                    ct = 1;
++                    coeff = 1;
++                }
++                sign = vp56_rac_get(c);
++                coeff = (coeff ^ -sign) + sign;
++                if (coeff_idx)
++                    coeff *= s-&gt;dequant_ac;
++                idx = s-&gt;coeff_index_to_pos[coeff_idx];
++                s-&gt;block_coeff[b][permute[idx]] = coeff;
++                run = 1;
++            } else {
++                /* parse a run */
++                ct = 0;
++                if (coeff_idx == 0) {
++                    s-&gt;left_block[vp56_b6to4[b]].not_null_dc = 0;
++                    s-&gt;above_blocks[s-&gt;above_block_idx[b]].not_null_dc = 0;
++                } else {
++                    if (!vp56_rac_get_prob(c, model2[1]))
++                        break;
++
++                    model3 = s-&gt;coeff_model_runv[coeff_idx &gt;= 6];
++                    run = vp56_rac_get_tree(c, vp6_pcr_tree, model3);
++                    if (!run)
++                        for (run=9, i=0; i&lt;6; i++)
++                            run += vp56_rac_get_prob(c, model3[i+8]) &lt;&lt; i;
++                }
++            }
++
++            cg = vp6_coeff_groups[coeff_idx+=run];
++            model = model2 = s-&gt;coeff_model_ract[pt][ct][cg];
++        }
++    }
++}
++
++static int vp6_adjust(int v, int t)
++{
++    int V = v, s = v &gt;&gt; 31;
++    V ^= s;
++    V -= s;
++    if (V-t-1 &gt;= (unsigned)(t-1))
++        return v;
++    V = 2*t - V;
++    V += s;
++    V ^= s;
++    return V;
++}
++
++static int vp6_block_variance(uint8_t *src, int stride)
++{
++    int sum = 0, square_sum = 0;
++    int y, x;
++
++    for (y=0; y&lt;8; y+=2) {
++        for (x=0; x&lt;8; x+=2) {
++            sum += src[x];
++            square_sum += src[x]*src[x];
++        }
++        src += 2*stride;
++    }
++    return (16*square_sum - sum*sum) &gt;&gt; 8;
++}
++
++static void vp6_filter_hv2(vp56_context_t *s, uint8_t *dst, uint8_t *src,
++                           int stride, int delta, int16_t weight)
++{
++    s-&gt;dsp.put_pixels_tab[1][0](dst, src, stride, 8);
++    s-&gt;dsp.biweight_h264_pixels_tab[3](dst, src+delta, stride, 2,
++                                       8-weight, weight, 0);
++}
++
++static void vp6_filter_hv4(uint8_t *dst, uint8_t *src, int stride,
++                           int delta, const int16_t *weights)
++{
++    int x, y;
++
++    for (y=0; y&lt;8; y++) {
++        for (x=0; x&lt;8; x++) {
++            dst[x] = clip_uint8((  src[x-delta  ] * weights[0]
++                                 + src[x        ] * weights[1]
++                                 + src[x+delta  ] * weights[2]
++                                 + src[x+2*delta] * weights[3] + 64) &gt;&gt; 7);
++        }
++        src += stride;
++        dst += stride;
++    }
++}
++
++static void vp6_filter_diag2(vp56_context_t *s, uint8_t *dst, uint8_t *src,
++                             int stride, int h_weight, int v_weight)
++{
++    uint8_t *tmp = s-&gt;edge_emu_buffer+16;
++    int x, xmax;
++
++    s-&gt;dsp.put_pixels_tab[1][0](tmp, src, stride, 8);
++    s-&gt;dsp.biweight_h264_pixels_tab[3](tmp, src+1, stride, 2,
++                                       8-h_weight, h_weight, 0);
++    /* we need a 8x9 block to do vertical filter, so compute one more line */
++    for (x=8*stride, xmax=x+8; x&lt;xmax; x++)
++        tmp[x] = (src[x]*(8-h_weight) + src[x+1]*h_weight + 4) &gt;&gt; 3;
++
++    s-&gt;dsp.put_pixels_tab[1][0](dst, tmp, stride, 8);
++    s-&gt;dsp.biweight_h264_pixels_tab[3](dst, tmp+stride, stride, 2,
++                                       8-v_weight, v_weight, 0);
++}
++
++static void vp6_filter_diag4(uint8_t *dst, uint8_t *src, int stride,
++                             const int16_t *h_weights,const int16_t *v_weights)
++{
++    int x, y;
++    int tmp[8*11];
++    int *t = tmp;
++
++    src -= stride;
++
++    for (y=0; y&lt;11; y++) {
++        for (x=0; x&lt;8; x++) {
++            t[x] = clip_uint8((  src[x-1] * h_weights[0]
++                               + src[x  ] * h_weights[1]
++                               + src[x+1] * h_weights[2]
++                               + src[x+2] * h_weights[3] + 64) &gt;&gt; 7);
++        }
++        src += stride;
++        t += 8;
++    }
++
++    t = tmp + 8;
++    for (y=0; y&lt;8; y++) {
++        for (x=0; x&lt;8; x++) {
++            dst[x] = clip_uint8((  t[x-8 ] * v_weights[0]
++                                 + t[x   ] * v_weights[1]
++                                 + t[x+8 ] * v_weights[2]
++                                 + t[x+16] * v_weights[3] + 64) &gt;&gt; 7);
++        }
++        dst += stride;
++        t += 8;
++    }
++}
++
++static void vp6_filter(vp56_context_t *s, uint8_t *dst, uint8_t *src,
++                       int offset1, int offset2, int stride,
++                       vp56_mv_t mv, int mask, int select, int luma)
++{
++    int filter4 = 0;
++    int x8 = mv.x &amp; mask;
++    int y8 = mv.y &amp; mask;
++
++    if (luma) {
++        x8 *= 2;
++        y8 *= 2;
++        filter4 = s-&gt;filter_mode;
++        if (filter4 == 2) {
++            if (s-&gt;max_vector_length &amp;&amp;
++                (FFABS(mv.x) &gt; s-&gt;max_vector_length ||
++                 FFABS(mv.y) &gt; s-&gt;max_vector_length)) {
++                filter4 = 0;
++            } else if (s-&gt;sample_variance_threshold
++                       &amp;&amp; (vp6_block_variance(src+offset1, stride)
++                           &lt; s-&gt;sample_variance_threshold)) {
++                filter4 = 0;
++            }
++        }
++    }
++
++    if ((y8 &amp;&amp; (offset2-offset1)*s-&gt;flip&lt;0) || (!y8 &amp;&amp; offset1 &gt; offset2)) {
++        offset1 = offset2;
++    }
++
++    if (filter4) {
++        if (!y8) {                      /* left or right combine */
++            vp6_filter_hv4(dst, src+offset1, stride, 1,
++                           vp6_block_copy_filter[select][x8]);
++        } else if (!x8) {               /* above or below combine */
++            vp6_filter_hv4(dst, src+offset1, stride, stride,
++                           vp6_block_copy_filter[select][y8]);
++        } else if ((mv.x^mv.y) &gt;&gt; 31) { /* lower-left or upper-right combine */
++            vp6_filter_diag4(dst, src+offset1-1, stride,
++                             vp6_block_copy_filter[select][x8],
++                             vp6_block_copy_filter[select][y8]);
++        } else {                        /* lower-right or upper-left combine */
++            vp6_filter_diag4(dst, src+offset1, stride,
++                             vp6_block_copy_filter[select][x8],
++                             vp6_block_copy_filter[select][y8]);
++        }
++    } else {
++        if (!y8) {                      /* left or right combine */
++            vp6_filter_hv2(s, dst, src+offset1, stride, 1, x8);
++        } else if (!x8) {               /* above or below combine */
++            vp6_filter_hv2(s, dst, src+offset1, stride, stride, y8);
++        } else if ((mv.x^mv.y) &gt;&gt; 31) { /* lower-left or upper-right combine */
++            vp6_filter_diag2(s, dst, src+offset1-1, stride, x8, y8);
++        } else {                        /* lower-right or upper-left combine */
++            vp6_filter_diag2(s, dst, src+offset1, stride, x8, y8);
++        }
++    }
++}
++
++static int vp6_decode_init(AVCodecContext *avctx)
++{
++    vp56_context_t *s = avctx-&gt;priv_data;
++
++    vp56_init(s, avctx, avctx-&gt;codec-&gt;id == CODEC_ID_VP6);
++    s-&gt;vp56_coord_div = vp6_coord_div;
++    s-&gt;parse_vector_adjustment = vp6_parse_vector_adjustment;
++    s-&gt;adjust = vp6_adjust;
++    s-&gt;filter = vp6_filter;
++    s-&gt;parse_coeff = vp6_parse_coeff;
++    s-&gt;default_models_init = vp6_default_models_init;
++    s-&gt;parse_vector_models = vp6_parse_vector_models;
++    s-&gt;parse_coeff_models = vp6_parse_coeff_models;
++    s-&gt;parse_header = vp6_parse_header;
++
++    return 0;
++}
++
++AVCodec vp6_decoder = {
++    &quot;vp6&quot;,
++    CODEC_TYPE_VIDEO,
++    CODEC_ID_VP6,
++    sizeof(vp56_context_t),
++    vp6_decode_init,
++    NULL,
++    vp56_free,
++    vp56_decode_frame,
++};
++
++/* flash version, not flipped upside-down */
++AVCodec vp6f_decoder = {
++    &quot;vp6f&quot;,
++    CODEC_TYPE_VIDEO,
++    CODEC_ID_VP6F,
++    sizeof(vp56_context_t),
++    vp6_decode_init,
++    NULL,
++    vp56_free,
++    vp56_decode_frame,
++};
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp6data.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp6data.h	2007-01-21 18:32:13 UTC (rev 2756)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/vp6data.h	2007-01-21 18:34:00 UTC (rev 2757)
+@@ -0,0 +1,300 @@
++/**
++ * @file vp6data.h
++ * VP6 compatible video decoder
++ *
++ * Copyright (C) 2006  Aurelien Jacobs &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">aurel at gnuage.org</A>&gt;
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
++ */
++
++#ifndef VP6DATA_H
++#define VP6DATA_H
++
++#include &quot;vp56data.h&quot;
++
++static const uint8_t vp6_def_fdv_vector_model[2][8] = {
++    { 247, 210, 135, 68, 138, 220, 239, 246 },
++    { 244, 184, 201, 44, 173, 221, 239, 253 },
++};
++
++static const uint8_t vp6_def_pdv_vector_model[2][7] = {
++    { 225, 146, 172, 147, 214,  39, 156 },
++    { 204, 170, 119, 235, 140, 230, 228 },
++};
++
++static const uint8_t vp6_def_coeff_reorder[] = {
++     0,  0,  1,  1,  1,  2,  2,  2,
++     2,  2,  2,  3,  3,  4,  4,  4,
++     5,  5,  5,  5,  6,  6,  7,  7,
++     7,  7,  7,  8,  8,  9,  9,  9,
++     9,  9,  9, 10, 10, 11, 11, 11,
++    11, 11, 11, 12, 12, 12, 12, 12,
++    12, 13, 13, 13, 13, 13, 14, 14,
++    14, 14, 15, 15, 15, 15, 15, 15,
++};
++
++static const uint8_t vp6_def_runv_coeff_model[2][14] = {
++    { 198, 197, 196, 146, 198, 204, 169, 142, 130, 136, 149, 149, 191, 249 },
++    { 135, 201, 181, 154,  98, 117, 132, 126, 146, 169, 184, 240, 246, 254 },
++};
++
++static const uint8_t vp6_sig_dct_pct[2][2] = {
++    { 237, 246 },
++    { 231, 243 },
++};
++
++static const uint8_t vp6_pdv_pct[2][7] = {
++    { 253, 253, 254, 254, 254, 254, 254 },
++    { 245, 253, 254, 254, 254, 254, 254 },
++};
++
++static const uint8_t vp6_fdv_pct[2][8] = {
++    { 254, 254, 254, 254, 254, 250, 250, 252 },
++    { 254, 254, 254, 254, 254, 251, 251, 254 },
++};
++
++static const uint8_t vp6_dccv_pct[2][11] = {
++    { 146, 255, 181, 207, 232, 243, 238, 251, 244, 250, 249 },
++    { 179, 255, 214, 240, 250, 255, 244, 255, 255, 255, 255 },
++};
++
++static const uint8_t vp6_coeff_reorder_pct[] =  {
++    255, 132, 132, 159, 153, 151, 161, 170,
++    164, 162, 136, 110, 103, 114, 129, 118,
++    124, 125, 132, 136, 114, 110, 142, 135,
++    134, 123, 143, 126, 153, 183, 166, 161,
++    171, 180, 179, 164, 203, 218, 225, 217,
++    215, 206, 203, 217, 229, 241, 248, 243,
++    253, 255, 253, 255, 255, 255, 255, 255,
++    255, 255, 255, 255, 255, 255, 255, 255,
++};
++
++static const uint8_t vp6_runv_pct[2][14] = {
++  { 219, 246, 238, 249, 232, 239, 249, 255, 248, 253, 239, 244, 241, 248 },
++  { 198, 232, 251, 253, 219, 241, 253, 255, 248, 249, 244, 238, 251, 255 },
++};
++
++static const uint8_t vp6_ract_pct[3][2][6][11] = {
++  { { { 227, 246, 230, 247, 244, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 209, 231, 231, 249, 249, 253, 255, 255, 255 },
++      { 255, 255, 225, 242, 241, 251, 253, 255, 255, 255, 255 },
++      { 255, 255, 241, 253, 252, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 248, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 } },
++    { { 240, 255, 248, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 240, 253, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 } } },
++  { { { 206, 203, 227, 239, 247, 255, 253, 255, 255, 255, 255 },
++      { 207, 199, 220, 236, 243, 252, 252, 255, 255, 255, 255 },
++      { 212, 219, 230, 243, 244, 253, 252, 255, 255, 255, 255 },
++      { 236, 237, 247, 252, 253, 255, 255, 255, 255, 255, 255 },
++      { 240, 240, 248, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 } },
++    { { 230, 233, 249, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 238, 238, 250, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 248, 251, 255, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 } } },
++  { { { 225, 239, 227, 231, 244, 253, 243, 255, 255, 253, 255 },
++      { 232, 234, 224, 228, 242, 249, 242, 252, 251, 251, 255 },
++      { 235, 249, 238, 240, 251, 255, 249, 255, 253, 253, 255 },
++      { 249, 253, 251, 250, 255, 255, 255, 255, 255, 255, 255 },
++      { 251, 250, 249, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 } },
++    { { 243, 244, 250, 250, 255, 255, 255, 255, 255, 255, 255 },
++      { 249, 248, 250, 253, 255, 255, 255, 255, 255, 255, 255 },
++      { 253, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 },
++      { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 } } }
++};
++
++static const int vp6_dccv_lc[3][5][2] = {
++  { { 122, 133 }, { 0, 1 }, { 78,  171 }, { 139, 117 }, { 168, 79 } },
++  { { 133,  51 }, { 0, 1 }, { 169,  71 }, { 214,  44 }, { 210, 38 } },
++  { { 142, -16 }, { 0, 1 }, { 221, -30 }, { 246,  -3 }, { 203, 17 } },
++};
++
++static const uint8_t vp6_coeff_groups[] = {
++    0, 0, 1, 1, 1, 2, 2, 2,
++    2, 2, 2, 3, 3, 3, 3, 3,
++    3, 3, 3, 3, 3, 3, 4, 4,
++    4, 4, 4, 4, 4, 4, 4, 4,
++    4, 4, 4, 4, 4, 5, 5, 5,
++    5, 5, 5, 5, 5, 5, 5, 5,
++    5, 5, 5, 5, 5, 5, 5, 5,
++    5, 5, 5, 5, 5, 5, 5, 5,
++};
++
++static const int16_t vp6_block_copy_filter[17][8][4] = {
++  { {   0, 128,   0,   0  },  /* 0 */
++    {  -3, 122,   9,   0  },
++    {  -4, 109,  24,  -1  },
++    {  -5,  91,  45,  -3  },
++    {  -4,  68,  68,  -4  },
++    {  -3,  45,  91,  -5  },
++    {  -1,  24, 109,  -4  },
++    {   0,   9, 122,  -3  } },
++  { {   0, 128,   0,   0  },  /* 1 */
++    {  -4, 124,   9,  -1  },
++    {  -5, 110,  25,  -2  },
++    {  -6,  91,  46,  -3  },
++    {  -5,  69,  69,  -5  },
++    {  -3,  46,  91,  -6  },
++    {  -2,  25, 110,  -5  },
++    {  -1,   9, 124,  -4  } },
++  { {   0, 128,   0,   0  },  /* 2 */
++    {  -4, 123,  10,  -1  },
++    {  -6, 110,  26,  -2  },
++    {  -7,  92,  47,  -4  },
++    {  -6,  70,  70,  -6  },
++    {  -4,  47,  92,  -7  },
++    {  -2,  26, 110,  -6  },
++    {  -1,  10, 123,  -4  } },
++  { {   0, 128,   0,   0  },  /* 3 */
++    {  -5, 124,  10,  -1  },
++    {  -7, 110,  27,  -2  },
++    {  -7,  91,  48,  -4  },
++    {  -6,  70,  70,  -6  },
++    {  -4,  48,  92,  -8  },
++    {  -2,  27, 110,  -7  },
++    {  -1,  10, 124,  -5  } },
++  { {   0, 128,   0,   0  },  /* 4 */
++    {  -6, 124,  11,  -1  },
++    {  -8, 111,  28,  -3  },
++    {  -8,  92,  49,  -5  },
++    {  -7,  71,  71,  -7  },
++    {  -5,  49,  92,  -8  },
++    {  -3,  28, 111,  -8  },
++    {  -1,  11, 124,  -6  } },
++  { {  0,  128,   0,   0  },  /* 5 */
++    {  -6, 123,  12,  -1  },
++    {  -9, 111,  29,  -3  },
++    {  -9,  93,  50,  -6  },
++    {  -8,  72,  72,  -8  },
++    {  -6,  50,  93,  -9  },
++    {  -3,  29, 111,  -9  },
++    {  -1,  12, 123,  -6  } },
++  { {   0, 128,   0,   0  },  /* 6 */
++    {  -7, 124,  12,  -1  },
++    { -10, 111,  30,  -3  },
++    { -10,  93,  51,  -6  },
++    {  -9,  73,  73,  -9  },
++    {  -6,  51,  93, -10  },
++    {  -3,  30, 111, -10  },
++    {  -1,  12, 124,  -7  } },
++  { {   0, 128,   0,   0  },  /* 7 */
++    {  -7, 123,  13,  -1  },
++    { -11, 112,  31,  -4  },
++    { -11,  94,  52,  -7  },
++    { -10,  74,  74, -10  },
++    {  -7,  52,  94, -11  },
++    {  -4,  31, 112, -11  },
++    {  -1,  13, 123,  -7  } },
++  { {   0, 128,   0,  0  },  /* 8 */
++    {  -8, 124,  13,  -1  },
++    { -12, 112,  32,  -4  },
++    { -12,  94,  53,  -7  },
++    { -10,  74,  74, -10  },
++    {  -7,  53,  94, -12  },
++    {  -4,  32, 112, -12  },
++    {  -1,  13, 124,  -8  } },
++  { {   0, 128,   0,   0  },  /* 9 */
++    {  -9, 124,  14,  -1  },
++    { -13, 112,  33,  -4  },
++    { -13,  95,  54,  -8  },
++    { -11,  75,  75, -11  },
++    {  -8,  54,  95, -13  },
++    {  -4,  33, 112, -13  },
++    {  -1,  14, 124,  -9  } },
++  { {   0, 128,   0,   0  },  /* 10 */
++    {  -9, 123,  15,  -1  },
++    { -14, 113,  34,  -5  },
++    { -14,  95,  55,  -8  },
++    { -12,  76,  76, -12  },
++    {  -8,  55,  95, -14  },
++    {  -5,  34, 112, -13  },
++    {  -1,  15, 123,  -9  } },
++  { {   0, 128,   0,   0  },  /* 11 */
++    { -10, 124,  15,  -1  },
++    { -14, 113,  34,  -5  },
++    { -15,  96,  56,  -9  },
++    { -13,  77,  77, -13  },
++    {  -9,  56,  96, -15  },
++    {  -5,  34, 113, -14  },
++    {  -1,  15, 124, -10  } },
++  { {   0, 128,   0,   0  },  /* 12 */
++    { -10, 123,  16,  -1  },
++    { -15, 113,  35,  -5  },
++    { -16,  98,  56, -10  },
++    { -14,  78,  78, -14  },
++    { -10,  56,  98, -16  },
++    {  -5,  35, 113, -15  },
++    {  -1,  16, 123, -10  } },
++  { {   0, 128,   0,   0  },  /* 13 */
++    { -11, 124,  17,  -2  },
++    { -16, 113,  36,  -5  },
++    { -17,  98,  57, -10  },
++    { -14,  78,  78, -14  },
++    { -10,  57,  98, -17  },
++    {  -5,  36, 113, -16  },
++    {  -2,  17, 124, -11  } },
++  { {   0, 128,   0,   0  },  /* 14 */
++    { -12, 125,  17,  -2  },
++    { -17, 114,  37,  -6  },
++    { -18,  99,  58, -11  },
++    { -15,  79,  79, -15  },
++    { -11,  58,  99, -18  },
++    {  -6,  37, 114, -17  },
++    {  -2,  17, 125, -12  } },
++  { {   0, 128,   0,   0  },  /* 15 */
++    { -12, 124,  18,  -2  },
++    { -18, 114,  38,  -6  },
++    { -19,  99,  59, -11  },
++    { -16,  80,  80, -16  },
++    { -11,  59,  99, -19  },
++    {  -6,  38, 114, -18  },
++    {  -2,  18, 124, -12  } },
++  { {   0, 128,   0,   0  },  /* 16 */
++    {  -4, 118,  16,  -2  },
++    {  -7, 106,  34,  -5  },
++    {  -8,  90,  53,  -7  },
++    {  -8,  72,  72,  -8  },
++    {  -7,  53,  90,  -8  },
++    {  -5,  34, 106,  -7  },
++    {  -2,  16, 118,  -4  } },
++};
++
++static const vp56_tree_t vp6_pcr_tree[] = {
++    { 8, 0},
++    { 4, 1},
++    { 2, 2}, {-1}, {-2},
++    { 2, 3}, {-3}, {-4},
++    { 8, 4},
++    { 4, 5},
++    { 2, 6}, {-5}, {-6},
++    { 2, 7}, {-7}, {-8},
++             {-0},
++};
++
++static const uint8_t vp6_coord_div[] = { 4, 4, 4, 4, 8, 8 };
++
++#endif /* VP6DATA_H */
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000082.html">[Avidemux-svn-commit] r2756 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+	<LI>Next message: <A HREF="000084.html">[Avidemux-svn-commit] r2758 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#83">[ date ]</a>
+              <a href="thread.html#83">[ thread ]</a>
+              <a href="subject.html#83">[ subject ]</a>
+              <a href="author.html#83">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

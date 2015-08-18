@@ -1,0 +1,137 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5335 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5335%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska&In-Reply-To=%3C200909161756.n8GHuJGW013611%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002546.html">
+   <LINK REL="Next"  HREF="002548.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5335 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5335%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska&In-Reply-To=%3C200909161756.n8GHuJGW013611%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5335 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Sep 16 19:56:19 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002546.html">[Avidemux-svn-commit] r5334 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux_core/ADM_coreAudio/include	avidemux_core/ADM_coreMuxer/src	avidemux_plugins/ADM_audioDecoders/ADM_ad_vorbis	avidemux_plugins/ADM_audioEncoders/vorbis	avidemux_plugins/ADM_demuxers/Matroska
+</A></li>
+        <LI>Next message: <A HREF="002548.html">[Avidemux-svn-commit] r5336 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2547">[ date ]</a>
+              <a href="thread.html#2547">[ thread ]</a>
+              <a href="subject.html#2547">[ subject ]</a>
+              <a href="author.html#2547">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-09-16 19:56:18 +0200 (Wed, 16 Sep 2009)
+New Revision: 5335
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h
+Log:
+[mkv demuxer] Adjust pts if b frames are present so that we dont end up with pts&lt;=dts when saving the result later
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp	2009-09-16 17:56:02 UTC (rev 5334)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp	2009-09-16 17:56:18 UTC (rev 5335)
+@@ -109,12 +109,43 @@
+         _access[i]=new mkvAccess(_filename,&amp;(_tracks[i+1]));
+         _audioStreams[i]=ADM_audioCreateStream(&amp;(_tracks[1+i].wavHeader), _access[i]);;
+     }
+-
++  delayFrameIfBFrames();
+   printf(&quot;[MKV]Matroska successfully read\n&quot;);
+ 
+   return 1;
+ }
+ /**
++    \fn delayFrameIfBFrames
++    \brief delay audio and video by 2 * time increment if b frames present
++                else we may have PTS&lt;DTS
++*/
++bool mkvHeader::delayTrack(mkvTrak *track, uint64_t value)
++{
++    int nb=track-&gt;index.size();
++    for(int i=0;i&lt;nb;i++)
++    {
++        if(track-&gt;index[i].Pts!=ADM_NO_PTS) track-&gt;index[i].Pts+=value;
++    }
++    return true;
++}
++bool mkvHeader::delayFrameIfBFrames(void)
++{
++    mkvTrak *track=_tracks;
++    int nb=track-&gt;index.size();
++    int nbBFrame=0;
++    for(int i=0;i&lt;nb;i++) if(track-&gt;index[i].flags==AVI_B_FRAME) nbBFrame++;
++    if(nbBFrame&lt;2)
++    {
++        printf(&quot;[Mkv] no b frames detected\n&quot;);
++        return true;
++    }
++    uint64_t twoFrames=track-&gt;_defaultFrameDuration*2;
++    printf(&quot;[mkv] Delaying PTS by %&quot;LLU&quot; us\n&quot;,twoFrames);
++    for(int i=0;i&lt;_nbAudioTrack+1;i++)
++        delayTrack(&amp;(_tracks[i]),twoFrames);
++    return true;
++}
++/**
+     \fn rescaleTrack
+     \brief Compute the average duration of one audio frame if the info is not present in the stream
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h	2009-09-16 17:56:02 UTC (rev 5334)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h	2009-09-16 17:56:18 UTC (rev 5335)
+@@ -144,6 +144,10 @@
+     uint8_t                 indexBlock(ADM_ebml_file *parser,uint32_t count,uint32_t timecodeMS);
+ 
+     uint8_t                 rescaleTrack(mkvTrak *track,uint32_t durationMs);
++
++    bool                    delayTrack(mkvTrak *track, uint64_t value);
++    bool                    delayFrameIfBFrames(void);
++
+   public:
+ 
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002546.html">[Avidemux-svn-commit] r5334 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux_core/ADM_coreAudio/include	avidemux_core/ADM_coreMuxer/src	avidemux_plugins/ADM_audioDecoders/ADM_ad_vorbis	avidemux_plugins/ADM_audioEncoders/vorbis	avidemux_plugins/ADM_demuxers/Matroska
+</A></li>
+	<LI>Next message: <A HREF="002548.html">[Avidemux-svn-commit] r5336 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2547">[ date ]</a>
+              <a href="thread.html#2547">[ thread ]</a>
+              <a href="subject.html#2547">[ subject ]</a>
+              <a href="author.html#2547">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

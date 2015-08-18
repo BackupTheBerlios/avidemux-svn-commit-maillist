@@ -1,0 +1,167 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7196 - in	branches/avidemux_2.6_branch_mean/avidemux/common:	ADM_audioFilter/src ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7196%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%0A%09ADM_audioFilter/src%20ADM_editor&In-Reply-To=%3C20110510054049.AC624480F9E%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004350.html">
+   <LINK REL="Next"  HREF="004352.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7196 - in	branches/avidemux_2.6_branch_mean/avidemux/common:	ADM_audioFilter/src ADM_editor</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7196%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%0A%09ADM_audioFilter/src%20ADM_editor&In-Reply-To=%3C20110510054049.AC624480F9E%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7196 - in	branches/avidemux_2.6_branch_mean/avidemux/common:	ADM_audioFilter/src ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue May 10 07:40:49 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004350.html">[Avidemux-svn-commit] r7195 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audiocodec	avidemux_plugins/ADM_audioDecoders/ADM_ad_faad
+</A></li>
+        <LI>Next message: <A HREF="004352.html">[Avidemux-svn-commit] r7197 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audiocodec avidemux_core/ADM_coreAudio/include	avidemux_core/ADM_coreAudio/src	avidemux_plugins/ADM_audioDecoders/ADM_ad_ac3	avidemux_plugins/ADM_audioDecoders/ADM_ad_faad	avidemux_plugins/ADM_audioDecoders/ADM_ad_ima_adpcm	avidemux_plugins/ADM_audioDecoders/ADM_ad_lav	avidemux_plugins/ADM_audioDecoders/ADM_ad_mad	avidemux_plugins/ADM_audioDecoders/ADM_ad_ms_adpcm	avidemux_plugins/ADM_audioDecoders/ADM_ad_ulaw	avidemux_plugins/ADM_audioDecoders/ADM_ad_vorbis
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4351">[ date ]</a>
+              <a href="thread.html#4351">[ thread ]</a>
+              <a href="subject.html#4351">[ subject ]</a>
+              <a href="author.html#4351">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-05-10 07:40:49 +0200 (Tue, 10 May 2011)
+New Revision: 7196
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_bridge.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edAudioPcm.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+Log:
+[audio] Make change to support output fq!=intput fq( sbr)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_bridge.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_bridge.cpp	2011-05-10 05:40:47 UTC (rev 7195)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_bridge.cpp	2011-05-10 05:40:49 UTC (rev 7196)
+@@ -33,6 +33,10 @@
+ {
+   _incoming=incoming;
+   memcpy(&amp;_wavHeader,_incoming-&gt;getInfo(),sizeof(_wavHeader));
++  // For SBR TEST
++  //_wavHeader.frequency*=2;
++  _wavHeader.frequency=_incoming-&gt;getOutputFrequency();
++  // /For SBR Test
+   _startTime=startInMs;
+   shiftMs=-shiftMs;
+   _shift=shiftMs;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edAudioPcm.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edAudioPcm.cpp	2011-05-10 05:40:47 UTC (rev 7195)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edAudioPcm.cpp	2011-05-10 05:40:49 UTC (rev 7196)
+@@ -49,8 +49,24 @@
+ #else
+ #define vprintf printf
+ #endif
++/**
++    \fn     getOutputFrequency
++    \brief  Get output fq, 2*wavheader-&gt;fq for sbr
+ 
++*/
+ 
++uint32_t        ADM_Composer::getOutputFrequency(void)
++{
++    ADM_audioStreamTrack *trk=getTrack(0);
++    if(!trk) 
++    {
++        ADM_warning(&quot;No audio track\n&quot;);
++        return 0;
++    }
++    if(!trk-&gt;codec)
++        return trk-&gt;wavheader.frequency;
++    return trk-&gt;codec-&gt;getOutputFrequency();
++}
+ /**
+     \fn     getPCMPacket
+     \brief  Get audio packet
+@@ -63,7 +79,7 @@
+ uint32_t inSize;
+ bool drop=false;
+ static bool fail=false;
+-
++uint32_t outFrequency=getTrack(0)-&gt;codec-&gt;getOutputFrequency();
+ again:
+     *samples=0;
+     ADM_audioStreamTrack *trk=getTrack(0);
+@@ -99,7 +115,7 @@
+                 // Let's add some filler
+                 // Compute filler size
+                 float f=packetBufferDts-lastDts; // in us
+-                f*=wavHeader.frequency;
++                f*=outFrequency;
+                 f/=1000000.;
+                 // in samples!
+                 uint32_t fillerSample=(uint32_t )(f+0.49);
+@@ -115,7 +131,7 @@
+                 uint32_t start=fillerSample*sizeof(float)*trk-&gt;wavheader.channels;
+                 memset(dest,0,start);
+ 
+-                advanceDtsBySample(fillerSample);
++                advanceDtsByCustomSample(fillerSample,outFrequency);
+                 dest+=fillerSample*trk-&gt;wavheader.channels;
+                 *samples=fillerSample;
+                 vprintf(&quot;[Composer::getPCMPacket] Adding %u padding samples, dts is now %lu\n&quot;,fillerSample,lastDts);
+@@ -157,7 +173,7 @@
+     // Update infos
+     *samples=(decodedSample);
+     *odts=lastDts;
+-    advanceDtsBySample(decodedSample);
++    advanceDtsByCustomSample(decodedSample,outFrequency);
+     vprintf(&quot;[Composer::getPCMPacket] Adding %u decodedSample, dts is not %lu\n&quot;,fillerSample,lastDts);
+     ADM_assert(sizeMax&gt;=(fillerSample+decodedSample)*trk-&gt;wavheader.channels);
+     return true;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2011-05-10 05:40:47 UTC (rev 7195)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2011-05-10 05:40:49 UTC (rev 7196)
+@@ -185,6 +185,7 @@
+                     uint64_t        getDurationInUs(void);
+                     uint8_t			getAudioStream(ADM_audioStream **audio);
+             virtual WAVHeader       *getInfo(void);
++                    uint32_t        getOutputFrequency(void); // sbr
+             virtual CHANNEL_TYPE    *getChannelMapping(void );
+ /************************************ /audioStream ******************************/
+                     bool            getAudioStreamsInfo(uint64_t xtime,uint32_t *nbStreams, audioInfo **infos);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004350.html">[Avidemux-svn-commit] r7195 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audiocodec	avidemux_plugins/ADM_audioDecoders/ADM_ad_faad
+</A></li>
+	<LI>Next message: <A HREF="004352.html">[Avidemux-svn-commit] r7197 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audiocodec avidemux_core/ADM_coreAudio/include	avidemux_core/ADM_coreAudio/src	avidemux_plugins/ADM_audioDecoders/ADM_ad_ac3	avidemux_plugins/ADM_audioDecoders/ADM_ad_faad	avidemux_plugins/ADM_audioDecoders/ADM_ad_ima_adpcm	avidemux_plugins/ADM_audioDecoders/ADM_ad_lav	avidemux_plugins/ADM_audioDecoders/ADM_ad_mad	avidemux_plugins/ADM_audioDecoders/ADM_ad_ms_adpcm	avidemux_plugins/ADM_audioDecoders/ADM_ad_ulaw	avidemux_plugins/ADM_audioDecoders/ADM_ad_vorbis
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4351">[ date ]</a>
+              <a href="thread.html#4351">[ thread ]</a>
+              <a href="subject.html#4351">[ subject ]</a>
+              <a href="author.html#4351">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

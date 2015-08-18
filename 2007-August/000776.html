@@ -1,0 +1,354 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3502 - in	branches/avidemux_2.4_branch/avidemux: ADM_video ADM_videoFilter
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3502%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_video%20ADM_videoFilter&In-Reply-To=%3C200708131352.l7DDq6gD017785%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000775.html">
+   <LINK REL="Next"  HREF="000777.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3502 - in	branches/avidemux_2.4_branch/avidemux: ADM_video ADM_videoFilter</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3502%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_video%20ADM_videoFilter&In-Reply-To=%3C200708131352.l7DDq6gD017785%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3502 - in	branches/avidemux_2.4_branch/avidemux: ADM_video ADM_videoFilter">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Aug 13 15:52:06 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000775.html">[Avidemux-svn-commit] r3501 - in	branches/avidemux_2.4_branch/avidemux:	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_commonUI ADM_video ADM_videoFilter
+</A></li>
+        <LI>Next message: <A HREF="000777.html">[Avidemux-svn-commit] r3503 - in	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec:	. i386
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#776">[ date ]</a>
+              <a href="thread.html#776">[ thread ]</a>
+              <a href="subject.html#776">[ subject ]</a>
+              <a href="author.html#776">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-08-13 15:52:06 +0200 (Mon, 13 Aug 2007)
+New Revision: 3502
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidCrop.cpp
+Removed:
+   branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_vidCrop.cpp
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_video/CMakeLists.txt
+   branches/avidemux_2.4_branch/avidemux/ADM_video/Makefile.am
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/CMakeLists.txt
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/Makefile.am
+Log:
+[Filter] move crop also
+
+Deleted: branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_vidCrop.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_vidCrop.cpp	2007-08-13 13:47:25 UTC (rev 3501)
++++ branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_vidCrop.cpp	2007-08-13 13:52:06 UTC (rev 3502)
+@@ -1,206 +0,0 @@
+-/***************************************************************************
+-                          ADM_vidCrop.cpp  -  description
+-                             -------------------
+-          Crop top/left/right/bottom
+-
+-          Each one ,must be even
+-
+-
+-    begin                : Sun Mar 24 2002
+-    copyright            : (C) 2002 by mean
+-    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+- ***************************************************************************/
+-
+-/***************************************************************************
+- *                                                                         *
+- *   This program is free software; you can redistribute it and/or modify  *
+- *   it under the terms of the GNU General Public License as published by  *
+- *   the Free Software Foundation; either version 2 of the License, or     *
+- *   (at your option) any later version.                                   *
+- *                                                                         *
+- ***************************************************************************/
+-
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+-#include &lt;string.h&gt;
+-#include &lt;ADM_assert.h&gt;
+-
+-#include &quot;config.h&quot;
+-#include &quot;fourcc.h&quot;
+-#include &quot;avio.hxx&quot;
+-#include &quot;config.h&quot;
+-#include &quot;avi_vars.h&quot;
+-#ifdef HAVE_ENCODER
+-
+-#include &quot;ADM_toolkit/toolkit.hxx&quot;
+-#include &quot;ADM_editor/ADM_edit.hxx&quot;
+-#include &quot;ADM_video/ADM_genvideo.hxx&quot;
+-#include &quot;ADM_video/ADM_vidCommonFilter.h&quot;
+-#include &quot;ADM_filter/video_filters.h&quot;
+-
+-
+-static FILTER_PARAM cropParam={4,{&quot;left&quot;,&quot;right&quot;,&quot;top&quot;,&quot;bottom&quot;}};
+-
+-
+-SCRIPT_CREATE(crop_script,AVDMVideoStreamCrop,cropParam);
+-
+-char *AVDMVideoStreamCrop::printConf( void )
+-{
+- 	static char buf[50];
+- 	
+- 	sprintf((char *)buf,&quot; Crop %lu x %lu --&gt; %lu x %lu&quot;,
+- 				_in-&gt;getInfo()-&gt;width,
+- 				_in-&gt;getInfo()-&gt;height,
+- 				_info.width,
+- 				_info.height);
+-        return buf;
+-}
+-
+-//_______________________________________________________________
+-
+-AVDMVideoStreamCrop::AVDMVideoStreamCrop(
+-									AVDMGenericVideoStream *in,CONFcouple *couples)
+-{
+-
+-
+-  	_in=in;		
+-   	memcpy(&amp;_info,_in-&gt;getInfo(),sizeof(_info));
+-	
+-		if(couples)
+-		{
+-			_param=	NEW(CROP_PARAMS);
+-			GET(left);
+-			GET(right);
+-			GET(top);
+-			GET(bottom);
+-				// Consistency check
+-				if(  _in-&gt;getInfo()-&gt;width&lt;(_param-&gt;right+_param-&gt;left))
+-						{
+-                      		printf(&quot;\n Warning Cropping too much width ! Width reseted !\n&quot;);
+-								_param-&gt;right=_param-&gt;left=0;
+-						}
+-				if(  _in-&gt;getInfo()-&gt;height&lt;(_param-&gt;bottom+_param-&gt;top))
+-						{
+-                      		printf(&quot;\n Warning Cropping too much height ! Height reseted !\n&quot;);
+-								_param-&gt;bottom=_param-&gt;top=0;
+-						}
+-
+-			_info.width=_in-&gt;getInfo()-&gt;width-_param-&gt;right-_param-&gt;left;		
+-			_info.height=_in-&gt;getInfo()-&gt;height-_param-&gt;bottom-_param-&gt;top;	
+-			
+-		}	
+-			else 			
+-		{	// default parameter	
+-				_param=	NEW(CROP_PARAMS); ;
+-				_param-&gt;left=_param-&gt;top=
+-				_param-&gt;right=_param-&gt;bottom=0;
+-		}				
+-					
+- 	//_uncompressed=(uint8_t *)malloc(3*_in-&gt;getInfo()-&gt;width*_in-&gt;getInfo()-&gt;height);
+- 	//_uncompressed=new uint8_t [3*_in-&gt;getInfo()-&gt;width*_in-&gt;getInfo()-&gt;height];
+-	_uncompressed=new ADMImage(_in-&gt;getInfo()-&gt;width,_in-&gt;getInfo()-&gt;height);
+-  	ADM_assert(_uncompressed);
+-  	_info.encoding=1;
+-	  
+-
+-  	  	
+-}
+-AVDMVideoStreamCrop::~AVDMVideoStreamCrop()
+-{
+- 	delete _uncompressed;
+- 	DELETE(_param);
+-}
+-
+-//
+-//	Basically ask a uncompressed frame from editor and ask
+-//		GUI to decompress it .
+-//
+-
+-uint8_t AVDMVideoStreamCrop::getFrameNumberNoAlloc(uint32_t frame,
+-				uint32_t *len,
+-   				ADMImage *data,
+-				uint32_t *flags)
+-{
+-
+-			ADM_assert(frame&lt;_info.nb_frames);
+-			ADM_assert(_param);									
+-		if(frame&gt;= _info.nb_frames) return 0;
+-			// read uncompressed frame
+-       		if(!_in-&gt;getFrameNumberNoAlloc(frame, len,_uncompressed,flags)) return 0;
+-       		
+-       		// Crop Y luma
+-       		uint32_t y,x,line;
+-       		uint8_t *src,*src2,*dest;
+-       		
+-       		y=_in-&gt;getInfo()-&gt;height;
+-       		x=_in-&gt;getInfo()-&gt;width;
+-       		line=_info.width;
+-       		src=YPLANE(_uncompressed)+_param-&gt;top*x+_param-&gt;left;
+-       		dest=YPLANE(data);
+-       		
+-       		for(uint32_t k=_info.height;k&gt;0;k--)
+-       			{
+-       			 	    memcpy(dest,src,line);
+-       			 	    src+=x;
+-       			 	    dest+=line;
+-       			}
+-       		 // Crop U  &amp; V
+-       		 	src=UPLANE(_uncompressed)+(x*_param-&gt;top&gt;&gt;2)+(_param-&gt;left&gt;&gt;1);
+-       		 	src2=VPLANE(_uncompressed)+(x*_param-&gt;top&gt;&gt;2)+(_param-&gt;left&gt;&gt;1);
+-			dest=UPLANE(data);
+-       		 	line&gt;&gt;=1;
+-       		 	x&gt;&gt;=1;       		       		 	
+-       		 		for(uint32_t k=((_info.height)&gt;&gt;1);k&gt;0;k--)
+-       		 		{
+-       		 	    	  	memcpy(dest,src,line);
+-       			 	    	src+=x;
+-       			 	    	dest+=line;
+-       		 		}
+-			dest=VPLANE(data);	
+-       		 		for(uint32_t k=((_info.height)&gt;&gt;1);k&gt;0;k--)
+-       		 		{
+-       		 	    	  	memcpy(dest,src2,line);
+-       			 	    	src2+=x;
+-       			 	    	dest+=line;
+-       		 		}	
+-       		  *flags=0;
+-       		  *len= _info.width*_info.height+(_info.width*_info.height&gt;&gt;1);
+-		  data-&gt;copyInfo(_uncompressed);
+-      return 1;
+-}
+-/**
+-	Return the configuration as a couple of string
+-	Up to the client to free them afterward
+-*/
+-uint8_t	AVDMVideoStreamCrop::getCoupledConf( CONFcouple **couples)
+-{
+-
+-			ADM_assert(_param);
+-			*couples=new CONFcouple(4);
+-
+-#define CSET(x)  (*couples)-&gt;setCouple((char *)#x,(_param-&gt;x))
+-			CSET(left);
+-			CSET(right);
+-			CSET(top);
+-			CSET(bottom);
+-			return 1;
+-
+-}
+-extern int DIA_getCropParams(	char *name,CROP_PARAMS *param,AVDMGenericVideoStream *in);
+-uint8_t AVDMVideoStreamCrop::configure( AVDMGenericVideoStream *instream)
+-
+-{
+-		uint8_t r;
+-		uint32_t w,h;
+-    	if(r = (DIA_getCropParams(&quot;Crop Settings&quot;,_param,instream )))
+-    	{
+-			w=_param-&gt;left+_param-&gt;right;
+-			h=_param-&gt;top+_param-&gt;bottom;
+-			ADM_assert(w&lt;instream-&gt;getInfo()-&gt;width);
+-			ADM_assert(h&lt;instream-&gt;getInfo()-&gt;height);
+-			_info.width=instream-&gt;getInfo()-&gt;width-w;
+-			_info.height=instream-&gt;getInfo()-&gt;height-h;
+-		}
+-		return r;
+-}
+-#endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_video/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_video/CMakeLists.txt	2007-08-13 13:47:25 UTC (rev 3501)
++++ branches/avidemux_2.4_branch/avidemux/ADM_video/CMakeLists.txt	2007-08-13 13:52:06 UTC (rev 3502)
+@@ -13,7 +13,6 @@
+ ADM_vidFont.cpp
+ ADM_vidVobsub.cpp
+ ADM_vidAsharp.cpp       
+-ADM_vidCrop.cpp       
+ ADM_vidVobSubRender.cpp
+ ADM_interlaced.cpp       
+ ADM_vidCached.cpp       
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_video/Makefile.am
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_video/Makefile.am	2007-08-13 13:47:25 UTC (rev 3501)
++++ branches/avidemux_2.4_branch/avidemux/ADM_video/Makefile.am	2007-08-13 13:52:06 UTC (rev 3502)
+@@ -11,7 +11,6 @@
+  ADM_vidPartial.cpp \
+  ADM_vidFont.cpp \
+  ADM_vidContrast.cpp \
+- ADM_vidCrop.cpp \
+  ADM_vidNull.cpp \
+ 	ADM_vidClean.cpp \
+  ADM_genvideo.cpp \
+@@ -81,7 +80,7 @@
+ ADM_vidContrast.cpp  ADM_vidMPdelogo.cpp \
+ ADM_vidContrast.h  ADM_vidMPdelogo.h \
+ ADM_vobsubinfo.cpp \
+-ADM_vidCrop.cpp  ADM_vobsubinfo.h \
++ADM_vobsubinfo.h \
+ swscale_internal.h \
+ ADM_vidTdeint_util.txt mmx_macros.h
+ 
+
+Copied: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidCrop.cpp (from rev 3497, branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_vidCrop.cpp)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/CMakeLists.txt	2007-08-13 13:47:25 UTC (rev 3501)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/CMakeLists.txt	2007-08-13 13:52:06 UTC (rev 3502)
+@@ -29,6 +29,7 @@
+ ADM_vidSRT.cpp
+ ADM_vidSRTload.cpp
+ ADM_vidSRTRender.cpp
++ADM_vidCrop.cpp       
+ )
+ ADD_LIBRARY(ADM_videoFilter STATIC ${ADM_videoFilter_SRCS})
+ if(FT_FOUND)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/Makefile.am
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/Makefile.am	2007-08-13 13:47:25 UTC (rev 3501)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/Makefile.am	2007-08-13 13:52:06 UTC (rev 3502)
+@@ -67,7 +67,8 @@
+  ADM_vidHue.cpp \
+  ADM_vidSRT.cpp \
+  ADM_vidSRTload.cpp \
+- ADM_vidSRTRender.cpp
++ ADM_vidSRTRender.cpp \
++ ADM_vidCrop.cpp       
+ 			
+ 
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000775.html">[Avidemux-svn-commit] r3501 - in	branches/avidemux_2.4_branch/avidemux:	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_commonUI ADM_video ADM_videoFilter
+</A></li>
+	<LI>Next message: <A HREF="000777.html">[Avidemux-svn-commit] r3503 - in	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec:	. i386
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#776">[ date ]</a>
+              <a href="thread.html#776">[ thread ]</a>
+              <a href="subject.html#776">[ subject ]</a>
+              <a href="author.html#776">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

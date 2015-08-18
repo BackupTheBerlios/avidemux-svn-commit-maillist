@@ -1,0 +1,185 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7309 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7309%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui&In-Reply-To=%3C20110709213527.581ED480BE2%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004462.html">
+   <LINK REL="Next"  HREF="004464.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7309 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7309%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui&In-Reply-To=%3C20110709213527.581ED480BE2%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7309 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sat Jul  9 23:35:27 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004462.html">[Avidemux-svn-commit] r7308 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="004464.html">[Avidemux-svn-commit] r7310 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	. telecide
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4463">[ date ]</a>
+              <a href="thread.html#4463">[ thread ]</a>
+              <a href="subject.html#4463">[ subject ]</a>
+              <a href="author.html#4463">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2011-07-09 23:35:26 +0200 (Sat, 09 Jul 2011)
+New Revision: 7309
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.h
+Log:
+[qt] don't block source application after drag and drop
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.cpp	2011-07-06 05:19:55 UTC (rev 7308)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.cpp	2011-07-09 21:35:26 UTC (rev 7309)
+@@ -14,7 +14,6 @@
+ #include &quot;config.h&quot;
+ #undef QT_TR_NOOP
+ 
+-#include &lt;QtCore/QUrl&gt;
+ #include &lt;QtCore/QDir&gt;
+ #include &lt;QtGui/QKeyEvent&gt;
+ #include &lt;QtGui/QGraphicsView&gt;
+@@ -106,11 +105,18 @@
+ void UI_updateFrameCount(uint32_t curFrame);
+ void UI_updateTimeCount(uint32_t curFrame,uint32_t fps);
+ extern void UI_purge(void);
+-/*
+-    Declare the class that will be our main window
+ 
+-*/
++class FileDropEvent : public QEvent
++{
++public:
++	QList&lt;QUrl&gt; files;
+ 
++	FileDropEvent(QList&lt;QUrl&gt; files) : QEvent(QEvent::User)
++	{
++		this-&gt;files = files;
++	}
++};
++
+ void MainWindow::comboChanged(int z)
+ {
+ 	if (sender() == ui.comboBoxVideo)
+@@ -480,6 +486,9 @@
+ 			}
+ 
+ 			break;
++		case QEvent::User:
++			this-&gt;openFiles(((FileDropEvent*)event)-&gt;files);
++			break;
+ 	}
+ 
+ 	return QObject::eventFilter(watched, event);
+@@ -498,30 +507,31 @@
+ 
+ void MainWindow::dropEvent(QDropEvent *event)
+ {
+-	QList&lt;QUrl&gt; urlList;
+-	QString fileName;
++	if (event-&gt;mimeData()-&gt;hasUrls())
++	{
++		QCoreApplication::postEvent(this, new FileDropEvent(event-&gt;mimeData()-&gt;urls()));
++
++		event-&gt;acceptProposedAction();
++	}
++}
++
++void MainWindow::openFiles(QList&lt;QUrl&gt; urlList)
++{
+ 	QFileInfo info;
+ 
+-	if (event-&gt;mimeData()-&gt;hasUrls())
++	for (int fileIndex = 0; fileIndex &lt; urlList.size(); fileIndex++)
+ 	{
+-		urlList = event-&gt;mimeData()-&gt;urls();
++		QString fileName = urlList[fileIndex].toLocalFile();
++		QFileInfo info(fileName);
+ 
+-		for (int fileIndex = 0; fileIndex &lt; urlList.size(); fileIndex++)
++		if (info.isFile())
+ 		{
+-			fileName = urlList[fileIndex].toLocalFile();
+-			info.setFile(fileName);
+-
+-			if (info.isFile())
+-			{
+-				if (avifileinfo)
+-					FileSel_ReadWrite(reinterpret_cast &lt;void (*)(const char *)&gt; (A_appendAvi), 0, fileName.toUtf8().data(), actual_workbench_file);
+-				else
+-					FileSel_ReadWrite(reinterpret_cast &lt;void (*)(const char *)&gt; (A_openAvi), 0, fileName.toUtf8().data(), actual_workbench_file);
+-			}
++			if (avifileinfo)
++				FileSel_ReadWrite(reinterpret_cast &lt;void (*)(const char *)&gt; (A_appendAvi), 0, fileName.toUtf8().data(), actual_workbench_file);
++			else
++				FileSel_ReadWrite(reinterpret_cast &lt;void (*)(const char *)&gt; (A_openAvi), 0, fileName.toUtf8().data(), actual_workbench_file);
+ 		}
+ 	}
+-
+-	event-&gt;acceptProposedAction();
+ }
+ 
+ void MainWindow::previousIntraFrame(void)
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.h	2011-07-06 05:19:55 UTC (rev 7308)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.h	2011-07-09 21:35:26 UTC (rev 7309)
+@@ -2,6 +2,7 @@
+ #define Q_gui2_h
+ 
+ #include &lt;QtCore/QFileInfo&gt;
++#include &lt;QtCore/QUrl&gt;
+ #include &lt;QtGui/QSlider&gt;
+ #include &lt;QtGui/QWidget&gt;
+ #include &lt;QtGui/QMenu&gt;
+@@ -53,5 +54,6 @@
+ 	void dropEvent(QDropEvent *event);
+ 	void closeEvent(QCloseEvent *event);
+ 	void addDirEntryToMenu(QMenu *parentMenu, QString path);
++	void openFiles(QList&lt;QUrl&gt;);
+ };
+ #endif	// Q_gui2_h
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004462.html">[Avidemux-svn-commit] r7308 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="004464.html">[Avidemux-svn-commit] r7310 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	. telecide
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4463">[ date ]</a>
+              <a href="thread.html#4463">[ thread ]</a>
+              <a href="subject.html#4463">[ subject ]</a>
+              <a href="author.html#4463">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

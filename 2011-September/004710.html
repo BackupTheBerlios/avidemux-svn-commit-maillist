@@ -1,0 +1,333 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7563 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/qt4 avidemux_core/ADM_core/include	avidemux_core/ADM_core/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7563%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux/qt4%20avidemux_core/ADM_core/include%0A%09avidemux_core/ADM_core/src&In-Reply-To=%3C20110915190248.7728E48135A%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004709.html">
+   <LINK REL="Next"  HREF="004711.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7563 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/qt4 avidemux_core/ADM_core/include	avidemux_core/ADM_core/src</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7563%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux/qt4%20avidemux_core/ADM_core/include%0A%09avidemux_core/ADM_core/src&In-Reply-To=%3C20110915190248.7728E48135A%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7563 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/qt4 avidemux_core/ADM_core/include	avidemux_core/ADM_core/src">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Thu Sep 15 21:02:48 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004709.html">[Avidemux-svn-commit] r7562 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+</A></li>
+        <LI>Next message: <A HREF="004711.html">[Avidemux-svn-commit] r7564 -	branches/avidemux_2.6_branch_mean/avidemux/qt4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4710">[ date ]</a>
+              <a href="thread.html#4710">[ thread ]</a>
+              <a href="subject.html#4710">[ subject ]</a>
+              <a href="author.html#4710">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2011-09-15 21:02:47 +0200 (Thu, 15 Sep 2011)
+New Revision: 7563
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_files.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_win32.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp
+Log:
+[mswin] default working files to user's profile but provide a --portable parameter for the nut jobs
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp	2011-09-15 17:30:31 UTC (rev 7562)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp	2011-09-15 19:02:47 UTC (rev 7563)
+@@ -104,11 +104,11 @@
+ 
+ void onexit(void);
+ int startAvidemux(int argc, char *argv[]);
++bool isPortableMode(int argc, char *argv[]);
+ 
+ int main(int _argc, char *_argv[])
+ {
+-	char **argv;
+-	int argc;
++	ADM_initBaseDir(isPortableMode(_argc, _argv));
+ 
+ #if defined(_WIN32) &amp;&amp; (ADM_UI_TYPE_BUILD == ADM_UI_GTK || ADM_UI_TYPE_BUILD == ADM_UI_QT4)
+ 	// redirect output before registering exception handler so error dumps are captured
+@@ -117,6 +117,9 @@
+ 
+ 	installSigHandler();
+ 
++	char **argv;
++	int argc;
++
+ #ifdef _WIN32
+ 	getUtf8CommandLine(&amp;argc, &amp;argv);
+ #else
+@@ -198,9 +201,9 @@
+ 
+     printf(&quot;Time: %s\n&quot;, ADM_epochToString(ADM_getSecondsSinceEpoch()));
+ 
+-	for(int i = 0; i &lt; argc; i++)
+-	{
+-		printf(&quot;%d: %s\n&quot;, i, argv[i]);
++	for(int i = 0; i &lt; argc; i++)
++	{
++		printf(&quot;%d: %s\n&quot;, i, argv[i]);
+ 	}
+ 
+ 	// Start counting memory
+@@ -401,9 +404,21 @@
+     #endif
+ #endif
+ }
+-extern void checkCrashFile(void);
+-void dummyXref(void)
++
++bool isPortableMode(int argc, char *argv[])
+ {
+-    checkCrashFile();
++	bool portableMode = false;
++
++	for (int i = 0; i &lt; argc; i++)
++	{
++		if (strcmp(argv[i], &quot;--portable&quot;) == 0)
++		{
++			portableMode = true;
++			break;
++		}
++	}
++
++	return portableMode;
+ }
++
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/CMakeLists.txt	2011-09-15 17:30:31 UTC (rev 7562)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/CMakeLists.txt	2011-09-15 19:02:47 UTC (rev 7563)
+@@ -160,7 +160,7 @@
+ endif (WIN32 OR APPLE)
+ 
+ IF (WIN32)
+-	target_link_libraries(ADM_osSupport)
++	target_link_libraries(avidemux3_qt4 ADM_osSupport6)
+ 	target_link_libraries(avidemux3_qt4 winmm -mwindows -Wl,--export-all-symbols)
+ ENDIF (WIN32)
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_files.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_files.h	2011-09-15 17:30:31 UTC (rev 7562)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_files.h	2011-09-15 19:02:47 UTC (rev 7563)
+@@ -16,6 +16,9 @@
+  ***************************************************************************/
+ #ifndef ADM_FILES_H
+ #define ADM_FILES_H
++#ifdef __cplusplus
++void ADM_initBaseDir(bool portableMode);
++#endif
+ // Returns dir to ~/.avidemux, no need to free it
+ char *ADM_getBaseDir(void);
+ // Returns dir to ~/.avidemux/jobs, no need to free it
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_win32.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_win32.h	2011-09-15 17:30:31 UTC (rev 7562)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_win32.h	2011-09-15 19:02:47 UTC (rev 7563)
+@@ -1,6 +1,8 @@
+ #if defined(_WIN32) &amp;&amp; !defined ADM_WIN32_H
+ #define ADM_WIN32_H
+ 
++#include &quot;ADM_inttype.h&quot;
++
+ uint8_t win32_netInit(void);
+ int shutdown_win32(void);
+ bool getWindowsVersion(char* version);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp	2011-09-15 17:30:31 UTC (rev 7562)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp	2011-09-15 19:02:47 UTC (rev 7563)
+@@ -19,8 +19,9 @@
+ #include &lt;dirent.h&gt;
+ #include &lt;errno.h&gt;
+ #include &lt;sys/stat.h&gt;
+-#include &lt;unistd.h&gt;
+ 
++#include &quot;ADM_win32.h&quot;
++
+ #if defined(__APPLE__)
+  #include &lt;Carbon/Carbon.h&gt;
+ #else
+@@ -33,25 +34,10 @@
+ 
+ #include &quot;ADM_default.h&quot;
+ 
+-#define WIN32_PORTABLE_MODE 1
+-
+ #ifdef __WIN32
+ static const char *SEPARATOR=&quot;\\&quot;;
+-
+-#ifdef WIN32_PORTABLE_MODE
+-    const char *ADM_DIR_NAME=&quot;settings&quot;;
+-    bool portable=true;
+ #else
+-    const char *ADM_DIR_NAME=&quot;avidemux6&quot;;
+-    bool portable=false;
+-#endif
+-#elif defined __HAIKU__
+ static const char *SEPARATOR=&quot;/&quot;;
+-const char *ADM_DIR_NAME=&quot;config/settings/avidemux6&quot;;
+-
+-#else
+-static const char *SEPARATOR=&quot;/&quot;;
+-const char *ADM_DIR_NAME=&quot;.avidemux6&quot;;
+ #endif
+ 
+ static char ADM_basedir[1024] = {0};
+@@ -60,18 +46,12 @@
+ static char *ADM_autodir = NULL;
+ static char *ADM_systemPluginSettings=NULL;
+ static char *ADM_userPluginSettings=NULL;
+-static int baseDirDone = 0;
+ 
+ #undef fread
+ #undef fwrite
+ #undef fopen
+ #undef fclose
+ 
+-#ifdef __WIN32
+-extern int utf8StringToWideChar(const char *utf8String, int utf8StringLength, wchar_t *wideCharString);
+-extern int wideCharStringToUtf8(const wchar_t *wideCharString, int wideCharStringLength, char *utf8String);
+-#endif
+-
+ size_t ADM_fread (void *ptr, size_t size, size_t n, FILE *sstream)
+ {
+ 	return fread(ptr,size,n,sstream);
+@@ -399,19 +379,22 @@
+ 	return ADM_getRelativePath(ADM_INSTALL_DIR, base1, base2, base3);
+ #endif
+ }
++
+ /*
+       Get the root directory for .avidemux stuff
+ ******************************************************/
+ char *ADM_getBaseDir(void)
+ {
+-	char *home;
++	return ADM_basedir;
++}
+ 
+-	if (baseDirDone)
+-		return ADM_basedir;
++void ADM_initBaseDir(bool portableMode)
++{
++	char *home = NULL;
+ 
+ 	// Get the base directory
+ #ifdef __WIN32
+-    if (portable)
++    if (portableMode)
+     {
+         // Portable mode...
+         home = ADM_getInstallRelativePath(NULL, NULL, NULL);
+@@ -444,31 +427,43 @@
+ 	else
+ 	{
+ 		printf(&quot;Oops: can't determine $HOME.&quot;);
+-
+-		return NULL;
+ 	}
+ #endif
+ 
+ 	// Try to open the .avidemux directory
+ 
+-	strcpy(ADM_basedir, home);
+-	AddSeparator(ADM_basedir);
+-	strcat(ADM_basedir, ADM_DIR_NAME);
+-	strcat(ADM_basedir, SEPARATOR);
++	if (home)
++	{
++		strcpy(ADM_basedir, home);
++		AddSeparator(ADM_basedir);
+ 
+-    delete [] home;
+-    home=NULL;
++#ifdef _WIN32
++		const char *ADM_DIR_NAME;
+ 
+-	if (!ADM_mkdir(ADM_basedir))
+-	{
+-		ADM_error(&quot;Oops: cannot create the .avidemux directoryi (%s)\n&quot;,ADM_basedir);
+-		return NULL;
+-	}
++		if (portableMode)
++			ADM_DIR_NAME = &quot;settings&quot;;
++		else
++			ADM_DIR_NAME = &quot;avidemux&quot;;
++#elif defined __HAIKU__
++		const char *ADM_DIR_NAME = &quot;config/settings/avidemux6&quot;;
++#else
++		const char *ADM_DIR_NAME = &quot;.avidemux6&quot;;
++#endif
+ 
+-	// Now built the filename
+-	baseDirDone = 1;
+-	printf(&quot;Using %s as base directory for prefs/jobs/...\n&quot;, ADM_basedir);
+-	return ADM_basedir;
++		strcat(ADM_basedir, ADM_DIR_NAME);
++		strcat(ADM_basedir, SEPARATOR);
++
++		delete [] home;
++
++		if (ADM_mkdir(ADM_basedir))
++		{
++			printf(&quot;Using %s as base directory for prefs, jobs, etc.\n&quot;, ADM_basedir);
++		}
++		else
++		{
++			ADM_error(&quot;Oops: cannot create the .avidemux directoryi (%s)\n&quot;, ADM_basedir);
++		}
++	}
+ }
+ 
+ #ifdef __WIN32
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004709.html">[Avidemux-svn-commit] r7562 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+</A></li>
+	<LI>Next message: <A HREF="004711.html">[Avidemux-svn-commit] r7564 -	branches/avidemux_2.6_branch_mean/avidemux/qt4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4710">[ date ]</a>
+              <a href="thread.html#4710">[ thread ]</a>
+              <a href="subject.html#4710">[ subject ]</a>
+              <a href="author.html#4710">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,533 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6058 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder:	. ADM_vidEnc_mpeg2enc ADM_vidEnc_mpeg2enc/mpeg2enc
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6058%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder%3A%0A%09.%20ADM_vidEnc_mpeg2enc%20ADM_vidEnc_mpeg2enc/mpeg2enc&In-Reply-To=%3C201004051832.o35IWTgU002835%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003261.html">
+   <LINK REL="Next"  HREF="003263.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6058 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder:	. ADM_vidEnc_mpeg2enc ADM_vidEnc_mpeg2enc/mpeg2enc</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6058%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder%3A%0A%09.%20ADM_vidEnc_mpeg2enc%20ADM_vidEnc_mpeg2enc/mpeg2enc&In-Reply-To=%3C201004051832.o35IWTgU002835%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6058 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder:	. ADM_vidEnc_mpeg2enc ADM_vidEnc_mpeg2enc/mpeg2enc">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Mon Apr  5 20:32:29 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003261.html">[Avidemux-svn-commit] r6057 - in	branches/avidemux_2.6_branch_mean/avidemux_core:	ADM_coreImage/include ADM_coreImage/src	ADM_coreImageLoader/src ADM_coreVideoFilter/include	ADM_coreVideoFilter/src
+</A></li>
+        <LI>Next message: <A HREF="003263.html">[Avidemux-svn-commit] r6059 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3262">[ date ]</a>
+              <a href="thread.html#3262">[ thread ]</a>
+              <a href="subject.html#3262">[ subject ]</a>
+              <a href="author.html#3262">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2010-04-05 20:32:22 +0200 (Mon, 05 Apr 2010)
+New Revision: 6058
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/encoder.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Options.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2enc/CMakeLists.txt
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/CMakeLists.txt
+Log:
+[mpeg2enc] finish porting of mpeg2enc logic for MPEG-2 to plugin
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/encoder.cpp	2010-04-05 18:05:56 UTC (rev 6057)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/encoder.cpp	2010-04-05 18:32:22 UTC (rev 6058)
+@@ -13,6 +13,7 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
++#include &lt;math.h&gt;
+ #include &lt;libxml/tree.h&gt;
+ 
+ #include &quot;encoder.h&quot;
+@@ -28,10 +29,15 @@
+ static Mpeg2encEncoder* encoders[] = {&amp;mpeg2};
+ static int supportedCsps[] = { ADM_CSP_YV12 };
+ 
++extern int mpegenc_encode(char *in, char *out, int *size, int *flags, int *quant);
++extern int mpegenc_end(void);
+ extern int mpegenc_init(mpeg2parm *incoming,int width, int height, int fps1000);
+-extern int mpegenc_encode(char *in, char *out, int *size, int *flags, int *quant);
+ extern int mpegenc_setQuantizer(int q);
+ 
++#ifdef __WIN32
++extern void convertPathToAnsi(const char *path, char **ansiPath);
++#endif
++
+ extern &quot;C&quot;
+ {
+ 	void *mpeg2encEncoder_getPointers(int _uiType, int *count)
+@@ -157,7 +163,7 @@
+ 
+ int Mpeg2encEncoder::getEncoderRequirements(void)
+ {
+-	return ADM_VIDENC_REQ_NONE;
++	return ADM_VIDENC_REQ_NULL_FLUSH;
+ }
+ 
+ int Mpeg2encEncoder::isConfigurable(void)
+@@ -197,11 +203,8 @@
+ 	_frameCount = properties-&gt;frameCount;
+ 	_bufferSize = (properties-&gt;width * properties-&gt;height) + 2 * ((properties-&gt;width + 1 &gt;&gt; 1) * (properties-&gt;height + 1 &gt;&gt; 1));
+ 	_buffer = new uint8_t[_bufferSize];
++	_xvidRc = NULL;
+ 
+-	memset(&amp;_param, 0, sizeof(mpeg2parm));
+-	_param.setDefault();
+-	_param.searchrad = 16; // speed up
+-
+ 	properties-&gt;supportedCspsCount = 1;
+ 	properties-&gt;supportedCsps = supportedCsps;
+ 
+@@ -225,9 +228,80 @@
+ 		return ADM_VIDENC_ERR_PASS_SKIP;
+ 	}
+ 
++	int encodeModeParameter, maxBitrate, vbv;
++
+ 	_openPass = true;
+ 	_currentPass++;
+ 
++	memset(&amp;_param, 0, sizeof(mpeg2parm));
++	_param.setDefault();
++	_param.searchrad = 16; // speed up
++
++	initParameters(&amp;encodeModeParameter, &amp;maxBitrate, &amp;vbv);
++
++	if (_encodeOptions.encodeMode == ADM_VIDENC_MODE_2PASS_SIZE || _encodeOptions.encodeMode == ADM_VIDENC_MODE_2PASS_ABR)
++	{
++		char *log = NULL;
++
++#ifdef __WIN32
++		convertPathToAnsi(passParameters-&gt;logFileName, &amp;log);
++#else
++		log = new char[strlen(passParameters-&gt;logFileName) + 1];
++		strcpy(log, passParameters-&gt;logFileName);
++#endif
++		_xvidRc = new ADM_newXvidRcVBV((_fpsNum * 1000) / _fpsDen, log);
++		delete [] log;
++
++		_param.quant = 2;
++
++		if (_currentPass == 1)
++		{
++			_xvidRc-&gt;startPass1();
++			_param.ignore_constraints = 1;
++			_param.bitrate = 50000000;
++		}
++		else
++		{
++			uint32_t bitrate, size;
++
++			if (_encodeOptions.encodeMode == ADM_VIDENC_MODE_2PASS_SIZE)
++			{
++				size = encodeModeParameter;
++				bitrate = calculateBitrate(_fpsNum, _fpsDen, _frameCount, encodeModeParameter);
++			}
++			else
++			{
++				double d = _frameCount;
++
++				d *= 1000.;
++				d /= (_fpsNum * 1000) / _fpsDen;   // D is a duration in second
++				d *= bitrate;   // * bitrate = total bits
++				d /= 8;   // Byte
++				d /= 1024 * 1024;   // MB
++
++				size = (uint32_t)d;
++				bitrate = encodeModeParameter * 1000;
++			}
++
++			if (bitrate &gt; maxBitrate * 1000)
++				bitrate = maxBitrate * 1000;
++
++			_xvidRc-&gt;setVBVInfo(maxBitrate, 0, vbv);
++			_xvidRc-&gt;startPass2(size, _frameCount);
++			_param.bitrate = bitrate;
++		}
++	}
++	else if (_encodeOptions.encodeMode == ADM_VIDENC_MODE_CQP)
++	{
++		_param.quant = encodeModeParameter;
++		_param.bitrate = maxBitrate * 1000;
++	}
++	else if (_encodeOptions.encodeMode == ADM_VIDENC_MODE_CBR)
++	{
++		_param.quant = 0;
++		_param.bitrate = encodeModeParameter * 1000;
++	}
++
+ 	if (!mpegenc_init(&amp;_param, _width, _height, (_fpsNum * 1000) / _fpsDen))
+ 		return ADM_VIDENC_ERR_FAILED;
+ 
+@@ -239,19 +313,68 @@
+ 	if (!_opened)
+ 		return ADM_VIDENC_ERR_CLOSED;
+ 
++	ADM_rframe rf;
+ 	int flags, size, qz;
+ 
+ 	if (_encodeOptions.encodeMode == ADM_VIDENC_MODE_CQP)
++	{
+ 		mpegenc_setQuantizer(_encodeOptions.encodeModeParameter);
++	}
++	else if (_currentPass == 2)
++	{
++		uint32_t qz_in;
+ 
+-	if (!mpegenc_encode((char*)encodeParams-&gt;frameData, (char*)_buffer, &amp;size, &amp;flags, &amp;qz))
++		_xvidRc-&gt;getQz(&amp;qz_in, &amp;rf);
++
++		if (qz_in &lt; 2)
++			qz_in = 2;
++		else if (qz_in &gt; 28)
++			qz_in = 28;
++
++		mpegenc_setQuantizer(qz_in);
++	}
++
++	char *input;
++
++	if (encodeParams-&gt;frameData[0] == NULL)
++		input = new char[1];
++	else
++		input = (char*)encodeParams-&gt;frameData[0];
++
++	if (!mpegenc_encode(input, (char*)_buffer, &amp;size, &amp;flags, &amp;qz))
+ 		return ADM_VIDENC_ERR_FAILED;
+ 
++	if (encodeParams-&gt;frameData[0] == NULL)
++		delete [] input;
++
+ 	encodeParams-&gt;frameType = getFrameType(flags);
+ 	encodeParams-&gt;encodedDataSize = size;
+ 	encodeParams-&gt;encodedData = _buffer;
++	encodeParams-&gt;ptsFrame = 0;
+ 	encodeParams-&gt;quantiser = qz;
+ 
++	switch (encodeParams-&gt;frameType)
++	{
++		case ADM_VIDENC_FRAMETYPE_IDR:
++			rf = RF_I;
++			break;
++		case ADM_VIDENC_FRAMETYPE_B:
++			rf = RF_B;
++			break;
++		case ADM_VIDENC_FRAMETYPE_P:
++			rf = RF_P;
++			break;
++	}
++
++	if (encodeParams-&gt;encodedDataSize &gt; 0 &amp;&amp; 
++		(_encodeOptions.encodeMode == ADM_VIDENC_MODE_2PASS_SIZE || _encodeOptions.encodeMode == ADM_VIDENC_MODE_2PASS_ABR))
++	{
++		if (_currentPass == 1)
++			_xvidRc-&gt;logPass1(encodeParams-&gt;quantiser, rf, encodeParams-&gt;encodedDataSize);
++		else
++			_xvidRc-&gt;logPass2(encodeParams-&gt;quantiser, rf, encodeParams-&gt;encodedDataSize);
++	}
++
+ 	return ADM_VIDENC_ERR_SUCCESS;
+ }
+ 
+@@ -260,13 +383,15 @@
+ 	if (!_opened)
+ 		return ADM_VIDENC_ERR_CLOSED;
+ 
++	mpegenc_end();
++
+ 	if (_openPass)
+ 		_openPass = false;
+ 
+-	if (_buffer)
++	if (_xvidRc)
+ 	{
+-		delete [] _buffer;
+-		_buffer = NULL;
++		delete _xvidRc;
++		_xvidRc = NULL;
+ 	}
+ 
+ 	return ADM_VIDENC_ERR_SUCCESS;
+@@ -277,6 +402,12 @@
+ 	if (_openPass)
+ 		finishPass();
+ 
++	if (_buffer)
++	{
++		delete [] _buffer;
++		_buffer = NULL;
++	}
++
+ 	_opened = false;
+ 	_currentPass = 0;
+ 
+@@ -295,3 +426,20 @@
+ 			return ADM_VIDENC_FRAMETYPE_P;
+ 	}
+ }
++
++unsigned int Mpeg2encEncoder::calculateBitrate(unsigned int fpsNum, unsigned int fpsDen, unsigned int frameCount, unsigned int sizeInMb)
++{
++	double db, ti;
++
++	db = sizeInMb;
++	db = db * 1024. * 1024. * 8.;
++	// now db is in bits
++
++	// compute duration
++	ti = frameCount;
++	ti *= fpsDen;
++	ti /= fpsNum;	// nb sec
++	db = db / ti;
++
++	return (unsigned int)floor(db);
++}
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/encoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/encoder.h	2010-04-05 18:05:56 UTC (rev 6057)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/encoder.h	2010-04-05 18:32:22 UTC (rev 6058)
+@@ -26,6 +26,7 @@
+ }
+ 
+ #include &quot;mpeg2parm.h&quot;
++#include &quot;xvidRateCtlVbv.h&quot;
+ 
+ class Mpeg2encEncoder
+ {
+@@ -42,8 +43,11 @@
+ 
+ 		vidEncOptions _encodeOptions;
+ 		mpeg2parm _param;
++		ADM_newXvidRcVBV *_xvidRc;
+ 
+ 		int getFrameType(int flags);
++		unsigned int calculateBitrate(unsigned int fpsNum, unsigned int fpsDen, unsigned int frameCount, unsigned int sizeInMb);
++		virtual int initParameters(int *encodeModeParameter, int *maxBitrate, int *vbv) = 0;
+ 
+ 	public:
+ 		virtual ~Mpeg2encEncoder(void);
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.cpp	2010-04-05 18:05:56 UTC (rev 6057)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.cpp	2010-04-05 18:32:22 UTC (rev 6058)
+@@ -277,10 +277,8 @@
+ 		return ADM_VIDENC_ERR_FAILED;
+ }
+ 
+-int Mpeg2Encoder::open(vidEncVideoProperties *properties)
++int Mpeg2Encoder::initParameters(int *encodeModeParameter, int *maxBitrate, int *vbv)
+ {
+-	int ret = Mpeg2encEncoder::open(properties);
+-
+ 	switch (_options.getMatrix())
+ 	{
+ 		case MPEG2_MATRIX_TMPGENC:
+@@ -293,7 +291,7 @@
+ 			_param.hf_quant = 0;
+ 	}
+ 
+-	if(_options.getWidescreen())
++	if (_options.getWidescreen())
+ 		_param.aspect_ratio = 3;
+ 	else
+ 		_param.aspect_ratio = 2;
+@@ -312,14 +310,6 @@
+ 			_param.input_interlacing = 1;
+ 	}
+ 
+-	if (_options.getMaxBitrate() == 0)
+-	{
+-		_param.bitrate = 50000000;
+-		_param.ignore_constraints = 1;
+-	}
+-	else
+-		_param.bitrate = _options.getMaxBitrate() * 1000;
+-
+ 	if (_options.getStreamType() == MPEG2_STREAMTYPE_SVCD)
+ 		_param.format = MPEG_FORMAT_SVCD;
+ 	else
+@@ -330,29 +320,15 @@
+ 	else
+ 		_param.min_GOP_size = _param.max_GOP_size = 18;
+ 
+-	if (_encodeOptions.encodeMode == ADM_VIDENC_MODE_CQP)
+-		_param.quant = _encodeOptions.encodeModeParameter;
+-	else
+-		_param.quant = 0;
++	*encodeModeParameter = _encodeOptions.encodeModeParameter;
++	*maxBitrate = _options.getMaxBitrate();
+ 
+-	return ret;
++	if (_options.getStreamType() == MPEG2_STREAMTYPE_SVCD)
++		*vbv = 122 * 1024;
++	else
++		*vbv = 224 * 1024;
+ }
+ 
+-int Mpeg2Encoder::beginPass(vidEncPassParameters *passParameters)
+-{
+-	return Mpeg2encEncoder::beginPass(passParameters);
+-}
+-
+-int Mpeg2Encoder::encodeFrame(vidEncEncodeParameters *encodeParams)
+-{
+-	return Mpeg2encEncoder::encodeFrame(encodeParams);
+-}
+-
+-int Mpeg2Encoder::finishPass(void)
+-{
+-	return Mpeg2encEncoder::finishPass();
+-}
+-
+ void Mpeg2Encoder::updateEncodeProperties(vidEncOptions *encodeOptions)
+ {
+ 	switch (encodeOptions-&gt;encodeMode)
+@@ -387,20 +363,3 @@
+ 			break;
+ 	}
+ }
+-
+-unsigned int Mpeg2Encoder::calculateBitrate(unsigned int fpsNum, unsigned int fpsDen, unsigned int frameCount, unsigned int sizeInMb)
+-{
+-	double db, ti;
+-
+-	db = sizeInMb;
+-	db = db * 1024. * 1024. * 8.;
+-	// now db is in bits
+-
+-	// compute duration
+-	ti = frameCount;
+-	ti *= fpsDen;
+-	ti /= fpsNum;	// nb sec
+-	db = db / ti;
+-
+-	return (unsigned int)floor(db);
+-}
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.h	2010-04-05 18:05:56 UTC (rev 6057)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.h	2010-04-05 18:32:22 UTC (rev 6058)
+@@ -22,6 +22,8 @@
+ 	#include &quot;ADM_vidEnc_plugin.h&quot;
+ }
+ 
++#include &lt;limits.h&gt;
++
+ #include &quot;encoder.h&quot;
+ #include &quot;mpeg2Options.h&quot;
+ #include &quot;DIA_factory.h&quot;
+@@ -43,7 +45,7 @@
+ 		uint8_t *_buffer;
+ 
+ 		void updateEncodeProperties(vidEncOptions *encodeOptions);
+-		unsigned int calculateBitrate(unsigned int fpsNum, unsigned int fpsDen, unsigned int frameCount, unsigned int sizeInMb);
++		int initParameters(int *encodeModeParameter, int *maxBitrate, int *vbv);
+ 
+ 	public:
+ 		Mpeg2Encoder(void);
+@@ -57,9 +59,5 @@
+ 		void saveSettings(vidEncOptions *encodeOptions, Mpeg2Options *options);
+ 		int getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize);
+ 		int setOptions(vidEncOptions *encodeOptions, const char *pluginOptions);
+-		int open(vidEncVideoProperties *properties);
+-		int beginPass(vidEncPassParameters *passParameters);
+-		int encodeFrame(vidEncEncodeParameters *encodeParams);
+-		int finishPass(void);
+ };
+ #endif	// mpeg2Encoder_h
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Options.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Options.cpp	2010-04-05 18:05:56 UTC (rev 6057)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Options.cpp	2010-04-05 18:32:22 UTC (rev 6058)
+@@ -40,7 +40,7 @@
+ {
+ 	PluginOptions::reset();
+ 
+-	setMaxBitrate(2500);
++	setMaxBitrate(9000);
+ 	setStreamType(MPEG2_STREAMTYPE_DVD);
+ 	setWidescreen(false);
+ 	setInterlaced(MPEG2_INTERLACED_NONE);
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2enc/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2enc/CMakeLists.txt	2010-04-05 18:05:56 UTC (rev 6057)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2enc/CMakeLists.txt	2010-04-05 18:32:22 UTC (rev 6058)
+@@ -41,4 +41,8 @@
+ 	ENDIF (NOT APPLE)
+ ENDIF (ADM_CPU_X86)
+ 
+-add_library(${ADM_LIB} ${${ADM_LIB}_SRCS})
+\ No newline at end of file
++add_library(${ADM_LIB} ${${ADM_LIB}_SRCS})
++
++if (UNIX)
++	add_target_cflags(mpeg2enc -fPIC)
++endif (UNIX)
+\ No newline at end of file
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/CMakeLists.txt	2010-04-05 18:05:56 UTC (rev 6057)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/CMakeLists.txt	2010-04-05 18:32:22 UTC (rev 6058)
+@@ -1,4 +1,5 @@
+ add_subdirectory(common)
+ ADD_SUBDIRECTORY(ADM_vidEnc_avcodec)
+ ADD_SUBDIRECTORY(ADM_vidEnc_x264)
+-ADD_SUBDIRECTORY(ADM_vidEnc_xvid)
+\ No newline at end of file
++ADD_SUBDIRECTORY(ADM_vidEnc_xvid)
++add_subdirectory(ADM_vidEnc_mpeg2enc)
+\ No newline at end of file
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003261.html">[Avidemux-svn-commit] r6057 - in	branches/avidemux_2.6_branch_mean/avidemux_core:	ADM_coreImage/include ADM_coreImage/src	ADM_coreImageLoader/src ADM_coreVideoFilter/include	ADM_coreVideoFilter/src
+</A></li>
+	<LI>Next message: <A HREF="003263.html">[Avidemux-svn-commit] r6059 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3262">[ date ]</a>
+              <a href="thread.html#3262">[ thread ]</a>
+              <a href="subject.html#3262">[ subject ]</a>
+              <a href="author.html#3262">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,232 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5253 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5253%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C200908171750.n7HHokmS027113%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002465.html">
+   <LINK REL="Next"  HREF="002467.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5253 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5253%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C200908171750.n7HHokmS027113%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5253 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Aug 17 19:50:46 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002465.html">[Avidemux-svn-commit] r5252 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioFilter/include
+</A></li>
+        <LI>Next message: <A HREF="002467.html">[Avidemux-svn-commit] r5254 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2466">[ date ]</a>
+              <a href="thread.html#2466">[ thread ]</a>
+              <a href="subject.html#2466">[ subject ]</a>
+              <a href="author.html#2466">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-08-17 19:50:46 +0200 (Mon, 17 Aug 2009)
+New Revision: 5253
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+Log:
+[asf/demuxer] Fix first image decoding, silence prints
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp	2009-08-16 19:21:42 UTC (rev 5252)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp	2009-08-17 17:50:46 UTC (rev 5253)
+@@ -692,6 +692,7 @@
+   len=0;
+   asfIndex indexEntry;
+   memset(&amp;indexEntry,0,sizeof(indexEntry));
++  bool first=true;
+   while(packet&lt;_nbPackets)
+   {
+     while(!readQueue.isEmpty())
+@@ -703,11 +704,14 @@
+       if(bit-&gt;stream==_videoStreamId)
+       {
+           aprintf(&quot;&gt;found packet of size %d seq %d, while curseq =%d\n&quot;,bit-&gt;len,bit-&gt;sequence,curSeq);
+-          if(bit-&gt;sequence!=sequence)
++          if(bit-&gt;sequence!=sequence || first==true)
+           {
+-            
+-            indexEntry.frameLen=len;
+-            _index.push_back(indexEntry);
++            if(first==false)
++            {
++                indexEntry.frameLen=len;
++                _index.push_back(indexEntry);
++            }
++            first=false;
+             aprintf(&quot;New sequence\n&quot;);
+             if( ((sequence+1)&amp;0xff)!=(bit-&gt;sequence&amp;0xff))
+             {
+@@ -738,6 +742,7 @@
+             for(int z=0;z&lt;_nbAudioTrack;z++)
+             {
+               indexEntry.audioSeen[z]=_allAudioTracks[z].length;
++              indexEntry.audioDts[z]=_allAudioTracks[z].lastDts;
+             }
+             readQueue.pushBack(bit);
+     
+@@ -756,6 +761,8 @@
+           {
+             
+             _allAudioTracks[i].length+=bit-&gt;len;
++            _allAudioTracks[i].lastDts=bit-&gt;dts;
++            
+             found=1;
+           }
+         }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h	2009-08-16 19:21:42 UTC (rev 5252)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h	2009-08-17 17:50:46 UTC (rev 5253)
+@@ -97,6 +97,7 @@
+   uint8_t      *extraData;
+   uint32_t     nbPackets;
+   uint32_t     length;
++  uint64_t     lastDts;
+   WAVHeader    wavHeader;
+ }asfAudioTrak;
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp	2009-08-16 19:21:42 UTC (rev 5252)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfAudio.cpp	2009-08-17 17:50:46 UTC (rev 5253)
+@@ -110,16 +110,21 @@
+ 
+ bool   asfAudioAccess::goToTime(uint64_t dts_us)
+ {
+-  // Compute the linear version
+-  float f;
+-  uint32_t val;
+-  
+-  f=dts_us;
+-  f/=1000;
+-  f*=_track-&gt;wavHeader.byterate;
+-  
+-  val=(uint32_t)((f+459.)/1000.);
+-  return setPos(val);
++    AsfVectorIndex     *idx=&amp;(_father-&gt;_index);
++    // Search
++    int size=idx-&gt;size();
++    if(dts_us&lt;=(*idx)[0].audioDts[_myRank])
++    {
++          return setPos( 0);
++    }
++    for(int i=0;i&lt;size-1;i++)
++    {
++        if(dts_us&gt;=(*idx)[i].audioDts[_myRank] &amp;&amp; dts_us&lt;(*idx)[i+1].audioDts[_myRank])
++        {
++            return setPos( (*idx)[i].packetNb);
++        }
++    }
++    return false;
+ }
+ 
+ /**
+@@ -138,12 +143,12 @@
+     {
+       asfBit *bit;
+       ADM_assert(readQueue.pop((void**)&amp;bit));
+-      printf(&quot;Audio found packet of size %d seq %d\n&quot;,bit-&gt;len,bit-&gt;sequence);
++      //printf(&quot;[Asf] Audio found packet of size %d seq %d\n&quot;,bit-&gt;len,bit-&gt;sequence);
+       
+       // still same sequence ...add
+       memcpy(dest,bit-&gt;data,bit-&gt;len);
+       *len=bit-&gt;len;
+-      *dts=ADM_NO_PTS;
++      *dts=bit-&gt;dts;
+ 	  delete[] bit-&gt;data;
+       delete bit;
+       return 1;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2009-08-16 19:21:42 UTC (rev 5252)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2009-08-17 17:50:46 UTC (rev 5253)
+@@ -205,7 +205,29 @@
+      replica=readVCL(segmentId);
+      aprintf(&quot;replica                %d\n&quot;,replica);
+      // Skip replica data_len
+-     skip(replica);
++     if(replica&gt;=8) // Grab timestamp
++     {
++        uint32_t time1=read32();
++        
++        //printf(&quot;Time 1 : %&quot;LU&quot;\n&quot;,time1);
++         if(replica &gt;= 8+38+4)
++         {
++            uint64_t time2;
++            uint32_t a,b;
++            skip(10);
++            a=read32();
++            b=read32();
++            time2=a+(b&lt;&lt;32);
++            skip(8); 
++            skip(12);
++            skip(4);
++            skip(replica - 8 - 38 - 4);
++            printf(&quot;Time 2 : %&quot;LLU&quot;\n&quot;,time2);
++            }else
++            skip(replica-4);
++     }
++      else 
++        skip(replica);
+      
+      payloadLen=0;
+      if(flags &amp;1)  // multi seg
+@@ -300,7 +322,7 @@
+  uint8_t asfPacket::pushPacket(uint32_t keyframe,uint32_t packetnb,uint32_t offset,uint32_t sequence,uint32_t payloadLen,uint32_t stream,uint64_t dts)
+  {
+    asfBit *bit=new asfBit;
+-   printf(&quot;Pushing packet stream=%d len=%d seq=%d dts=%d ms\n&quot;,stream,payloadLen,sequence,dts/1000);
++   //printf(&quot;Pushing packet stream=%d len=%d seq=%d dts=%d ms\n&quot;,stream,payloadLen,sequence,dts/1000);
+    bit-&gt;sequence=sequence;
+    bit-&gt;offset=offset;
+    bit-&gt;len=payloadLen;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002465.html">[Avidemux-svn-commit] r5252 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioFilter/include
+</A></li>
+	<LI>Next message: <A HREF="002467.html">[Avidemux-svn-commit] r5254 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2466">[ date ]</a>
+              <a href="thread.html#2466">[ thread ]</a>
+              <a href="subject.html#2466">[ subject ]</a>
+              <a href="author.html#2466">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

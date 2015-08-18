@@ -1,0 +1,219 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4667 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4667%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui&In-Reply-To=%3C200903102235.n2AMZE5N031605%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001896.html">
+   <LINK REL="Next"  HREF="001898.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4667 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4667%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui&In-Reply-To=%3C200903102235.n2AMZE5N031605%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4667 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Mar 10 23:35:14 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001896.html">[Avidemux-svn-commit] r4666 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_core/include ADM_core/src ADM_script
+</A></li>
+        <LI>Next message: <A HREF="001898.html">[Avidemux-svn-commit] r4668 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/Mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1897">[ date ]</a>
+              <a href="thread.html#1897">[ thread ]</a>
+              <a href="subject.html#1897">[ subject ]</a>
+              <a href="author.html#1897">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-03-10 23:35:06 +0100 (Tue, 10 Mar 2009)
+New Revision: 4667
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.h
+Log:
+[script] populate auto menu with contents of script dir
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.cpp	2009-03-09 20:10:03 UTC (rev 4666)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.cpp	2009-03-10 22:35:06 UTC (rev 4667)
+@@ -13,8 +13,8 @@
+  ***************************************************************************/
+ #include &quot;config.h&quot;
+ 
+-#include &lt;QtCore/QFileInfo&gt;
+ #include &lt;QtCore/QUrl&gt;
++#include &lt;QtCore/QDir&gt;
+ #include &lt;QtGui/QKeyEvent&gt;
+ #include &lt;QtGui/QGraphicsView&gt;
+ 
+@@ -53,6 +53,7 @@
+ extern int A_appendAvi(const char *name);
+ extern char *actual_workbench_file;
+ extern void FileSel_ReadWrite(SELFILE_CB *cb, int rw, const char *name, const char *actual_workbench_file);
++extern bool A_parseECMAScript(const char *name);
+ 
+ int SliderIsShifted=0;
+ static void setupMenus(void);
+@@ -306,6 +307,7 @@
+ 
+ 	/* Build the custom menu */
+ 	buildCustomMenu();
++	buildAutoMenu();
+ 
+ 	this-&gt;installEventFilter(this);
+ 	slider-&gt;installEventFilter(this);
+@@ -567,6 +569,73 @@
+ 	printf(&quot;Custom menu built\n&quot;);
+ }
+ 
++void MainWindow::autoMenuHandler(void)
++{
++	QObject *obj = sender();
++	QString filePath = ((QAction*)obj)-&gt;text() + &quot;.js&quot;;
++
++	while (obj-&gt;parent() != ui.menuAuto)
++	{
++		obj = obj-&gt;parent();
++		filePath = ((QMenu*)obj)-&gt;title() + QDir::separator() + filePath;
++	}
++
++	char *scriptDir = ADM_getScriptPath();
++
++	A_parseECMAScript((QString::fromUtf8(scriptDir) + &quot;auto&quot; + QDir::separator() + filePath).toUtf8().constData());
++
++	delete scriptDir;
++}
++
++void MainWindow::addDirEntryToMenu(QMenu *parentMenu, QString path)
++{
++	QFileInfo info(path);
++
++	if (info.isDir())
++	{
++		QDir dir(info.path() + QDir::separator());
++
++		dir.setSorting(QDir::DirsFirst | QDir::Name);
++
++		QFileInfoList fileList = dir.entryInfoList();
++
++		for (int x = 0; x &lt; fileList.count(); x++)
++		{
++			if (fileList[x].fileName() != &quot;.&quot; &amp;&amp; fileList[x].fileName() != &quot;..&quot;)
++			{
++				QMenu *menu = parentMenu;
++
++				if (fileList[x].isDir())
++				{
++					menu = parentMenu-&gt;addMenu(QDir(fileList[x].filePath()).dirName());
++
++					addDirEntryToMenu(menu, fileList[x].filePath() + QDir::separator());
++				}
++				else
++					addDirEntryToMenu(menu, fileList[x].filePath());
++			}
++		}
++	}
++	else
++	{
++		QAction *action = new QAction(info.baseName(), parentMenu);
++
++		parentMenu-&gt;addAction(action);
++		connect(action, SIGNAL(triggered()), this, SLOT(autoMenuHandler()));
++	}
++}
++
++void MainWindow::buildAutoMenu(void)
++{
++	char *scriptDir = ADM_getScriptPath();
++	QFileInfo autoDirInfo = QFileInfo(QString::fromUtf8(scriptDir) + QString(&quot;auto&quot;) + QDir::separator());
++
++	delete scriptDir;
++
++	if (autoDirInfo.isDir())
++		addDirEntryToMenu(ui.menuAuto, autoDirInfo.filePath());
++}
++
+ void MainWindow::closeEvent(QCloseEvent *event)
+ {
+ 	HandleAction(ACT_Exit);
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.h	2009-03-09 20:10:03 UTC (rev 4666)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui/Q_gui2.h	2009-03-10 22:35:06 UTC (rev 4667)
+@@ -1,8 +1,10 @@
+ #ifndef Q_gui2_h
+ #define Q_gui2_h
+ 
++#include &lt;QtCore/QFileInfo&gt;
+ #include &lt;QtGui/QSlider&gt;
+ #include &lt;QtGui/QWidget&gt;
++#include &lt;QtGui/QMenu&gt;
+ 
+ #include &quot;ADM_qslider.h&quot;
+ #include &quot;T_thumbSlider.h&quot;
+@@ -14,15 +16,17 @@
+ 
+ public:
+ 	MainWindow();
+-	virtual ~MainWindow();	
++	virtual ~MainWindow();
+ 	void buildCustomMenu(void);
+-	
++	void buildAutoMenu(void);
++
+ 	Ui_MainWindow ui;
+ 
+ public slots:
+ 	void timeChanged(int);
+ 	void buttonPressed(void);
+ 	void custom(void);
++	void autoMenuHandler(void);
+ 	void toolButtonPressed(bool z);
+ 
+ 	void comboChanged(int z);
+@@ -48,5 +52,6 @@
+ 	void dragEnterEvent(QDragEnterEvent *event);
+ 	void dropEvent(QDropEvent *event);
+ 	void closeEvent(QCloseEvent *event);
++	void addDirEntryToMenu(QMenu *parentMenu, QString path);
+ };
+ #endif	// Q_gui2_h
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001896.html">[Avidemux-svn-commit] r4666 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_core/include ADM_core/src ADM_script
+</A></li>
+	<LI>Next message: <A HREF="001898.html">[Avidemux-svn-commit] r4668 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/Mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1897">[ date ]</a>
+              <a href="thread.html#1897">[ thread ]</a>
+              <a href="subject.html#1897">[ subject ]</a>
+              <a href="author.html#1897">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

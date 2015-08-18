@@ -1,0 +1,2447 @@
+From mean at mail.berlios.de  Sun Jan  1 09:49:50 2012
+From: mean at mail.berlios.de (mean at mail.berlios.de)
+Date: Sun,  1 Jan 2012 09:49:50 +0100
+Subject: [Avidemux-svn-commit] r7721 -
+	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src
+Message-ID: <20120101084950.A61B44813AD@sheep.berlios.de>
+
+Author: mean
+Date: 2012-01-01 09:49:50 +0100 (Sun, 01 Jan 2012)
+New Revision: 7721
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_mp3info.cpp
+Log:
+[mp2 parser] Better support for mp2.5, related to #136
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_mp3info.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_mp3info.cpp	2011-12-31 15:00:33 UTC (rev 7720)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_mp3info.cpp	2012-01-01 08:49:50 UTC (rev 7721)
+@@ -58,18 +58,20 @@
+ 			memcpy(a+1,stream,3);
+ 			do
+ 			{
+-
+ 				memmove(a,a+1,3);
+ 				a[3]=stream[start+3];
+ 				if(start>=maxSearch-3) break;
+ 				start++;
+-				if(a[0]==0xff && ((a[1]&0xF0)==0xF0))
++				if(a[0]==0xff && ((a[1]&0xE0)==0xE0))
+ 				{
+ 					// Layer
+-					mpegInfo->layer=4-(a[1]>>1)&3;
+-					mpegInfo->level=4-(a[1]>>3)&3;
++					mpegInfo->layer=4-((a[1]>>1)&3);
++					mpegInfo->level=4-((a[1]>>3)&3);
+ 					if(mpegInfo->level==3) continue;
+-					if(mpegInfo->level==4) mpegInfo->level=3;
++					if(mpegInfo->level==4) 
++                    {
++                            mpegInfo->level=3; // mpeg 2.5
++                    }
+ 					mpegInfo->protect=(a[1]&1)^1;
+ 					mpegInfo->padding=(a[2]>>1)&1;
+                                         mpegInfo->privatebit=(a[2]&1);
+
+
+
+From mean at mail.berlios.de  Sun Jan  1 09:49:51 2012
+From: mean at mail.berlios.de (mean at mail.berlios.de)
+Date: Sun,  1 Jan 2012 09:49:51 +0100
+Subject: [Avidemux-svn-commit] r7722 -
+	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src
+Message-ID: <20120101084951.A81AE4813AD@sheep.berlios.de>
+
+Author: mean
+Date: 2012-01-01 09:49:51 +0100 (Sun, 01 Jan 2012)
+New Revision: 7722
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_mp3info.cpp
+Log:
+[mpeg2.5] Fixes #136, compute right amount of sample per frame when dealing with mpeg 2.5
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_mp3info.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_mp3info.cpp	2012-01-01 08:49:50 UTC (rev 7721)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_mp3info.cpp	2012-01-01 08:49:51 UTC (rev 7722)
+@@ -39,6 +39,7 @@
+ 	{ 0, 32, 48, 56,64, 80, 96, 112,     128, 160, 192, 224,   256, 320, 384, 0},
+ 	//Level 1 / Layer 3
+ 	{ 0, 32, 40, 48, 56, 64, 80, 96,         112, 128, 160, 192,  224, 256, 320, 0},
++    //-----------------------
+ 	// Level 2/Layer 0
+ 	{0,0,0,0,0,0,0,0   ,0,0,0,0,0,0,0,0},
+ 	// Level 2 Layer 1
+@@ -163,7 +164,7 @@
+                 case 1: mpegInfo->samples=384;break;
+                 case 2: mpegInfo->samples=1152;break;
+                 default:
+-                case 3: if(mpegInfo->level==1) 
++                case 3: if(mpegInfo->level==1)  // mpeg 2.5
+                                 mpegInfo->samples=1152;
+                         else
+                                 mpegInfo->samples=576;
+@@ -183,10 +184,10 @@
+ 					break;
+ 				default:
+ 				//FrameLengthInBytes = 144 * BitRate / SampleRate + Padding
+-                                  uint32_t slot_per_frame;
+-                                        if(mpegInfo->layer==3 && mpegInfo->level==2)  slot_per_frame=72;
+-                                                else slot_per_frame=144;
+-                                        mpegInfo->size=(slot_per_frame*mpegInfo->bitrate*1000)/mpegInfo->samplerate;
++                  uint32_t slot_per_frame;
++                        if(mpegInfo->layer==3 && (mpegInfo->level&2)==2)  slot_per_frame=72;
++                                else slot_per_frame=144;
++                        mpegInfo->size=(slot_per_frame*mpegInfo->bitrate*1000)/mpegInfo->samplerate;
+ 					mpegInfo->size+=mpegInfo->padding;
+ 			}
+ 			if(*offset)
+
+
+
+From mean at mail.berlios.de  Sun Jan  1 14:52:52 2012
+From: mean at mail.berlios.de (mean at mail.berlios.de)
+Date: Sun,  1 Jan 2012 14:52:52 +0100
+Subject: [Avidemux-svn-commit] r7723 -
+	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src
+Message-ID: <20120101135252.EAFA84813AD@sheep.berlios.de>
+
+Author: mean
+Date: 2012-01-01 14:52:52 +0100 (Sun, 01 Jan 2012)
+New Revision: 7723
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audio_encoderPlugin.cpp
+Log:
+[audioEncoder] Dont attempt to set bitrate on a codec that does not support it (pcm)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audio_encoderPlugin.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audio_encoderPlugin.cpp	2012-01-01 08:49:51 UTC (rev 7722)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audio_encoderPlugin.cpp	2012-01-01 13:52:52 UTC (rev 7723)
+@@ -407,7 +407,8 @@
+     }
+      ADM_assert(currentEncoder<ListOfAudioEncoder.size());
+      ADM_audioEncoder *encoder= ListOfAudioEncoder[currentEncoder];
+-     encoder->setBitrate(bitrate);
++     if(encoder->setBitrate)
++        encoder->setBitrate(bitrate);
+      if(encoder->setConfigurationData)
+      {
+         if(c)             return encoder->setConfigurationData(c);
+
+
+
+From mean at mail.berlios.de  Sun Jan  1 19:14:02 2012
+From: mean at mail.berlios.de (mean at mail.berlios.de)
+Date: Sun,  1 Jan 2012 19:14:02 +0100
+Subject: [Avidemux-svn-commit] r7724 -
+	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter
+Message-ID: <20120101181402.67E7B480BC5@sheep.berlios.de>
+
+Author: mean
+Date: 2012-01-01 19:14:01 +0100 (Sun, 01 Jan 2012)
+New Revision: 7724
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter/audio_encoderPlugin.cpp
+Log:
+[audio] Dont crash when bitrate cannot be set (PCM)
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter/audio_encoderPlugin.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter/audio_encoderPlugin.cpp	2012-01-01 13:52:52 UTC (rev 7723)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audiofilter/audio_encoderPlugin.cpp	2012-01-01 18:14:01 UTC (rev 7724)
+@@ -361,7 +361,10 @@
+     }
+      ADM_assert(currentEncoder<ListOfAudioEncoder.size());
+      ADM_audioEncoder *encoder= ListOfAudioEncoder[currentEncoder];
+-     *bitrate=encoder->getBitrate();
++     if(encoder->getBitrate)
++        *bitrate=encoder->getBitrate();
++     else
++        *bitrate=128;
+      if(encoder->getConfigurationData)
+         return encoder->getConfigurationData(extraDataSize,extradata);
+      else return 1;
+
+
+
+From mean at mail.berlios.de  Fri Jan  6 08:09:09 2012
+From: mean at mail.berlios.de (mean at mail.berlios.de)
+Date: Fri,  6 Jan 2012 08:09:09 +0100
+Subject: [Avidemux-svn-commit] r7725 - in
+	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:
+	. mplayerDelogo mplayerDelogo/cli mplayerDelogo/gtk
+	mplayerDelogo/qt4
+Message-ID: <20120106070909.9E87E4811FC@sheep.berlios.de>
+
+Author: mean
+Date: 2012-01-06 08:09:08 +0100 (Fri, 06 Jan 2012)
+New Revision: 7725
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/ADM_vidMPdelogo.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/ADM_vidMPdelogo.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/DIA_flyMpDelogo.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/DIA_flyMpDelogo.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/cli/
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/cli/DIA_mpdelogo.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo.conf
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo_desc.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo_json.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/gtk/
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/gtk/DIA_mpdelogo.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/Q_mpdelogo.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/Q_mpdelogo.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/mpdelogo.ui
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/CMakeLists.txt
+Log:
+[videoFilter] Skeleton for mplayer delogo
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/CMakeLists.txt	2012-01-01 18:14:01 UTC (rev 7724)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/CMakeLists.txt	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -15,6 +15,7 @@
+ ADD_SUBDIRECTORY(logo)
+ ADD_SUBDIRECTORY(lumaOnly)
+ ADD_SUBDIRECTORY(mplayerDenoise3D)
++ADD_SUBDIRECTORY(mplayerDelogo)
+ ADD_SUBDIRECTORY(printInfo)
+ ADD_SUBDIRECTORY(removePlane)
+ ADD_SUBDIRECTORY(resampleFps)
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/ADM_vidMPdelogo.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/ADM_vidMPdelogo.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/ADM_vidMPdelogo.cpp	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -0,0 +1,381 @@
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include "DIA_flyDialog.h"
++#include "ADM_default.h"
++#include "ADM_coreVideoFilterInternal.h"
++#include "DIA_factory.h"
++#include "delogo.h"
++#include "delogo_desc.cpp"
++
++
++extern "C" {
++#include "libavcodec/avcodec.h"
++#include "libavutil/avutil.h"
++#include "libswscale/swscale.h"
++}
++
++#include "ADM_vidMPdelogo.h"
++/**
++    \class ADMVideoMPdelogo
++*/
++extern bool DIA_getMpDelogo(delogo *param, ADM_coreVideoFilter *previousFilter);
++class  MPDelogo:public ADM_coreVideoFilter
++ {
++ protected:
++                    delogo          param;
++
++ public:
++
++                            MPDelogo(ADM_coreVideoFilter *in,CONFcouple *couples)   ;
++                            MPDelogo(ADM_coreVideoFilter *in,int x,int y)   ;
++       virtual              ~MPDelogo();
++       virtual const char   *getConfiguration(void);          /// Return  current configuration as a human readable string
++       virtual bool         getNextFrame(uint32_t *fn,ADMImage *image);    /// Return the next image
++	   virtual bool         getCoupledConf(CONFcouple **couples) ;   /// Return the current filter configuration
++       virtual bool         configure(void) ;                 /// Start graphical user interface     
++
++ }     ;
++
++extern uint8_t DIA_getMPdelogo(delogo *param,ADM_coreVideoFilter *in);
++static void xdelogo(uint8_t *dst, uint8_t *src, int dstStride, int srcStride, int width, int height,
++                   int logo_x, int logo_y, int logo_w, int logo_h, int band, int show, int direct) ;
++
++//******************************************
++
++// Add the hook to make it valid plugin
++DECLARE_VIDEO_FILTER(   MPDelogo,   // Class
++                        1,0,0,              // Version
++                        ADM_UI_TYPE_BUILD,         // UI
++                        VF_SHARPNESS,            // Category
++                        "mpdelogo",            // internal name (must be uniq!)
++                        "MPlayer delogo",            // Display name
++                        QT_TR_NOOP("Blend a logo by interpolating its surrounding box.") // Description
++                    );
++//******************************************
++/**
++    \fn ASharp 
++    \brief ctor
++*/
++MPDelogo::MPDelogo(ADM_coreVideoFilter *in,CONFcouple *couples) : ADM_coreVideoFilter(in,couples)
++{
++        if(!couples || !ADM_paramLoad(couples,delogo_param,&param))
++		{
++                param.xoff=0;
++                param.yoff=0;
++                param.lw = info.width>>1;
++                param.lh = info.height>>1;
++                param.band=4;
++                param.show=0;
++        }
++}
++/**
++    \fn dtor 
++    \brief recompute parameters
++*/
++
++MPDelogo::~MPDelogo(void)
++{
++        
++}
++
++/**
++    \fn getCoupledConf
++    \brief Return our current configuration as couple name=value
++*/
++bool         MPDelogo::getCoupledConf(CONFcouple **couples)
++{
++    return ADM_paramSave(couples, delogo_param,&param);
++}
++
++/**
++    \fn getConfiguration
++*/
++const char   *MPDelogo::getConfiguration(void)   
++{
++    static char s[256];
++    snprintf(s,255,"x=%d y=%d w=%d h=%d",(int)param.xoff, (int)param.yoff,(int)param.lw,(int)param.lh);
++    return s;        
++}
++/**
++    \fn configure
++*/
++bool MPDelogo::configure(void)
++{
++uint8_t r=0;
++        if( DIA_getMpDelogo(&param, previousFilter))
++        {
++                r=1;
++        }
++        return r;
++}
++
++/**
++    \fn getNextFrame
++*/
++ bool         MPDelogo::getNextFrame(uint32_t *fn,ADMImage *data)
++{
++ADMImage *dst;
++
++        dst=data;
++        
++        if(!previousFilter->getNextFrame(fn,dst)) return false;
++
++        for(int i=0;i<3;i++)
++        {
++            ADM_PLANE p=(ADM_PLANE)i;
++            int x=param.xoff,y=param.yoff;
++            int w=param.lw,h=param.lh;
++            int width=data->GetWidth(p);
++            int height=data->GetHeight(p);
++            int stride=data->GetPitch(p);
++            if(i)
++            {
++                    x>>=1;y>>=1;w>>=1;h>>=1;
++            }
++//void xdelogo(uint8_t *dst, uint8_t *src, int dstStride, int srcStride, int width, int height,
++//		   int logo_x, int logo_y, int logo_w, int logo_h, int band, int show, int direct)
++            xdelogo(data->GetWritePtr(p), data->GetReadPtr(p),
++                stride,stride,width,height,
++                x,y,w,h, param.band, param.show, true);
++
++        }
++        return 1;
++}
++
++
++/*
++  Copyright (C) 2002 Jindrich Makovicka <makovick at kmlinux.fjfi.cvut.cz>
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of the GNU General Public License as published by
++  the Free Software Foundation; either version 2 of the License, or
++  (at your option) any later version.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License for more details.
++
++  You should have received a copy of the GNU General Public License
++  along with this program; if not, write to the Free Software
++  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++*/
++
++/* A very simple tv station logo remover */
++
++
++
++//===========================================================================//
++
++
++#define MIN(a,b) (((a) < (b)) ? (a) : (b))
++#define MAX(a,b) (((a) > (b)) ? (a) : (b))
++
++void xdelogo(uint8_t *dst, uint8_t *src, int dstStride, int srcStride, int width, int height,
++		   int logo_x, int logo_y, int logo_w, int logo_h, int band, int show, int direct) {
++    int y, x;
++    int interp, dist;
++    uint8_t *xdst, *xsrc;
++    
++    uint8_t *topleft, *botleft, *topright;
++    int xclipl, xclipr, yclipt, yclipb;
++    int logo_x1, logo_x2, logo_y1, logo_y2;
++    
++    xclipl = MAX(-logo_x, 0);
++    xclipr = MAX(logo_x+logo_w-width, 0);
++    yclipt = MAX(-logo_y, 0);
++    yclipb = MAX(logo_y+logo_h-height, 0);
++
++    logo_x1 = logo_x + xclipl;
++    logo_x2 = logo_x + logo_w - xclipr;
++    logo_y1 = logo_y + yclipt;
++    logo_y2 = logo_y + logo_h - yclipb;
++
++    topleft = src+logo_y1*srcStride+logo_x1;
++    topright = src+logo_y1*srcStride+logo_x2-1;
++    botleft = src+(logo_y2-1)*srcStride+logo_x1;
++
++    if (!direct) memcpy(dst, src,(width*height*3)/2); // width, height, dstStride, srcStride);
++
++    dst += (logo_y1+1)*dstStride;
++    src += (logo_y1+1)*srcStride;
++    
++    for(y = logo_y1+1; y < logo_y2-1; y++)
++    {
++	for (x = logo_x1+1, xdst = dst+logo_x1+1, xsrc = src+logo_x1+1; x < logo_x2-1; x++, xdst++, xsrc++) {
++	    interp = ((topleft[srcStride*(y-logo_y-yclipt)]
++		       + topleft[srcStride*(y-logo_y-1-yclipt)]
++		       + topleft[srcStride*(y-logo_y+1-yclipt)])*(logo_w-(x-logo_x))/logo_w
++		      + (topright[srcStride*(y-logo_y-yclipt)]
++			 + topright[srcStride*(y-logo_y-1-yclipt)]
++			 + topright[srcStride*(y-logo_y+1-yclipt)])*(x-logo_x)/logo_w
++		      + (topleft[x-logo_x-xclipl]
++			 + topleft[x-logo_x-1-xclipl]
++			 + topleft[x-logo_x+1-xclipl])*(logo_h-(y-logo_y))/logo_h
++		      + (botleft[x-logo_x-xclipl]
++			 + botleft[x-logo_x-1-xclipl]
++			 + botleft[x-logo_x+1-xclipl])*(y-logo_y)/logo_h
++		)/6;
++/*		interp = (topleft[srcStride*(y-logo_y)]*(logo_w-(x-logo_x))/logo_w
++			  + topright[srcStride*(y-logo_y)]*(x-logo_x)/logo_w
++			  + topleft[x-logo_x]*(logo_h-(y-logo_y))/logo_h
++			  + botleft[x-logo_x]*(y-logo_y)/logo_h
++			  )/2;*/
++	    if (y >= logo_y+band && y < logo_y+logo_h-band && x >= logo_x+band && x < logo_x+logo_w-band) {
++		    *xdst = interp;
++	    } else {
++		dist = 0;
++		if (x < logo_x+band) dist = MAX(dist, logo_x-x+band);
++		else if (x >= logo_x+logo_w-band) dist = MAX(dist, x-(logo_x+logo_w-1-band));
++		if (y < logo_y+band) dist = MAX(dist, logo_y-y+band);
++		else if (y >= logo_y+logo_h-band) dist = MAX(dist, y-(logo_y+logo_h-1-band));
++		*xdst = (*xsrc*dist + interp*(band-dist))/band;
++		if (show && (dist == band-1)) *xdst = 0;
++	    }
++	}
++
++	dst+= dstStride;
++	src+= srcStride;
++    }
++}
++
++#if 0
++static int put_image(struct vf_instance_s* vf, mp_image_t *mpi){
++    mp_image_t *dmpi;
++
++    if(!(mpi->flags&MP_IMGFLAG_DIRECT)){
++	// no DR, so get a new image! hope we'll get DR buffer:
++	vf->dmpi=vf_get_image(vf->next,vf->priv->outfmt,
++			      MP_IMGTYPE_TEMP, MP_IMGFLAG_ACCEPT_STRIDE,
++			      mpi->w,mpi->h);
++    }
++    dmpi= vf->dmpi;
++
++    delogo(dmpi->planes[0], mpi->planes[0], dmpi->stride[0], mpi->stride[0], mpi->w, mpi->h,
++	   vf->priv->xoff, vf->priv->yoff, vf->priv->lw, vf->priv->lh, vf->priv->band, vf->priv->show,
++	   mpi->flags&MP_IMGFLAG_DIRECT);
++    delogo(dmpi->planes[1], mpi->planes[1], dmpi->stride[1], mpi->stride[1], mpi->w/2, mpi->h/2,
++	   vf->priv->xoff/2, vf->priv->yoff/2, vf->priv->lw/2, vf->priv->lh/2, vf->priv->band/2, vf->priv->show,
++	   mpi->flags&MP_IMGFLAG_DIRECT);
++    delogo(dmpi->planes[2], mpi->planes[2], dmpi->stride[2], mpi->stride[2], mpi->w/2, mpi->h/2,
++	   vf->priv->xoff/2, vf->priv->yoff/2, vf->priv->lw/2, vf->priv->lh/2, vf->priv->band/2, vf->priv->show,
++	   mpi->flags&MP_IMGFLAG_DIRECT);
++
++    vf_clone_mpi_attributes(dmpi, mpi);
++
++    return vf_next_put_image(vf,dmpi);
++}
++
++static void uninit(struct vf_instance_s* vf){
++    if(!vf->priv) return;
++
++    free(vf->priv);
++    vf->priv=NULL;
++}
++
++//===========================================================================//
++
++static int query_format(struct vf_instance_s* vf, unsigned int fmt){
++    switch(fmt)
++    {
++    case IMGFMT_YV12:
++    case IMGFMT_I420:
++    case IMGFMT_IYUV:
++	return vf_next_query_format(vf,vf->priv->outfmt);
++    }
++    return 0;
++}
++
++static unsigned int fmt_list[]={
++    IMGFMT_YV12,
++    IMGFMT_I420,
++    IMGFMT_IYUV,
++    0
++};
++
++static int open(vf_instance_t *vf, char* args){
++    int res;
++    
++    vf->config=config;
++    vf->put_image=put_image;
++    vf->get_image=get_image;
++    vf->query_format=query_format;
++    vf->uninit=uninit;
++    if (!vf->priv)
++    {
++        vf->priv=malloc(sizeof(struct vf_priv_s));
++	memset(vf->priv, 0, sizeof(struct vf_priv_s));
++    }
++
++    if (args) res = sscanf(args, "%d:%d:%d:%d:%d",
++			   &vf->priv->xoff, &vf->priv->yoff,
++			   &vf->priv->lw, &vf->priv->lh,
++			   &vf->priv->band);
++    if (args && (res != 5)) {
++	uninit(vf);
++	return 0; // bad syntax
++    }
++
++    mp_msg(MSGT_VFILTER, MSGL_V, "delogo: %d x %d, %d x %d, band = %d\n",
++	   vf->priv->xoff, vf->priv->yoff,
++	   vf->priv->lw, vf->priv->lh,
++	   vf->priv->band);
++
++    vf->priv->show = 0;
++
++    if (vf->priv->band < 0) {
++	vf->priv->band = 4;
++	vf->priv->show = 1;
++    }
++    
++
++    vf->priv->lw += vf->priv->band*2;
++    vf->priv->lh += vf->priv->band*2;
++    vf->priv->xoff -= vf->priv->band;
++    vf->priv->yoff -= vf->priv->band;
++
++    // check csp:
++    vf->priv->outfmt=vf_match_csp(&vf->next,fmt_list,IMGFMT_YV12);
++    if(!vf->priv->outfmt)
++    {
++	uninit(vf);
++        return 0; // no csp match :(
++    }
++
++    return 1;
++}
++
++#define ST_OFF(f) M_ST_OFF(struct vf_priv_s,f)
++static m_option_t vf_opts_fields[] = {
++    { "x", ST_OFF(xoff), CONF_TYPE_INT, 0, 0, 0, NULL },
++    { "y", ST_OFF(yoff), CONF_TYPE_INT, 0, 0, 0, NULL },
++    { "w", ST_OFF(lw), CONF_TYPE_INT, 0, 0, 0, NULL },
++    { "h", ST_OFF(lh), CONF_TYPE_INT, 0, 0, 0, NULL },
++    { "t", ST_OFF(band), CONF_TYPE_INT, 0, 0, 0, NULL },
++    { "band", ST_OFF(band), CONF_TYPE_INT, 0, 0, 0, NULL }, // alias
++    { NULL, NULL, 0, 0, 0, 0, NULL }
++};
++
++static m_struct_t vf_opts = {
++    "delogo",
++    sizeof(struct vf_priv_s),
++    &vf_priv_dflt,
++    vf_opts_fields
++};
++
++vf_info_t vf_info_delogo = {
++    "simple logo remover",
++    "delogo",
++    "Jindrich Makovicka, Alex Beregszaszi",
++    "",
++    open,
++    &vf_opts
++};
++#endif
++//===========================================================================//
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/ADM_vidMPdelogo.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/ADM_vidMPdelogo.h	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/ADM_vidMPdelogo.h	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -0,0 +1,24 @@
++/***************************************************************************
++    copyright            : Mplayer team/Mean for ADM port
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#ifndef ADM_DELOGO_H
++#define ADM_DELOGO_H
++typedef struct MPDELOGO_PARAM
++{
++        uint32_t xoff;
++        uint32_t yoff;
++        uint32_t lw;
++        uint32_t lh;
++        uint32_t band;
++        uint32_t show;
++}MPDELOGO_PARAM;
++#endif
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/CMakeLists.txt	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/CMakeLists.txt	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -0,0 +1,38 @@
++INCLUDE(vf_plugin)
++
++MACRO(addDeps tgt)
++        TARGET_LINK_LIBRARIES(${tgt} ADM_libswscale)
++        TARGET_LINK_LIBRARIES(${tgt} ADM_libavcodec)
++        TARGET_LINK_LIBRARIES(${tgt} ADM_libavutil)
++ENDMACRO(addDeps tgt)
++
++SET(mpdelogoCommon_SRCS 
++ADM_vidMPdelogo.cpp
++DIA_flyMpDelogo.cpp
++)
++# ---------- QT4 Version ----------------
++INCLUDE(vf_plugin_qt4)
++SET(mpdelogoQT_SRCS  qt4/Q_mpdelogo.cpp)
++SET(mpdelogoQT_HEADERS  qt4/Q_mpdelogo.h)
++SET(mpdelogoQT_UI    qt4/mpdelogo)
++IF(DO_QT4)
++  INIT_VIDEO_FILTER_QT4(ADM_vf_mpdelogoQt4 ${mpdelogoQT_SRCS} ${mpdelogoQT_HEADERS} ${mpdelogoQT_UI} ${mpdelogoCommon_SRCS})
++  addDeps(ADM_vf_mpdelogoQt4)
++ENDIF(DO_QT4)
++# /QT4
++
++
++#------------- Gtk Version ---------------
++#INCLUDE(vf_plugin_gtk)
++#SET(mpdelogoGtk_SRCS gtk/DIA_mpdelogo.cpp)
++#INIT_VIDEO_FILTER_GTK(ADM_vf_mpdelogoGtk ${mpdelogoGtk_SRCS} ${mpdelogoCommon_SRCS})
++
++#------------ Cli Version ----------------
++#INCLUDE(vf_plugin_cli)
++#SET(mpdelogoCli_SRCS cli/DIA_mpdelogo.cpp)
++#IF(DO_CLI)
++  #INIT_VIDEO_FILTER_CLI(  ADM_vf_mpdelogoCli ${mpdelogoCli_SRCS} ${mpdelogoCommon_SRCS})
++  #addDeps(ADM_vf_mpdelogoCli)
++#ENDIF(DO_CLI)
++##%%%%%%%%%%%%%%%%%%
++
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/DIA_flyMpDelogo.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/DIA_flyMpDelogo.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/DIA_flyMpDelogo.cpp	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -0,0 +1,39 @@
++/**/
++/***************************************************************************
++                          DIA_Asharp
++                             -------------------
++
++                           Ui for Asharp
++
++    begin                : 08 Apr 2005
++    copyright            : (C) 2004/5 by mean
++    email                : fixounet at free.fr
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include "DIA_flyDialog.h"
++#include "ADM_default.h"
++#include "ADM_image.h"
++
++
++#include "delogo.h"
++#include "DIA_flyMpDelogo.h"
++
++
++/************* COMMON PART *********************/
++/**
++    \fn process
++*/
++uint8_t    flyMpDelogo::processRgb(uint8_t *imageIn, uint8_t *imageOut)
++{
++    printf("Process\n");
++    return 1;
++}
++//EOF
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/DIA_flyMpDelogo.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/DIA_flyMpDelogo.h	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/DIA_flyMpDelogo.h	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -0,0 +1,43 @@
++/***************************************************************************
++    copyright            : (C) 2011 by mean
++    email                : fixounet at free.fr
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++
++#ifndef FLY_MPDELOGO_H
++#define FLY_MPDELOGO_H
++/**
++    \class flyASharp
++*/
++#include "delogo.h"
++/**
++    \class flyMpDelogo
++*/
++class flyMpDelogo : public FLY_DIALOG_TYPE
++{
++  
++  public:
++   delogo      param;
++  public:
++   uint8_t     processRgb(uint8_t *imageIn, uint8_t *imageOut);
++   uint8_t     download(void);
++   uint8_t     upload(void);
++               flyMpDelogo (uint32_t width,uint32_t height,ADM_coreVideoFilter *in,
++                                    void *canvas, void *slider) : 
++                FLY_DIALOG_TYPE(width, height,in,canvas, slider,0,RESIZE_AUTO) 
++                {};
++         virtual ~flyMpDelogo() {};
++};
++// EOF
++
++
++#endif
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/cli/DIA_mpdelogo.cpp
+===================================================================
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo.conf
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo.conf	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo.conf	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -0,0 +1,8 @@
++delogo{
++uint32_t:xoff //
++uint32_t:yoff //
++uint32_t:lw //
++uint32_t:lh //
++uint32_t:band//
++bool:show;
++}
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo.h	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo.h	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -0,0 +1,12 @@
++// automatically generated by admSerialization.py do not edit
++#ifndef ADM_delogo_CONF_H
++#define ADM_delogo_CONF_H
++typedef struct {
++uint32_t xoff;
++uint32_t yoff;
++uint32_t lw;
++uint32_t lh;
++uint32_t band;
++bool show;
++}delogo;
++#endif
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo_desc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo_desc.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo_desc.cpp	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -0,0 +1,10 @@
++// automatically generated by admSerialization.py, do not edit!
++extern const ADM_paramList delogo_param[]={
++ {"xoff",offsetof(delogo,xoff),"uint32_t",ADM_param_uint32_t},
++ {"yoff",offsetof(delogo,yoff),"uint32_t",ADM_param_uint32_t},
++ {"lw",offsetof(delogo,lw),"uint32_t",ADM_param_uint32_t},
++ {"lh",offsetof(delogo,lh),"uint32_t",ADM_param_uint32_t},
++ {"band",offsetof(delogo,band),"uint32_t",ADM_param_uint32_t},
++ {"show",offsetof(delogo,show),"bool",ADM_param_bool},
++{NULL,0,NULL}
++};
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo_json.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo_json.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/delogo_json.cpp	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -0,0 +1,23 @@
++// automatically generated by admSerialization.py, do not edit!
++#include "ADM_default.h"
++#include "ADM_paramList.h"
++#include "ADM_coreJson.h"
++#include "delogo.h"
++bool  delogo_jserialize(const char *file, const delogo *key){
++admJson json;
++json.addUint32("xoff",key->xoff);
++json.addUint32("yoff",key->yoff);
++json.addUint32("lw",key->lw);
++json.addUint32("lh",key->lh);
++json.addUint32("band",key->band);
++json.addBool("show",key->show);
++return json.dumpToFile(file);
++};
++bool  delogo_jdeserialize(const char *file, const ADM_paramList *tmpl,delogo *key){
++admJsonToCouple json;
++CONFcouple *c=json.readFromFile(file);
++if(!c) {ADM_error("Cannot read json file");return false;}
++bool r= ADM_paramLoadPartial(c,tmpl,key);
++delete c;
++return r;
++};
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/gtk/DIA_mpdelogo.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/gtk/DIA_mpdelogo.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/gtk/DIA_mpdelogo.cpp	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -0,0 +1,527 @@
++/***************************************************************************
++                          DIA_crop.cpp  -  description
++                             -------------------
++
++			    GUI for cropping including autocrop
++			    +Revisted the Gtk2 way
++			     +Autocrop now in RGB space (more accurate)
++
++    begin                : Fri May 3 2002
++    copyright            : (C) 2002 by mean
++    email                : fixounet at free.fr
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include <math.h>
++
++#include "ADM_toolkitGtk.h"
++
++#include "ADM_image.h"
++#include "ADM_videoFilter.h"
++#include "ADM_colorspace.h"
++#include "ADM_vidMPdelogo.h"
++
++extern "C" {
++#include "libavcodec/avcodec.h"
++}
++
++static GtkWidget	*create_dialog1 (void);
++static void  		ui_read ( void);
++static void  		ui_update ( void);
++static void 		draw (GtkWidget *dialog,uint32_t w,uint32_t h );
++static gboolean 	gui_draw( void );
++static void 		autocrop (void );
++static void 		reset( void );
++static void 		ui_upload(void);
++static gboolean		ui_changed(void);
++
++
++static void		prepare(uint32_t img);
++static void 		frame_changed( void );
++
++extern void GUI_RGBDisplay(uint8_t * dis, uint32_t w, uint32_t h, void *widg);
++
++static ColYuvRgb    *rgbConv=NULL;
++static uint8_t *working=NULL;
++static uint8_t *rgbBufferDisplay=NULL;
++static uint8_t *original=NULL;
++static GtkWidget *dialog=NULL;
++static uint32_t x,y,w,h,zoomW,zoomH,band;
++
++static AVDMGenericVideoStream *incoming=NULL;
++static ADMImage *imgsrc=NULL;
++static ADMImageResizer *resizer=NULL;
++
++static int lock=0,width,height;
++
++
++//
++//	Video is in YV12 Colorspace
++//
++//
++uint8_t DIA_getMPdelogo(MPDELOGO_PARAM *param,AVDMGenericVideoStream *in)
++
++{
++	// Allocate space for green-ised video
++	width=in->getInfo()->width;
++	height=in->getInfo()->height;
++		
++	working=new uint8_t [width*height*4];	
++	original=NULL;
++
++	uint8_t ret=0;
++
++	dialog=create_dialog1();
++
++	gtk_dialog_set_alternative_button_order(GTK_DIALOG(dialog),
++										GTK_RESPONSE_OK,
++										GTK_RESPONSE_CANCEL,
++										-1);
++
++	gtk_register_dialog(dialog);
++	
++	x=param->xoff;
++	y=param->yoff;
++	w=param->lw;
++	h=param->lh;
++	band=param->band;
++
++	imgsrc=new ADMImage(width,height);
++	incoming=in;
++	
++	rgbConv=new ColYuvRgb(width,height);
++        rgbConv->reset(width,height);
++
++	float zoom = UI_calcZoomToFitScreen(GTK_WINDOW(dialog), WID(drawingarea1), width, height);
++
++	zoomW = width * zoom;
++	zoomH = height * zoom;
++	rgbBufferDisplay=new uint8_t[zoomW*zoomH*4];
++
++	gtk_widget_set_usize(WID(drawingarea1), zoomW, zoomH);
++
++	if (zoom < 1)
++	{
++		UI_centreCanvasWindow((GtkWindow*)dialog, WID(drawingarea1), zoomW, zoomH);
++		resizer = new ADMImageResizer(width, height, zoomW, zoomH, PIX_FMT_RGB32, PIX_FMT_RGB32);
++	}
++
++	prepare(0);
++	gtk_widget_show(dialog);
++	
++	ui_upload();
++	ui_update();
++	
++#define CONNECT(x,y,z) 	gtk_signal_connect(GTK_OBJECT(WID(x)), #y,GTK_SIGNAL_FUNC(z),   NULL);
++
++        CONNECT(drawingarea1,expose_event,gui_draw);
++        CONNECT(hscale1,value_changed,frame_changed);	  
++		      
++#define CONNECT_SPIN(x) CONNECT(spinbutton##x, value_changed,ui_changed)
++      	  
++        CONNECT_SPIN(X);
++        CONNECT_SPIN(Y);
++        CONNECT_SPIN(W);
++        CONNECT_SPIN(H);
++        CONNECT_SPIN(Band);
++	  
++	draw(dialog,width,height);
++
++	ret=0;
++	int response;
++	while( (response=gtk_dialog_run(GTK_DIALOG(dialog)))==GTK_RESPONSE_APPLY)
++	{
++		ui_changed();
++		
++	}
++	if(response==GTK_RESPONSE_OK)
++        {
++		ui_read( );
++		param->xoff=x;
++                param->yoff=y;
++                param->lw=w;
++                param->lh=h;
++                param->band=band;
++		ret=1;
++	}
++        gtk_unregister_dialog(dialog);
++	gtk_widget_destroy(dialog);
++	delete working;	
++	delete imgsrc;
++	delete rgbConv;
++
++	if (resizer)
++	{
++		delete resizer;
++		delete[] rgbBufferDisplay;
++
++		resizer=NULL;
++		rgbBufferDisplay=NULL;
++	}
++
++	working=NULL;
++	dialog=NULL;
++	original=NULL;
++	imgsrc=NULL;
++	return ret;
++}
++void frame_changed( void )
++{
++uint32_t new_frame,max,l,f;
++double   percent;
++GtkWidget *wid;	
++GtkAdjustment *adj;
++
++        max=incoming->getInfo()->nb_frames;
++        wid=WID(hscale1);
++        adj=gtk_range_get_adjustment (GTK_RANGE(wid));
++        new_frame=0;
++        
++        percent=(double)GTK_ADJUSTMENT(adj)->value;
++        percent*=max;
++        percent/=100.;
++        new_frame=(uint32_t)floor(percent);
++        
++        if(new_frame>=max) new_frame=max-1;
++        
++        prepare(new_frame);
++        ui_update();
++        gui_draw();
++
++
++}
++void prepare(uint32_t img)
++{
++	uint32_t l,f;
++	
++	ADM_assert(incoming->getFrameNumberNoAlloc(img,&l,imgsrc,&f));
++	original=imgsrc->data;
++	
++
++}
++gboolean ui_changed(void)
++{
++	if(!lock)
++	{
++		ui_read();
++		memcpy(working,original,(width*height*3)>>1);
++		ui_update();
++		draw(dialog,width,height);
++	}
++		return true;
++}
++
++
++/*---------------------------------------------------------------------------
++	Actually draw the working frame on screen
++*/
++gboolean gui_draw( void )
++{
++	draw(dialog,width,height);
++	return true;
++}
++void draw (GtkWidget *dialog,uint32_t w,uint32_t h )
++{
++	GtkWidget *draw=WID(drawingarea1);
++
++	if (resizer)
++	{
++		resizer->resize(working, rgbBufferDisplay);
++		GUI_RGBDisplay(rgbBufferDisplay, zoomW, zoomH, (void*)draw);
++	}
++	else
++		GUI_RGBDisplay(working, w, h, (void*)draw);
++}
++/*---------------------------------------------------------------------------
++	Read entried from dialog box
++*/
++
++#define SPIN_GET(x,y) {x= gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(WID(spinbutton##y))) ;}
++#define SPIN_SET(x,y)  {gtk_spin_button_set_value(GTK_SPIN_BUTTON(WID(spinbutton##y)),(gfloat)x) ;}
++
++
++void ui_read (void )
++{
++	int reject=0;
++	
++			SPIN_GET(x,X);
++			SPIN_GET(y,Y);
++			SPIN_GET(h,H);
++			SPIN_GET(w,W);
++                        SPIN_GET(band,Band);
++			
++			//printf("%d %d %d %d\n",x,y,w,h);
++			
++			x&=0xffffe;
++			y&=0xffffe;
++			h&=0xffffe;
++			w&=0xffffe;
++			
++			if((x+w)>width)
++				{
++                                        if(w>=width) w=width;
++                                        x=width-w;
++                                        reject=1;
++				}
++			if((y+h)>height)
++				{
++                                        if(h>=height) h=height;
++                                        y=height-h;
++                                        reject=1;
++				}
++			if(reject)
++				ui_upload();
++}
++
++void ui_upload(void)
++{
++	lock++;
++	SPIN_SET(x,X);
++	SPIN_SET(y,Y);
++	SPIN_SET(w,W);
++	SPIN_SET(h,H);
++        SPIN_SET(band,Band);
++	lock--;
++}
++//____________________________________
++void reset( void )
++{
++	
++	x=y=w=h=0;
++	ui_upload();
++	ui_update();
++	gui_draw();
++	
++
++}
++/*---------------------------------------------------------------------------
++	Green-ify the displayed frame on cropped parts
++*/
++void ui_update( )
++{
++
++        uint8_t  *in,*in2;
++        uint8_t *buffer=working;
++
++        rgbConv->scale(original,buffer);
++        // Buffer is in RGB space
++        in=buffer+x*4+y*width*4;
++        in2=buffer+(x+w)*4+y*width*4;
++        
++        for(int yy=0;yy<h;yy++)
++        {
++          in[0]=in[2]=0;in[1]=0xff;
++          in2[0]=in2[2]=0;in2[1]=0xff;
++          in+=width*4;
++          in2+=width*4;
++        }
++        in=buffer+(y*width+x)*4;
++        in2=buffer+((y+h)*width+x)*4;
++        for(int yy=0;yy<w;yy++)
++        {
++          in[0]=in[2]=0;in[1]=0xff;
++          in2[0]=in2[2]=0;in2[1]=0xff;
++          in+=4;
++          in2+=4;
++        }
++
++}
++
++//--------------------------------------------
++GtkWidget*
++create_dialog1 (void)
++{
++  GtkWidget *dialog1;
++  GtkWidget *dialog_vbox1;
++  GtkWidget *vbox1;
++  GtkWidget *vbox2;
++  GtkWidget *table2;
++  GtkWidget *label3;
++  GtkWidget *label4;
++  GtkWidget *label5;
++  GtkWidget *label6;
++  GtkWidget *label7;
++  GtkObject *spinbuttonX_adj;
++  GtkWidget *spinbuttonX;
++  GtkObject *spinbuttonY_adj;
++  GtkWidget *spinbuttonY;
++  GtkObject *spinbuttonW_adj;
++  GtkWidget *spinbuttonW;
++  GtkObject *spinbuttonH_adj;
++  GtkWidget *spinbuttonH;
++  GtkWidget *hseparator1;
++  GtkWidget *hseparator2;
++  GtkObject *spinbuttonBand_adj;
++  GtkWidget *spinbuttonBand;
++  GtkWidget *hseparator3;
++  GtkWidget *hscale1;
++  GtkWidget *drawingarea1;
++  GtkWidget *dialog_action_area1;
++  GtkWidget *cancelbutton1;
++  GtkWidget *okbutton1;
++
++  dialog1 = gtk_dialog_new ();
++  gtk_window_set_title (GTK_WINDOW (dialog1), QT_TR_NOOP("Mplayer Delogo"));
++  gtk_window_set_type_hint (GTK_WINDOW (dialog1), GDK_WINDOW_TYPE_HINT_DIALOG);
++
++  dialog_vbox1 = GTK_DIALOG (dialog1)->vbox;
++  gtk_widget_show (dialog_vbox1);
++
++  vbox1 = gtk_vbox_new (FALSE, 0);
++  gtk_widget_show (vbox1);
++  gtk_box_pack_start (GTK_BOX (dialog_vbox1), vbox1, TRUE, TRUE, 0);
++
++  vbox2 = gtk_vbox_new (FALSE, 0);
++  gtk_widget_show (vbox2);
++  gtk_box_pack_start (GTK_BOX (vbox1), vbox2, FALSE, FALSE, 0);
++
++  table2 = gtk_table_new (3, 4, FALSE);
++  gtk_widget_show (table2);
++  gtk_box_pack_start (GTK_BOX (vbox2), table2, TRUE, TRUE, 0);
++
++  label3 = gtk_label_new (QT_TR_NOOP("X"));
++  gtk_widget_show (label3);
++  gtk_table_attach (GTK_TABLE (table2), label3, 0, 1, 0, 1,
++                    (GtkAttachOptions) (GTK_FILL),
++                    (GtkAttachOptions) (0), 0, 0);
++  gtk_misc_set_alignment (GTK_MISC (label3), 0, 0.5);
++
++  label4 = gtk_label_new (QT_TR_NOOP("Y"));
++  gtk_widget_show (label4);
++  gtk_table_attach (GTK_TABLE (table2), label4, 0, 1, 1, 2,
++                    (GtkAttachOptions) (GTK_FILL),
++                    (GtkAttachOptions) (0), 0, 0);
++  gtk_misc_set_alignment (GTK_MISC (label4), 0, 0.5);
++
++  label5 = gtk_label_new (QT_TR_NOOP("W"));
++  gtk_widget_show (label5);
++  gtk_table_attach (GTK_TABLE (table2), label5, 2, 3, 0, 1,
++                    (GtkAttachOptions) (GTK_FILL),
++                    (GtkAttachOptions) (0), 0, 0);
++  gtk_misc_set_alignment (GTK_MISC (label5), 0, 0.5);
++
++  label6 = gtk_label_new (QT_TR_NOOP("H"));
++  gtk_widget_show (label6);
++  gtk_table_attach (GTK_TABLE (table2), label6, 2, 3, 1, 2,
++                    (GtkAttachOptions) (GTK_FILL),
++                    (GtkAttachOptions) (0), 0, 0);
++  gtk_misc_set_alignment (GTK_MISC (label6), 0, 0.5);
++
++  label7 = gtk_label_new (QT_TR_NOOP("Band"));
++  gtk_widget_show (label7);
++  gtk_table_attach (GTK_TABLE (table2), label7, 0, 1, 2, 3,
++                    (GtkAttachOptions) (GTK_FILL),
++                    (GtkAttachOptions) (0), 0, 0);
++  gtk_misc_set_alignment (GTK_MISC (label7), 0, 0.5);
++
++  spinbuttonX_adj = gtk_adjustment_new (1, 0, 2000, 1, 10, 10);
++  spinbuttonX = gtk_spin_button_new (GTK_ADJUSTMENT (spinbuttonX_adj), 1, 0);
++  gtk_widget_show (spinbuttonX);
++  gtk_table_attach (GTK_TABLE (table2), spinbuttonX, 1, 2, 0, 1,
++                    (GtkAttachOptions) (GTK_EXPAND | GTK_FILL),
++                    (GtkAttachOptions) (0), 0, 0);
++
++  spinbuttonY_adj = gtk_adjustment_new (1, 0, 2000, 1, 10, 10);
++  spinbuttonY = gtk_spin_button_new (GTK_ADJUSTMENT (spinbuttonY_adj), 1, 0);
++  gtk_widget_show (spinbuttonY);
++  gtk_table_attach (GTK_TABLE (table2), spinbuttonY, 1, 2, 1, 2,
++                    (GtkAttachOptions) (GTK_EXPAND | GTK_FILL),
++                    (GtkAttachOptions) (0), 0, 0);
++
++  spinbuttonW_adj = gtk_adjustment_new (1, 0, 2000, 1, 10, 10);
++  spinbuttonW = gtk_spin_button_new (GTK_ADJUSTMENT (spinbuttonW_adj), 1, 0);
++  gtk_widget_show (spinbuttonW);
++  gtk_table_attach (GTK_TABLE (table2), spinbuttonW, 3, 4, 0, 1,
++                    (GtkAttachOptions) (GTK_EXPAND | GTK_FILL),
++                    (GtkAttachOptions) (0), 0, 0);
++
++  spinbuttonH_adj = gtk_adjustment_new (1, 0, 2000, 1, 10, 10);
++  spinbuttonH = gtk_spin_button_new (GTK_ADJUSTMENT (spinbuttonH_adj), 1, 0);
++  gtk_widget_show (spinbuttonH);
++  gtk_table_attach (GTK_TABLE (table2), spinbuttonH, 3, 4, 1, 2,
++                    (GtkAttachOptions) (GTK_EXPAND | GTK_FILL),
++                    (GtkAttachOptions) (0), 0, 0);
++
++  hseparator1 = gtk_hseparator_new ();
++  gtk_widget_show (hseparator1);
++  gtk_table_attach (GTK_TABLE (table2), hseparator1, 3, 4, 2, 3,
++                    (GtkAttachOptions) (GTK_FILL),
++                    (GtkAttachOptions) (GTK_FILL), 0, 0);
++
++  hseparator2 = gtk_hseparator_new ();
++  gtk_widget_show (hseparator2);
++  gtk_table_attach (GTK_TABLE (table2), hseparator2, 2, 3, 2, 3,
++                    (GtkAttachOptions) (GTK_FILL),
++                    (GtkAttachOptions) (GTK_FILL), 0, 0);
++
++  spinbuttonBand_adj = gtk_adjustment_new (1, 0, 100, 1, 10, 10);
++  spinbuttonBand = gtk_spin_button_new (GTK_ADJUSTMENT (spinbuttonBand_adj), 1, 0);
++  gtk_widget_show (spinbuttonBand);
++  gtk_table_attach (GTK_TABLE (table2), spinbuttonBand, 1, 2, 2, 3,
++                    (GtkAttachOptions) (GTK_EXPAND | GTK_FILL),
++                    (GtkAttachOptions) (0), 0, 0);
++
++  hseparator3 = gtk_hseparator_new ();
++  gtk_widget_show (hseparator3);
++  gtk_box_pack_start (GTK_BOX (vbox2), hseparator3, FALSE, FALSE, 0);
++
++  hscale1 = gtk_hscale_new (GTK_ADJUSTMENT (gtk_adjustment_new (0, 0, 100, 1, 1, 0)));
++  gtk_widget_show (hscale1);
++  gtk_box_pack_start (GTK_BOX (vbox1), hscale1, FALSE, FALSE, 0);
++
++  drawingarea1 = gtk_drawing_area_new ();
++  gtk_widget_show (drawingarea1);
++  gtk_box_pack_start (GTK_BOX (vbox1), drawingarea1, TRUE, TRUE, 0);
++  gtk_widget_set_size_request (drawingarea1, 100, 100);
++
++  dialog_action_area1 = GTK_DIALOG (dialog1)->action_area;
++  gtk_widget_show (dialog_action_area1);
++  gtk_button_box_set_layout (GTK_BUTTON_BOX (dialog_action_area1), GTK_BUTTONBOX_END);
++
++  cancelbutton1 = gtk_button_new_from_stock ("gtk-cancel");
++  gtk_widget_show (cancelbutton1);
++  gtk_dialog_add_action_widget (GTK_DIALOG (dialog1), cancelbutton1, GTK_RESPONSE_CANCEL);
++  GTK_WIDGET_SET_FLAGS (cancelbutton1, GTK_CAN_DEFAULT);
++
++  okbutton1 = gtk_button_new_from_stock ("gtk-ok");
++  gtk_widget_show (okbutton1);
++  gtk_dialog_add_action_widget (GTK_DIALOG (dialog1), okbutton1, GTK_RESPONSE_OK);
++  GTK_WIDGET_SET_FLAGS (okbutton1, GTK_CAN_DEFAULT);
++
++  /* Store pointers to all widgets, for use by lookup_widget(). */
++  GLADE_HOOKUP_OBJECT_NO_REF (dialog1, dialog1, "dialog1");
++  GLADE_HOOKUP_OBJECT_NO_REF (dialog1, dialog_vbox1, "dialog_vbox1");
++  GLADE_HOOKUP_OBJECT (dialog1, vbox1, "vbox1");
++  GLADE_HOOKUP_OBJECT (dialog1, vbox2, "vbox2");
++  GLADE_HOOKUP_OBJECT (dialog1, table2, "table2");
++  GLADE_HOOKUP_OBJECT (dialog1, label3, "label3");
++  GLADE_HOOKUP_OBJECT (dialog1, label4, "label4");
++  GLADE_HOOKUP_OBJECT (dialog1, label5, "label5");
++  GLADE_HOOKUP_OBJECT (dialog1, label6, "label6");
++  GLADE_HOOKUP_OBJECT (dialog1, label7, "label7");
++  GLADE_HOOKUP_OBJECT (dialog1, spinbuttonX, "spinbuttonX");
++  GLADE_HOOKUP_OBJECT (dialog1, spinbuttonY, "spinbuttonY");
++  GLADE_HOOKUP_OBJECT (dialog1, spinbuttonW, "spinbuttonW");
++  GLADE_HOOKUP_OBJECT (dialog1, spinbuttonH, "spinbuttonH");
++  GLADE_HOOKUP_OBJECT (dialog1, hseparator1, "hseparator1");
++  GLADE_HOOKUP_OBJECT (dialog1, hseparator2, "hseparator2");
++  GLADE_HOOKUP_OBJECT (dialog1, spinbuttonBand, "spinbuttonBand");
++  GLADE_HOOKUP_OBJECT (dialog1, hseparator3, "hseparator3");
++  GLADE_HOOKUP_OBJECT (dialog1, hscale1, "hscale1");
++  GLADE_HOOKUP_OBJECT (dialog1, drawingarea1, "drawingarea1");
++  GLADE_HOOKUP_OBJECT_NO_REF (dialog1, dialog_action_area1, "dialog_action_area1");
++  GLADE_HOOKUP_OBJECT (dialog1, cancelbutton1, "cancelbutton1");
++  GLADE_HOOKUP_OBJECT (dialog1, okbutton1, "okbutton1");
++
++  return dialog1;
++}
++
++
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/Q_mpdelogo.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/Q_mpdelogo.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/Q_mpdelogo.cpp	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -0,0 +1,162 @@
++/***************************************************************************
++                          DIA_crop.cpp  -  description
++                             -------------------
++
++			    GUI for cropping including autocrop
++			    +Revisted the Gtk2 way
++			     +Autocrop now in RGB space (more accurate)
++
++    begin                : Fri May 3 2002
++    copyright            : (C) 2002/2007 by mean
++    email                : fixounet at free.fr
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include "Q_mpdelogo.h"
++#include "ADM_toolkitQt.h"
++
++//
++//	Video is in YV12 Colorspace
++//
++//
++/**
++
++*/
++
++  Ui_mpdelogoWindow::Ui_mpdelogoWindow(QWidget *parent,  delogo *param, ADM_coreVideoFilter *in) 
++            : QDialog(parent)
++  {
++    uint32_t width,height;
++        ui.setupUi(this);
++        lock=0;
++        // Allocate space for green-ised video
++        width=in->getInfo()->width;
++        height=in->getInfo()->height;
++
++        canvas=new ADM_QCanvas(ui.graphicsView,width,height);
++        
++        myCrop=new flyMpDelogo( width, height,in,canvas,ui.horizontalSlider);
++        memcpy(&(myCrop->param),param,sizeof(delogo));
++        myCrop->_cookie=&ui;
++        myCrop->upload();
++        myCrop->sliderChanged();
++
++
++        connect( ui.horizontalSlider,SIGNAL(valueChanged(int)),this,SLOT(sliderUpdate(int)));
++#define SPINNER(x) connect( ui.doubleSpinBox##x,SIGNAL(valueChanged(int)),this,SLOT(valueChanged(int))); 
++//          SPINNER(Treshold);
++//          SPINNER(Strength);
++//          SPINNER(Block);
++//          connect( ui.checkBox,SIGNAL(stateChanged(int)),this,SLOT(valueChanged(int))); 
++
++  }
++/**
++
++*/
++
++  void Ui_mpdelogoWindow::sliderUpdate(int foo)
++  {
++    myCrop->sliderChanged();
++  }
++/**
++
++*/
++
++  void Ui_mpdelogoWindow::gather(delogo *param)
++  {
++    
++        myCrop->download();
++        memcpy(param,&(myCrop->param),sizeof(delogo));
++  }
++/**
++
++*/
++Ui_mpdelogoWindow::~Ui_mpdelogoWindow()
++{
++  if(myCrop) delete myCrop;
++  myCrop=NULL; 
++  if(canvas) delete canvas;
++  canvas=NULL;
++}
++/**
++
++*/
++
++void Ui_mpdelogoWindow::valueChanged( int f )
++{
++  if(lock) return;
++  lock++;
++  myCrop->update();
++  lock--;
++}
++
++#define MYSPIN(x) w->doubleSpinBox##x
++//************************
++/**
++
++*/
++uint8_t flyMpDelogo::upload(void)
++{
++#if 0
++      Ui_asharpDialog *w=(Ui_asharpDialog *)_cookie;
++
++        MYSPIN(Treshold)->setValue(param.t);
++        MYSPIN(Strength)->setValue(param.d);
++        MYSPIN(Block)->setValue(param.b);
++        
++        //w->bf->w->checkBox->isChecked();
++        w->checkBox->setChecked(param.bf);
++#endif
++        printf("Upload\n");
++        return 1;
++}
++/**
++
++*/
++uint8_t flyMpDelogo::download(void)
++{
++#if 0
++       Ui_asharpDialog *w=(Ui_asharpDialog *)_cookie;
++       param.t= MYSPIN(Treshold)->value();
++       param.d= MYSPIN(Strength)->value();
++       param.b= MYSPIN(Block)->value();
++       
++       //w->spinBoxBottom->setValue(bottom);
++       param.bf=w->checkBox->isChecked();
++#endif
++        printf("Download\n");
++}
++
++/**
++      \fn     DIA_getMpDelogo
++      \brief  Handle delogo dialog
++*/
++bool DIA_getMpDelogo(delogo *param, ADM_coreVideoFilter *in)
++{
++        uint8_t ret=0;
++        
++        Ui_mpdelogoWindow dialog(qtLastRegisteredDialog(), param,in);
++		qtRegisterDialog(&dialog);
++
++        if(dialog.exec()==QDialog::Accepted)
++        {
++            dialog.gather(param); 
++            ret=1;
++        }
++
++		qtUnregisterDialog(&dialog);
++        return ret;
++}
++
++//____________________________________
++// EOF
++
++
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/Q_mpdelogo.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/Q_mpdelogo.h	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/Q_mpdelogo.h	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -0,0 +1,31 @@
++#ifndef Q_mpdelogo_h
++#define Q_mpdelogo_h
++
++#include "ui_mpdelogo.h"
++#include "DIA_flyDialog.h"
++#include "ADM_image.h"
++#include "DIA_flyDialogQt4.h"
++#include "DIA_flyMpDelogo.h"
++
++class Ui_mpdelogoWindow : public QDialog
++{
++	Q_OBJECT
++
++protected: 
++	int lock;
++
++public:
++	flyMpDelogo *myCrop;
++	ADM_QCanvas *canvas;
++	Ui_mpdelogoWindow(QWidget *parent, delogo *param, ADM_coreVideoFilter *in);
++	~Ui_mpdelogoWindow();
++	Ui_mpdelogoDialog ui;
++
++public slots:
++	void gather(delogo *param);
++
++private slots:
++	void sliderUpdate(int foo);
++	void valueChanged(int foo);
++};
++#endif
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/mpdelogo.ui
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/mpdelogo.ui	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/mpdelogo.ui	2012-01-06 07:09:08 UTC (rev 7725)
+@@ -0,0 +1,216 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<ui version="4.0">
++ <class>mpdelogoDialog</class>
++ <widget class="QDialog" name="mpdelogoDialog">
++  <property name="geometry">
++   <rect>
++    <x>0</x>
++    <y>0</y>
++    <width>529</width>
++    <height>516</height>
++   </rect>
++  </property>
++  <property name="windowTitle">
++   <string>Mplayer Delogo</string>
++  </property>
++  <layout class="QVBoxLayout" name="verticalLayout">
++   <item>
++    <layout class="QGridLayout" name="gridLayout">
++     <item row="0" column="0">
++      <widget class="QLabel" name="label">
++       <property name="text">
++        <string>X</string>
++       </property>
++      </widget>
++     </item>
++     <item row="0" column="1">
++      <widget class="QDoubleSpinBox" name="spinX">
++       <property name="decimals">
++        <number>0</number>
++       </property>
++      </widget>
++     </item>
++     <item row="0" column="2">
++      <spacer>
++       <property name="orientation">
++        <enum>Qt::Horizontal</enum>
++       </property>
++       <property name="sizeHint" stdset="0">
++        <size>
++         <width>40</width>
++         <height>20</height>
++        </size>
++       </property>
++      </spacer>
++     </item>
++     <item row="1" column="0">
++      <widget class="QLabel" name="label_2">
++       <property name="text">
++        <string>Y</string>
++       </property>
++       <property name="textFormat">
++        <enum>Qt::PlainText</enum>
++       </property>
++      </widget>
++     </item>
++     <item row="1" column="1">
++      <widget class="QDoubleSpinBox" name="spinY">
++       <property name="decimals">
++        <number>0</number>
++       </property>
++      </widget>
++     </item>
++     <item row="1" column="2">
++      <spacer>
++       <property name="orientation">
++        <enum>Qt::Horizontal</enum>
++       </property>
++       <property name="sizeHint" stdset="0">
++        <size>
++         <width>40</width>
++         <height>20</height>
++        </size>
++       </property>
++      </spacer>
++     </item>
++     <item row="2" column="0">
++      <widget class="QLabel" name="label_3">
++       <property name="text">
++        <string>Width</string>
++       </property>
++      </widget>
++     </item>
++     <item row="2" column="1">
++      <widget class="QDoubleSpinBox" name="spinW">
++       <property name="decimals">
++        <number>0</number>
++       </property>
++      </widget>
++     </item>
++     <item row="2" column="2">
++      <spacer>
++       <property name="orientation">
++        <enum>Qt::Horizontal</enum>
++       </property>
++       <property name="sizeHint" stdset="0">
++        <size>
++         <width>40</width>
++         <height>20</height>
++        </size>
++       </property>
++      </spacer>
++     </item>
++     <item row="3" column="0">
++      <widget class="QLabel" name="label_4">
++       <property name="text">
++        <string>Height</string>
++       </property>
++      </widget>
++     </item>
++     <item row="3" column="1">
++      <widget class="QDoubleSpinBox" name="spinH">
++       <property name="decimals">
++        <number>0</number>
++       </property>
++      </widget>
++     </item>
++     <item row="3" column="2">
++      <spacer>
++       <property name="orientation">
++        <enum>Qt::Horizontal</enum>
++       </property>
++       <property name="sizeHint" stdset="0">
++        <size>
++         <width>40</width>
++         <height>20</height>
++        </size>
++       </property>
++      </spacer>
++     </item>
++     <item row="4" column="0">
++      <widget class="QLabel" name="label_5">
++       <property name="text">
++        <string>Border Width</string>
++       </property>
++      </widget>
++     </item>
++     <item row="4" column="1">
++      <widget class="QDoubleSpinBox" name="spinBand">
++       <property name="decimals">
++        <number>0</number>
++       </property>
++      </widget>
++     </item>
++     <item row="4" column="2">
++      <spacer name="spacer">
++       <property name="orientation">
++        <enum>Qt::Horizontal</enum>
++       </property>
++       <property name="sizeHint" stdset="0">
++        <size>
++         <width>40</width>
++         <height>20</height>
++        </size>
++       </property>
++      </spacer>
++     </item>
++    </layout>
++   </item>
++   <item>
++    <widget class="QSlider" name="horizontalSlider">
++     <property name="orientation">
++      <enum>Qt::Horizontal</enum>
++     </property>
++    </widget>
++   </item>
++   <item>
++    <widget class="QGraphicsView" name="graphicsView"/>
++   </item>
++   <item>
++    <widget class="QDialogButtonBox" name="buttonBox">
++     <property name="orientation">
++      <enum>Qt::Horizontal</enum>
++     </property>
++     <property name="standardButtons">
++      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
++     </property>
++    </widget>
++   </item>
++  </layout>
++ </widget>
++ <resources/>
++ <connections>
++  <connection>
++   <sender>buttonBox</sender>
++   <signal>accepted()</signal>
++   <receiver>mpdelogoDialog</receiver>
++   <slot>accept()</slot>
++   <hints>
++    <hint type="sourcelabel">
++     <x>248</x>
++     <y>254</y>
++    </hint>
++    <hint type="destinationlabel">
++     <x>157</x>
++     <y>274</y>
++    </hint>
++   </hints>
++  </connection>
++  <connection>
++   <sender>buttonBox</sender>
++   <signal>rejected()</signal>
++   <receiver>mpdelogoDialog</receiver>
++   <slot>reject()</slot>
++   <hints>
++    <hint type="sourcelabel">
++     <x>316</x>
++     <y>260</y>
++    </hint>
++    <hint type="destinationlabel">
++     <x>286</x>
++     <y>274</y>
++    </hint>
++   </hints>
++  </connection>
++ </connections>
++</ui>
+
+
+
+From mean at mail.berlios.de  Fri Jan  6 08:09:10 2012
+From: mean at mail.berlios.de (mean at mail.berlios.de)
+Date: Fri,  6 Jan 2012 08:09:10 +0100
+Subject: [Avidemux-svn-commit] r7726 -
+	branches/avidemux_2.6_branch_mean/avidemux/common
+Message-ID: <20120106070910.D50C74811FC@sheep.berlios.de>
+
+Author: mean
+Date: 2012-01-06 08:09:10 +0100 (Fri, 06 Jan 2012)
+New Revision: 7726
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp
+Log:
+[macOs] change plugin path , patch by nibbles
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp	2012-01-06 07:09:08 UTC (rev 7725)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp	2012-01-06 07:09:10 UTC (rev 7726)
+@@ -251,7 +251,7 @@
+ 	//***************Plugins *********************
+ 	// Load system wide audio decoder plugin
+ #ifdef __APPLE__
+-    const char *startDir="../Resources/lib";
++    const char *startDir="../lib";
+ #else
+     const char *startDir=ADM_RELATIVE_LIB_DIR;
+ #endif
+
+
+
+From mean at mail.berlios.de  Fri Jan  6 08:09:12 2012
+From: mean at mail.berlios.de (mean at mail.berlios.de)
+Date: Fri,  6 Jan 2012 08:09:12 +0100
+Subject: [Avidemux-svn-commit] r7727 - in
+	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo:
+	. qt4
+Message-ID: <20120106070912.1ABB54811FC@sheep.berlios.de>
+
+Author: mean
+Date: 2012-01-06 08:09:11 +0100 (Fri, 06 Jan 2012)
+New Revision: 7727
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/ADM_vidMPdelogo.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/DIA_flyMpDelogo.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/Q_mpdelogo.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/mpdelogo.ui
+Log:
+[mplayer Delogo] Connect flyDialog ui (qt4)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/ADM_vidMPdelogo.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/ADM_vidMPdelogo.cpp	2012-01-06 07:09:10 UTC (rev 7726)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/ADM_vidMPdelogo.cpp	2012-01-06 07:09:11 UTC (rev 7727)
+@@ -125,12 +125,14 @@
+         dst=data;
+         
+         if(!previousFilter->getNextFrame(fn,dst)) return false;
+-
++        if(param.xoff>=info.width ) return true;
++        if(param.yoff>=info.height ) return true;
+         for(int i=0;i<3;i++)
+         {
+             ADM_PLANE p=(ADM_PLANE)i;
+             int x=param.xoff,y=param.yoff;
+             int w=param.lw,h=param.lh;
++
+             int width=data->GetWidth(p);
+             int height=data->GetHeight(p);
+             int stride=data->GetPitch(p);
+@@ -138,6 +140,9 @@
+             {
+                     x>>=1;y>>=1;w>>=1;h>>=1;
+             }
++            if(x+w>=width) w=width-x-1;
++            if(y+h>=height) h=height-y-1;
++
+ //void xdelogo(uint8_t *dst, uint8_t *src, int dstStride, int srcStride, int width, int height,
+ //		   int logo_x, int logo_y, int logo_w, int logo_h, int band, int show, int direct)
+             xdelogo(data->GetWritePtr(p), data->GetReadPtr(p),
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/DIA_flyMpDelogo.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/DIA_flyMpDelogo.cpp	2012-01-06 07:09:10 UTC (rev 7726)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/DIA_flyMpDelogo.cpp	2012-01-06 07:09:11 UTC (rev 7727)
+@@ -34,6 +34,63 @@
+ uint8_t    flyMpDelogo::processRgb(uint8_t *imageIn, uint8_t *imageOut)
+ {
+     printf("Process\n");
++    uint32_t x,y;
++    uint8_t  *in;
++    uint32_t w=_w,h=_h;
++        
++    memcpy(imageOut,imageIn,_w*_h*4);
++
++    int lineTop=param.yoff;
++    int lineBottom=param.yoff+param.lh;
++
++    if(lineTop >= _h) lineTop=_h-1;
++    if(lineBottom >= _h) lineBottom=_h-1;
++
++    int lineLeft=param.xoff;
++    int lineRight=param.xoff+param.lw;
++
++    if(lineLeft >= _w) lineLeft=_w-1;
++    if(lineRight >= _w) lineRight=_w-1;
++
++    uint8_t *ptrTop=imageOut+4*_w*lineTop+lineLeft*4;
++    uint8_t *ptrBottom=imageOut+4*_w*lineBottom+lineLeft*4;
++
++    int r=lineRight-lineLeft;
++    if(!r) r=1;
++    for(int x=0;x<r;x++)
++    {
++            ptrTop[0]=0;
++            ptrTop[1]=0xff;
++            ptrTop[2]=0;
++            ptrTop[3]=0;
++
++            ptrBottom[0]=0;
++            ptrBottom[1]=0xff;
++            ptrBottom[2]=0;
++            ptrBottom[3]=0;
++            ptrTop+=4;
++            ptrBottom+=4;
++    }
++    r=lineBottom-lineTop;
++    ptrTop=imageOut+4*_w*lineTop+lineLeft*4;
++    ptrBottom=imageOut+4*_w*lineTop+lineRight*4;
++
++    if(!r) r=1;
++    for(int x=0;x<r;x++)
++    {
++            ptrTop[0]=0;
++            ptrTop[1]=0xff;
++            ptrTop[2]=0;
++            ptrTop[3]=0;
++
++            ptrBottom[0]=0;
++            ptrBottom[1]=0xff;
++            ptrBottom[2]=0;
++            ptrBottom[3]=0;
++            ptrTop+=4*w;
++            ptrBottom+=4*w;
++    }
++  
+     return 1;
+ }
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/Q_mpdelogo.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/Q_mpdelogo.cpp	2012-01-06 07:09:10 UTC (rev 7726)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/Q_mpdelogo.cpp	2012-01-06 07:09:11 UTC (rev 7727)
+@@ -23,12 +23,8 @@
+ #include "Q_mpdelogo.h"
+ #include "ADM_toolkitQt.h"
+ 
+-//
+-//	Video is in YV12 Colorspace
+-//
+-//
+ /**
+-
++    \fn ctor
+ */
+ 
+   Ui_mpdelogoWindow::Ui_mpdelogoWindow(QWidget *parent,  delogo *param, ADM_coreVideoFilter *in) 
+@@ -44,22 +40,31 @@
+         canvas=new ADM_QCanvas(ui.graphicsView,width,height);
+         
+         myCrop=new flyMpDelogo( width, height,in,canvas,ui.horizontalSlider);
+-        memcpy(&(myCrop->param),param,sizeof(delogo));
++        myCrop->param=*param;
+         myCrop->_cookie=&ui;
++#define SPINENTRY(x) ui.x
++        SPINENTRY(spinX)->setMaximum(width);
++        SPINENTRY(spinW)->setMaximum(width);
++        SPINENTRY(spinY)->setMaximum(height);
++        SPINENTRY(spinH)->setMaximum(height);
++
++        SPINENTRY(spinX)->setSingleStep(5);
++        SPINENTRY(spinY)->setSingleStep(5);
++        SPINENTRY(spinW)->setSingleStep(5);
++        SPINENTRY(spinH)->setSingleStep(5);
++        
+         myCrop->upload();
+         myCrop->sliderChanged();
+-
+-
+         connect( ui.horizontalSlider,SIGNAL(valueChanged(int)),this,SLOT(sliderUpdate(int)));
+-#define SPINNER(x) connect( ui.doubleSpinBox##x,SIGNAL(valueChanged(int)),this,SLOT(valueChanged(int))); 
+-//          SPINNER(Treshold);
+-//          SPINNER(Strength);
+-//          SPINNER(Block);
+-//          connect( ui.checkBox,SIGNAL(stateChanged(int)),this,SLOT(valueChanged(int))); 
+-
++#define SPINNER(x) connect( ui.x,SIGNAL(valueChanged(int)),this,SLOT(valueChanged(int))); 
++          SPINNER(spinX);
++          SPINNER(spinY);
++          SPINNER(spinW);
++          SPINNER(spinH);
++          SPINNER(spinBand);
+   }
+ /**
+-
++    \fn sliderUpdate
+ */
+ 
+   void Ui_mpdelogoWindow::sliderUpdate(int foo)
+@@ -67,7 +72,7 @@
+     myCrop->sliderChanged();
+   }
+ /**
+-
++    \fn gather
+ */
+ 
+   void Ui_mpdelogoWindow::gather(delogo *param)
+@@ -77,7 +82,7 @@
+         memcpy(param,&(myCrop->param),sizeof(delogo));
+   }
+ /**
+-
++    \fn dtor
+ */
+ Ui_mpdelogoWindow::~Ui_mpdelogoWindow()
+ {
+@@ -87,52 +92,53 @@
+   canvas=NULL;
+ }
+ /**
+-
++    \fn valueChanged
+ */
+ 
+ void Ui_mpdelogoWindow::valueChanged( int f )
+ {
++    printf("Change (lock=%d)\n",lock);
+   if(lock) return;
+   lock++;
+-  myCrop->update();
++  myCrop->download();
++  myCrop->sameImage();
+   lock--;
+ }
+ 
+-#define MYSPIN(x) w->doubleSpinBox##x
++#define MYSPIN(x) w->x
+ //************************
+ /**
+-
++    \fn upload
+ */
+ uint8_t flyMpDelogo::upload(void)
+ {
+-#if 0
+-      Ui_asharpDialog *w=(Ui_asharpDialog *)_cookie;
+ 
+-        MYSPIN(Treshold)->setValue(param.t);
+-        MYSPIN(Strength)->setValue(param.d);
+-        MYSPIN(Block)->setValue(param.b);
++        Ui_mpdelogoDialog *w=(Ui_mpdelogoDialog *)_cookie;
++
++        MYSPIN(spinX)->setValue(param.xoff);
++        MYSPIN(spinY)->setValue(param.yoff);
++        MYSPIN(spinW)->setValue(param.lw);
++        MYSPIN(spinH)->setValue(param.lh);   
++        MYSPIN(spinBand)->setValue(param.band);   
+         
+-        //w->bf->w->checkBox->isChecked();
+-        w->checkBox->setChecked(param.bf);
+-#endif
+         printf("Upload\n");
+         return 1;
+ }
+ /**
+-
++        \fn download
+ */
+ uint8_t flyMpDelogo::download(void)
+ {
+-#if 0
+-       Ui_asharpDialog *w=(Ui_asharpDialog *)_cookie;
+-       param.t= MYSPIN(Treshold)->value();
+-       param.d= MYSPIN(Strength)->value();
+-       param.b= MYSPIN(Block)->value();
++
++        Ui_mpdelogoDialog *w=(Ui_mpdelogoDialog *)_cookie;
++        param.xoff= MYSPIN(spinX)->value();
++        param.yoff= MYSPIN(spinY)->value();
++        param.lw= MYSPIN(spinW)->value();
++        param.lh= MYSPIN(spinH)->value();
++        param.band= MYSPIN(spinBand)->value();
+        
+-       //w->spinBoxBottom->setValue(bottom);
+-       param.bf=w->checkBox->isChecked();
+-#endif
+         printf("Download\n");
++        return true;
+ }
+ 
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/mpdelogo.ui
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/mpdelogo.ui	2012-01-06 07:09:10 UTC (rev 7726)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/mplayerDelogo/qt4/mpdelogo.ui	2012-01-06 07:09:11 UTC (rev 7727)
+@@ -23,13 +23,6 @@
+        </property>
+       </widget>
+      </item>
+-     <item row="0" column="1">
+-      <widget class="QDoubleSpinBox" name="spinX">
+-       <property name="decimals">
+-        <number>0</number>
+-       </property>
+-      </widget>
+-     </item>
+      <item row="0" column="2">
+       <spacer>
+        <property name="orientation">
+@@ -53,13 +46,6 @@
+        </property>
+       </widget>
+      </item>
+-     <item row="1" column="1">
+-      <widget class="QDoubleSpinBox" name="spinY">
+-       <property name="decimals">
+-        <number>0</number>
+-       </property>
+-      </widget>
+-     </item>
+      <item row="1" column="2">
+       <spacer>
+        <property name="orientation">
+@@ -80,13 +66,6 @@
+        </property>
+       </widget>
+      </item>
+-     <item row="2" column="1">
+-      <widget class="QDoubleSpinBox" name="spinW">
+-       <property name="decimals">
+-        <number>0</number>
+-       </property>
+-      </widget>
+-     </item>
+      <item row="2" column="2">
+       <spacer>
+        <property name="orientation">
+@@ -107,13 +86,6 @@
+        </property>
+       </widget>
+      </item>
+-     <item row="3" column="1">
+-      <widget class="QDoubleSpinBox" name="spinH">
+-       <property name="decimals">
+-        <number>0</number>
+-       </property>
+-      </widget>
+-     </item>
+      <item row="3" column="2">
+       <spacer>
+        <property name="orientation">
+@@ -134,13 +106,6 @@
+        </property>
+       </widget>
+      </item>
+-     <item row="4" column="1">
+-      <widget class="QDoubleSpinBox" name="spinBand">
+-       <property name="decimals">
+-        <number>0</number>
+-       </property>
+-      </widget>
+-     </item>
+      <item row="4" column="2">
+       <spacer name="spacer">
+        <property name="orientation">
+@@ -154,6 +119,21 @@
+        </property>
+       </spacer>
+      </item>
++     <item row="0" column="1">
++      <widget class="QSpinBox" name="spinX"/>
++     </item>
++     <item row="1" column="1">
++      <widget class="QSpinBox" name="spinY"/>
++     </item>
++     <item row="2" column="1">
++      <widget class="QSpinBox" name="spinW"/>
++     </item>
++     <item row="3" column="1">
++      <widget class="QSpinBox" name="spinH"/>
++     </item>
++     <item row="4" column="1">
++      <widget class="QSpinBox" name="spinBand"/>
++     </item>
+     </layout>
+    </item>
+    <item>
+
+
+
+From mean at mail.berlios.de  Sat Jan  7 09:41:30 2012
+From: mean at mail.berlios.de (mean at mail.berlios.de)
+Date: Sat,  7 Jan 2012 09:41:30 +0100
+Subject: [Avidemux-svn-commit] r7728 -
+	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src
+Message-ID: <20120107084130.8C7D7480EE4@sheep.berlios.de>
+
+Author: mean
+Date: 2012-01-07 09:41:30 +0100 (Sat, 07 Jan 2012)
+New Revision: 7728
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacadts.cpp
+Log:
+[adts] Properly construct the AAC configuration atom (bits were swapped
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacadts.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacadts.cpp	2012-01-06 07:09:11 UTC (rev 7727)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacadts.cpp	2012-01-07 08:41:30 UTC (rev 7728)
+@@ -144,6 +144,7 @@
+             {
+                 crc=true;
+             }
++            if(nbFrames!=1) continue;
+             aprintf("Packet len=%d, nbframes=%d\n",packetLen,nbFrames);
+             aprintf("Found sync at offset %d, buffer size=%d\n",(int)(p-buffer),(int)(head-tail));
+             aprintf("Dropping %d bytes\n",(int)(p-buffer-tail));
+@@ -177,9 +178,9 @@
+     }
+     if(!hasExtra)
+     { // build codec specific info, thanks vlc  
+-        int i_profile=p[3]>>6;
+-        int i_sample_rate_idx=(p[3]>>2)&0x0f;
+-        int pi_channels=(p[3]>>7)+((p[4]>>6)<<2);
++        int i_profile=p[2]>>6;
++        int i_sample_rate_idx=(p[2]>>2)&0x0f;
++        int pi_channels=((p[2]<<2)+((p[3]>>6)))&0x7;
+       extra[0] =   (i_profile + 1) << 3 | (i_sample_rate_idx >> 1);
+       extra[1] =   ((i_sample_rate_idx & 0x01) << 7) | (pi_channels <<3);
+       hasExtra=true;
+
+
+
+From mean at mail.berlios.de  Mon Jan  9 07:38:22 2012
+From: mean at mail.berlios.de (mean at mail.berlios.de)
+Date: Mon,  9 Jan 2012 07:38:22 +0100
+Subject: [Avidemux-svn-commit] r7729 -
+	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+Message-ID: <20120109063822.AD1F94815AB@sheep.berlios.de>
+
+Author: mean
+Date: 2012-01-09 07:38:22 +0100 (Mon, 09 Jan 2012)
+New Revision: 7729
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_ts.cpp
+Log:
+[TS] Use I instead of IDR when we have less than 2 IDRs, refs #141
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_ts.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_ts.cpp	2012-01-07 08:41:30 UTC (rev 7728)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_ts.cpp	2012-01-09 06:38:22 UTC (rev 7729)
+@@ -151,7 +151,7 @@
+     }
+     printf("[TsDemuxer] Found %d I, %d B, %d P\n",nbI,nbB,nbP);
+     printf("[TsH264] Found %d IDR\n",nbIdr);
+-    if(nbIdr) // Change IDR to I and I to P...
++    if(nbIdr>1) // Change IDR to I and I to P...
+     { 
+         printf("[TsH264] Remapping IDR to I and I TO P\n");
+         for(int i=0;i<ListOfFrames.size();i++)
+
+
+
+From mean at mail.berlios.de  Mon Jan 16 08:26:43 2012
+From: mean at mail.berlios.de (mean at mail.berlios.de)
+Date: Mon, 16 Jan 2012 08:26:43 +0100
+Subject: [Avidemux-svn-commit] r7730 -
+	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src
+Message-ID: <20120116072644.30AC8482457@sheep.berlios.de>
+
+Author: mean
+Date: 2012-01-16 08:26:43 +0100 (Mon, 16 Jan 2012)
+New Revision: 7730
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+Log:
+ [cosmetic] add a break in default statement
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2012-01-09 06:38:22 UTC (rev 7729)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2012-01-16 07:26:43 UTC (rev 7730)
+@@ -336,7 +336,7 @@
+                                   vdpDecoder=VDP_DECODER_PROFILE_MPEG2_MAIN;
+                                   WRAP_OpenByName(mpegvideo_vdpau,CODEC_ID_MPEG2VIDEO);
+                                   break;
+-            default: ADM_assert(0);
++            default: ADM_assert(0);break;
+         }
+         ADM_info("[VDPAU] Decoder created \n");
+         // Now instantiate our VDPAU surface & decoder
+
+
+
+From mean at mail.berlios.de  Mon Jan 16 08:26:45 2012
+From: mean at mail.berlios.de (mean at mail.berlios.de)
+Date: Mon, 16 Jan 2012 08:26:45 +0100
+Subject: [Avidemux-svn-commit] r7731 -
+	branches/avidemux_2.6_branch_mean/cmake
+Message-ID: <20120116072645.31C1C482457@sheep.berlios.de>
+
+Author: mean
+Date: 2012-01-16 08:26:44 +0100 (Mon, 16 Jan 2012)
+New Revision: 7731
+
+Modified:
+   branches/avidemux_2.6_branch_mean/cmake/admFFmpegBuild.cmake
+Log:
+[build] Make ffmpeg use the same C compiler as the code
+
+Modified: branches/avidemux_2.6_branch_mean/cmake/admFFmpegBuild.cmake
+===================================================================
+--- branches/avidemux_2.6_branch_mean/cmake/admFFmpegBuild.cmake	2012-01-16 07:26:43 UTC (rev 7730)
++++ branches/avidemux_2.6_branch_mean/cmake/admFFmpegBuild.cmake	2012-01-16 07:26:44 UTC (rev 7731)
+@@ -151,6 +151,18 @@
+ 	endif(APPLE)
+ 
+ 	message(STATUS "Using cross compilation flag: ${FFMPEG_FLAGS}")
++else (CROSS)
++# for ffmpeg to use our compiler
++        MESSAGE(STATUS "Building ffmpeg with CC=${CMAKE_C_COMPILER}")
++        MESSAGE(STATUS "Building ffmpeg with LD=${CMAKE_C_COMPILER}")
++        MESSAGE(STATUS "Building ffmpeg with AR=${CMAKE_AR}")
++        MESSAGE(STATUS "Building ffmpeg with CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
++        MESSAGE(STATUS "Building ffmpeg with CFLAGS=${FF_FLAGS}")
++        MESSAGE(STATUS "Building ffmpeg with CFLAGS2=${FFMPEG_FLAGS}")
++        xadd(--cc ${CMAKE_C_COMPILER})
++        xadd(--ld ${CMAKE_C_COMPILER})
++        xadd(--ar ${CMAKE_AR})
++        # nm should be ok if we do not cross compile
+ endif (CROSS)
+ 
+ if (CROSS_ARCH OR CROSS_OS)
+
+
+
+From mean at mail.berlios.de  Mon Jan 16 08:26:46 2012
+From: mean at mail.berlios.de (mean at mail.berlios.de)
+Date: Mon, 16 Jan 2012 08:26:46 +0100
+Subject: [Avidemux-svn-commit] r7732 -
+	branches/avidemux_2.6_branch_mean/cmake
+Message-ID: <20120116072646.4A5C0482457@sheep.berlios.de>
+
+Author: mean
+Date: 2012-01-16 08:26:46 +0100 (Mon, 16 Jan 2012)
+New Revision: 7732
+
+Modified:
+   branches/avidemux_2.6_branch_mean/cmake/admFFmpegBuild.cmake
+Log:
+[build] Factorize code, this breaks ccache
+
+Modified: branches/avidemux_2.6_branch_mean/cmake/admFFmpegBuild.cmake
+===================================================================
+--- branches/avidemux_2.6_branch_mean/cmake/admFFmpegBuild.cmake	2012-01-16 07:26:44 UTC (rev 7731)
++++ branches/avidemux_2.6_branch_mean/cmake/admFFmpegBuild.cmake	2012-01-16 07:26:46 UTC (rev 7732)
+@@ -124,9 +124,6 @@
+ 	if(APPLE)
+ 		xadd(--prefix /opt/mac)
+ 		xadd(--host-cc gcc)
+-		xadd(--cc ${CMAKE_CROSS_PREFIX}-gcc)
+-		xadd(--ld ${CMAKE_CROSS_PREFIX}-gcc) # Not an error !
+-		xadd(--ar ${CMAKE_CROSS_PREFIX}-ar) 
+ 		xadd(--nm ${CMAKE_CROSS_PREFIX}-nm) 
+ 		xadd(--strip ${CMAKE_CROSS_PREFIX}-strip) 
+ 
+@@ -135,9 +132,6 @@
+ 	else(APPLE)
+ 		xadd(--prefix /mingw)
+ 		xadd(--host-cc gcc)
+-		xadd(--cc ${CMAKE_CROSS_PREFIX}-gcc)
+-		xadd(--ld ${CMAKE_CROSS_PREFIX}-gcc) # Not an error !
+-		xadd(--ar ${CMAKE_CROSS_PREFIX}-ar) 
+ 		xadd(--nm ${CMAKE_CROSS_PREFIX}-nm) 
+ 		xadd(--sysroot /mingw/include)
+ 
+@@ -151,19 +145,18 @@
+ 	endif(APPLE)
+ 
+ 	message(STATUS "Using cross compilation flag: ${FFMPEG_FLAGS}")
+-else (CROSS)
+-# for ffmpeg to use our compiler
+-        MESSAGE(STATUS "Building ffmpeg with CC=${CMAKE_C_COMPILER}")
+-        MESSAGE(STATUS "Building ffmpeg with LD=${CMAKE_C_COMPILER}")
+-        MESSAGE(STATUS "Building ffmpeg with AR=${CMAKE_AR}")
+-        MESSAGE(STATUS "Building ffmpeg with CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
+-        MESSAGE(STATUS "Building ffmpeg with CFLAGS=${FF_FLAGS}")
+-        MESSAGE(STATUS "Building ffmpeg with CFLAGS2=${FFMPEG_FLAGS}")
+-        xadd(--cc ${CMAKE_C_COMPILER})
+-        xadd(--ld ${CMAKE_C_COMPILER})
+-        xadd(--ar ${CMAKE_AR})
+-        # nm should be ok if we do not cross compile
+ endif (CROSS)
++# for ffmpeg to use the same  compiler as others
++MESSAGE(STATUS "Building ffmpeg with CC=${CMAKE_C_COMPILER}")
++MESSAGE(STATUS "Building ffmpeg with LD=${CMAKE_C_COMPILER}")
++MESSAGE(STATUS "Building ffmpeg with AR=${CMAKE_AR}")
++MESSAGE(STATUS "Building ffmpeg with CMAKE_C_FLAGS=${CMAKE_C_FLAGS}")
++MESSAGE(STATUS "Building ffmpeg with CFLAGS=${FF_FLAGS}")
++MESSAGE(STATUS "Building ffmpeg with CFLAGS2=${FFMPEG_FLAGS}")
++xadd(--cc "${CMAKE_C_COMPILER}")
++xadd(--ld "${CMAKE_C_COMPILER}")
++xadd(--ar "${CMAKE_AR}")
++# nm should be ok if we do not cross compile
+ 
+ if (CROSS_ARCH OR CROSS_OS)
+ 	xadd(--enable-cross-compile)
+
+
+

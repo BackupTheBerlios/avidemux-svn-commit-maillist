@@ -1,0 +1,200 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4817 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4817%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200905121541.n4CFf6mM001085%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002039.html">
+   <LINK REL="Next"  HREF="002041.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4817 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4817%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200905121541.n4CFf6mM001085%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4817 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue May 12 17:41:06 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002039.html">[Avidemux-svn-commit] r4816 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_core/include plugins/ADM_demuxers/MpegTS	plugins/ADM_muxers plugins/ADM_muxers/muxerMp4	plugins/ADM_muxers/oplug_flv
+</A></li>
+        <LI>Next message: <A HREF="002041.html">[Avidemux-svn-commit] r4818 -	branches/avidemux_2.6_branch_mean/avidemux
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2040">[ date ]</a>
+              <a href="thread.html#2040">[ thread ]</a>
+              <a href="subject.html#2040">[ subject ]</a>
+              <a href="author.html#2040">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-05-12 17:40:58 +0200 (Tue, 12 May 2009)
+New Revision: 4817
+
+Modified:
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp
+Log:
+[TsDemuxer] Also take tracks in ES descriptor (fix with_error2.ts)
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp	2009-05-08 13:35:43 UTC (rev 4816)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp	2009-05-12 15:40:58 UTC (rev 4817)
+@@ -26,8 +26,8 @@
+     \fn scanPmt
+ */
+ static bool TS_scanPmt(tsPacket *t,uint32_t pid,listOfTsTracks *list);
+-
+-
++static bool   decodeProgrameDescriptor(uint8_t *r, uint32_t maxlen);
++static ADM_TS_TRACK_TYPE EsType(uint32_t type,const char **str);
+ /**
+     \class TrackTypeDescriptor
+ */
+@@ -202,7 +202,75 @@
+         int programInfoLength=(r[0]&lt;&lt;8)+r[1];
+         programInfoLength&amp;=0xff;
+         r+=2;
+-        printf(&quot;[PMT] PMT :%02x Program Info Len: %d\n&quot;,pid,programInfoLength);    
++        packLen-=4;
++        // Program Descriptor
++        if(programInfoLength &amp;&amp; programInfoLength&lt;=packLen)
++        {
++            decodeProgrameDescriptor(r, programInfoLength);
++            packLen-=programInfoLength;
++            r+=programInfoLength;
++        }
++        printf(&quot;[PMT]            Left : %d bytes\n&quot;,packLen);
++        // Es Type Descriptor
++        while(packLen&gt;4)
++        {
++            int type=r[0];
++            int pid=(r[1]&lt;&lt;8)+r[2];
++            int size=(r[3]&lt;&lt;8)+r[4];
++
++            size&amp;=0xfff;
++            pid&amp;=0x1fff;
++            r+=size+5;
++            packLen-=5+size;
++            printf(&quot;[PMT]          Type=0x%x pid=%x size=%d\n&quot;,type,pid,size);
++            const char *str;
++            ADM_TS_TRACK_TYPE trackType=EsType(type,&amp;str);;
++            if(trackType!=ADM_TS_UNKNOWN) 
++            {
++                    ADM_TS_TRACK trk2;
++                    trk2.trackPid=pid;
++                    trk2.trackType=trackType;
++                    printf(&quot;[PMT]  Adding pid 0x%x (%d) , type %s\n&quot;,pid,pid,str);
++                    list-&gt;push_back(trk2);
++            }
++           
++        }
++        if(trk.trackType!=ADM_TS_UNKNOWN) list-&gt;push_back(trk);
++        return true;
++       }
++    return false;
++}
++/**
++    \fn EsType
++    \brief returns type and string attached to a ES type
++*/
++ADM_TS_TRACK_TYPE EsType(uint32_t type,const char **str)
++{
++    *str=&quot;????&quot;;
++    switch(type)
++    {
++                case 1:case 2: *str= &quot;Mpeg Video&quot;;return ADM_TS_MPEG2;break;
++                case 3:case 4: *str= &quot;Mpeg Audio&quot;;return ADM_TS_MPEG_AUDIO;break;
++                case 0x11: case 0xF:     *str= &quot;Mpeg AAC&quot;;return ADM_TS_AAC;break;
++             //   case 0x10:        *streamType=ADM_STREAM_MPEG4;return &quot;MP4 Video&quot;;
++                case 0x1B:  *str= &quot;H264 Video&quot;;return ADM_TS_H264;break;
++                case 0x81:  *str= &quot;AC3 (Not sure)&quot;;return ADM_TS_AC3;break;
++                default : break;
++    }
++    return ADM_TS_UNKNOWN;
++}
++
++/**
++    \fn decodeProgrameDescriptor
++    \brief decodeProgramDescriptor
++
++    <A HREF="http://www.coolstf.com/tsreader/descriptors.html">http://www.coolstf.com/tsreader/descriptors.html</A>
++
++*/
++bool   decodeProgrameDescriptor(uint8_t *r, uint32_t maxlen)
++{
++        printf(&quot;[PMT] Program Info Len: %d\n&quot;,maxlen); 
++        int packLen=maxlen;
+         packLen-=(2+4);
+         while(packLen&gt;4)
+         {
+@@ -214,12 +282,16 @@
+                 packLen-=5;
+                 packLen-=esInfoLength;
+                 TrackTypeDescriptor *td=TrackTypeDescriptor::find(streamType);
+-                printf(&quot;[PMT] PMT :%02x StreamType: 0x%x,&lt;&lt;%s&gt;&gt;\n&quot;,pid,streamType,td-&gt;desc);    
++                printf(&quot;[PMT]           StreamType: 0x%x,&lt;&lt;%s&gt;&gt;\n&quot;,streamType,td-&gt;desc);    
+                 printf(&quot;[PMT]           Pid:        0x%x\n&quot;,streamPid);
+                 printf(&quot;[PMT]           Es Info Length: %d (0x%x)\n&quot;,esInfoLength,esInfoLength);
+-                
+-                trk.trackType=td-&gt;trackType;
+-                trk.trackPid=streamPid;
++                if(packLen&lt;1) 
++                {
++                    printf(&quot;[PMT             ES Info length bigger than section\n&quot;);
++                    return true;
++                }
++                //trk.trackType=td-&gt;trackType;
++                //trk.trackPid=streamPid;
+                 uint8_t *p=r,*pend=r+esInfoLength;
+                 r+=esInfoLength;
+                 while(p&lt;pend)
+@@ -248,10 +320,12 @@
+                     p+=2+taglen;
+                 }
+                 // 
+-                if(trk.trackType!=ADM_TS_UNKNOWN) list-&gt;push_back(trk);
++                
+         }
+         return true;
+-     }
+-    return false;
++
+ }
++
++
++
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002039.html">[Avidemux-svn-commit] r4816 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_core/include plugins/ADM_demuxers/MpegTS	plugins/ADM_muxers plugins/ADM_muxers/muxerMp4	plugins/ADM_muxers/oplug_flv
+</A></li>
+	<LI>Next message: <A HREF="002041.html">[Avidemux-svn-commit] r4818 -	branches/avidemux_2.6_branch_mean/avidemux
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2040">[ date ]</a>
+              <a href="thread.html#2040">[ thread ]</a>
+              <a href="subject.html#2040">[ subject ]</a>
+              <a href="author.html#2040">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

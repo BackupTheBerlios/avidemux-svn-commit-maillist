@@ -1,0 +1,533 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7245 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_core/ADM_coreUtils/src avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7245%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreDemuxerMpeg/src%0A%09avidemux_core/ADM_coreUtils/src%20avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20110530074242.E59D748134C%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004398.html">
+   <LINK REL="Next"  HREF="004400.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7245 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_core/ADM_coreUtils/src avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7245%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreDemuxerMpeg/src%0A%09avidemux_core/ADM_coreUtils/src%20avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20110530074242.E59D748134C%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7245 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_core/ADM_coreUtils/src avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon May 30 09:42:42 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004398.html">[Avidemux-svn-commit] r7244 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs
+</A></li>
+        <LI>Next message: <A HREF="004400.html">[Avidemux-svn-commit] r7246 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4399">[ date ]</a>
+              <a href="thread.html#4399">[ thread ]</a>
+              <a href="subject.html#4399">[ subject ]</a>
+              <a href="author.html#4399">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-05-30 09:42:42 +0200 (Mon, 30 May 2011)
+New Revision: 7245
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmx_io.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/avidemutils.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexH264.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexMpeg2.cpp
+Log:
+[indexer (ts)] Check and ask for sequential file (i.e. foo00.ts foo01.ts)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmx_io.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmx_io.cpp	2011-05-27 06:12:46 UTC (rev 7244)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmx_io.cpp	2011-05-30 07:42:42 UTC (rev 7245)
+@@ -17,13 +17,18 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
++#include &quot;ADM_cpp.h&quot;
+ #include &lt;math.h&gt;
+ 
+ #include &quot;ADM_default.h&quot;
+ #include &quot;dmx_io.h&quot;
++#if 0
++    #define aprintf(...) {}
++#else
++    #define aprintf printf
++#endif
++extern bool ADM_splitSequencedFile(const char *filename, char **left, char **right,uint32_t *nbDigit,uint32_t *base);
+ 
+-#define aprintf(...) {}
+-
+ fileParser::fileParser( void )
+ {
+                 _off=0;
+@@ -58,43 +63,34 @@
+ */
+ uint8_t fileParser::open( const char *filename,FP_TYPE *multi )
+ {
+-        const char *dot = NULL;                   // pointer to the last dot in filename
+-        uint8_t decimals = 0;               // number of decimals
+-        char *left = NULL, *number = NULL, *right = NULL; // parts of filename (after splitting)
+ 
+-        char *followup = new char[ strlen(filename) + 1 ]; // possible follow-up filename
+-        uint8_t first_followup = 1;         // indicates first follow-up
+-        uint8_t last_followup = 0;          // indicates last follow-up (by number: 99)
+-        uint8_t count = 0;                  // number of follow-ups
++        uint32_t decimals = 0;               // number of decimals
++        char *left = NULL, *right = NULL; // parts of filename (after splitting)
+ 
+-
+-        int i = 0;                          // index (general use)
+-
+-
+-        // find the last dot
+-        dot = strrchr( filename, '.' );
+-
+-        // count the decimals before the dot
+-        decimals = 1;
+-        while( (dot != NULL) &amp;&amp; ((dot - decimals) != filename) &amp;&amp;
+-               (dot[0 - decimals] &gt;= '0') &amp;&amp; (dot[0 - decimals] &lt;= '9') )
+-                { decimals++; }
+-        decimals--;
+-
+-        // Nuv files can have 20 decimals
+-        // Keep it down to 10000
+-        if(decimals&gt;4) decimals=4;
+-        if(*multi==FP_DONT_APPEND)
++        uint8_t count = 0;                  // number of follow-ups
++        uint32_t base=0;
++        bool splitFile=false;
++//        int i = 0;      
++        // index (general use)
++        if(*multi!=FP_DONT_APPEND)
+         {
+-                if(decimals) printf(&quot;There was several files, but dont append was forced\n&quot;);
+-                decimals=0;
++            aprintf(&quot;Checking if there are several files...\n&quot;);
++            splitFile=ADM_splitSequencedFile(filename, &amp;left, &amp;right,&amp;decimals,&amp;base);
++            if(splitFile)
++            {   
++                aprintf(&quot;left:&lt;%s&gt;, right=&lt;%s&gt;,base=%&quot;LU&quot;,digit=%&quot;LU&quot;\n&quot;,left,right,base,decimals);
++            }else       
++            {
++                aprintf(&quot;No.\n&quot;);
++            }
+         }
+-        // no number sequence
+-        if( decimals == 0 )
++        // ____________________
++        // Single loading
++        // ____________________
++        if( false ==splitFile )
+         {
+                 fdIo newFd;
+                 aprintf( &quot;\nSimple loading: \n&quot; );
+-                delete [] followup;
+                 _curFd = 0;
+                 FILE *f=NULL;
+                 // open file
+@@ -108,106 +104,86 @@
+                  newFd.fileSizeCumul=0;
+                 _size=newFd.fileSize;
+                 listOfFd.push_back(newFd);
+-                aprintf( &quot; file: %s, size: %&quot;LLU&quot;\n&quot;, filename, _sizeFd[0] );
++                aprintf( &quot; file: %s, size: %&quot;LLU&quot;\n&quot;, filename, newFd.fileSize );
+                 aprintf( &quot; found 1 files \n&quot; );
+                 aprintf( &quot;Done \n&quot; );
+                 return 1;
+         }
+-
+-        // possible number sequence
+-        else
++        // ____________________
++        // Multi loading
++        // ____________________
++        uint32_t tabSize;
++        std::string leftPart(left);
++        std::string rightPart(right);
++        delete [] left;
++        delete [] right;
++        left=NULL;
++        right=NULL;
++    
++        aprintf( &quot;\nAuto adding: \n&quot; );
++        uint32_t current=base;
++        _curFd = 0;
++        uint64_t total=0;
++        
++        // build match string
++        char match[16];
++        match[0]='%';
++        match[1]='0';
++        sprintf(match+2,&quot;%d&quot;,decimals); // snprintf instead ...
++        strcat(match,&quot;d&quot;);
++        match[15]=0;
++        aprintf(&quot;Using %s as match string\n&quot;,match);
++        char number[16];
++        while(1)
+         {
+-                // split the filename in &lt;left&gt;, &lt;number&gt; and &lt;right&gt;
+-                // -----
++                sprintf(number,match,current);
++                std::string middle(number);
++                std::string outName=leftPart+middle+rightPart;
++                aprintf(&quot;Checking %s\n&quot;,outName.c_str());
+ 
+-                // &lt;left&gt; part
+-                left = new char[(dot - filename - decimals) + 1];
+-                strncpy( left, filename, (dot - filename - decimals) );
+-                left[(dot - filename - decimals)] = '\0';
+-
+-                // &lt;number&gt; part
+-                number = new char[decimals + 1];
+-                strncpy( number, (dot - decimals), decimals );
+-                number[decimals] = '\0';
+-
+-                // &lt;right&gt; part
+-                right = new char[ strlen(dot)+1 ];
+-                strcpy( right, dot );
+-
+-                // add the file, and all existing follow-ups
+-                // -----
+-                uint32_t tabSize;
+-
+-            
+-                aprintf( &quot;\nAuto adding: \n&quot; );
+-                _curFd = 0;
+-                uint64_t total=0;
+-                while( last_followup == 0 )
++                // open file
++                FILE *f= ADM_fopen(outName.c_str(), &quot;rb&quot;);
++                if(!f)
+                 {
+-                        strcpy( followup, left );
+-                        strcat( followup, number );
+-                        strcat( followup, right );
++                        // we need at least one file!
++                        if( !count  )
++                          { return 0; }
++                        else
++                          { 
++                                printf( &quot; file: %s not found. \n&quot;, outName.c_str() ); 
++                                break; 
++                          }
++                }
+ 
+-                        // open file
+-                        FILE *f= ADM_fopen(followup, &quot;rb&quot;);
+-                        if(!f)
+-                        {
+-                                // we need at least one file!
+-                                if( first_followup == 1 )
+-                                  { return 0; }
+-                                else
+-                                  { printf( &quot; file: %s not found. \n&quot;, followup ); break; }
+-                        }
++                // calculate file-size
++                fdIo myFd;
++                myFd.file=f;
++                myFd.fileSize=ADM_fileSize(outName.c_str());
++                myFd.fileSizeCumul = total;
++                total+=  myFd.fileSize;
+ 
+-                        // calculate file-size
+-                        fdIo myFd;
+-                        myFd.file=f;
+-                        fseeko(f, 0, SEEK_END );
+-                        myFd.fileSize = ftello(f );
+-                        myFd.fileSizeCumul = total;
+-                        fseeko( f, 0, SEEK_SET );
+-                        total+=  myFd.fileSize;
++                aprintf( &quot; file %d: %s, size: %&quot;LLU&quot;\n&quot;, (count + 1), outName.c_str(),
++                                            myFd.fileSize );
+ 
+-                        aprintf( &quot; file %d: %s, size: %&quot;LLU&quot;\n&quot;, (count + 1), followup,
+-                                                    myFd.fileSize );
++                listOfFd.push_back(myFd);
++                count++;
++                current++;
++        } 
+ 
+-                        // increase number
+-                        number[decimals - 1] = number[decimals - 1] + 1;
+-                        for( i = decimals - 1; i &gt;= 0; i-- )
+-                        {
+-                                if( number[i] &gt; '9' )
+-                                {
+-                                        if( i == 0 )
+-                                          { last_followup = 1; break; }
+-                                        number[i] = '0';
+-                                        number[i - 1] = number[i - 1] + 1;
+-                                }
+-                        }
++      
++        _size=total;
++        // clean up
++        if(*multi==FP_PROBE)
++        {
++                if(count&gt;1)
++                        *multi=FP_APPEND;       //
++                else
++                        *multi=FP_DONT_APPEND;
++        }
+ 
+-                        first_followup = 0;
+-                        listOfFd.push_back(myFd);
+-                        count++;
+-                } // while( last_followup == 0 )
+-
+-              
+-                _size=total;
+-                // clean up
+-                delete [] followup;
+-                delete [] left;
+-                delete [] number;
+-                delete [] right;
+-                if(*multi==FP_PROBE)
+-                {
+-                        if(count&gt;1)
+-                                *multi=FP_APPEND;       //
+-                        else
+-                                *multi=FP_DONT_APPEND;
+-                }
+-
+-                aprintf( &quot; found %d files \n&quot;, count );
+-                aprintf( &quot;Done \n&quot; );
+-        } // if( decimals == 0 )
+-                return 1;
++        aprintf( &quot; found %d files \n&quot;, count );
++        aprintf( &quot;Done \n&quot; );
++        return 1;
+ } // fileParser::open()
+ 
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/avidemutils.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/avidemutils.cpp	2011-05-27 06:12:46 UTC (rev 7244)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/avidemutils.cpp	2011-05-30 07:42:42 UTC (rev 7245)
+@@ -14,7 +14,7 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
+-
++#include &quot;ADM_cpp.h&quot;
+ #include &quot;ADM_default.h&quot;
+ #include &lt;math.h&gt;
+ 
+@@ -463,6 +463,85 @@
+ 
+ 	return (a1 &lt;&lt; 4) + b1;
+ }
++/**
++    \fn ADM_splitSequencedFile
++    \brief split file foobar001.foo into foobar, 001 and 3
++*/
++bool ADM_splitSequencedFile(const char *filename, char **left, char **right,uint32_t *nbDigit,uint32_t *base)
++{
++        const char *dot = strrchr( filename, '.' );
++        *left=NULL;
++        *right=NULL;
+ 
++        // count the decimals before the dot
++        int decimals = 1;
++        while( (dot != NULL) &amp;&amp; ((dot - decimals) != filename) &amp;&amp;
++               (dot[0 - decimals] &gt;= '0') &amp;&amp; (dot[0 - decimals] &lt;= '9') )
++                { decimals++; }
++        decimals--;
+ 
++        // Nuv files can have 20 decimals
++        // Keep it down to 10000
++        if(decimals&gt;4) decimals=4;
++        // split the filename in &lt;left&gt;, &lt;number&gt; and &lt;right&gt;
++        // -----
++        if(!decimals) return false;
++        // &lt;left&gt; part
++        
++        *left = new char[(dot - filename - decimals) + 1];
++        char *aleft=*left;
++        strncpy( aleft, filename, (dot - filename - decimals) );
++        aleft[(dot - filename - decimals)] = '\0';
++
++        // &lt;number&gt; part
++        char number[decimals + 1];
++        strncpy( number, (dot - decimals), decimals );
++        number[decimals] = '\0';
++        *base=atoi(number);
++        *nbDigit=decimals;
++
++        // &lt;right&gt; part
++        *right = new char[ strlen(dot)+1 ];
++        strcpy( *right, dot );
++        return true;
++}
++/**
++    \fn ADM_probeSequencedFile
++*/
++bool ADM_probeSequencedFile(const char *fileName)
++{
++    char *left=NULL;
++    char *right=NULL;
++    uint32_t nbDigit,base;
++     if(false==ADM_splitSequencedFile(fileName, &amp;left, &amp;right,&amp;nbDigit,&amp;base))
++            return false;
++
++    // check if at least one sequence exists...
++    std::string aLeft(left);
++    std::string aRight(right);
++    delete [] left;
++    delete [] right;
++
++    char match[16];
++    match[0]='%';
++    match[1]='0';
++    sprintf(match+2,&quot;%d&quot;,nbDigit); // snprintf instead ...
++    strcat(match,&quot;d&quot;);
++    match[15]=0;
++
++    
++    char names[16];
++    sprintf(names,match,base+1);
++    std::string middle(names);
++    std::string target=aLeft+middle+aRight;
++    bool r=false;
++    FILE *f=ADM_fopen(target.c_str(),&quot;rb&quot;);
++    if(f)
++    {
++        fclose(f);
++        r=true;
++    }
++
++    return r;
++}
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexH264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexH264.cpp	2011-05-27 06:12:46 UTC (rev 7244)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexH264.cpp	2011-05-30 07:42:42 UTC (rev 7245)
+@@ -12,8 +12,12 @@
+  *                                                                         *
+  ***************************************************************************/
+ #include &quot;ADM_tsIndex.h&quot;
++#include &quot;DIA_coreToolkit.h&quot;
++bool ADM_probeSequencedFile(const char *fileName);
+ 
++#include &quot;ADM_tsIndex.h&quot;
+ 
++
+ /**
+         \fn decodeSEI
+         \brief decode SEI to get short ref I
+@@ -101,8 +105,8 @@
+ dmxPacketInfo tmpInfo;
+ TS_PESpacket SEI_nal(0);
+ bool result=false;
++bool bAppend=false;
+ 
+-
+     beginConsuming=0;
+     listOfUnits.clear();
+ 
+@@ -127,10 +131,18 @@
+         return false;
+     }
+ 
+-    writeSystem(file,false);
++    
+     pkt=new tsPacketLinearTracker(videoTrac-&gt;trackPid, audioTracks);
+ 
+-    FP_TYPE append=FP_APPEND;
++    FP_TYPE append=FP_DONT_APPEND;
++    if(true==ADM_probeSequencedFile(file))
++    {
++        if(true==GUI_Question(&quot;There are several files with sequential file names. Should they be all loaded ?&quot;))
++                bAppend=true;
++    }
++    if(bAppend==true)
++        append=FP_APPEND;
++    writeSystem(file,bAppend);
+     pkt-&gt;open(file,append);
+     data.pkt=pkt;
+     fullSize=pkt-&gt;getSize();
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexMpeg2.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexMpeg2.cpp	2011-05-27 06:12:46 UTC (rev 7244)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndexMpeg2.cpp	2011-05-30 07:42:42 UTC (rev 7245)
+@@ -12,7 +12,8 @@
+  *                                                                         *
+  ***************************************************************************/
+ #include &quot;ADM_tsIndex.h&quot;
+-
++#include &quot;DIA_coreToolkit.h&quot;
++bool ADM_probeSequencedFile(const char *fileName);
+ static const uint32_t FPS[16]={
+                 0,                      // 0
+                 23976,          // 1 (23.976 fps) - FILM
+@@ -49,6 +50,8 @@
+ indexerData  data;    
+ dmxPacketInfo tmpInfo;
+ 
++bool bAppend=false;
++
+     listOfUnits.clear();
+ 
+     if(!videoTrac) return false;
+@@ -70,10 +73,17 @@
+         printf(&quot;[PsIndex] Cannot create %s\n&quot;,indexName.c_str());
+         return false;
+     }
+-    writeSystem(file,false);
++    
+     pkt=new tsPacketLinearTracker(videoTrac-&gt;trackPid, audioTracks);
+-
+-    FP_TYPE append=FP_APPEND;
++    FP_TYPE append=FP_DONT_APPEND;
++    if(true==ADM_probeSequencedFile(file))
++    {
++        if(true==GUI_Question(&quot;There are several files with sequential file names. Should they be all loaded ?&quot;))
++               bAppend=true;
++    }
++    if(true==bAppend)
++        append=FP_APPEND;
++    writeSystem(file,bAppend);
+     pkt-&gt;open(file,append);
+     data.pkt=pkt;
+     fullSize=pkt-&gt;getSize();
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004398.html">[Avidemux-svn-commit] r7244 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_codecs
+</A></li>
+	<LI>Next message: <A HREF="004400.html">[Avidemux-svn-commit] r7246 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4399">[ date ]</a>
+              <a href="thread.html#4399">[ thread ]</a>
+              <a href="subject.html#4399">[ subject ]</a>
+              <a href="author.html#4399">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

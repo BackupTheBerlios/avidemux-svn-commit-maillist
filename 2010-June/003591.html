@@ -1,0 +1,414 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6402 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6402%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg%3A%0A%09include%20src&In-Reply-To=%3C201006241754.o5OHs0Rp013751%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003590.html">
+   <LINK REL="Next"  HREF="003592.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6402 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg:	include src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6402%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg%3A%0A%09include%20src&In-Reply-To=%3C201006241754.o5OHs0Rp013751%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6402 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jun 24 19:54:00 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003590.html">[Avidemux-svn-commit] r6401 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="003592.html">[Avidemux-svn-commit] r6403 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3591">[ date ]</a>
+              <a href="thread.html#3591">[ thread ]</a>
+              <a href="subject.html#3591">[ subject ]</a>
+              <a href="author.html#3591">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-06-24 19:54:00 +0200 (Thu, 24 Jun 2010)
+New Revision: 6402
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/dmx_io.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmx_io.cpp
+Log:
+[dmx] Cleanup/simplify
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/dmx_io.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/dmx_io.h	2010-06-24 17:53:58 UTC (rev 6401)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/dmx_io.h	2010-06-24 17:54:00 UTC (rev 6402)
+@@ -17,6 +17,8 @@
+ #ifndef FPARSER_
+ #define FPARSER_
+ #define DMX_BUFFER 1024*100
++#include &lt;vector&gt;
++using std::vector;
+ 
+ /*
+         _off is the logical offset in the file
+@@ -31,7 +33,22 @@
+         FP_DONT_APPEND=2,
+         FP_APPEND=3
+ }FP_TYPE;
+-
++/**
++    \class fdIo
++    \brief Describe one file
++*/
++class fdIo
++{
++public:
++        FILE        *file;
++        uint64_t    fileSize;
++        uint64_t    fileSizeCumul;// Cumulative side from beginning =offset for the 1st byte in the file
++        fdIo() {file=NULL;fileSize=0;fileSizeCumul=0;}
++};
++/**
++    \class fileParser
++    \brief helper class to read one logical file over several physical ones
++*/
+  class fileParser
+ {
+         private:
+@@ -40,10 +57,7 @@
+             uint64_t _off;              // Absolute offset
+             
+             uint32_t _curFd;        
+-            uint32_t _nbFd;
+-            FILE      **_fd;
+-            uint64_t *_sizeFd;          // Filesize for file X
+-            uint64_t *_sizeFdCumul;     // Cumulative side from beginning =offset for the 1st byte in the file
++            vector &lt;fdIo&gt; listOfFd;
+             uint64_t _head,_tail,_size;       
+            
+         public:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmx_io.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmx_io.cpp	2010-06-24 17:53:58 UTC (rev 6401)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmx_io.cpp	2010-06-24 17:54:00 UTC (rev 6402)
+@@ -1,10 +1,8 @@
+-/***************************************************************************
+-                          dmx_io.cpp  -  description
+-                             -------------------
++/** *************************************************************************
++    \file    dmx_io.cpp
++    \brief   handle several files as one
++    \author  mean (c) 2005/2010 <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+ 
+-    copyright            : (C) 2005 by mean
+-    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+-
+     This just handles mpeg sync search and little endian/big endin integer reading
+     It also handle multiple files seen as one logical file and buffering
+         to speed up ios
+@@ -28,10 +26,7 @@
+ 
+ fileParser::fileParser( void )
+ {
+-                _fd=NULL;
+-                _sizeFd=NULL;
+                 _off=0;
+-                _nbFd=0;
+                 _curFd=0;
+                 _buffer=new uint8_t[DMX_BUFFER];
+                 _head=_tail=0;
+@@ -40,22 +35,18 @@
+ 
+ fileParser::~fileParser()
+ {
+-        if(_nbFd)
++        int nb=listOfFd.size();
++        for(int i=0;i&lt;nb;i++)
+         {
+-                 for(uint32_t i=0;i&lt;_nbFd;i++)
+-                 {
+-                                if(_fd[i])
+-                                        fclose(_fd[i]);
+-                 }
+-                delete [] _fd;
+-                delete [] _sizeFd;
+-                delete [] _sizeFdCumul;
+-
+-
++                if(listOfFd[i].file)
++                {
++                    fclose(listOfFd[i].file);
++                    listOfFd[i].file=NULL;
++                }
+         }
++        listOfFd.clear();
+         if(_buffer) delete [] _buffer;
+         _buffer=NULL;
+-        _nbFd=0;
+ }
+ 
+ /*
+@@ -76,8 +67,6 @@
+         uint8_t last_followup = 0;          // indicates last follow-up (by number: 99)
+         uint8_t count = 0;                  // number of follow-ups
+ 
+-        FILE **buffer_fd = NULL;            // _fd buffer
+-        uint64_t *buffer_sizeFd = NULL;     // _sizeFd buffer
+ 
+         int i = 0;                          // index (general use)
+ 
+@@ -103,24 +92,22 @@
+         // no number sequence
+         if( decimals == 0 )
+         {
++                fdIo newFd;
+                 aprintf( &quot;\nSimple loading: \n&quot; );
+                 delete [] followup;
+-                _nbFd = 1;
+                 _curFd = 0;
+-                _fd = new FILE * [_nbFd];
+-                _sizeFd = new uint64_t [_nbFd];
+-                _sizeFdCumul = new uint64_t [_nbFd];
+-
++                FILE *f=NULL;
+                 // open file
+-                if(! (_fd[0] = ADM_fopen(filename, &quot;rb&quot;)) )
++                if(! (f = ADM_fopen(filename, &quot;rb&quot;)) )
+                   { return 0; }
+-
++                newFd.file=f;
+                 // calculate file-size
+-                fseeko( _fd[0], 0, SEEK_END );
+-                _sizeFd[0] = ftello( _fd[0] );
+-                fseeko( _fd[0], 0, SEEK_SET );
+-                _sizeFdCumul[0]=0;
+-                _size=_sizeFd[0];
++                fseeko( f, 0, SEEK_END );
++                 newFd.fileSize = ftello( f );
++                fseeko( f, 0, SEEK_SET );
++                 newFd.fileSizeCumul=0;
++                _size=newFd.fileSize;
++                listOfFd.push_back(newFd);
+                 aprintf( &quot; file: %s, size: %&quot;LLU&quot;\n&quot;, filename, _sizeFd[0] );
+                 aprintf( &quot; found 1 files \n&quot; );
+                 aprintf( &quot;Done \n&quot; );
+@@ -151,11 +138,10 @@
+                 // -----
+                 uint32_t tabSize;
+ 
+-                tabSize=(uint32_t)pow(10,decimals);
+-                buffer_fd = new FILE * [tabSize];
+-                buffer_sizeFd = new uint64_t [tabSize];
+-
++            
+                 aprintf( &quot;\nAuto adding: \n&quot; );
++                _curFd = 0;
++                uint64_t total=0;
+                 while( last_followup == 0 )
+                 {
+                         strcpy( followup, left );
+@@ -163,8 +149,8 @@
+                         strcat( followup, right );
+ 
+                         // open file
+-                        buffer_fd[count] = ADM_fopen(followup, &quot;rb&quot;);
+-                        if(! buffer_fd[count] )
++                        FILE *f= ADM_fopen(followup, &quot;rb&quot;);
++                        if(!f)
+                         {
+                                 // we need at least one file!
+                                 if( first_followup == 1 )
+@@ -174,11 +160,16 @@
+                         }
+ 
+                         // calculate file-size
+-                        fseeko( buffer_fd[count], 0, SEEK_END );
+-                        buffer_sizeFd[count] = ftello( buffer_fd[count] );
+-                        fseeko( buffer_fd[count], 0, SEEK_SET );
++                        fdIo myFd;
++                        myFd.file=f;
++                        fseeko(f, 0, SEEK_END );
++                        myFd.fileSize = ftello(f );
++                        myFd.fileSizeCumul = total;
++                        fseeko( f, 0, SEEK_SET );
++                        total+=  myFd.fileSize;
+ 
+-                        aprintf( &quot; file %d: %s, size: %&quot;LLU&quot;\n&quot;, (count + 1), followup, buffer_sizeFd[count] );
++                        aprintf( &quot; file %d: %s, size: %&quot;LLU&quot;\n&quot;, (count + 1), followup,
++                                                    myFd.fileSize );
+ 
+                         // increase number
+                         number[decimals - 1] = number[decimals - 1] + 1;
+@@ -194,31 +185,17 @@
+                         }
+ 
+                         first_followup = 0;
++                        listOfFd.push_back(myFd);
+                         count++;
+                 } // while( last_followup == 0 )
+ 
+-                // copy from buffer
+-                _nbFd = count;
+-                _curFd = 0;
+-                _fd = new FILE * [_nbFd];
+-                _sizeFd = new uint64_t [_nbFd];
+-                _sizeFdCumul = new uint64_t [_nbFd];
+-                uint64_t total=0;
+-                for( i = 0; i &lt; count; i++ )
+-                {
+-                        _fd[i] = buffer_fd[i];
+-                        _sizeFd[i] = buffer_sizeFd[i];
+-                        _sizeFdCumul[i]=total;
+-                        total+=buffer_sizeFd[i];
+-                }
++              
+                 _size=total;
+                 // clean up
+                 delete [] followup;
+                 delete [] left;
+                 delete [] number;
+                 delete [] right;
+-                delete [] buffer_fd;
+-                delete [] buffer_sizeFd;
+                 if(*multi==FP_PROBE)
+                 {
+                         if(count&gt;1)
+@@ -257,12 +234,14 @@
+                                return 0;
+                         }
+                 _off+=jmp;  // final location
+-                for(uint32_t i=_curFd;i&lt;_nbFd;i++)
++                int nb=listOfFd.size();
++                for(uint32_t i=_curFd;i&lt;nb;i++)
+                 {
+-                        if(_off&gt;=_sizeFdCumul[i] &amp;&amp; _off&lt;(_sizeFdCumul[i]+_sizeFd[i]))
++                        if(_off&gt;=listOfFd[i].fileSizeCumul &amp;&amp; _off&lt;(listOfFd[i].fileSizeCumul
++                                                                    +listOfFd[i].fileSize))
+                         {
+                                 _curFd=i;
+-                                fseeko(_fd[i],_off-_sizeFdCumul[i],SEEK_SET);
++                                fseeko(listOfFd[i].file,_off-listOfFd[i].fileSizeCumul,SEEK_SET);
+                                 _head=_tail=_off;
+                                 return 1;
+                         }
+@@ -280,13 +259,14 @@
+                         _off=o;
+                         return 1;
+                 }
+-                for(uint32_t i=0;i&lt;_nbFd;i++)
++                int nb=listOfFd.size();
++                for(uint32_t i=0;i&lt;nb;i++)
+                         {
+-                                if( (o&gt;=_sizeFdCumul[i]) &amp;&amp; o&lt;(_sizeFdCumul[i]+_sizeFd[i]))
++                                if( (o&gt;=listOfFd[i].fileSizeCumul) &amp;&amp; o&lt;(listOfFd[i].fileSizeCumul+listOfFd[i].fileSize))
+                                         {
+                                                         _curFd=i;
+                                                         _off=o;
+-                                                        fseeko(_fd[_curFd],_off-_sizeFdCumul[i],SEEK_SET);
++                                                        fseeko(listOfFd[_curFd].file,_off-listOfFd[i].fileSizeCumul,SEEK_SET);
+                                                         _head=_tail=_off; // Flush
+                                                   return 1;
+                                         }
+@@ -306,7 +286,7 @@
+         // preload
+         if((4+_off)&gt;=_size)
+         {
+-                printf(&quot;Dmx IO: End of file met (%&quot;LLU&quot; / %&quot;LLU&quot; seg:%&quot;LU&quot;)\n&quot;,_off,_size,_nbFd);
++                printf(&quot;Dmx IO: End of file met (%&quot;LLU&quot; / %&quot;LLU&quot; seg:%u)\n&quot;,_off,_size,(unsigned int)listOfFd.size());
+                 return 0;
+         }
+         hnt=(read8i()&lt;&lt;16) + (read8i()&lt;&lt;8) +read8i();
+@@ -318,7 +298,7 @@
+                 val=read8i();
+                 hnt+=val;
+                 hnt&amp;=0xffffff;
+-                if(_curFd==_nbFd-1)
++                if(_curFd==listOfFd.size()-1)
+                 {
+                                 if((4+_off)&gt;=_size) return 0;
+                 }
+@@ -339,7 +319,7 @@
+         // preload
+         if((5+_off)&gt;=_size)
+         {
+-                printf(&quot;Dmx IO: End of file met (%&quot;LLU&quot; / %&quot;LLU&quot; seg:%&quot;LU&quot;)\n&quot;,_off,_size,_nbFd);
++                printf(&quot;Dmx IO: End of file met (%&quot;LLU&quot; / %&quot;LLU&quot; seg:%u)\n&quot;,_off,_size,(unsigned int)listOfFd.size());
+                 return 0;
+         }
+         hnt=(read8i()&lt;&lt;24)+(read8i()&lt;&lt;16) + (read8i()&lt;&lt;8) +read8i();
+@@ -350,7 +330,7 @@
+                 hnt&lt;&lt;=8;
+                 val=read8i();
+                 hnt+=val;
+-                if(_curFd==_nbFd-1)
++                if(_curFd==listOfFd.size()-1)
+                 {
+                                 if((5+_off)&gt;=_size) return 0;
+                 }
+@@ -418,27 +398,27 @@
+ 
+         // Reload ?
+         // What is left in that file ?
+-        mx=_sizeFd[_curFd]+_sizeFdCumul[_curFd]-_off;
++        mx=listOfFd[_curFd].fileSize+listOfFd[_curFd].fileSizeCumul-_off;
+         // Do we need more, if so jump over it
+         if(len&gt;mx)
+         {
+-                fread(buffer,mx,1,_fd[_curFd]);
++                fread(buffer,mx,1,listOfFd[_curFd].file);
+                 len-=mx;
+                 _off+=mx;
+                 buffer+=mx;
+                 _head=_tail=_off;
+                 _curFd++;
+-                if(_curFd&gt;=_nbFd) return 0;
+-                fseeko(_fd[_curFd],0,SEEK_SET);
++                if(_curFd&gt;=listOfFd.size()) return 0;
++                fseeko(listOfFd[_curFd].file,0,SEEK_SET);
+                 return mx+read32(len,buffer);
+         }
+         // Read what is available in file, store leftover in the buffer
+-        fread(buffer,len,1,_fd[_curFd]);
++        fread(buffer,len,1,listOfFd[_curFd].file);
+         _off+=len;
+         // available in that file
+         mx-=len;
+         if(mx&gt;DMX_BUFFER) mx=DMX_BUFFER;
+-        fread(_buffer,mx,1,_fd[_curFd]);
++        fread(_buffer,mx,1,listOfFd[_curFd].file);
+         _head=_off;
+         _tail=_head+mx;
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003590.html">[Avidemux-svn-commit] r6401 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="003592.html">[Avidemux-svn-commit] r6403 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3591">[ date ]</a>
+              <a href="thread.html#3591">[ thread ]</a>
+              <a href="subject.html#3591">[ subject ]</a>
+              <a href="author.html#3591">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

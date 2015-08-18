@@ -1,0 +1,639 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5854 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5854%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy&In-Reply-To=%3C201001171552.o0HFqPqB013785%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003058.html">
+   <LINK REL="Next"  HREF="003061.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5854 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5854%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy&In-Reply-To=%3C201001171552.o0HFqPqB013785%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5854 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jan 17 16:52:25 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003058.html">[Avidemux-svn-commit] r5853 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv
+</A></li>
+        <LI>Next message: <A HREF="003061.html">[Avidemux-svn-commit] r5855 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3059">[ date ]</a>
+              <a href="thread.html#3059">[ thread ]</a>
+              <a href="subject.html#3059">[ subject ]</a>
+              <a href="author.html#3059">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-01-17 16:52:25 +0100 (Sun, 17 Jan 2010)
+New Revision: 5854
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/avsHeader.h
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_internal.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.cpp
+Log:
+[avsproxy demuxer] Add avsproxy, using new declaration + update protocol to make room for version and later audio
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.cpp	2010-01-17 15:52:23 UTC (rev 5853)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.cpp	2010-01-17 15:52:25 UTC (rev 5854)
+@@ -27,7 +27,7 @@
+ */
+ avsHeader::avsHeader()
+ {
+-    mySocket=0;
++    
+ }
+ /**
+     \fn avsHeader
+@@ -37,25 +37,52 @@
+ {
+     close();   
+ }
+-
++uint8_t avsHeader::close()
++{
++    network.close();
++    return 1;
++}
+ /**
+     \fn open
+ */
+ uint8_t avsHeader::open(const char *name)
+ {
+-    mySocket=0;
+-    if(!bindMe(9999))
++   
++    if(!network.bindMe(9999))
+     {
+         printf(&quot;[avsProxy]Open failed\n&quot;);
+         return 0;
+     }
+     // now time to grab some info
+     avsInfo info;
+-    if(!askFor(AvsCmd_GetInfo,0,sizeof(info),(uint8_t*)&amp;info))
++    avsNetPacket in,out;
++    out.buffer=(uint8_t *)&info;
++    out.sizeMax=sizeof(info);
++    out.size=0;
++    typedef struct 
+     {
++        uint32_t ver;
++        uint32_t api;
++    }version;
++    version v={AVSHEADER_API_VERSION,6};
++    in.buffer=(uint8_t *)&v;
++    in.size=sizeof(v);
++    in.sizeMax=sizeof(v);
++
++    if(!network.command(AvsCmd_GetInfo,0,&amp;in,&amp;out))
++    {
+         printf(&quot;Get info failed\n&quot;);
+         return 0;   
+     }
++    // Dump some info
++#define PINFO(x) printf(#x&quot;:%d\n&quot;,info.x);
++    PINFO( version);
++	PINFO( width);
++	PINFO( height);
++	PINFO( fps1000);
++	PINFO( nbFrames);
++	PINFO( frequency);
++	PINFO( channels);
+     // Build header..
+     _isaudiopresent = 0;	// Remove audio ATM
+     _isvideopresent = 1;	// Remove audio ATM
+@@ -86,12 +113,17 @@
+     return 1;
+ }
+ /**
+-
++    \fn frameToTime 
++    \brief convert a give frame into time
+ */
+ uint64_t    avsHeader::frameToTime(uint32_t frame)
+ {
+-
+-
++    float f=frame;
++    f*=1000000000; // Want us
++    f/=_videostream.dwRate;
++    uint64_t t=(uint64_t)f;
++    //printf(&quot;%&quot;LU&quot; -&gt; %&quot;LLU&quot;\n&quot;,frame,t);
++    return t;
+ }
+ /**
+     \fn getFrame
+@@ -105,12 +137,21 @@
+         ADM_warning(&quot;Avisynth proxy out of bound %u / %u\n&quot;,framenum,_mainaviheader.dwTotalFrames);
+         return 0;
+     }
+-    if(!askFor(AvsCmd_GetFrame,framenum,page,img-&gt;data))
++    avsNetPacket out;
++    out.buffer=img-&gt;data;
++    out.sizeMax=page;
++    out.size=0;
++    //printf(&quot;Asking for frame %d\n&quot;,framenum);
++    if(!network.command(AvsCmd_GetFrame,framenum,NULL,&amp;out))
+     {
+-        printf(&quot;Get frame failed for frame %u\n&quot;,framenum);
++        ADM_error(&quot;Get frame failed for frame %u\n&quot;,framenum);
+         return 0;   
+     }
++    ADM_assert(out.size==page);
+     img-&gt;dataLength=page;
++    img-&gt;demuxerDts=frameToTime(framenum);
++    img-&gt;demuxerPts=img-&gt;demuxerDts;
++    //printf(&quot;Frame :%&quot;LU&quot; Time=%&quot;LLU&quot;\n&quot;,framenum,img-&gt;demuxerPts);
+     return 1;
+ }
+ /**
+@@ -146,6 +187,7 @@
+         ADM_warning(&quot;Avisynth proxy out of bound %u / %u\n&quot;,frame,_mainaviheader.dwTotalFrames);
+         return 0;
+     }
++    return frameToTime(frame);
+ }
+ /**
+     \fn getExtraHeaderData
+@@ -163,7 +205,7 @@
+ 
+   uint64_t avsHeader::getVideoDuration(void)
+ {
+-    return 1;
++    return frameToTime(_mainaviheader.dwTotalFrames);
+ }
+ /**
+     \fn getPtsDts
+@@ -171,8 +213,8 @@
+ 
+ bool   avsHeader::getPtsDts(uint32_t frame,uint64_t *pts,uint64_t *dts)
+ {
+-    float f=frame;
+-    
++    *pts=frameToTime(frame);
++    *dts=*pts;
+     return true;
+ }
+ /**
+@@ -196,5 +238,9 @@
+     *size=(_mainaviheader.dwWidth*_mainaviheader.dwHeight*3)&gt;&gt;1;
+     return true;
+ }
++WAVHeader              *avsHeader::getAudioInfo(uint32_t i ) {return NULL;} ;
++uint8_t                 avsHeader::getAudioStream(uint32_t i,ADM_audioStream  **audio){*audio=NULL;return 0;}
++uint8_t                 avsHeader::getNbAudioStreams(void) {return 0;};
++
+ //EOF
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.h	2010-01-17 15:52:23 UTC (rev 5853)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy.h	2010-01-17 15:52:25 UTC (rev 5854)
+@@ -18,7 +18,7 @@
+ #include &quot;avifmt2.h&quot;
+ #include &quot;ADM_Video.h&quot;
+ #include &quot;ADM_audioStream.h&quot;
+-
++#include &quot;ADM_avsproxy_net.h&quot;
+ #define AVS_PROXY_DUMMY_FILE &quot;::ADM_AVS_PROXY::&quot; // warning this is duplicated in main app
+ 
+ /**
+@@ -27,21 +27,15 @@
+ class avsHeader         :public vidHeader
+ {
+     protected:
+-        int         mySocket;
+-        uint8_t     bindMe(uint32_t port);
+-        uint8_t     sendData(uint32_t cmd,uint32_t frame, uint32_t payload_size,uint8_t *payload);
+-        uint8_t     receiveData(uint32_t *cmd, uint32_t *frame,uint32_t *payload_size,uint8_t *payload);
+-        uint8_t     askFor(uint32_t cmd,uint32_t frame, uint32_t payloadsize,uint8_t *payload);
+-        uint8_t     rxData(uint32_t howmuch, uint8_t *where);
+-        uint8_t     txData(uint32_t howmuch, uint8_t *where);
+-        uint64_t    frameToTime(uint32_t frame);
++        uint64_t                    frameToTime(uint32_t frame);
++        avsNet                      network;
+     public:
+ 
+ 
+         virtual   void 				Dump(void) {};
+ 
+-        avsHeader( void );
+-        ~avsHeader(  );
++                                    avsHeader( void );
++                                    ~avsHeader(  );
+ // AVI io
+         virtual 	uint8_t			open(const char *name);
+         virtual 	uint8_t			close(void) ;
+@@ -60,18 +54,18 @@
+   //__________________________
+   //				 video
+   //__________________________
+- virtual uint8_t  setFlag(uint32_t frame,uint32_t flags);
+- virtual uint32_t getFlags(uint32_t frame,uint32_t *flags);
+- virtual uint8_t  getFrame(uint32_t framenum,ADMCompressedImage *img);
+- virtual uint64_t getTime(uint32_t frame);
+-         uint8_t  getExtraHeaderData(uint32_t *len, uint8_t **data);
+- virtual uint64_t getVideoDuration(void);
++ virtual uint8_t                    setFlag(uint32_t frame,uint32_t flags);
++ virtual uint32_t                   getFlags(uint32_t frame,uint32_t *flags);
++ virtual uint8_t                    getFrame(uint32_t framenum,ADMCompressedImage *img);
++ virtual uint64_t                   getTime(uint32_t frame);
++         uint8_t                    getExtraHeaderData(uint32_t *len, uint8_t **data);
++ virtual uint64_t                   getVideoDuration(void);
+ 
+-virtual   bool                    getPtsDts(uint32_t frame,uint64_t *pts,uint64_t *dts);
+-virtual   bool                    setPtsDts(uint32_t frame,uint64_t pts,uint64_t dts);
++virtual   bool                      getPtsDts(uint32_t frame,uint64_t *pts,uint64_t *dts);
++virtual   bool                      setPtsDts(uint32_t frame,uint64_t pts,uint64_t dts);
+ 
+- bool                       providePts(void) {return true;};
+-virtual 	uint8_t                 getFrameSize(uint32_t frame,uint32_t *size);
++          bool                      providePts(void) {return true;};
++virtual   uint8_t                   getFrameSize(uint32_t frame,uint32_t *size);
+ };
+ #endif
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_internal.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_internal.h	2010-01-17 15:52:23 UTC (rev 5853)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_internal.h	2010-01-17 15:52:25 UTC (rev 5854)
+@@ -1,38 +1,16 @@
+-/** 
+-	\file avsHeader.h
+-	\brief Content of exchanges between avidemux and avsproxy
++/*
+ 
+-
++(c) Mean 2006
+ */
+-#ifndef AVS_HEADER_H
+-#define AVS_HEADER_H
+-#define AVSHEADER_API_VERSION 2
+-typedef enum AvsEnum
++#ifndef AVS_PROXY_INTERNAL_H
++#include &quot;avsHeader.h&quot;
++typedef struct SktHeader
+ {
+-	AvsCmd_GetInfo=1,
+-	AvsCmd_SendInfo=2,
+-	AvsCmd_GetFrame=3,
+-	AvsCmd_SendFrame=4,
+-	AvsCmd_GetAudio=5,
+-	AvsCmd_SendAudio=6,
+-	AvsCmd_Quit=99
+-};
++    uint32_t cmd;
++    uint32_t frame;
++    uint32_t payloadLen;
++    uint32_t magic;
++}SktHeader;
+ 
+-typedef struct avsInfo
+-{
+-	uint32_t version;
+-	uint32_t width;
+-	uint32_t height;
+-	uint32_t fps1000;
+-	uint32_t nbFrames;
+-	uint32_t frequency;
+-	uint32_t channels;
+-}avsyInfo;
+ 
+-typedef struct 
+-{
+-	uint32_t sizeInFloatSample;
+-	uint64_t startSample;       // -1 means continue
+-}avsAudioFrame;
+ #endif
+-
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.cpp	2010-01-17 15:52:23 UTC (rev 5853)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.cpp	2010-01-17 15:52:25 UTC (rev 5854)
+@@ -1,5 +1,20 @@
+ 
++/***************************************************************************
++    \file ADM_avsproxy_net.cpp
++    \brief Handle the network part of avsproxy demuxer
++    \author (C) 2007-2010 by mean  <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+ 
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
+ #ifdef __MINGW32__
+ #include &lt;windows.h&gt;
+ #include &lt;winbase.h&gt;
+@@ -19,13 +34,16 @@
+ #include &lt;errno.h&gt;
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_avsproxy_internal.h&quot;
+-#include &quot;ADM_avsproxy.h&quot;
++#include &quot;ADM_avsproxy_net.h&quot;
+ 
+ #define MAGGIC 0xDEADBEEF
+ 
+ #define aprintf(...) {}
+-
+-uint8_t avsHeader::bindMe(uint32_t port)
++#define DEBUG_NET
++/**
++    \fn bindMe
++*/
++bool avsNet::bindMe(uint32_t port)
+ {
+  #ifdef __MINGW32__
+  mySocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+@@ -40,7 +58,7 @@
+     struct sockaddr_in  service;
+     service.sin_family = AF_INET;
+ #ifdef DEBUG_NET
+-    service.sin_addr.s_addr = inet_addr(&quot;192.168.0.10&quot;);
++    service.sin_addr.s_addr = inet_addr(&quot;192.168.0.22&quot;);
+ #else
+     service.sin_addr.s_addr = inet_addr(&quot;127.0.0.1&quot;);
+ #endif    
+@@ -54,7 +72,10 @@
+     printf(&quot;[avsproxy]Connected to avsproxy : port %d, socket %d\n&quot;,port,mySocket);
+     return 1;
+ }
+-uint8_t avsHeader::close(void)
++/**
++    \fn close
++*/
++bool avsNet::close(void)
+ {
+     if(mySocket)
+     {
+@@ -69,32 +90,37 @@
+     }
+     return 1;
+ }
+-
+-uint8_t avsHeader::askFor(uint32_t cmd,uint32_t frame, uint32_t payloadsize,uint8_t *payload)
++/**
++    \fn askFor
++*/
++bool avsNet::command(uint32_t cmd,uint32_t frame,avsNetPacket *in,avsNetPacket *out)
+ {
+-   
+-    if(!sendData(cmd,frame,0,NULL))
++   avsNetPacket dummy={0,0,NULL};
++   avsNetPacket *in2=in;
++    if(!in2) in2=&dummy;
++    if(!sendData(cmd,frame,in2-&gt;size,in2-&gt;buffer))
+     {
+         printf(&quot;[avsProxy]Send Cmd %u failed for frame %u\n&quot;,cmd,frame);
+         return 0;
+     }
+     // Wait reply
+     uint32_t size,reply,outframe;
+-    if(!receiveData(&amp;reply,&amp;outframe,&amp;size,payload))
++    if(!receiveData(&amp;reply,&amp;outframe,&amp;(out-&gt;size),out-&gt;buffer))
+     {
+         printf(&quot;[avsProxy]Rx Cmd %u failed for frame %u\n&quot;,cmd,frame);
+         return 0;   
+     }
+   
+     // Check!
+-    ADM_assert(outframe==frame);
++    ADM_assert(out-&gt;size&lt;=out-&gt;sizeMax);
+     ADM_assert(reply==cmd+1);
+-    ADM_assert(size==payloadsize);
+     aprintf(&quot;[avsProxy]Cmd %u on frame %u succeed\n&quot;,cmd,frame);
+-    return 1;
+-    
++    return 1;   
+ }
+-uint8_t avsHeader::rxData(uint32_t howmuch, uint8_t *where)
++/**
++    \fn rxData
++*/
++bool avsNet::rxData(uint32_t howmuch, uint8_t *where)
+ {
+ uint32_t got=0;
+ int rx;
+@@ -111,7 +137,10 @@
+     }
+   return 1;
+ }
+-uint8_t avsHeader::txData(uint32_t howmuch, uint8_t *where)
++/**
++    \fn txData
++*/
++bool avsNet::txData(uint32_t howmuch, uint8_t *where)
+ {
+ uint32_t got=0,tx;
+     while(got&lt;howmuch)
+@@ -127,8 +156,10 @@
+     }
+   return 1;
+ }
+-
+-uint8_t avsHeader::receiveData(uint32_t *cmd, uint32_t *frame,uint32_t *payload_size,uint8_t *payload)
++/**
++    \fn receiveData
++*/
++bool avsNet::receiveData(uint32_t *cmd, uint32_t *frame,uint32_t *payload_size,uint8_t *payload)
+ {
+         SktHeader header;
+         memset(&amp;header,0,sizeof(header));
+@@ -149,14 +180,14 @@
+         {
+             int togo=header.payloadLen;
+             return rxData(togo,payload);
+-            
+         }
+-
+         return 1;
+ }
+ 
+-
+-uint8_t avsHeader::sendData(uint32_t cmd,uint32_t frame, uint32_t payload_size,uint8_t *payload)
++/**
++    \fn sendData
++*/
++bool avsNet::sendData(uint32_t cmd,uint32_t frame, uint32_t payload_size,uint8_t *payload)
+ {
+         SktHeader header;
+         memset(&amp;header,0,sizeof(header));
+@@ -167,10 +198,19 @@
+         header.magic=(uint32_t)MAGGIC;
+         if(!txData(sizeof(header),(uint8_t *)&amp;header))
+         {
+-            printf(&quot;Error in senddata: header %d\n&quot;,sizeof(header));
++            printf(&quot;Error in senddata: header %d\n&quot;,(int)sizeof(header));
+             return 0;
+         }
+         int togo=payload_size;
+         int chunk;
+         return txData(togo,payload);
+ }
++avsNet::avsNet()
++{
++    mySocket=0;
++}
++avsNet::~avsNet()
++{
++    close();
++}
++//EOF
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.h	2010-01-17 15:52:23 UTC (rev 5853)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_net.h	2010-01-17 15:52:25 UTC (rev 5854)
+@@ -0,0 +1,50 @@
++/***************************************************************************
++    \file ADM_avsproxy_net.h
++    \author (C) 2007-2010 by mean  <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#ifndef AVS_PROXY_NET_H
++#define AVS_PROXY_NET_H
++
++typedef struct
++{
++    uint32_t size;
++    uint32_t sizeMax;
++    uint8_t  *buffer;
++}avsNetPacket;
++
++/**
++    \class avsNet
++*/
++class avsNet       
++{
++    protected:
++        int         mySocket;
++    public:
++        bool     bindMe(uint32_t port);
++        bool     sendData(uint32_t cmd,uint32_t frame, uint32_t payload_size,uint8_t *payload);
++        bool     receiveData(uint32_t *cmd, uint32_t *frame,uint32_t *payload_size,uint8_t *payload);
++        
++        bool     command(uint32_t cmd,uint32_t frame,avsNetPacket *in,avsNetPacket *out);
++        bool     rxData(uint32_t howmuch, uint8_t *where);
++        bool     txData(uint32_t howmuch, uint8_t *where);
++        bool     close(void);
++    public:
++
++
++        virtual   void 				Dump(void) {};
++
++        avsNet( void );
++        ~avsNet(  );
++};
++#endif
++//EOF
+
+Copied: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/avsHeader.h (from rev 5853, branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_internal.h)
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/ADM_avsproxy_internal.h	2010-01-17 15:52:23 UTC (rev 5853)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/avsHeader.h	2010-01-17 15:52:25 UTC (rev 5854)
+@@ -0,0 +1,38 @@
++/** 
++	\file avsHeader.h
++	\brief Content of exchanges between avidemux and avsproxy
++
++
++*/
++#ifndef AVS_HEADER_H
++#define AVS_HEADER_H
++#define AVSHEADER_API_VERSION 2
++ enum AvsEnum
++{
++	AvsCmd_GetInfo=1,
++	AvsCmd_SendInfo=2,
++	AvsCmd_GetFrame=3,
++	AvsCmd_SendFrame=4,
++	AvsCmd_GetAudio=5,
++	AvsCmd_SendAudio=6,
++	AvsCmd_Quit=99
++};
++
++typedef struct avsInfo
++{
++	uint32_t version;
++	uint32_t width;
++	uint32_t height;
++	uint32_t fps1000;
++	uint32_t nbFrames;
++	uint32_t frequency;
++	uint32_t channels;
++}avsyInfo;
++
++typedef struct 
++{
++	uint32_t sizeInFloatSample;
++	uint64_t startSample;       // -1 means continue
++}avsAudioFrame;
++#endif
++
+
+
+Property changes on: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy/avsHeader.h
+___________________________________________________________________
+Name: svn:executable
+   + *
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003058.html">[Avidemux-svn-commit] r5853 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv
+</A></li>
+	<LI>Next message: <A HREF="003061.html">[Avidemux-svn-commit] r5855 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3059">[ date ]</a>
+              <a href="thread.html#3059">[ thread ]</a>
+              <a href="subject.html#3059">[ subject ]</a>
+              <a href="author.html#3059">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

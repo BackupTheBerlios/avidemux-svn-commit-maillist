@@ -1,0 +1,152 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5014 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux_core/ADM_coreVideoEncoder/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5014%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux_core/ADM_coreVideoEncoder/src&In-Reply-To=%3C200907071836.n67Ia4wh013144%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002228.html">
+   <LINK REL="Next"  HREF="002230.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5014 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux_core/ADM_coreVideoEncoder/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5014%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux_core/ADM_coreVideoEncoder/src&In-Reply-To=%3C200907071836.n67Ia4wh013144%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5014 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux_core/ADM_coreVideoEncoder/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Jul  7 20:36:04 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002228.html">[Avidemux-svn-commit] r5013 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4
+</A></li>
+        <LI>Next message: <A HREF="002230.html">[Avidemux-svn-commit] r5015 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2229">[ date ]</a>
+              <a href="thread.html#2229">[ thread ]</a>
+              <a href="subject.html#2229">[ subject ]</a>
+              <a href="author.html#2229">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-07-07 20:36:03 +0200 (Tue, 07 Jul 2009)
+New Revision: 5014
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/gui_savenew.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp
+Log:
+[Encoder] Fix 2 pass encoding with ffmpeg/mpeg4
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gui_savenew.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gui_savenew.cpp	2009-07-07 18:36:02 UTC (rev 5013)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gui_savenew.cpp	2009-07-07 18:36:03 UTC (rev 5014)
+@@ -162,7 +162,7 @@
+                 bitstream.data=buffer;
+                 bitstream.bufferSize=BUFFER_SIZE;
+                 DIA_workingBase  *encoding=createWorking(&quot;Pass1&quot;);
+-             
++                int nbFrames=0;
+                 while(pass1-&gt;encode(&amp;bitstream))
+                 {
+                     if(bitstream.pts!=ADM_NO_PTS)
+@@ -173,15 +173,21 @@
+                         uint32_t percent=(uint32_t)f;
+                         encoding-&gt;update(percent);
+                     }
++                    nbFrames++;
+                 }
+                 delete encoding;
+                 delete [] buffer;
+-                printf(&quot;[Save] Pass 1 done, restarting for pass 2\n&quot;);
++                delete pass1;
++                encoding=NULL;
++                buffer=NULL;
++                pass1=NULL;
++
++                printf(&quot;[Save] Pass 1 done, encoded %d frames, restarting for pass 2\n&quot;,nbFrames);
+                 // Destroy filter chain &amp; create the new encoder
+                 destroyVideoFilterChain(chain);
+                 chain=NULL;
+                 chain=createVideoFilterChain(markerA,markerB);
+-                delete pass1;
++                
+                 if(!chain)
+                 {
+                     printf(&quot;[Save] Cannot recreate video filter chain\n&quot;);
+@@ -197,6 +203,29 @@
+                     return NULL;
+                 }
+                 pass2-&gt;setPassAndLogFile(2,logFileName);
++#if 0
++                buffer=new uint8_t[BUFFER_SIZE];
++                pass2-&gt;setup();
++                nbFrames=0;
++                bitstream.data=buffer;
++                encoding=createWorking(&quot;Pass2&quot;);
++                while(pass2-&gt;encode(&amp;bitstream))
++                {
++                    if(bitstream.pts!=ADM_NO_PTS)
++                    {
++                        float f=100;
++                        f/=videoDuration;
++                        f*=bitstream.pts;
++                        uint32_t percent=(uint32_t)f;
++                        encoding-&gt;update(percent);
++                    }
++                    nbFrames++;
++                }
++                printf(&quot;: Pass2 done : %d frames this time\n&quot;,nbFrames);
++                delete [] buffer;
++                delete encoding;
++                
++#endif
+     return pass2;
+ }
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp	2009-07-07 18:36:02 UTC (rev 5013)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp	2009-07-07 18:36:03 UTC (rev 5014)
+@@ -41,6 +41,7 @@
+     _context-&gt;height = h;
+     _context-&gt;strict_std_compliance = -1;
+     rgbBuffer=new uint8_t [(w+7)*(h+7)*4];
++    colorSpace=NULL;
+ 
+ }
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002228.html">[Avidemux-svn-commit] r5013 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/ffMpeg4
+</A></li>
+	<LI>Next message: <A HREF="002230.html">[Avidemux-svn-commit] r5015 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2229">[ date ]</a>
+              <a href="thread.html#2229">[ thread ]</a>
+              <a href="subject.html#2229">[ subject ]</a>
+              <a href="author.html#2229">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

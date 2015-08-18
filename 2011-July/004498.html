@@ -1,0 +1,152 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7344 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7344%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2%3A%0A%09include%20src&In-Reply-To=%3C20110724062907.E0EDE480E9F%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004497.html">
+   <LINK REL="Next"  HREF="004499.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7344 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7344%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2%3A%0A%09include%20src&In-Reply-To=%3C20110724062907.E0EDE480E9F%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7344 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jul 24 08:29:07 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004497.html">[Avidemux-svn-commit] r7343 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_icons/videoFilter
+</A></li>
+        <LI>Next message: <A HREF="004499.html">[Avidemux-svn-commit] r7345 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4498">[ date ]</a>
+              <a href="thread.html#4498">[ thread ]</a>
+              <a href="subject.html#4498">[ subject ]</a>
+              <a href="author.html#4498">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-07-24 08:29:07 +0200 (Sun, 24 Jul 2011)
+New Revision: 7344
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_videoFilterApi.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_pluginLoad.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilters.cpp
+Log:
+[videoFilter] If the filter chain contains an openGl filter, disable threading
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_videoFilterApi.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_videoFilterApi.h	2011-07-24 06:14:40 UTC (rev 7343)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_videoFilterApi.h	2011-07-24 06:29:07 UTC (rev 7344)
+@@ -29,5 +29,5 @@
+ 
+ uint32_t    ADM_vf_getTagFromInternalName(const char *name);
+ bool        ADM_vf_addFilter(uint32_t tag,CONFcouple *couples);
+-
++VF_CATEGORY ADM_vf_getFilterCategoryFromTag(uint32_t tag);
+ #endif //ADM_VIDEO_FILTER_API_H
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_pluginLoad.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_pluginLoad.cpp	2011-07-24 06:14:40 UTC (rev 7343)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_pluginLoad.cpp	2011-07-24 06:29:07 UTC (rev 7344)
+@@ -279,6 +279,14 @@
+     return plugin-&gt;info.displayName;
+ }
+ /**
++    \fn ADM_vf_getFilterCategoryFromTag
++*/
++VF_CATEGORY ADM_vf_getFilterCategoryFromTag(uint32_t tag)
++{
++    ADM_vf_plugin *plugin=ADM_vf_getPluginFromTag(tag);
++    return plugin-&gt;info.category;
++}
++/**
+     \fn ADM_vf_createFromTag
+     \brief Create a new filter from its tag
+ */
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilters.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilters.cpp	2011-07-24 06:14:40 UTC (rev 7343)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilters.cpp	2011-07-24 06:29:07 UTC (rev 7344)
+@@ -214,6 +214,7 @@
+     ADM_coreVideoFilter *f=bridge;
+     // Now create a clone of the videoFilterChain we have here
+     int nb=ADM_VideoFilters.size();
++    bool openGl=false;
+     for(int i=0;i&lt;nb;i++)
+     {
+             // Get configuration
+@@ -221,18 +222,29 @@
+             ADM_coreVideoFilter *old=ADM_VideoFilters[i].instance;
+             uint32_t tag=ADM_VideoFilters[i].tag;
+             old-&gt;getCoupledConf(&amp;c);
+-
+             ADM_coreVideoFilter *nw=ADM_vf_createFromTag(tag,f,c);
+             if(c) delete c;
+             f=nw;
+             chain-&gt;push_back(nw);
++
++            VF_CATEGORY type=ADM_vf_getFilterCategoryFromTag(tag);
++            if(type== VF_OPENGL) openGl=true;
++
+     }
+     // Last create the thread
+ #if 1
+-    int m=chain-&gt;size();
+-    ADM_coreVideoFilter *last=(*chain)[m-1];
+-    ADM_videoFilterQueue *thread=new ADM_videoFilterQueue(last);
+-    chain-&gt;push_back(thread);
++    // Make sure there is no openGl filter in the queue, it is not thread safe...
++    
++    if(openGl==true)
++    {
++        ADM_warning(&quot;The filter chain contains an openGl filter, disabling threads \n&quot;);
++    }else
++    {
++        int m=chain-&gt;size();
++        ADM_coreVideoFilter *last=(*chain)[m-1];
++        ADM_videoFilterQueue *thread=new ADM_videoFilterQueue(last);
++        chain-&gt;push_back(thread);
++    }
+ #endif
+     return chain;
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004497.html">[Avidemux-svn-commit] r7343 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_icons/videoFilter
+</A></li>
+	<LI>Next message: <A HREF="004499.html">[Avidemux-svn-commit] r7345 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4498">[ date ]</a>
+              <a href="thread.html#4498">[ thread ]</a>
+              <a href="subject.html#4498">[ subject ]</a>
+              <a href="author.html#4498">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,353 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3774 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_inputs/ADM_inpics
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3774%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%0A%09ADM_inputs/ADM_inpics&In-Reply-To=%3C200801280015.m0S0F5QN017571%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001041.html">
+   <LINK REL="Next"  HREF="001043.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3774 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_inputs/ADM_inpics</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3774%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%0A%09ADM_inputs/ADM_inpics&In-Reply-To=%3C200801280015.m0S0F5QN017571%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3774 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_inputs/ADM_inpics">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Mon Jan 28 01:15:05 CET 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001041.html">[Avidemux-svn-commit] r3773 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_colorspace
+</A></li>
+        <LI>Next message: <A HREF="001043.html">[Avidemux-svn-commit] r3775 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_colorspace
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1042">[ date ]</a>
+              <a href="thread.html#1042">[ thread ]</a>
+              <a href="subject.html#1042">[ subject ]</a>
+              <a href="author.html#1042">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-01-28 01:14:55 +0100 (Mon, 28 Jan 2008)
+New Revision: 3774
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_rgb16.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_rgb16.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_inpics/ADM_pics.cpp
+Log:
+[BMP] improve handling of bitmaps - correct colour conversion and support padded scanlines
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp	2008-01-27 23:52:12 UTC (rev 3773)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_codecs.cpp	2008-01-28 00:14:55 UTC (rev 3774)
+@@ -375,14 +375,14 @@
+     {
+       // RGB 16 Codecs
+       printf (&quot;\n using RGB codec\n&quot;);
+-      return (decoders *) (new decoderRGB16 (w, h));
++      return (decoders *) (new decoderRGB16 (w, h, 0, bpp));
+ 
+     }
+  if ((fcc == 0) || fourCC::check (fcc, (uint8_t *) &quot;DIB &quot;))
+     {
+       // RGB 16 Codecs
+       printf (&quot;\n using RGB-DIB codec\n&quot;);
+-      return (decoders *) (new decoderRGB16 (w, h,1));
++      return (decoders *) (new decoderRGB16 (w, h, 1, bpp));
+ 
+     }
+   if (isMpeg12Compatible (fcc))
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_rgb16.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_rgb16.cpp	2008-01-27 23:52:12 UTC (rev 3773)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_rgb16.cpp	2008-01-28 00:14:55 UTC (rev 3774)
+@@ -18,72 +18,110 @@
+ 
+ #include &lt;stdio.h&gt;
+ #include &lt;stdlib.h&gt;
+-
+ #include &lt;string.h&gt;
+-#include &lt;math.h&gt;
+ 
+-
+-
+ #include &quot;ADM_utilities/default.h&quot;
+-
+-#include &lt;ADM_assert.h&gt;
++#include &quot;ADM_assert.h&quot;
+ #include &quot;ADM_colorspace/colorspace.h&quot;
+ 
+ #include &quot;ADM_codecs/ADM_codec.h&quot;
+ #include &quot;ADM_codecs/ADM_rgb16.h&quot;
+ 
++decoderRGB16::decoderRGB16(uint32_t w, uint32_t h, uint32_t rgb, uint32_t bpp) : decoders (w, h)
++{
++	isRgb = rgb;
++	_bpp = bpp;
+ 
+-decoderRGB16::decoderRGB16 (uint32_t w, uint32_t h,uint32_t rgb):decoders (w, h)
++	decoded = new uint8_t[_bpp * w * h];
++}
++
++decoderRGB16::~decoderRGB16()
+ {
+-  isRgb=rgb;
++	delete[] decoded;
+ }
+-decoderRGB16::~decoderRGB16 ()
++
++uint8_t decoderRGB16::uncompress(ADMCompressedImage * in, ADMImage * out)
+ {
++	int xx = _w * _h;
++	int lineSize = (_w * (_bpp / 8) + 3) &amp; ~3;
++	ADM_colorspace colorspace;
++	int i, j;
++	uint8_t *src = in-&gt;data;
++	uint8_t *dst = decoded;
+ 
+-}
++	switch (_bpp)
++	{
++		case 16:
++			// FIXME - 16-bit could use a BGR555 or BGR565 colour mask
++			colorspace = ADM_COLOR_BGR555;
++			break;
++		case 24:
++		case 32:
++			if(isRgb)
++				colorspace = ADM_COLOR_RGB24;
++			else
++				colorspace = ADM_COLOR_BGR24;
+ 
++			break;
++		default:
++			printf(&quot;bpp %d not supported\n&quot;, _bpp);
++			return 0;
++	}
+ 
+-uint8_t
+-  decoderRGB16::uncompress (ADMCompressedImage * in, ADMImage * out)
+-{
+-  int xx;
+-  xx = _w * _h;
++	if (_bpp == 32)
++	{
++		for(i = 0; i &lt; _h; i++)
++		{
++			uint8_t *buf = src;
++			uint8_t *ptr = dst;
+ 
+-  
+-    out-&gt;flags = AVI_KEY_FRAME;
++			for(j = 0; j &lt; _w; j++)
++			{
++				ptr[0] = buf[0];
++				ptr[1] = buf[1];
++				ptr[2] = buf[2];
++				ptr += 3;
++				buf += 4;
++			}
+ 
+-  // We dont do much here ...
++			src += lineSize;
++			dst += _w * 3;
++		}
++	}
++	else
++	{
++		memcpy(decoded, in-&gt;data, lineSize * _h);
+ 
+-  if (in-&gt;dataLength == (3 * xx))  // rgb 24 ?
+-    {
+-      if(isRgb)
+-        out-&gt;_colorspace =(ADM_colorspace)( ADM_COLOR_RGB24 | ADM_COLOR_BACKWARD);
+-      else
+-        out-&gt;_colorspace = (ADM_colorspace)( ADM_COLOR_BGR24| ADM_COLOR_BACKWARD);
+-      out-&gt;_planeStride[0] = 3 * _w;
+-    }
+-  else if (in-&gt;dataLength  == (4 * xx))
+-    {
+-      if(isRgb)
+-        out-&gt;_colorspace = (ADM_colorspace)( ADM_COLOR_RGB32A | ADM_COLOR_BACKWARD );
+-      else
+-        out-&gt;_colorspace = (ADM_colorspace)( ADM_COLOR_BGR32A| ADM_COLOR_BACKWARD);
+-      out-&gt;_planeStride[0] = 4 * _w;
+-    }
+-        else if(in-&gt;dataLength==2*xx) // RGB16
+-        {
+-        				out-&gt;_colorspace =(ADM_colorspace)(ADM_COLOR_RGB16 |ADM_COLOR_BACKWARD );
+-                        out-&gt;_planeStride[0] = 2 * _w;
+-        }
+-  else
+-    return 0;
++		if (lineSize == _w * _bpp)
++		{
++			// no extra junk in scanlines so copy as is
++			memcpy(decoded, in-&gt;data, lineSize * _h);
++		}
++		else
++		{
++			// strip extra junk from scanlines (due to 4 byte alignment)
++			for(i = 0; i &lt; _h; i++)
++			{
++				memcpy(dst, src, _w * (_bpp / 8));
++				src += lineSize;
++				dst += _w * (_bpp / 8);
++			}
++		}
++	}
+ 
+-  ADM_assert (out-&gt;_isRef);
+-  out-&gt;_planes[0] = in-&gt;data;
+-  out-&gt;_planes[1] = NULL;
+-  out-&gt;_planes[2] = NULL;
+-  out-&gt;_planeStride[1] = 0;
+-  out-&gt;_planeStride[2] = 0;
+-  return 1;
++	ADM_assert(out-&gt;_isRef);
++
++	out-&gt;flags = AVI_KEY_FRAME;
++	out-&gt;_colorspace = (ADM_colorspace)(colorspace | ADM_COLOR_BACKWARD);
++
++	out-&gt;_planes[0] = decoded;
++	out-&gt;_planes[1] = NULL;
++	out-&gt;_planes[2] = NULL;
++
++	out-&gt;_planeStride[0] = (_bpp / 8) * _w;
++	out-&gt;_planeStride[1] = 0;
++	out-&gt;_planeStride[2] = 0;
++
++	return 1;
+ }
+ //EOF
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_rgb16.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_rgb16.h	2008-01-27 23:52:12 UTC (rev 3773)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_rgb16.h	2008-01-28 00:14:55 UTC (rev 3774)
+@@ -18,22 +18,21 @@
+ #define ADM_RGB16_H
+ 
+ #include &quot;ADM_colorspace/ADM_rgb.h&quot;
+-class decoderRGB16:decoders
++
++class decoderRGB16 : decoders
+ {
+-protected:
+-  uint8_t * planar;
+-  ColRgbToYV12 *color;
+-  uint32_t      isRgb; // Else BGR
++	protected:
++		uint8_t* planar;
++		ColRgbToYV12* color;
++		uint32_t isRgb; // Else BGR
++		uint32_t _bpp;
++		uint8_t* decoded;
+ 
+-public:
+-    uint8_t dontcopy (void)
+-  {
+-    return 1;
+-  }
+-  decoderRGB16 (uint32_t w, uint32_t h, uint32_t fcc=0);
+-  virtual ~ decoderRGB16 ();
+-  virtual uint8_t uncompress(ADMCompressedImage * in, ADMImage * out);
+-
++	public:
++		uint8_t dontcopy (void) { return 1; }
++		decoderRGB16 (uint32_t w, uint32_t h, uint32_t rgb, uint32_t bpp);
++		virtual ~decoderRGB16();
++		virtual uint8_t uncompress(ADMCompressedImage * in, ADMImage * out);
+ };
+ 
+ #endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_inpics/ADM_pics.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_inpics/ADM_pics.cpp	2008-01-27 23:52:12 UTC (rev 3773)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_inpics/ADM_pics.cpp	2008-01-28 00:14:55 UTC (rev 3774)
+@@ -122,7 +122,7 @@
+     uint8_t fcc_tab[4];
+     FILE *fd;
+     char *end;
+-    uint32_t w = 0, h = 0;
++    uint32_t w = 0, h = 0, bpp = 0;
+ 
+     // 1- identity the file type
+     //
+@@ -196,7 +196,7 @@
+ 
+     for (uint32_t i = 0; i &lt; MAX_ACCEPTED_OPEN_FILE; i++) {
+ 	sprintf(realname, realstring, name, i + _first);
+-	printf(&quot;\n %lu : %s&quot;, i, realname);
++	printf(&quot;\n %lu : %s\n&quot;, i, realname);
+ 	fd = fopen(realname, &quot;rb&quot;);
+ 	if (fd == NULL)
+ 	    break;
+@@ -250,6 +250,7 @@
+ 	    _offset = bmph.size + 14;
+ 	    w = bmph.width;
+ 	    h = bmph.height;
++		bpp = bmph.numBitsPerPlane;
+ 	}
+ 	break;
+ 
+@@ -319,7 +320,8 @@
+ 	    }
+ 	    w = bmph.biWidth;
+ 	    h = bmph.biHeight;
+-	    printf(&quot;W: %d H: %d offset : %d\n&quot;, w, h, _offset);
++		bpp = bmph.biBitCount;
++	    printf(&quot;W: %d H: %d offset: %d\n&quot;, w, h, _offset);
+ 	}
+ 
+ 	break;
+@@ -359,7 +361,10 @@
+     _mainaviheader.dwMicroSecPerFrame = 40000;;	// 25 fps hard coded
+     _videostream.fccType = fourCC::get((uint8_t *) &quot;vids&quot;);
+ 
+-    _video_bih.biBitCount = 24;
++	if (bpp)
++		_video_bih.biBitCount = bpp;
++	else
++		_video_bih.biBitCount = 24;
+ 
+     _videostream.dwLength = _mainaviheader.dwTotalFrames = _nb_file;
+     _videostream.dwInitialFrames = 0;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001041.html">[Avidemux-svn-commit] r3773 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_colorspace
+</A></li>
+	<LI>Next message: <A HREF="001043.html">[Avidemux-svn-commit] r3775 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_colorspace
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1042">[ date ]</a>
+              <a href="thread.html#1042">[ thread ]</a>
+              <a href="subject.html#1042">[ subject ]</a>
+              <a href="author.html#1042">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,341 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5393 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5393%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%20ADM_editor&In-Reply-To=%3C200910201717.n9KHHLVt018144%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002603.html">
+   <LINK REL="Next"  HREF="002605.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5393 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5393%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%20ADM_editor&In-Reply-To=%3C200910201717.n9KHHLVt018144%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5393 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Oct 20 19:17:21 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002603.html">[Avidemux-svn-commit] r5392 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_editor ADM_muxerGate/src ADM_videoFilter2
+</A></li>
+        <LI>Next message: <A HREF="002605.html">[Avidemux-svn-commit] r5394 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2604">[ date ]</a>
+              <a href="thread.html#2604">[ thread ]</a>
+              <a href="subject.html#2604">[ subject ]</a>
+              <a href="author.html#2604">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-10-20 19:17:18 +0200 (Tue, 20 Oct 2009)
+New Revision: 5393
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/gui_navigate.cpp
+Log:
+[editor] Slightly less broken editor
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-10-20 13:26:48 UTC (rev 5392)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-10-20 17:17:18 UTC (rev 5393)
+@@ -82,7 +82,7 @@
+         ADM_warning(&quot;Cannot go to segment %&quot;LU&quot;\n&quot;,s);
+         return false;
+     }
+-    if(false== DecodePictureUpToIntra(frame,seg-&gt;_reference))
++    if(false== DecodePictureUpToIntra(seg-&gt;_reference,frame))
+     {
+         return false;
+     }
+@@ -286,16 +286,35 @@
+     }
+     _SEGMENT *seg=_segments.getSegment(s);
+     ADM_assert(seg);
+-    ADM_info(&quot;Switching to seg %&quot;LU&quot; with startTime in reference pic= %&quot;LU&quot; ms\n&quot;,s,seg-&gt;_refStartTimeUs/1000);
++    ADM_info(&quot;Trying to switch to seg %&quot;LU&quot; with startTime in reference pic= %&quot;LU&quot; ms\n&quot;,s,seg-&gt;_refStartTimeUs/1000);
++        // If the refStartTime is 0, it is the first image
++        // But the fist image might not be = 0
++        _VIDEOS *vid=_segments.getRefVideo(seg-&gt;_reference);
++        vidHeader 	*demuxer=vid-&gt;_aviheader;  
++        ADM_assert(vid);
++        uint64_t from=seg-&gt;_refStartTimeUs;
++      uint32_t flags;
++      uint64_t pts,dts;
++        demuxer-&gt;getFlags(0,&amp;flags);
++        demuxer-&gt;getPtsDts(0,&amp;pts,&amp;dts);
++    if(!seg-&gt;_refStartTimeUs)
++    {
++        if(pts!=ADM_NO_PTS &amp;&amp; pts)
++        {
++                ADM_info(&quot;This segment does not start at 0,...\n&quot;);
++                from=pts;
++        }
++    }
++    
+     // Search the previous keyframe for segment....
+     uint64_t seekTime;
+-    if(_segments.isKeyFrameByTime(seg-&gt;_reference,seg-&gt;_refStartTimeUs))
++    if(_segments.isKeyFrameByTime(seg-&gt;_reference,from))
+     {
+-        seekTime=seg-&gt;_refStartTimeUs;
++        seekTime=from;
+         ADM_info(&quot;First frame of the new segment is a keyframe at %&quot;LU&quot;ms\n&quot;,seekTime/1000);
+     }else   
+     {
+-        if(false==searchPreviousKeyFrameInRef(seg-&gt;_reference,seg-&gt;_refStartTimeUs,&amp;seekTime))
++        if(false==searchPreviousKeyFrameInRef(seg-&gt;_reference,from,&amp;seekTime))
+         {
+             ADM_warning(&quot;Cannot identify the keyframe before %&quot;LLU&quot; ms\n&quot;,seekTime/1000);
+             return false;
+@@ -303,7 +322,7 @@
+     }
+     // ok now seek...
+     uint32_t frame=_segments.intraTimeToFrame(seg-&gt;_reference,seekTime);
+-    if(false==DecodePictureUpToIntra(frame,seg-&gt;_reference))
++    if(false==DecodePictureUpToIntra(seg-&gt;_reference,frame))
+     {
+         return false;
+     }
+@@ -313,6 +332,14 @@
+     seg-&gt;_curFrame=ref-&gt;lastSentFrame;
+     return true;
+ }
++/**
++    \fn rewind
++    \brief
++*/
++bool ADM_Composer::rewind(void)
++{
++        ADM_info(&quot;Rewinding\n&quot;);
++        return DecodePictureUpToIntra(0,0);
+ 
+-
++}
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2009-10-20 13:26:48 UTC (rev 5392)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2009-10-20 17:17:18 UTC (rev 5393)
+@@ -50,7 +50,7 @@
+   ADMImage *in=cache-&gt;getByPts(vid-&gt;lastDecodedPts);
+   if(!in)
+   {
+-    printf(&quot;[ADM_Composer::getSamePicture] Failed, while looking for Pts=%&quot;LU&quot; ms\n&quot;,vid-&gt;lastDecodedPts);
++    printf(&quot;[ADM_Composer::getSamePicture] Failed, while looking for Pts=%&quot;LLU&quot; ms\n&quot;,vid-&gt;lastDecodedPts);
+     cache-&gt;dump();
+     return false;
+   }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp	2009-10-20 13:26:48 UTC (rev 5392)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edSearch.cpp	2009-10-20 17:17:18 UTC (rev 5393)
+@@ -130,6 +130,7 @@
+         if(pts==ADM_NO_PTS) continue;
+         if(pts&gt;refTime)
+         {
++            ADM_info(&quot;Found nextkeyframe %&quot;LLU&quot; at frame %&quot;LU&quot;\n&quot;,pts/1000,i);
+             *nkTime=pts;
+             return true;
+         }
+@@ -164,6 +165,7 @@
+             return true;
+         }
+     }
++    ADM_warning(&quot;Cannot find keyframe with PTS less than %&quot;LU&quot;ms\n&quot;,refTime/1000);
+     return false;
+ }
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2009-10-20 13:26:48 UTC (rev 5392)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2009-10-20 17:17:18 UTC (rev 5393)
+@@ -69,6 +69,7 @@
+   _imageBuffer=NULL;
+   _internalFlags=0;
+   _currentSegment=0;
++  _scratch=NULL;
+ }
+ /**
+ 	Remap 1:1 video to segments
+@@ -555,7 +556,8 @@
+ */
+ bool  ADM_Composer::rebuildDuration(void)
+ {
+-  return true;
++  switchToSegment(0);
++  return true; nextPictureInternal(0,NULL);
+ }
+ /**
+     \fn getCurrentFramePts
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-10-20 13:26:48 UTC (rev 5392)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-10-20 17:17:18 UTC (rev 5393)
+@@ -64,7 +64,7 @@
+ {
+   private:
+ //*********************************PRIVATE API *******************************************
+-                    bool		decodeCache(uint32_t ref, uint32_t frame,ADMImage *image);
++                    //bool		decodeCache(uint32_t ref, uint32_t frame,ADMImage *image);
+                     bool        switchToNextSegment(void);
+                     bool        switchToSegment(uint32_t s);
+                     uint32_t    currentFrame;
+@@ -146,6 +146,7 @@
+                     bool        goToIntraTimeVideo(uint64_t time);
+                     bool        nextPicture(ADMImage *image);
+                     bool        samePicture(ADMImage *image);
++                    bool        rewind(void);
+ public:
+                     uint8_t	    updateVideoInfo(aviInfo *info);
+                     uint32_t 	getSpecificMpeg4Info( void );
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2009-10-20 13:26:48 UTC (rev 5392)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2009-10-20 17:17:18 UTC (rev 5393)
+@@ -70,11 +70,21 @@
+    }
+    seg._durationUs=ref-&gt;_aviheader-&gt;getVideoDuration();
+ 
+-    // Update frametype if needed...
+-    _VIDEOS 	*vid=ref;
+-    decoders *decoder=vid-&gt;decoder;
+-//    rederiveFrameType(_videos[_nb_video]._aviheader);
++    // Set the default startTime to the pts of first Pic
++    vidHeader *demuxer=	ref-&gt;_aviheader;
++    uint32_t flags;
++    uint64_t pts,dts;
++        demuxer-&gt;getFlags(0,&amp;flags);
++        demuxer-&gt;getPtsDts(0,&amp;pts,&amp;dts);
+ 
++        if(pts!=ADM_NO_PTS &amp;&amp;pts)
++        {
++            ADM_warning(&quot;The first frame has a PTS &gt;0, adjusting to %&quot;LLU&quot; ms\n&quot;,pts/1000);
++//            seg._refStartTimeUs=pts;
++        }
++    //
++
++
+     segments.push_back(seg);
+     videos.push_back(*ref);
+     updateStartTime();
+@@ -98,8 +108,11 @@
+             delete v-&gt;decoder;
+       if(v-&gt;color)
+             delete v-&gt;color;
+-      v-&gt;_aviheader-&gt;close ();
+-      delete v-&gt;_aviheader;
++      if(v-&gt;_aviheader)
++      {
++          v-&gt;_aviheader-&gt;close ();
++          delete v-&gt;_aviheader;
++      }
+       if(v-&gt;_videoCache)
+       	delete  v-&gt;_videoCache;
+       v-&gt;_videoCache=NULL;
+@@ -112,7 +125,9 @@
+       {
+             for(int i=0;i&lt;v-&gt;nbAudioStream;i++)
+             {
+-                delete v-&gt;audioTracks[i];
++                if(v-&gt;audioTracks[i])
++                    delete v-&gt;audioTracks[i];
++                v-&gt;audioTracks[i]=NULL;
+             }
+             delete [] v-&gt;audioTracks;
+             v-&gt;audioTracks=NULL;
+@@ -302,7 +317,6 @@
+                 *oflags=flags;
+                 return true;
+             }
+-            if(pts!=ADM_NO_PTS &amp;&amp;pts&gt;time) return false;
+     }
+     return false;
+ }
+@@ -318,6 +332,7 @@
+         ADM_assert(v);
+         if(false==TimeToFrame(v,seekTime,&amp;frame,&amp;flags))
+         {
++            ADM_error(&quot;Cannot find frame with time %&quot;LLU&quot;ms\n&quot;,seekTime/1000);
+             ADM_assert(0);
+         }
+         ADM_assert(flags &amp; AVI_KEY_FRAME);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp	2009-10-20 13:26:48 UTC (rev 5392)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp	2009-10-20 17:17:18 UTC (rev 5393)
+@@ -746,7 +746,7 @@
+ 
+ 
+ 
+-   //   admPreview::seekToIntraPts (0);
++      video_body-&gt;rewind();
+       admPreview::samePicture();
+       GUI_setCurrentFrameAndTime();
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gui_navigate.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gui_navigate.cpp	2009-10-20 13:26:48 UTC (rev 5392)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gui_navigate.cpp	2009-10-20 17:17:18 UTC (rev 5393)
+@@ -161,8 +161,11 @@
+             }
+ 	  break;
+       case ACT_Begin:
+-        GUI_GoToKFrameTime(0);
+-	  break;
++            video_body-&gt;rewind();
++            admPreview::samePicture(); // Ugly FIXME TODO
++             GUI_setCurrentFrameAndTime();
++            //GUI_GoToKFrameTime(0);
++            break;
+       case ACT_JumpToFrame:
+         {
+               // read value
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002603.html">[Avidemux-svn-commit] r5392 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_editor ADM_muxerGate/src ADM_videoFilter2
+</A></li>
+	<LI>Next message: <A HREF="002605.html">[Avidemux-svn-commit] r5394 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2604">[ date ]</a>
+              <a href="thread.html#2604">[ thread ]</a>
+              <a href="subject.html#2604">[ subject ]</a>
+              <a href="author.html#2604">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

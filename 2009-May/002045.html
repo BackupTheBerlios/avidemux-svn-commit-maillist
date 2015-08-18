@@ -1,0 +1,429 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4822 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/ADM_codecs avidemux/ADM_core/include	avidemux/ADM_userInterfaces/ADM_render cmake
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4822%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux%20avidemux/ADM_codecs%20avidemux/ADM_core/include%0A%09avidemux/ADM_userInterfaces/ADM_render%20cmake&In-Reply-To=%3C200905131040.n4DAeLdi032579%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002043.html">
+   <LINK REL="Next"  HREF="002046.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4822 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/ADM_codecs avidemux/ADM_core/include	avidemux/ADM_userInterfaces/ADM_render cmake</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4822%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux%20avidemux/ADM_codecs%20avidemux/ADM_core/include%0A%09avidemux/ADM_userInterfaces/ADM_render%20cmake&In-Reply-To=%3C200905131040.n4DAeLdi032579%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4822 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/ADM_codecs avidemux/ADM_core/include	avidemux/ADM_userInterfaces/ADM_render cmake">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed May 13 12:40:21 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002043.html">[Avidemux-svn-commit] r4821 - in branches/avidemux_2.6_branch_mean:	. avidemux/ADM_codecs	avidemux/ADM_libraries/ADM_ffmpeg/ffmpeg_config	avidemux/ADM_libraries/ADM_ffmpeg/libavcodec cmake
+</A></li>
+        <LI>Next message: <A HREF="002046.html">[Avidemux-svn-commit] r4823 - in	branches/avidemux_2.6_branch_mean/avidemux: ADM_codecs	ADM_coreImage/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2045">[ date ]</a>
+              <a href="thread.html#2045">[ thread ]</a>
+              <a href="subject.html#2045">[ subject ]</a>
+              <a href="author.html#2045">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-05-13 12:40:21 +0200 (Wed, 13 May 2009)
+New Revision: 4822
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.h
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_core/include/ADM_dynamicLoading.h
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_userInterfaces/ADM_render/GUI_render.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/main.cpp
+   branches/avidemux_2.6_branch_mean/cmake/ADM_coreConfig.h.cmake
+   branches/avidemux_2.6_branch_mean/cmake/config.h.cmake
+Log:
+[VDPAU] Begin wiring vdpau, need to do some ugly stitches as vdpau depends on x11 indirectly
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp	2009-05-13 10:40:17 UTC (rev 4821)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp	2009-05-13 10:40:21 UTC (rev 4822)
+@@ -43,7 +43,6 @@
+     static int  ADM_getBuffer(AVCodecContext *avctx, AVFrame *pic);
+ }
+ 
+-#define ADM_VDPAU 0
+ 
+ 
+ #define WRAP_Open_Template(funcz,argz,display,codecid) \
+@@ -596,16 +595,7 @@
+     LOWDELAY();
+   printf (&quot;[lavc] Initializing H264 decoder with %d extradata\n&quot;, l);
+ 
+-    if(ADM_VDPAU)
+-    {
+-        _context-&gt;get_buffer      = ADM_getBuffer;
+-        _context-&gt;release_buffer  = ADM_releaseBuffer;
+-        _context-&gt;reget_buffer    = ADM_getBuffer;
+-
+-        WRAP_OpenByName(h264_vdpau,CODEC_ID_H264);
+-    }
+-    else  
+-    {
++       {
+         WRAP_Open(CODEC_ID_H264);
+     }
+ 
+@@ -813,35 +803,4 @@
+ 	//av_free_static();
+ }
+ 
+-int ADM_getBuffer(AVCodecContext *avctx, AVFrame *pic)
+-{
+-    uint32_t w= avctx-&gt;width;
+-    uint32_t h= avctx-&gt;height;
+-
+-    uint32_t rounded_w=(w+63)&amp;~63;
+-    uint32_t rounded_h=(h+63)&amp;~63;
+-    uint32_t page=rounded_w*rounded_h;
+-
+-    pic-&gt;data[0]=new uint8_t [page];
+-    pic-&gt;data[1]=new uint8_t [page/4];
+-    pic-&gt;data[2]=new uint8_t [page/4];
+-
+-    pic-&gt;linesize[0]=rounded_w;
+-    pic-&gt;linesize[1]=rounded_w/2;
+-    pic-&gt;linesize[2]=rounded_w/2;
+-    pic-&gt;type= FF_BUFFER_TYPE_USER;
+-    pic-&gt;age=1;
+-    return 0;
+-}
+-
+- void ADM_releaseBuffer(struct AVCodecContext *avctx, AVFrame *pic)
+-{
+-    #define F(x) if(pic-&gt;x) delete [] pic-&gt;x;pic-&gt;x=NULL;
+-    F(data[0]);
+-    F(data[1]);
+-    F(data[2]);
+-    return;
+-}
+-
+-
+ // EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.h	2009-05-13 10:40:17 UTC (rev 4821)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.h	2009-05-13 10:40:21 UTC (rev 4822)
+@@ -347,4 +347,14 @@
+   decoderFFMjpegB (uint32_t w, uint32_t h, uint32_t l, uint8_t * d);
+ };
+ 
++#ifdef USE_VDPAU
++class decoderFFVDPAU:public decoderFF
++{
++protected:
++public:
++  decoderFFVDPAU (uint32_t w, uint32_t h, uint32_t l, uint8_t * d);
++};
+ 
++#endif
++// EOF
++
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau.cpp	2009-05-13 10:40:17 UTC (rev 4821)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmpeg_vdpau.cpp	2009-05-13 10:40:21 UTC (rev 4822)
+@@ -0,0 +1,142 @@
++/***************************************************************************
++            \file              ADM_ffmpeg_vdpau.cpp  
++            \brief Decoder using half ffmpeg/half VDPAU
++
++    The ffmpeg part is to preformat inputs for VDPAU
++    VDPAU is loaded dynamically to be able to make a binary
++        and have something working even if the target machine
++        does not have vdpau
++
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++extern &quot;C&quot; {
++#include &quot;ADM_lavcodec.h&quot;
++}
++
++#include &quot;ADM_default.h&quot;
++#ifdef USE_VDPAU
++#include &quot;vdpau/vdpau_x11.h&quot;
++#include &quot;vdpau/vdpau.h&quot;
++#include &quot;ADM_codecs/ADM_codec.h&quot;
++#include &quot;ADM_codecs/ADM_ffmp43.h&quot;
++#include &quot;DIA_coreToolkit.h&quot;
++#include &quot;ADM_dynamicLoading.h&quot;
++#include &quot;ADM_userInterfaces/ADM_render/GUI_render.h&quot;
++
++
++static bool vdpauWorking=false;
++
++static ADM_LibWrapper vdpauDynaLoader;
++static VdpDeviceCreateX11 *ADM_createVdpX11;
++static VdpDevice             vdpDevice;
++static VdpGetProcAddress     *vdpProcAddress;
++
++#define WRAP_Open_Template(funcz,argz,display,codecid) \
++{\
++AVCodec *codec=funcz(argz);\
++if(!codec) {GUI_Error_HIG(&quot;Codec&quot;,QT_TR_NOOP(&quot;Internal error finding codec&quot;display));ADM_assert(0);} \
++  codecId=codecid; \
++  _context-&gt;workaround_bugs=1*FF_BUG_AUTODETECT +0*FF_BUG_NO_PADDING; \
++  _context-&gt;error_concealment=3; \
++  if (avcodec_open(_context, codec) &lt; 0)  \
++                      { \
++                                        printf(&quot;[lavc] Decoder init: &quot;display&quot; video decoder failed!\n&quot;); \
++                                        GUI_Error_HIG(&quot;Codec&quot;,&quot;Internal error opening &quot;display); \
++                                        ADM_assert(0); \
++                                } \
++                                else \
++                                { \
++                                        printf(&quot;[lavc] Decoder init: &quot;display&quot; video decoder initialized! (%s)\n&quot;,codec-&gt;long_name); \
++                                } \
++}
++
++#define WRAP_Open(x)            {WRAP_Open_Template(avcodec_find_decoder,x,#x,x);}
++#define WRAP_OpenByName(x,y)    {WRAP_Open_Template(avcodec_find_decoder_by_name,#x,#x,y);}
++
++
++/**
++    \fn vdpauProbe
++    \brief Try loading vdpau...
++*/
++bool vdpauProbe(void)
++{
++    if(false==vdpauDynaLoader.loadLibrary(&quot;/usr/lib/libvdpau.so&quot;))
++    {
++        return false;
++    }
++    ADM_createVdpX11=(VdpDeviceCreateX11*)vdpauDynaLoader.getSymbol(&quot;vdp_device_create_x11&quot;);
++    if(!ADM_createVdpX11) return false;
++
++    //
++    GUI_WindowInfo xinfo;
++    void *draw;
++    draw=UI_getDrawWidget();
++    UI_getWindowInfo(draw,&amp;xinfo );
++    
++    // try to create....
++    if( VDP_STATUS_OK!=ADM_createVdpX11((Display*)xinfo.display,0,&amp;vdpDevice,&amp;vdpProcAddress))
++    {
++        return false;
++    }
++    // Now that we have the vdpProcAddress, time to get the functions....
++    
++
++
++    return true;
++}
++/**
++
++*/
++int ADM_getBuffer(AVCodecContext *avctx, AVFrame *pic)
++{
++    uint32_t w= avctx-&gt;width;
++    uint32_t h= avctx-&gt;height;
++
++    uint32_t rounded_w=(w+63)&amp;~63;
++    uint32_t rounded_h=(h+63)&amp;~63;
++    uint32_t page=rounded_w*rounded_h;
++
++    pic-&gt;data[0]=new uint8_t [page];
++    pic-&gt;data[1]=new uint8_t [page/4];
++    pic-&gt;data[2]=new uint8_t [page/4];
++
++    pic-&gt;linesize[0]=rounded_w;
++    pic-&gt;linesize[1]=rounded_w/2;
++    pic-&gt;linesize[2]=rounded_w/2;
++    pic-&gt;type= FF_BUFFER_TYPE_USER;
++    pic-&gt;age=1;
++    return 0;
++}
++
++ void ADM_releaseBuffer(struct AVCodecContext *avctx, AVFrame *pic)
++{
++    #define F(x) if(pic-&gt;x) delete [] pic-&gt;x;pic-&gt;x=NULL;
++    F(data[0]);
++    F(data[1]);
++    F(data[2]);
++    return;
++}
++//***************************
++
++decoderFFVDPAU::decoderFFVDPAU(uint32_t w, uint32_t h, uint32_t l, uint8_t * d):decoderFF (w,	   h)
++{
++        _context-&gt;get_buffer      = ADM_getBuffer;
++        _context-&gt;release_buffer  = ADM_releaseBuffer;
++        _context-&gt;reget_buffer    = ADM_getBuffer;
++
++        WRAP_OpenByName(h264_vdpau,CODEC_ID_H264);
++}
++
++
++#endif
++// EOF
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/CMakeLists.txt	2009-05-13 10:40:17 UTC (rev 4821)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/CMakeLists.txt	2009-05-13 10:40:21 UTC (rev 4822)
+@@ -1,6 +1,8 @@
+ SET(ADM_codecs_SRCS 
+ 	ADM_codecs.cpp  ADM_ffmpeg.cpp  ADM_mjpegEncode.cpp  ADM_png.cpp    ADM_theora_dec.cpp   ADM_xvid.cpp
+-	ADM_ffmp43.cpp  ADM_mjpeg.cpp   ADM_rgb16.cpp  ADM_uyvy.cpp        ADM_xvid4.cpp)
++	ADM_ffmp43.cpp  ADM_mjpeg.cpp   ADM_rgb16.cpp  ADM_uyvy.cpp        ADM_xvid4.cpp
++        ADM_ffmpeg_vdpau.cpp
++)
+ 
+ ADD_ADM_LIB_ALL_TARGETS(ADM_codecs ${ADM_codecs_SRCS})
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_core/include/ADM_dynamicLoading.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_core/include/ADM_dynamicLoading.h	2009-05-13 10:40:17 UTC (rev 4821)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_core/include/ADM_dynamicLoading.h	2009-05-13 10:40:21 UTC (rev 4822)
+@@ -34,7 +34,7 @@
+ 	#ifdef __WIN32
+ 		virtual char* formatMessage(uint32_t msgCode);
+ 	#endif
+-
++    public:
+ 		ADM_LibWrapper();
+ 		virtual ~ADM_LibWrapper();		
+ 		virtual bool loadLibrary(const char* path);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_userInterfaces/ADM_render/GUI_render.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_userInterfaces/ADM_render/GUI_render.cpp	2009-05-13 10:40:17 UTC (rev 4821)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_userInterfaces/ADM_render/GUI_render.cpp	2009-05-13 10:40:21 UTC (rev 4822)
+@@ -88,7 +88,7 @@
+   RENDER_CHECK(UI_purge); 
+   HookFunc-&gt;UI_purge();
+  }
+-static void MUI_getWindowInfo(void *draw, GUI_WindowInfo *xinfo)
++void MUI_getWindowInfo(void *draw, GUI_WindowInfo *xinfo)
+ {
+   RENDER_CHECK(UI_getWindowInfo);
+   HookFunc-&gt;UI_getWindowInfo(draw, xinfo);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/main.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/main.cpp	2009-05-13 10:40:17 UTC (rev 4821)
++++ branches/avidemux_2.6_branch_mean/avidemux/main.cpp	2009-05-13 10:40:21 UTC (rev 4822)
+@@ -42,6 +42,7 @@
+ extern void  ADM_lavInit();
+ extern void  ADM_lavDestroy();
+ extern void  ADM_lavFormatInit(void);
++extern bool  vdpauProbe(void);
+ extern &quot;C&quot; {
+      extern uint8_t     ADM_InitMemcpy(void);
+ };
+@@ -76,6 +77,8 @@
+ extern uint8_t ADM_ae_loadPlugins(const char *path);
+ extern uint8_t ADM_dm_loadPlugins(const char *path);
+ extern uint8_t ADM_mx_loadPlugins(const char *path);
++
++extern bool vdpauProbe(void);
+ extern void loadPlugins(void);
+ extern void InitFactory(void);
+ extern void InitCoreToolkit(void);
+@@ -294,6 +297,12 @@
+ 	__try1(exceptionHandler);
+ #endif
+ 
++#ifdef USE_VDPAU
++    printf(&quot;Probing for VDPAU...\n&quot;);
++    if(vdpauProbe()==true) printf(&quot;VDPAU available\n&quot;);
++        else printf(&quot;VDPAU not available\n&quot;);
++#endif
++
+     UI_RunApp();
+ 
+ #ifdef __MINGW32__
+
+Modified: branches/avidemux_2.6_branch_mean/cmake/ADM_coreConfig.h.cmake
+===================================================================
+--- branches/avidemux_2.6_branch_mean/cmake/ADM_coreConfig.h.cmake	2009-05-13 10:40:17 UTC (rev 4821)
++++ branches/avidemux_2.6_branch_mean/cmake/ADM_coreConfig.h.cmake	2009-05-13 10:40:21 UTC (rev 4822)
+@@ -18,6 +18,9 @@
+ // GCC - Operating System
+ #cmakedefine ADM_BSD_FAMILY
+ 
++// use vdpau h264 hw decoding 
++#cmakedefine USE_VDPAU
++
+ // 'gettimeofday' function is present
+ #cmakedefine HAVE_GETTIMEOFDAY
+ 
+@@ -35,4 +38,4 @@
+ #define fseeko fseeko64
+ #endif
+ 
+-#endif
+\ No newline at end of file
++#endif
+
+Modified: branches/avidemux_2.6_branch_mean/cmake/config.h.cmake
+===================================================================
+--- branches/avidemux_2.6_branch_mean/cmake/config.h.cmake	2009-05-13 10:40:17 UTC (rev 4821)
++++ branches/avidemux_2.6_branch_mean/cmake/config.h.cmake	2009-05-13 10:40:21 UTC (rev 4822)
+@@ -92,8 +92,6 @@
+ /* use Nvwa memory leak detector */
+ #cmakedefine FIND_LEAKS
+ 
+-/* use vdpau h264 hw decoding */
+-#cmakedefine USE_VDPAU
+ 
+ #if defined(OSS_SUPPORT) || defined (USE_ARTS) || defined(USE_SDL) || defined(__APPLE__) || defined(__WIN32) || defined(ALSA_SUPPORT)
+ #define HAVE_AUDIO
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002043.html">[Avidemux-svn-commit] r4821 - in branches/avidemux_2.6_branch_mean:	. avidemux/ADM_codecs	avidemux/ADM_libraries/ADM_ffmpeg/ffmpeg_config	avidemux/ADM_libraries/ADM_ffmpeg/libavcodec cmake
+</A></li>
+	<LI>Next message: <A HREF="002046.html">[Avidemux-svn-commit] r4823 - in	branches/avidemux_2.6_branch_mean/avidemux: ADM_codecs	ADM_coreImage/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2045">[ date ]</a>
+              <a href="thread.html#2045">[ thread ]</a>
+              <a href="subject.html#2045">[ subject ]</a>
+              <a href="author.html#2045">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

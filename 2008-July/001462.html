@@ -1,0 +1,126 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4214 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4214%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat&In-Reply-To=%3C200807151811.m6FIBpDu007510%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001461.html">
+   <LINK REL="Next"  HREF="001463.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4214 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4214%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat&In-Reply-To=%3C200807151811.m6FIBpDu007510%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4214 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Jul 15 20:11:51 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001461.html">[Avidemux-svn-commit] r4213 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+        <LI>Next message: <A HREF="001463.html">[Avidemux-svn-commit] r4215 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1462">[ date ]</a>
+              <a href="thread.html#1462">[ thread ]</a>
+              <a href="subject.html#1462">[ subject ]</a>
+              <a href="author.html#1462">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-07-15 20:11:43 +0200 (Tue, 15 Jul 2008)
+New Revision: 4214
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/file.c
+Log:
+[MP4] support for 64-bit output
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp	2008-07-15 17:56:08 UTC (rev 4213)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp	2008-07-15 18:11:43 UTC (rev 4214)
+@@ -530,14 +530,14 @@
+         AVPacket pkt;
+         double f;
+         int64_t timeInUs;
+-        static int sz=0;
++        static uint64_t sz = 0;
+             //printf(&quot;Audio paclet : size %u, sample %u\n&quot;,len,sample);
+ 
+            if(!audio_st) return 0;
+            if(!len) return 1;
+             av_init_packet(&amp;pkt);
+             timeInUs=(int64_t)sample2time_us(sample);
+-            aprintf(&quot;Sample :%u time :%u size :%u this round:%u\n&quot;,sample,timeInUs,sz,len);
++            aprintf(&quot;Sample: %u, time: %&quot;LLU&quot;, size: %&quot;LLU&quot;, this round: %u\n&quot;,sample, timeInUs, sz, len);
+             sz+=len;
+             /* Rescale to ?? */
+             if(_type==MUXER_FLV || _type==MUXER_MATROSKA) /* The FLV muxer expects packets dated in ms, there is something i did not get... WTF */
+@@ -552,8 +552,8 @@
+             	f*=_audioFq; // In samples
+             	f=floor(f+0.4);
+             }
+-            pkt.dts=pkt.pts=(int)(f);
+-            aprintf(&quot;Adm audio dts=:%u\n&quot;,pkt.dts);
++            pkt.dts=pkt.pts=f;
++            aprintf(&quot;Adm audio dts: %&quot;LLU&quot;\n&quot;,pkt.dts);
+             //printf(&quot;F:%f Q:%u D=%u\n&quot;,f,pkt.pts,timeInUs-_lastAudioDts);
+ 
+             pkt.flags |= PKT_FLAG_KEY;
+@@ -561,7 +561,7 @@
+             pkt.size= len;
+             pkt.stream_index=1;
+             //pkt.duration=pkt.dts-_lastAudioDts; // Duration
+-            aprintf(&quot;A: sample: %d frame_pts: %d fq: %d\n&quot;,(int32_t )sample,(int32_t )pkt.dts,audio_st-&gt;codec-&gt;sample_rate);
++            aprintf(&quot;A: sample: %d, frame_pts: %&quot;LLU&quot;, fq: %d\n&quot;, sample, pkt.dts, audio_st-&gt;codec-&gt;sample_rate);
+ 
+             ret = av_write_frame(oc, &amp;pkt);
+             _lastAudioDts=timeInUs;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/file.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/file.c	2008-07-15 17:56:08 UTC (rev 4213)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/file.c	2008-07-15 18:11:43 UTC (rev 4214)
+@@ -28,6 +28,7 @@
+ #ifdef __WIN32
+ extern int ADM_open(const char *path, int oflag, ...);
+ #define open ADM_open
++#define lseek(f,p,w) _lseeki64((f), (p), (w))
+ #endif
+ // GRUNTSTER end
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001461.html">[Avidemux-svn-commit] r4213 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+	<LI>Next message: <A HREF="001463.html">[Avidemux-svn-commit] r4215 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1462">[ date ]</a>
+              <a href="thread.html#1462">[ thread ]</a>
+              <a href="subject.html#1462">[ subject ]</a>
+              <a href="author.html#1462">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

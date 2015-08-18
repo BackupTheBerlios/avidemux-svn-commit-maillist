@@ -1,0 +1,153 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2967 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2967%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200704251719.l3PHJ9Ho011339%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000283.html">
+   <LINK REL="Next"  HREF="000285.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2967 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2967%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200704251719.l3PHJ9Ho011339%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2967 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Apr 25 19:19:09 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000283.html">[Avidemux-svn-commit] r2966 -	branches/avidemux_2.4_branch/avidemux/ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="000285.html">[Avidemux-svn-commit] r2968 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_inputs/ADM_matroska ADM_userInterfaces/ADM_GTK/ADM_gui2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#284">[ date ]</a>
+              <a href="thread.html#284">[ thread ]</a>
+              <a href="subject.html#284">[ subject ]</a>
+              <a href="author.html#284">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-04-25 19:19:01 +0200 (Wed, 25 Apr 2007)
+New Revision: 2967
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/mkv_tagenum.h
+Log:
+fix size of audio blocks
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-04-25 14:01:19 UTC (rev 2966)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-04-25 17:19:01 UTC (rev 2967)
+@@ -131,6 +131,12 @@
+                                                     remaining--;
+                                                     // Only mp3/Ac3 supported, ignore lacing FIXME : Vorbis or AAC will not work
+                                                     addVideoEntry(track,blockGroup.tell(),remaining);
++                                                    int bsize=remaining/nbLaces;
++                                                    if(bsize*nbLaces!=remaining)
++                                                    {
++                                                      printf(&quot;Warning not multiple bsize=%d total=%u  nbLaces=%u\n&quot;,bsize,remaining,nbLaces);
++                                                    }
++                                                    if(!track) printf(&quot;Warning lacing on video track\n&quot;);
+                                                     //printf(&quot;tid:%u track %u Remaining : %llu laces %u blksize %d er%d\n&quot;,tid,track,remaining,nbLaces,remaining/nbLaces,remaining-(remaining/nbLaces)*nbLaces);
+                                             } 
+                                         break;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2007-04-25 14:01:19 UTC (rev 2966)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2007-04-25 17:19:01 UTC (rev 2967)
+@@ -27,25 +27,9 @@
+ #include &quot;fourcc.h&quot;
+ #include &quot;ADM_toolkit/toolkit.hxx&quot;
+ 
+-
+ #include &quot;ADM_mkv.h&quot;
+-#if 0
+-class mkvAudio : public AVDMGenericAudioStream
+-{
+-  protected:
+-    mkvTrak                     *_track;
+-    
+-  public:
+-                                mkvAudio(mkvTrak *track);
+-    virtual                     ~mkvAudio();
+-    virtual uint32_t            read(uint32_t len,uint8_t *buffer);
+-    virtual uint8_t             goTo(uint32_t newoffset);
+-    virtual uint8_t             getPacket(uint8_t *dest, uint32_t *len, uint32_t *samples);
+-    virtual uint8_t             goToTime(uint32_t mstime);
+-    virtual uint8_t             extraData(uint32_t *l,uint8_t **d);
+-};
+-#endif
+ 
++
+ /**
+     \fn ~mkvAudio
+     
+@@ -66,14 +50,15 @@
+     //********************************************
+     if(_index&gt;=_track-&gt;_nbIndex)
+     {
+-      return 0; 
++      return red; 
+     }
+     //********************************************
+     if(len+_offset &lt;=_track-&gt;_index[_index].size)
+     {
+       _parser-&gt;readBin(buffer,len);
+       _offset+=len;
+-      return len; 
++      red+=len;
++      return red; 
+     }
+     // empty...
+     //********************************************
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/mkv_tagenum.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/mkv_tagenum.h	2007-04-25 14:01:19 UTC (rev 2966)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/mkv_tagenum.h	2007-04-25 17:19:01 UTC (rev 2967)
+@@ -86,6 +86,7 @@
+   MKTAG(MKV_TIMECODE,0xE7,ADM_MKV_TYPE_UINTEGER),
+   MKTAG(MKV_BLOCK_GROUP,0xA0,ADM_MKV_TYPE_CONTAINER),
+   MKTAG(MKV_BLOCK,0xA1,ADM_MKV_TYPE_BINARY),
++  MKTAG(MKV_SIMPLE_BLOCK,0xA3,ADM_MKV_TYPE_BINARY),
+   /** */
+   MKTAG(MKV_CUE_POINT,0xBB,ADM_MKV_TYPE_CONTAINER),
+   MKTAG(MKV_CUE_TIME,0xB3,ADM_MKV_TYPE_UINTEGER),
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000283.html">[Avidemux-svn-commit] r2966 -	branches/avidemux_2.4_branch/avidemux/ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="000285.html">[Avidemux-svn-commit] r2968 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_inputs/ADM_matroska ADM_userInterfaces/ADM_GTK/ADM_gui2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#284">[ date ]</a>
+              <a href="thread.html#284">[ thread ]</a>
+              <a href="subject.html#284">[ subject ]</a>
+              <a href="author.html#284">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

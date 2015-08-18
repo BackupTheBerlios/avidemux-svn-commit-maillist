@@ -1,0 +1,529 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4634 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4634%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script&In-Reply-To=%3C200902251404.n1PE4l6W027982%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001863.html">
+   <LINK REL="Next"  HREF="001865.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4634 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4634%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script&In-Reply-To=%3C200902251404.n1PE4l6W027982%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4634 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Wed Feb 25 15:04:47 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001863.html">[Avidemux-svn-commit] r4633 - in	branches/avidemux_2.5_branch_gruntster/avidemux: .	ADM_userInterfaces/ADM_render
+</A></li>
+        <LI>Next message: <A HREF="001865.html">[Avidemux-svn-commit] r4635 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1864">[ date ]</a>
+              <a href="thread.html#1864">[ thread ]</a>
+              <a href="subject.html#1864">[ subject ]</a>
+              <a href="author.html#1864">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-02-25 15:04:40 +0100 (Wed, 25 Feb 2009)
+New Revision: 4634
+
+Added:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDFMenu.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDFMenu.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDialogFactory.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDialogFactory.h
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSGlobal.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/CMakeLists.txt
+Log:
+[script] add very basic dialogFactory class to ECMAScript engine
+
+Added: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDFMenu.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDFMenu.cpp	2009-02-24 22:25:28 UTC (rev 4633)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDFMenu.cpp	2009-02-25 14:04:40 UTC (rev 4634)
+@@ -0,0 +1,177 @@
++#include &quot;ADM_JSDFMenu.h&quot;
++
++ADM_JSDFMenuHelper::ADM_JSDFMenuHelper(const char *title)
++{
++	_title = ADM_strdup(title);
++	_menuEntries = NULL;
++	_index = 0;
++}
++
++ADM_JSDFMenuHelper::~ADM_JSDFMenuHelper(void)
++{
++	if (_title)
++		delete _title;
++
++	_title = NULL;
++
++	std::vector&lt;char*&gt;::iterator it;
++
++	for (it = _items.begin(); it != _items.end(); it++)
++		delete *it;
++
++	_items.clear();
++
++	if (_menuEntries)
++		delete _menuEntries;
++
++	_menuEntries = NULL;
++}
++
++void ADM_JSDFMenuHelper::addItem(const char* item)
++{
++	_items.push_back(ADM_strdup(item));
++}
++
++diaElem* ADM_JSDFMenuHelper::getControl(void)
++{
++	if (_menuEntries)
++		delete _menuEntries;
++
++	std::vector&lt;char*&gt;::iterator it;
++	int i = 0;
++
++	_menuEntries = new diaMenuEntry[_items.size()];	
++
++	for (it = _items.begin(); it != _items.end(); it++)
++	{
++		_menuEntries[i].val = i;
++		_menuEntries[i].text = *it;
++		_menuEntries[i].desc = NULL;
++
++		i++;
++	}
++
++	return new diaElemMenu(&amp;_index, _title, _items.size(), _menuEntries);
++}
++
++int ADM_JSDFMenuHelper::index(void)
++{
++	return _index;
++}
++
++void ADM_JSDFMenuHelper::setIndex(int index)
++{
++	_index = index;
++}
++
++JSPropertySpec ADM_JSDFMenu::properties[] = 
++{ 
++	{ &quot;index&quot;, indexProperty, JSPROP_ENUMERATE },
++	{ 0 }
++};
++
++JSFunctionSpec ADM_JSDFMenu::methods[] =
++{
++	{ &quot;addItem&quot;, addItem, 1, 0, 0 },
++	{ 0 }
++};
++
++JSClass ADM_JSDFMenu::m_dfMenuHelper =
++{
++	&quot;DFMenu&quot;, JSCLASS_HAS_PRIVATE,
++	JS_PropertyStub, JS_PropertyStub,
++	ADM_JSDFMenu::JSGetProperty, ADM_JSDFMenu::JSSetProperty,
++	JS_EnumerateStub, JS_ResolveStub,
++	JS_ConvertStub, ADM_JSDFMenu::JSDestructor
++};
++
++JSObject *ADM_JSDFMenu::JSInit(JSContext *cx, JSObject *obj, JSObject *proto)
++{
++	return JS_InitClass(cx, obj, proto, &amp;m_dfMenuHelper, 
++		ADM_JSDFMenu::JSConstructor, 1,
++		ADM_JSDFMenu::properties, ADM_JSDFMenu::methods,
++		NULL, NULL);
++}
++
++JSBool ADM_JSDFMenu::JSConstructor(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
++{
++	if (argc != 1)
++		return JS_FALSE;
++
++	if (!JSVAL_IS_STRING(argv[0]))
++		return JS_FALSE;
++
++	ADM_JSDFMenuHelper *pObject = new ADM_JSDFMenuHelper(JS_GetStringBytes(JSVAL_TO_STRING(argv[0])));
++
++	if (!JS_SetPrivate(cx, obj, pObject))
++		return JS_FALSE;
++
++	*rval = OBJECT_TO_JSVAL(obj);
++
++	return JS_TRUE;
++}
++
++void ADM_JSDFMenu::JSDestructor(JSContext *cx, JSObject *obj)
++{
++	ADM_JSDFMenuHelper *pObject = (ADM_JSDFMenuHelper*)JS_GetInstancePrivate(cx, obj, &amp;m_dfMenuHelper, NULL);
++
++	if (pObject)
++		delete pObject;
++}
++
++JSBool ADM_JSDFMenu::addItem(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
++{
++	ADM_JSDFMenuHelper *pObject = (ADM_JSDFMenuHelper*)JS_GetInstancePrivate(cx, obj, &amp;m_dfMenuHelper, NULL);
++
++	if (argc != 1)
++		return JS_FALSE;
++
++	if (!JSVAL_IS_STRING(argv[0]))
++		return JS_FALSE;
++
++	pObject-&gt;addItem(JS_GetStringBytes(JSVAL_TO_STRING(argv[0])));
++
++	return JS_TRUE;
++}
++
++JSBool ADM_JSDFMenu::JSGetProperty(JSContext *cx, JSObject *obj, jsval id, jsval *vp)
++{
++	if (JSVAL_IS_INT(id)) 
++	{
++		ADM_JSDFMenuHelper *pObject = (ADM_JSDFMenuHelper*)JS_GetInstancePrivate(cx, obj, &amp;m_dfMenuHelper, NULL);
++
++		switch(JSVAL_TO_INT(id))
++		{
++			case indexProperty:
++			{
++				*vp = INT_TO_JSVAL(pObject-&gt;index());
++				break;
++			}
++		}
++	}
++
++	return JS_TRUE;
++}
++
++JSBool ADM_JSDFMenu::JSSetProperty(JSContext *cx, JSObject *obj, jsval id, jsval *vp)
++{
++	if (JSVAL_IS_INT(id)) 
++	{
++		ADM_JSDFMenuHelper *pObject = (ADM_JSDFMenuHelper*)JS_GetInstancePrivate(cx, obj, &amp;m_dfMenuHelper, NULL);
++
++		switch(JSVAL_TO_INT(id))
++		{
++			case indexProperty:
++			{
++				if (JSVAL_IS_INT(*vp))
++					pObject-&gt;setIndex(JSVAL_TO_INT(*vp));
++
++				break;
++			}
++			default:
++				return JS_FALSE;
++		}
++	}
++
++	return JS_TRUE;
++}
+
+Added: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDFMenu.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDFMenu.h	2009-02-24 22:25:28 UTC (rev 4633)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDFMenu.h	2009-02-25 14:04:40 UTC (rev 4634)
+@@ -0,0 +1,50 @@
++#ifndef _ADM_JSDFMenu_H
++#define _ADM_JSDFMenu_H
++
++#include &quot;config.h&quot;
++#include &quot;ADM_libraries/ADM_smjs/jsapi.h&quot;
++#include &quot;DIA_factory.h&quot;
++#include &lt;vector&gt;
++
++class ADM_JSDFMenuHelper
++{
++private:
++	char* _title;
++	uint32_t _index;
++	diaMenuEntry *_menuEntries;
++	std::vector &lt;char*&gt; _items;
++
++public:
++	ADM_JSDFMenuHelper(const char *title);
++	~ADM_JSDFMenuHelper(void);
++	void addItem(const char* item);
++	diaElem* getControl(void);
++	int index(void);
++	void setIndex(int index);
++};
++
++class ADM_JSDFMenu
++{
++public:
++	ADM_JSDFMenu(void) {}
++
++	static JSBool JSConstructor(JSContext *cx, JSObject *obj, uintN argc, 
++								jsval *argv, jsval *rval);
++	static void JSDestructor(JSContext *cx, JSObject *obj);
++	static JSObject *JSInit(JSContext *cx, JSObject *obj, JSObject *proto = NULL);
++	static JSBool JSGetProperty(JSContext *cx, JSObject *obj, jsval id, jsval *vp);
++	static JSBool JSSetProperty(JSContext *cx, JSObject *obj, jsval id, jsval *vp);
++
++	static JSBool addItem(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);	
++
++	static JSPropertySpec properties[];
++	static JSFunctionSpec methods[];
++	static JSClass m_dfMenuHelper;
++
++	enum
++	{
++		indexProperty
++	};
++};
++
++#endif
+
+Added: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDialogFactory.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDialogFactory.cpp	2009-02-24 22:25:28 UTC (rev 4633)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDialogFactory.cpp	2009-02-25 14:04:40 UTC (rev 4634)
+@@ -0,0 +1,123 @@
++#include &quot;ADM_JSDialogFactory.h&quot;
++
++ADM_JSDialogFactoryHelper::ADM_JSDialogFactoryHelper(const char *title)
++{
++	_title = ADM_strdup(title);
++}
++
++ADM_JSDialogFactoryHelper::~ADM_JSDialogFactoryHelper(void)
++{
++	if (_title)
++		delete _title;
++
++	_title = NULL;
++}
++
++void ADM_JSDialogFactoryHelper::addControl(ADM_JSDFMenuHelper* control)
++{
++	_controls.push_back(control);
++}
++
++diaElem** ADM_JSDialogFactoryHelper::getControls(int *controlCount)
++{
++	*controlCount = (int)_controls.size();
++
++	std::vector&lt;ADM_JSDFMenuHelper*&gt;::iterator it;
++	int i = 0;
++	diaElem **elems = new diaElem*[*controlCount];
++
++	for (it = _controls.begin(); it != _controls.end(); it++)
++	{
++		elems[i] = (*it)-&gt;getControl();
++		i++;
++	}
++
++	return elems;
++}
++
++const char* ADM_JSDialogFactoryHelper::title(void)
++{
++	return _title;
++}
++
++JSFunctionSpec ADM_JSDialogFactory::methods[] =
++{
++	{ &quot;addControl&quot;, addControl, 1, 0, 0 },
++	{ &quot;show&quot;, show, 0, 0, 0 },
++	{ 0 }
++};
++
++JSClass ADM_JSDialogFactory::m_dialogFactoryHelper =
++{
++	&quot;DialogFactory&quot;, JSCLASS_HAS_PRIVATE,
++	JS_PropertyStub, JS_PropertyStub,
++	JS_PropertyStub, JS_PropertyStub,
++	JS_EnumerateStub, JS_ResolveStub,
++	JS_ConvertStub, ADM_JSDialogFactory::JSDestructor
++};
++
++JSObject *ADM_JSDialogFactory::JSInit(JSContext *cx, JSObject *obj, JSObject *proto)
++{
++	return JS_InitClass(cx, obj, proto, &amp;m_dialogFactoryHelper, 
++		ADM_JSDialogFactory::JSConstructor, 1,
++		NULL, ADM_JSDialogFactory::methods,
++		NULL, NULL);
++}
++
++JSBool ADM_JSDialogFactory::JSConstructor(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
++{
++	if (argc != 1)
++		return JS_FALSE;
++
++	if (JSVAL_IS_STRING(argv[0]) == false)
++		return JS_FALSE;
++
++	ADM_JSDialogFactoryHelper *pObject = new ADM_JSDialogFactoryHelper(JS_GetStringBytes(JSVAL_TO_STRING(argv[0])));
++
++	if (!JS_SetPrivate(cx, obj, pObject))
++		return JS_FALSE;
++
++	*rval = OBJECT_TO_JSVAL(obj);
++
++	return JS_TRUE;
++}
++
++void ADM_JSDialogFactory::JSDestructor(JSContext *cx, JSObject *obj)
++{
++	ADM_JSDialogFactoryHelper *pObject = (ADM_JSDialogFactoryHelper*)JS_GetInstancePrivate(cx, obj, &amp;m_dialogFactoryHelper, NULL);
++
++	if (pObject != NULL)
++		delete pObject;
++}
++
++JSBool ADM_JSDialogFactory::addControl(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
++{
++	ADM_JSDialogFactoryHelper *p = (ADM_JSDialogFactoryHelper*)JS_GetInstancePrivate(cx, obj, &amp;m_dialogFactoryHelper, NULL);
++
++	if (argc != 1)
++		return JS_FALSE;
++
++	p-&gt;addControl((ADM_JSDFMenuHelper*)JS_GetPrivate(cx, JSVAL_TO_OBJECT(argv[0])));
++
++	return JS_TRUE;
++}
++
++JSBool ADM_JSDialogFactory::show(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
++{
++	ADM_JSDialogFactoryHelper *p = (ADM_JSDialogFactoryHelper*)JS_GetInstancePrivate(cx, obj, &amp;m_dialogFactoryHelper, NULL);
++
++	if (argc != 0)
++		return JS_FALSE;
++
++	int controlCount;
++	diaElem **elems = p-&gt;getControls(&amp;controlCount);
++
++	*rval = BOOLEAN_TO_JSVAL(diaFactoryRun(p-&gt;title(), controlCount, elems));
++
++	for (int i = 0; i &lt; controlCount; i++)
++		delete elems[i];
++
++	delete elems;
++
++	return JS_TRUE;
++}
+
+Added: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDialogFactory.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDialogFactory.h	2009-02-24 22:25:28 UTC (rev 4633)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSDialogFactory.h	2009-02-25 14:04:40 UTC (rev 4634)
+@@ -0,0 +1,41 @@
++#ifndef _ADM_JSDialogFactory_H
++#define _ADM_JSDialogFactory_H
++
++#include &quot;config.h&quot;
++#include &quot;ADM_libraries/ADM_smjs/jsapi.h&quot;
++#include &quot;DIA_factory.h&quot;
++#include &quot;ADM_JSDFMenu.h&quot;
++#include &lt;vector&gt;
++
++class ADM_JSDialogFactoryHelper
++{
++private:
++	char* _title;
++	std::vector &lt;ADM_JSDFMenuHelper*&gt; _controls;
++
++public:
++	ADM_JSDialogFactoryHelper(const char *title);
++	~ADM_JSDialogFactoryHelper(void);
++	void addControl(ADM_JSDFMenuHelper* control);
++	diaElem** getControls(int *controlCount);
++	const char* title(void);
++};
++
++class ADM_JSDialogFactory
++{
++public:
++	ADM_JSDialogFactory(void) {}
++	virtual ~ADM_JSDialogFactory(void);
++
++	static JSBool JSConstructor(JSContext *cx, JSObject *obj, uintN argc, 
++								jsval *argv, jsval *rval);
++	static void JSDestructor(JSContext *cx, JSObject *obj);
++	static JSObject *JSInit(JSContext *cx, JSObject *obj, JSObject *proto = NULL);
++	static JSBool addControl(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
++	static JSBool show(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
++
++	static JSFunctionSpec methods[];
++	static JSClass m_dialogFactoryHelper;
++};
++
++#endif
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSGlobal.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSGlobal.cpp	2009-02-24 22:25:28 UTC (rev 4633)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSGlobal.cpp	2009-02-25 14:04:40 UTC (rev 4634)
+@@ -18,6 +18,8 @@
+ #include &quot;ADM_JSGlobal.h&quot;
+ #include &quot;ADM_JSAvidemux.h&quot;
+ #include &quot;ADM_JSDirectorySearch.h&quot;
++#include &quot;ADM_JSDialogFactory.h&quot;
++#include &quot;ADM_JSDFMenu.h&quot;
+ 
+ extern uint8_t JS_AvidemuxFunction(JSContext *cx,JSObject *global);
+ extern void A_Resync(void);
+@@ -94,6 +96,9 @@
+ 			// load our custom JS class objects
+ 			JSObject *obj = ADM_JSAvidemux::JSInit(cx, global);
+ 			JSObject *dsObj = ADM_JSDirectorySearch::JSInit(cx, global);
++			JSObject *df = ADM_JSDialogFactory::JSInit(cx, global);
++			JSObject *dfmenu = ADM_JSDFMenu::JSInit(cx, global);
++
+ 			// register error handler
+ 			JS_SetErrorReporter(cx, printJSError);
+                         JS_AvidemuxFunction(cx,global);
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/CMakeLists.txt	2009-02-24 22:25:28 UTC (rev 4633)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/CMakeLists.txt	2009-02-25 14:04:40 UTC (rev 4634)
+@@ -1,6 +1,7 @@
+ SET(ADM_script_SRCS
+ 	ADM_AvidemuxAudio.cpp  ADM_AvidemuxVideo.cpp    ADM_JSAvidemux.cpp       ADM_JSDirectorySearch.cpp  ADM_JSGlobal.cpp
+-	ADM_Avidemux.cpp       ADM_JSAvidemuxAudio.cpp  ADM_JSAvidemuxVideo.cpp  ADM_JSFunctions.cpp        DirectorySearch.cpp)
++	ADM_Avidemux.cpp       ADM_JSAvidemuxAudio.cpp  ADM_JSAvidemuxVideo.cpp  ADM_JSFunctions.cpp        DirectorySearch.cpp
++	ADM_JSDialogFactory.cpp  ADM_JSDFMenu.cpp)
+ 
+ ADD_ADM_LIB_ALL_TARGETS(ADM_script ${ADM_script_SRCS})
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001863.html">[Avidemux-svn-commit] r4633 - in	branches/avidemux_2.5_branch_gruntster/avidemux: .	ADM_userInterfaces/ADM_render
+</A></li>
+	<LI>Next message: <A HREF="001865.html">[Avidemux-svn-commit] r4635 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1864">[ date ]</a>
+              <a href="thread.html#1864">[ thread ]</a>
+              <a href="subject.html#1864">[ subject ]</a>
+              <a href="author.html#1864">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

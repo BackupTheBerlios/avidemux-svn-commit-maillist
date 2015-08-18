@@ -1,0 +1,746 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4370 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4370%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi&In-Reply-To=%3C200809191556.m8JFu90t005849%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001609.html">
+   <LINK REL="Next"  HREF="001611.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4370 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4370%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi&In-Reply-To=%3C200809191556.m8JFu90t005849%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4370 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Fri Sep 19 17:56:09 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001609.html">[Avidemux-svn-commit] r4369 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+</A></li>
+        <LI>Next message: <A HREF="001611.html">[Avidemux-svn-commit] r4371 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1610">[ date ]</a>
+              <a href="thread.html#1610">[ thread ]</a>
+              <a href="subject.html#1610">[ subject ]</a>
+              <a href="author.html#1610">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-09-19 17:56:00 +0200 (Fri, 19 Sep 2008)
+New Revision: 4370
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisave.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisave.h
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy_pack.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy_unpack.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_savecopy.h
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_saveprocess.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_saveprocess.h
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_savesmart.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_savesmart.hxx
+Log:
+[avi] remove prefilling since it doesn't cater for empty frames that occur mid-stream (e.g. Xvid with B-frames). Empty frames are only treated as delayed if the flush flag is returned by encoder.
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisave.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisave.cpp	2008-09-19 15:21:58 UTC (rev 4369)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisave.cpp	2008-09-19 15:56:00 UTC (rev 4370)
+@@ -135,6 +135,7 @@
+  _pq=NULL;
+  memset(&amp;_context,0,sizeof(_context));
+  _context.audioDone=1;
++ _encode=NULL;
+ }
+ 
+ GenericAviSave::~GenericAviSave ()
+@@ -209,20 +210,30 @@
+   //__________________________________
+   //   now go to main loop.....
+   //__________________________________
++  int frameDelay = 0;
++  int videoSize;
++
+   for (uint32_t cf = 0; cf &lt; frametogo; cf++) 
+-    {
+-			
+-			
+-			
+-      			if (guiUpdate (cf, frametogo))
+-					goto abortme;
+-      			//   printf(&quot;\n %lu / %lu&quot;,cf,frametogo);
+-      			writeVideoChunk (cf);
+-      			writeAudioChunk (cf);
+-			//writter-&gt;sync();
+-     
+-     
+-    };				// end for
++  {
++	  if (guiUpdate(cf, frametogo))
++		  goto abortme;
++
++	  for (;;)
++	  {
++		  videoSize = writeVideoChunk(cf + frameDelay);
++
++		  if (videoSize == 0 &amp;&amp; _encode &amp;&amp; (_encode-&gt;getRequirements() &amp; ADM_ENC_REQ_NULL_FLUSH))
++		  {
++			  printf(&quot;skipping frame: %u size: %i\n&quot;, cf + frameDelay, videoSize);
++			  frameDelay++;
++		  }
++		  else
++			  break;
++	  }
++
++	  writeAudioChunk(cf);
++  }
++
+     ret=1;
+ abortme:
+   guiStop ();
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisave.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisave.h	2008-09-19 15:21:58 UTC (rev 4369)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisave.h	2008-09-19 15:56:00 UTC (rev 4370)
+@@ -23,11 +23,13 @@
+  #include &quot;ADM_image.h&quot;
+  #include &quot;ADM_fileio.h&quot;
+ #include &quot;ADM_toolkit/ADM_audioQueue.h&quot;
++#include &quot;ADM_encoder/adm_encoder.h&quot;
+ 
+  class GenericAviSave
+  {
+      protected :
+                 ADMFile                 *_file;
++				Encoder 	*_encode;
+                 
+      		uint32_t		_audioTarget;
+ 		uint32_t		_audioCurrent;
+@@ -61,7 +63,7 @@
+                     virtual uint8_t setupAudio( void);
+                     virtual uint8_t setupVideo( char *name )=0;
+                     virtual uint8_t writeAudioChunk(uint32_t  f);
+-                    virtual uint8_t writeVideoChunk(uint32_t frame )=0;
++                    virtual int writeVideoChunk(uint32_t frame )=0;
+                     virtual void guiStart(void);
+                     virtual void guiStop(void);
+                     	    void guiSetPhasis(const char *str);
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy.cpp	2008-09-19 15:21:58 UTC (rev 4369)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy.cpp	2008-09-19 15:56:00 UTC (rev 4370)
+@@ -122,8 +122,7 @@
+ // Basically ask a video frame and send it to writter
+ // If it contains b frame and frames have been re-ordered
+ // reorder them back ...
+-uint8_t
+-GenericAviSaveCopy::writeVideoChunk (uint32_t frame)
++int GenericAviSaveCopy::writeVideoChunk (uint32_t frame)
+ {
+   
+   uint8_t    ret1;
+@@ -148,7 +147,7 @@
+       }
+ 
+   if (!ret1)
+-    return 0;
++    return -1;
+ 
+     // check for split
+      // check for auto split
+@@ -171,9 +170,11 @@
+   if(_videoFlag==AVI_KEY_FRAME)
+           newFile();
+   encoding_gui-&gt;setFrame(frame,img.dataLength,0,frametogo);
+-  return writter-&gt;saveVideoFrame (img.dataLength, img.flags, img.data);
+ 
+-
++  if (writter-&gt;saveVideoFrame (img.dataLength, img.flags, img.data))
++	  return img.dataLength;
++  else
++	  return -1;
+ }
+ /**
+       \fn newFile
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy_pack.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy_pack.cpp	2008-09-19 15:21:58 UTC (rev 4369)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy_pack.cpp	2008-09-19 15:56:00 UTC (rev 4370)
+@@ -192,7 +192,7 @@
+       \brief init for unpacker code
+ 
+ */
+-uint8_t GenericAviSaveCopyPack::writeVideoChunk (uint32_t frame)
++int GenericAviSaveCopyPack::writeVideoChunk (uint32_t frame)
+ {
+   
+   uint8_t    ret1;
+@@ -236,7 +236,7 @@
+                  
+                 if( !prefetch(curToggle^1,frame+1))
+                     {
+-                        return 0; 
++                        return -1; 
+                     }
+                 // Curtoggle holds the current frame, curToggle ^1 hold the next frame
+                 if(current-&gt;flags!=1 &amp;&amp; current-&gt;flags!=AVI_B_FRAME &amp;&amp; next-&gt;flags==AVI_B_FRAME)
+@@ -277,15 +277,18 @@
+       }
+ 
+   if (!ret1)
+-    return 0;
++    return -1;
+ 
+      if(_videoFlag==AVI_KEY_FRAME)
+           newFile();
+ 
+   aprintf(&quot;Writting frame %u size %u flags %x\n&quot;,frame,img.dataLength,_videoFlag);  
+   encoding_gui-&gt;setFrame(frame,img.dataLength,0,frametogo);
+-  return writter-&gt;saveVideoFrame (img.dataLength, img.flags, img.data);
+-
++  
++  if (writter-&gt;saveVideoFrame (img.dataLength, img.flags, img.data))
++	  return img.dataLength;
++  else
++	  return -1;
+ }
+ 
+ //_____________________________________________________
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy_unpack.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy_unpack.cpp	2008-09-19 15:21:58 UTC (rev 4369)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy_unpack.cpp	2008-09-19 15:56:00 UTC (rev 4370)
+@@ -130,7 +130,7 @@
+       \brief init for unpacker code
+ 
+ */
+-uint8_t GenericAviSaveCopyUnpack::writeVideoChunk (uint32_t frame)
++int GenericAviSaveCopyUnpack::writeVideoChunk (uint32_t frame)
+ {
+   
+   uint8_t    ret1;
+@@ -159,15 +159,19 @@
+       }
+ 
+   if (!ret1)
+-    return 0;
++    return -1;
+ 
+       if(_videoFlag==AVI_KEY_FRAME)
+           newFile();
+ 
+   
+   encoding_gui-&gt;setFrame(frame,img.dataLength,0,frametogo);
+-  return writter-&gt;saveVideoFrame (img.dataLength, img.flags, img.data);
+ 
++  if (writter-&gt;saveVideoFrame (img.dataLength, img.flags, img.data))
++	  return img.dataLength;
++  else
++	  return -1;
++
+ }
+ 
+ //_____________________________________________________
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_savecopy.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_savecopy.h	2008-09-19 15:21:58 UTC (rev 4369)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_savecopy.h	2008-09-19 15:56:00 UTC (rev 4370)
+@@ -22,7 +22,7 @@
+      protected :
+ 		                                EncoderCopy          *copy;	
+ 		          virtual uint8_t 	setupVideo( char *name  );
+-                          virtual uint8_t 	writeVideoChunk(uint32_t frame );
++                          virtual int 	writeVideoChunk(uint32_t frame );
+                                   uint8_t       newFile(void);
+ 
+      public:
+@@ -54,7 +54,7 @@
+  {
+      protected :
+                           virtual uint8_t 	setupVideo( char *name  );
+-                          virtual uint8_t 	writeVideoChunk(uint32_t frame );
++                          virtual int 	writeVideoChunk(uint32_t frame );
+      public:
+   
+  };
+@@ -66,7 +66,7 @@
+                           uint32_t              curToggle;
+                           uint32_t              time_inc;
+                           virtual uint8_t 	setupVideo( char *name  );
+-                          virtual uint8_t 	writeVideoChunk(uint32_t frame );
++                          virtual int 	writeVideoChunk(uint32_t frame );
+                                   uint8_t       prefetch(uint32_t buffer,uint32_t frame);
+      public:
+                           virtual	~GenericAviSaveCopyPack();	
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_saveprocess.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_saveprocess.cpp	2008-09-19 15:21:58 UTC (rev 4369)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_saveprocess.cpp	2008-09-19 15:56:00 UTC (rev 4370)
+@@ -18,6 +18,8 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
++#define __STDC_LIMIT_MACROS
++
+ #include &lt;stdio.h&gt;
+ #include &lt;stdlib.h&gt;
+ #include &lt;math.h&gt;
+@@ -56,15 +58,12 @@
+ {
+ 	TwoPassLogFile=NULL;
+ 	_incoming=NULL;
+-	_encode=NULL;
+ 	_videoProcess=1;
+-	_prefill=0;
+ };
+ 
+ uint8_t
+ GenericAviSaveProcess::setupVideo (char *name)
+ {
+-	_notnull=0;
+ 	_incoming = getLastVideoFilter (frameStart,frameEnd-frameStart);
+  	frametogo=_incoming-&gt;getInfo()-&gt;nb_frames;
+ 	encoding_gui-&gt;setFps(_incoming-&gt;getInfo()-&gt;fps1000);
+@@ -117,7 +116,7 @@
+       uint32_t len, flag;
+       FILE *tmp;
+ 	uint8_t reuse=0;
+-	int prefill = 0, r;
++	int r, frameDelay = 0;
+ 
+  	aprintf(&quot;\n** Dual pass encoding**\n&quot;);
+ 
+@@ -145,53 +144,47 @@
+         bitstream.bufferSize = _incoming-&gt;getInfo()-&gt;width * _incoming-&gt;getInfo()-&gt;height * 3;
+         bitstream.data=buffer;
+ 
+-preFilling:
+-		bitstream.cleanup(0);
+-
+-		if(!_encode-&gt;encode(prefill, &amp;bitstream))
++		for (uint32_t cf = 0; cf &lt; frametogo; cf++)
+ 		{
+-			printf(&quot;AVI: First frame error\n&quot;);
+-			GUI_Error_HIG(QT_TR_NOOP(&quot;Error while encoding&quot;), NULL);
+-			return 0;
+-		}
++			if (guiUpdate (cf, frametogo))
++			{
++abt:
++				GUI_Error_HIG (QT_TR_NOOP(&quot;Aborting&quot;), NULL);
++				delete[] buffer;
++				return -1;
++			}
+ 
+-		if (!bitstream.len)
+-		{
+-			prefill++;
+-			goto preFilling;
+-		}
++			for (;;)
++			{
++				bitstream.cleanup(cf);
+ 
+-		printf(&quot;Prefill: %u\n&quot;, prefill);
++				if (cf + frameDelay &gt;= frametogo)
++				{
++					if (_encode-&gt;getRequirements() &amp; ADM_ENC_REQ_NULL_FLUSH)
++						r = _encode-&gt;encode(UINT32_MAX, &amp;bitstream);
++					else
++						r = 0;
++				}
++				else
++					r = _encode-&gt;encode(cf + frameDelay, &amp;bitstream);
+ 
+-      //__________________________________
+-      //   now go to main loop.....
+-      //__________________________________
+-        for (uint32_t cf = 1; cf &lt; frametogo; cf++)
+-        {
+-          if (guiUpdate (cf, frametogo))
+-            {
+-            abt:
+-                GUI_Error_HIG (QT_TR_NOOP(&quot;Aborting&quot;), NULL);
+-              delete[]buffer;
+-              return 0;
+-            }
+-            
+-            bitstream.cleanup(cf);
++				if (!r)
++				{
++					printf(&quot;Encoding of frame %lu failed!\n&quot;, cf);
++					goto abt;
++				}
+ 
+-			if (!prefill || cf + prefill &lt; frametogo)
+-				r = _encode-&gt;encode(prefill + cf, &amp;bitstream);
+-			else
+-				r = _encode-&gt;encode(frametogo - 1, &amp;bitstream);
+-
+-			if (!r)
+-			{
+-				printf(&quot;Encoding of frame %lu failed!\n&quot;, cf);
+-				goto abt;
++				if (bitstream.len == 0 &amp;&amp; (_encode-&gt;getRequirements() &amp; ADM_ENC_REQ_NULL_FLUSH))
++				{
++					printf(&quot;skipping frame: %u size: %i\n&quot;, cf + frameDelay, bitstream.len);
++					frameDelay++;
++				}
++				else
++					break;
+ 			}
+ 
+-           encoding_gui-&gt;setFrame(cf,bitstream.len,bitstream.out_quantizer,frametogo);
+-    
+-        }
++			encoding_gui-&gt;setFrame(cf,bitstream.len,bitstream.out_quantizer,frametogo);
++		}
+ 
+ 	encoding_gui-&gt;reset();
+       	delete[]buffer;	
+@@ -261,74 +254,62 @@
+ }
+ 
+ // copy mode
+-// Basically ask a video frame and send it to writter
+-uint8_t
+-GenericAviSaveProcess::writeVideoChunk (uint32_t frame)
++// Basically ask a video frame and send it to writer
++int GenericAviSaveProcess::writeVideoChunk(uint32_t frame)
+ {
+-  uint8_t    	r;
+-  // CBR or CQ
+-  if (frame == 0)
+-  {
+-    encoding_gui-&gt;setCodec(_encode-&gt;getDisplayName())  ;
+-  if (!_encode-&gt;isDualPass ())
+-  {
+-                          guiSetPhasis (QT_TR_NOOP(&quot;Encoding&quot;));
+-        }
+-  else
+-          {
+-                          guiSetPhasis (QT_TR_NOOP(&quot;2nd Pass&quot;));
+-        }
+-  }
+-  // first read
++	uint8_t r = 0;
++	// CBR or CQ
++	if (frame == 0)
++	{
++		encoding_gui-&gt;setCodec(_encode-&gt;getDisplayName());
+ 
+-preFilling:
+-  bitstream.cleanup(0);
++		if (!_encode-&gt;isDualPass())
++			guiSetPhasis (QT_TR_NOOP(&quot;Encoding&quot;));
++		else
++			guiSetPhasis (QT_TR_NOOP(&quot;2nd Pass&quot;));
++	}
+ 
+-  if (!_prefill || frame + _prefill &lt; frametogo) 
+-	  r = _encode-&gt;encode(_prefill + frame, &amp;bitstream);
+-  else
+-	  r = _encode-&gt;encode(frametogo - 1, &amp;bitstream);
++	bitstream.cleanup(frame);
+ 
+-  if (!r)
+-	  return 0;
++	if (frame &gt;= frametogo)
++	{
++		if (_encode-&gt;getRequirements() &amp; ADM_ENC_REQ_NULL_FLUSH)
++			r = _encode-&gt;encode(UINT32_MAX, &amp;bitstream);
++	}
++	else
++		r = _encode-&gt;encode(frame, &amp;bitstream);
+ 
+-  if (!bitstream.len &amp;&amp; frame == 0)
+-  {
+-	  _prefill++;
+-	  goto preFilling;
+-  }
+-  else if (frame == 0)
+-	  printf(&quot;Prefill: %u\n&quot;, _prefill);
++	if (!r)
++		return -1;
+ 
+-  _videoFlag=bitstream.flags;
++	if (bitstream.len &gt; 0)
++	{
++		_videoFlag=bitstream.flags;
+ 
+-  // check for split
+-     // check for auto split
+-      // if so, we re-write the last I frame
+-      if(muxSize)
+-      {
+-              // we overshot the limit and it is a key frame
+-              // start a new chunk
+-              if(handleMuxSize() &amp;&amp; (_videoFlag &amp; AVI_KEY_FRAME))
+-              {		
+-                      uint8_t *data;
+-                      uint32_t dataLen=0;
++		// check for split
++		// check for auto split
++		// if so, we re-write the last I frame
++		if (muxSize)
++		{
++			// we overshot the limit and it is a key frame
++			// start a new chunk
++			if (handleMuxSize() &amp;&amp; (_videoFlag &amp; AVI_KEY_FRAME))
++			{
++				uint8_t *data;
++				uint32_t dataLen = 0;
+ 
+-                      _encode-&gt;hasExtraHeaderData( &amp;dataLen,&amp;data);	   
+-                      if(!reigniteChunk(dataLen,data)) return 0;
+-              }
+-        }
+-        encoding_gui-&gt;setFrame(frame,bitstream.len,bitstream.out_quantizer,frametogo);	
+-        // If we have several null B frames dont write them
+-        if(bitstream.len) _notnull=1;
+-	else	if( !_notnull)
+-	{
+-		printf(&quot;Frame : %lu dropped\n&quot;,frame);
+-	 	return 1;			 
+-	 }
+-         return writter-&gt;saveVideoFrame (bitstream.len, _videoFlag, vbuffer);
++				_encode-&gt;hasExtraHeaderData(&amp;dataLen,&amp;data);
+ 
+-}
++				if (!reigniteChunk(dataLen, data))
++					return -1;
++			}
++		}
+ 
++		encoding_gui-&gt;setFrame(frame,bitstream.len,bitstream.out_quantizer,frametogo);	
+ 
+-// EOF
++		if (!writter-&gt;saveVideoFrame (bitstream.len, _videoFlag, vbuffer))
++			return -1;
++	}
++
++	return bitstream.len;
++}
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_saveprocess.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_saveprocess.h	2008-09-19 15:21:58 UTC (rev 4369)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_saveprocess.h	2008-09-19 15:56:00 UTC (rev 4370)
+@@ -23,15 +23,11 @@
+  class GenericAviSaveProcess : public   GenericAviSave
+  {
+      protected :
+-					    
+-			Encoder 	*_encode;
+-			uint8_t		_notnull;
+-			int _prefill;
+-                       	char 		*TwoPassLogFile;
++			           	char 		*TwoPassLogFile;
+                         ADMBitstream    bitstream;
+ 
+ 			virtual uint8_t	setupVideo( char *name  );
+-			virtual uint8_t	writeVideoChunk(uint32_t frame );
++			virtual int	writeVideoChunk(uint32_t frame );
+                          
+      public:
+      					GenericAviSaveProcess( void ) ;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_savesmart.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_savesmart.cpp	2008-09-19 15:21:58 UTC (rev 4369)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_savesmart.cpp	2008-09-19 15:56:00 UTC (rev 4370)
+@@ -138,8 +138,7 @@
+ 
+ // copy mode
+ // Basically ask a video frame and send it to writter
+-uint8_t
+-GenericAviSaveSmart::writeVideoChunk (uint32_t frame)
++int GenericAviSaveSmart::writeVideoChunk (uint32_t frame)
+ {
+   uint32_t    len;
+   uint8_t     ret1, seq;
+@@ -152,7 +151,7 @@
+     return writeVideoChunk_copy(frame);
+ }
+ //_________________________________________________________
+-uint8_t GenericAviSaveSmart::writeVideoChunk_recode (uint32_t frame)
++int GenericAviSaveSmart::writeVideoChunk_recode (uint32_t frame)
+ {
+ uint32_t len;
+ ADMBitstream bitstream(MAXIMUM_SIZE * MAXIMUM_SIZE * 3);
+@@ -171,19 +170,23 @@
+ 	// Else encode it ....
+ 	//1-Read it
+ 	if (! video_body-&gt;getUncompressedFrame (frame, aImage))
+-		return 0;
++		return -1;
+ 	// 2-encode it
+         bitstream.data=vbuffer;
+         bitstream.cleanup(frame);
+         if (!_encoder-&gt;encode (aImage, &amp;bitstream))//vbuffer, &amp;len, &amp;_videoFlag))
+-		return 0;
++		return -1;
+         _videoFlag=bitstream.flags;
+ 	// 3-write it
+         encoding_gui-&gt;setFrame(frame-frameStart,bitstream.len,bitstream.out_quantizer,frametogo);
+-	return writter-&gt;saveVideoFrame (bitstream.len, _videoFlag, vbuffer);
++	if (writter-&gt;saveVideoFrame (bitstream.len, _videoFlag, vbuffer))
++		return bitstream.len;
++	else
++		return -1;
+ }
++
+ //_________________________________________________________
+-uint8_t GenericAviSaveSmart::writeVideoChunk_copy (uint32_t frame,uint32_t first)
++int GenericAviSaveSmart::writeVideoChunk_copy (uint32_t frame,uint32_t first)
+ {
+   // Check flags and seq
+   uint32_t myseq=0;
+@@ -207,7 +210,7 @@
+ 
+    			video_body-&gt;getExtraHeaderData(&amp;extraLen,&amp;extraData);
+ 					   
+-			if(!reigniteChunk(extraLen,extraData)) return 0;
++			if(!reigniteChunk(extraLen,extraData)) return -1;
+ 		}
+ 	}
+   
+@@ -232,7 +235,7 @@
+ 			if(!seekNextRef(frame,&amp;nextip))
+ 			{
+ 				aprintf(&quot;Smart:B Frame without reference frame\n&quot;);
+-				return 1;
++				return 0;
+ 			}
+ 			// check if that the frame -1,....,next forward ref are all sequential
+ 			if(!video_body-&gt;sequentialFramesB(frame-1,nextip)&amp;&amp;!(_videoFlag &amp;AVI_KEY_FRAME )) 
+@@ -246,20 +249,27 @@
+ 			aprintf(&quot;Smart : using %lu as next\n&quot;,nextip);
+ 			// Seems ok, write it and mark it
+ 			if (! video_body-&gt;getFrameNoAlloc (nextip,&amp;img,&amp;seq))// vbuffer, &amp;len,		      &amp;_videoFlag, &amp;seq))
+-    				return 0;
++    				return -1;
+                         _videoFlag=img.flags;
+ 			_nextip=nextip;
+                         encoding_gui-&gt;setFrame(frame-frameStart,img.dataLength,0,frametogo);
+-			return writter-&gt;saveVideoFrame (img.dataLength, img.flags, img.data);
++
++						if (writter-&gt;saveVideoFrame (img.dataLength, img.flags, img.data))
++							return img.dataLength;
++						else
++							return -1;
+ 		}
+ 		else
+ 		{	// Nth B frame
+ 			aprintf(&quot;Smart:Next B frame\n&quot;);
+ 			if (!video_body-&gt;getFrameNoAlloc (frame-1, &amp;img, &amp;seq))
+-    				return 0;
++    				return -1;
+                          _videoFlag=img.flags;
+                         encoding_gui-&gt;setFrame(frame-frameStart,img.dataLength,0,frametogo);
+-			return writter-&gt;saveVideoFrame (img.dataLength, img.flags, img.data);
++			if (writter-&gt;saveVideoFrame (img.dataLength, img.flags, img.data))
++				return img.dataLength;
++			else
++				return -1;
+ 		}
+ 	}
+ 	// Not a bframe
+@@ -269,10 +279,13 @@
+ 		// Send the last B frame instead
+ 		aprintf(&quot;Smart finishing B frame %lu\n&quot;,frame-1);
+ 		if (! video_body-&gt;getFrameNoAlloc(frame-1, &amp;img, &amp;seq))// (frame-1, vbuffer, &amp;len,    &amp;_videoFlag, &amp;seq))
+-    			return 0;
++    			return -1;
+                  _videoFlag=img.flags;
+                 encoding_gui-&gt;setFrame(frame-frameStart,img.dataLength,0,frametogo);
+-		return writter-&gt;saveVideoFrame  (img.dataLength, img.flags, img.data);;
++		if (writter-&gt;saveVideoFrame  (img.dataLength, img.flags, img.data))
++			return img.dataLength;
++		else
++			return -1;
+ 	
+ 	}
+ 	// Regular frame
+@@ -312,11 +325,18 @@
+ 				memcpy(buffer+extraLen,img.data,img.dataLength);
+ 				r=writter-&gt;saveVideoFrame (img.dataLength+extraLen, img.flags, buffer);;
+ 				delete [] buffer;
+-				return r;
+-				
++
++				if (r)
++					return img.dataLength + extraLen;
++				else
++					return -1;				
+ 			}
+ 	}
+-	return writter-&gt;saveVideoFrame (img.dataLength, img.flags, img.data);;
++	if (writter-&gt;saveVideoFrame (img.dataLength, img.flags, img.data))
++		return img.dataLength;
++	else
++		return -1;
++
+ }
+ //_________________________________________________________
+ uint8_t GenericAviSaveSmart::seekNextRef(uint32_t frame,uint32_t *nextip)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_savesmart.hxx
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_savesmart.hxx	2008-09-19 15:21:58 UTC (rev 4369)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_savesmart.hxx	2008-09-19 15:56:00 UTC (rev 4370)
+@@ -30,9 +30,9 @@
+        				uint32_t 	encoderReady;
+               			uint32_t 	compEngaged;
+ 	virtual 		uint8_t 	setupVideo( char *name  );
+- 	virtual 		uint8_t 	writeVideoChunk(uint32_t frame );
+-				uint8_t		 writeVideoChunk_recode (uint32_t frame);
+-				uint8_t		 writeVideoChunk_copy (uint32_t frame,uint32_t first=0);
++ 	virtual 		int 	writeVideoChunk(uint32_t frame );
++				int		 writeVideoChunk_recode (uint32_t frame);
++				int		 writeVideoChunk_copy (uint32_t frame,uint32_t first=0);
+               			encoder 	*_encoder;
+               			uint8_t 	_cqReenc          ;
+ 				
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001609.html">[Avidemux-svn-commit] r4369 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+</A></li>
+	<LI>Next message: <A HREF="001611.html">[Avidemux-svn-commit] r4371 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1610">[ date ]</a>
+              <a href="thread.html#1610">[ thread ]</a>
+              <a href="subject.html#1610">[ subject ]</a>
+              <a href="author.html#1610">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,564 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3432 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_filter	ADM_inputs/ADM_mpegdemuxer ADM_videoFilter
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3432%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_filter%0A%09ADM_inputs/ADM_mpegdemuxer%20ADM_videoFilter&In-Reply-To=%3C200707221605.l6MG5H9R028697%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000705.html">
+   <LINK REL="Next"  HREF="000708.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3432 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_filter	ADM_inputs/ADM_mpegdemuxer ADM_videoFilter</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3432%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_filter%0A%09ADM_inputs/ADM_mpegdemuxer%20ADM_videoFilter&In-Reply-To=%3C200707221605.l6MG5H9R028697%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3432 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_filter	ADM_inputs/ADM_mpegdemuxer ADM_videoFilter">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jul 22 18:05:17 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000705.html">[Avidemux-svn-commit] r3431 -	branches/avidemux_2.4_branch/addons/tsscan
+</A></li>
+        <LI>Next message: <A HREF="000708.html">[Avidemux-svn-commit] r3433 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces:	ADM_GTK/ADM_dialogFactory ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#707">[ date ]</a>
+              <a href="thread.html#707">[ thread ]</a>
+              <a href="subject.html#707">[ subject ]</a>
+              <a href="author.html#707">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-07-22 18:05:17 +0200 (Sun, 22 Jul 2007)
+New Revision: 3432
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidDvbSub.cpp
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h
+   branches/avidemux_2.4_branch/avidemux/ADM_filter/filter_declaration.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_filter/video_filters.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.h
+   branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/CMakeLists.txt
+Log:
+[FILTER] First raw DVB subtitle filter, very incomplete
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2007-07-22 09:28:23 UTC (rev 3431)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2007-07-22 16:05:17 UTC (rev 3432)
+@@ -639,6 +639,50 @@
+   WRAP_Open (CODEC_ID_FLV1);
+ }
+ 
++decoderFFDVBSub::decoderFFDVBSub (uint32_t w, uint32_t h, uint32_t l, uint8_t * d):decoderFF (w,	   h)
++{
++  _context-&gt;sub_id=1;
++  WRAP_Open (CODEC_ID_DVB_SUBTITLE);
++}
++//*********************
++/**
++    \fn decoderFFSubs
++    \brief Constructor for DVB subtitles...
++*/
++
++decoderFFSubs::decoderFFSubs (uint32_t subid)
++{
++  _context = avcodec_alloc_context ();
++  codecId= CODEC_ID_DVB_SUBTITLE;
++  subId=subid;
++  _context-&gt;sub_id=subId;
++  WRAP_Open (CODEC_ID_DVB_SUBTITLE);
++}
++decoderFFSubs:: ~ decoderFFSubs ()
++{
++  avcodec_close (_context);
++  ADM_dealloc (_context);
++  _context=NULL;
++  
++}
++
++uint8_t decoderFFSubs::uncompress (ADMCompressedImage * in, AVSubtitle * out)
++{
++  int ret=0;
++  int got_picture=0;
++  ret=avcodec_decode_subtitle(_context, out,
++                            &amp;got_picture,
++                            in-&gt;data, in-&gt;dataLength); 
++     if(ret&lt;0) 
++     {
++        printf(&quot;[FFSUB] Error %d\n&quot;,ret);
++        return 0; 
++     }
++     return 1;
++}
++
++
++//***************
+ extern uint8_t  lavformat_init(void);
+ extern void     avcodec_init(void );
+ extern  void    avcodec_register_all(void );
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h	2007-07-22 09:28:23 UTC (rev 3431)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h	2007-07-22 16:05:17 UTC (rev 3432)
+@@ -19,7 +19,20 @@
+  ***************************************************************************/
+ #ifdef USE_FFMPEG
+ 
++class decoderFFSubs
++{
++  protected:
++     int      codecId;
++     uint32_t subId;
++     AVCodecContext *_context;
++  public:
+ 
++    decoderFFSubs (uint32_t subId);
++    virtual ~ decoderFFSubs ();
++    virtual uint8_t uncompress (ADMCompressedImage * in, AVSubtitle * out); 
++};
++
++/****************************/
+ class decoderFF:public decoders
+ {
+ protected:
+@@ -302,5 +315,11 @@
+ public:
+   decoderFFFLV1 (uint32_t w, uint32_t h, uint32_t l, uint8_t * d);
+ };
++class decoderFFDVBSub:public decoderFF
++{
++protected:
++public:
++  decoderFFDVBSub (uint32_t w, uint32_t h, uint32_t l, uint8_t * d);
++};
+ 
+ #endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_filter/filter_declaration.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_filter/filter_declaration.cpp	2007-07-22 09:28:23 UTC (rev 3431)
++++ branches/avidemux_2.4_branch/avidemux/ADM_filter/filter_declaration.cpp	2007-07-22 16:05:17 UTC (rev 3432)
+@@ -152,6 +152,7 @@
+ 	REGISTERX(&quot;ass&quot;,&quot;ASS&quot;,&quot;Add ASS/SSA subtitles to the picture.&quot;,VF_ASS,1,ass_create,ass_script);
+ #endif
+         REGISTERX(&quot;vobsub&quot;,&quot;VobSub&quot;,&quot;Embed VobSub subtitles into picture.&quot;,VF_VOBSUB,1,vobsub_create,vobsub_script);
++        REGISTERX(&quot;dvbsub&quot;,&quot;DVB sub&quot;,&quot;Embed DVB-T subtitle.&quot;,VF_DVBSUB,1,dvbsub_create,dvbsub_script);
+         
+ 
+         //*********************
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_filter/video_filters.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_filter/video_filters.h	2007-07-22 09:28:23 UTC (rev 3431)
++++ branches/avidemux_2.4_branch/avidemux/ADM_filter/video_filters.h	2007-07-22 16:05:17 UTC (rev 3432)
+@@ -98,6 +98,7 @@
+                 VF_FADE,
+                 VF_ASS,
+                 VF_YADIF,
++                VF_DVBSUB,
+                 VF_DUMMY,
+                 VF_EXTERNAL_START=0xF0000000
+           }VF_FILTERS;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.cpp	2007-07-22 09:28:23 UTC (rev 3431)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.cpp	2007-07-22 16:05:17 UTC (rev 3432)
+@@ -302,7 +302,38 @@
+                 }
+                 return 1;
+ }
++/**
++      \fn readPes
++      \brief Read a complete PES packet
++*/
++uint8_t dmx_demuxerTS::readPes(uint8_t *data, uint32_t *pesBlockLen, uint32_t *dts,uint32_t *pts)
++{
++  uint32_t total=0;
++    if(!refill())
++    {
++      printf(&quot;[DMX] Refill failed\n&quot;);
++      return 0; 
++    }
++    *dts=_pesDTS;
++    *pts=_pesPTS;
++    total=_pesBufferLen;
++    memcpy(data,_pesBuffer,_pesBufferLen);
++    while(packLen)
++    {
++        if(!refill())
++        {
++          printf(&quot;[DMX] Refill failed\n&quot;);
++          return 0; 
++        }
+ 
++        memcpy(data+total,_pesBuffer,_pesBufferLen);
++        total+=_pesBufferLen;      
++      
++    }
++    *pesBlockLen=total;
++    printf(&quot;[DMX] Read %d bytes, packMode %u, pesLen %u\n&quot;,*pesBlockLen,packMode,packLen);
++    return 1;
++}
+ //
+ //      Refill the pesBuffer
+ //              Read packet of correct PID, locate a PES start and read the whole PES packet
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.h	2007-07-22 09:28:23 UTC (rev 3431)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.h	2007-07-22 16:05:17 UTC (rev 3432)
+@@ -93,7 +93,7 @@
+                   uint8_t         hasAudio(void) { return 1;} // MAYBE has audio
+                   uint8_t         getStats(uint64_t *stat);
+                   uint8_t         changePid(uint32_t newpid,uint32_t newpes);
+-
++                  uint8_t         readPes(uint8_t *data, uint32_t *pesBlockLen, uint32_t *dts,uint32_t *pts);
+ // Inlined
+ uint8_t         read8i(void)
+ {
+
+Copied: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidDvbSub.cpp (from rev 3422, branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidASS.cpp)
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidASS.cpp	2007-07-21 03:38:04 UTC (rev 3422)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/ADM_vidDvbSub.cpp	2007-07-22 16:05:17 UTC (rev 3432)
+@@ -0,0 +1,290 @@
++/***************************************************************************
++                         DVB-T subtitle filter
++    
++    copyright            : (C) 2007 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++
++
++#include &quot;config.h&quot;
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++#include &lt;string.h&gt;
++#include &quot;ADM_lavcodec.h&quot;
++#include &quot;ADM_assert.h&quot;
++#include &quot;default.h&quot;
++
++#include &quot;fourcc.h&quot;
++
++
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
++#include &quot;ADM_editor/ADM_edit.hxx&quot;
++#include &quot;ADM_video/ADM_genvideo.hxx&quot;
++#include &quot;ADM_video/ADM_vidCommonFilter.h&quot;
++#include &quot;ADM_filter/video_filters.h&quot;
++#include &quot;ADM_colorspace/ADM_rgb.h&quot;
++#include &quot;ADM_userInterfaces/ADM_commonUI/DIA_factory.h&quot;
++
++#include &quot;DIA_factory.h&quot;
++#include &quot;ADM_inputs/ADM_mpegdemuxer/dmx_mpegstartcode.h&quot;
++#include &quot;ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.h&quot;
++
++#include &quot;ADM_colorspace/colorspace.h&quot;
++#include &quot;ADM_codecs/ADM_codec.h&quot;
++#include &quot;ADM_codecs/ADM_ffmp43.h&quot;
++
++#define READ_BUFFER_SIZE (64*1024)
++
++class ADMVideoSubDVB : public AVDMGenericVideoStream 
++{
++protected:
++        virtual char* printConf(void);
++       
++        uint8_t init(void);
++        
++        decoderFFSubs *decoder;
++        ADMCompressedImage *binary;
++        dmx_demuxerTS *demuxer;
++        AVSubtitle  sub;
++        uint8_t     readBuffer[READ_BUFFER_SIZE];
++        uint32_t    _inited;
++        
++public:
++        ADMVideoSubDVB(AVDMGenericVideoStream *in, CONFcouple *conf);
++        virtual ~ADMVideoSubDVB();
++        virtual uint8_t getFrameNumberNoAlloc(uint32_t frame, uint32_t *len, ADMImage *data,uint32_t *flags);
++        uint8_t configure(AVDMGenericVideoStream *instream);
++        uint8_t	getCoupledConf(CONFcouple **conf);
++};
++
++static FILTER_PARAM assParam={7,
++        { /* float */ &quot;font_scale&quot;,
++          /*float*/ &quot;line_spacing&quot;,
++          /* int */ &quot;top_margin&quot;,
++          /* int */ &quot;bottom_margin&quot;,
++          /* bool */ &quot;extract_embedded_fonts&quot;,
++          /* ADM_filename */ &quot;fonts_dir&quot;,
++          /* ADM_filename */ &quot;subfile&quot; }};
++
++SCRIPT_CREATE(dvbsub_script,ADMVideoSubDVB,assParam);
++BUILD_CREATE(dvbsub_create,ADMVideoSubDVB);
++
++char *ADMVideoSubDVB::printConf() 
++{
++      static char buf[50];
++      sprintf((char *)buf,&quot; DVB Subtitle &quot;);
++      
++      return buf;
++}
++
++
++uint8_t ADMVideoSubDVB::configure(AVDMGenericVideoStream * instream)
++{
++  
++   return 1;
++}
++
++//_______________________________________________________________
++
++ADMVideoSubDVB::ADMVideoSubDVB(AVDMGenericVideoStream *in, CONFcouple *conf) 
++{
++        _in=in;		
++        memcpy(&amp;_info,_in-&gt;getInfo(),sizeof(_info));
++        
++        
++      
++        _uncompressed=new ADMImage(_in-&gt;getInfo()-&gt;width,_in-&gt;getInfo()-&gt;height);
++        ADM_assert(_uncompressed);
++        _info.encoding=1;
++        
++        decoder=new decoderFFSubs(1);
++        binary=new ADMCompressedImage;
++        binary-&gt;data=readBuffer+2;
++        
++        MPEG_TRACK track;
++        track.pid=0x96;
++
++        
++        demuxer=new dmx_demuxerTS(1,&amp;track,0,DMX_MPG_TS);
++        _inited=init();
++
++      
++}
++// **********************************
++uint8_t ADMVideoSubDVB::init(void)
++{
++const char  *tsFileName=&quot;/capture/grey/Grey_anatomy_2007_05_22_Avec_Le_Temp.mpg&quot;;
++    // First create our demuxer
++     
++     if(!demuxer-&gt;open(tsFileName))
++     {
++        printf(&quot;Cannot open TS\n&quot;);
++        return 0; 
++     }
++      memset(&amp;sub,0,sizeof(sub));
++     
++     return 1;
++} 
++
++//*******************************************
++ADMVideoSubDVB::~ADMVideoSubDVB() 
++{
++      if(_uncompressed) DELETE(_uncompressed);
++      if(decoder) delete decoder;
++      if(binary) delete binary;
++      if(demuxer) delete demuxer;
++      decoder=NULL;
++      binary=NULL;
++      demuxer=NULL;
++   
++}
++//*******************************************
++#define _r(c)  ((c)&amp;0xff)
++#define _b(c)  (((c)&gt;&gt;16)&amp;0xFF)
++#define _g(c)  (((c)&gt;&gt;8)&amp;0xFF)
++#define _a(c)  ((c)&gt;&gt;24)
++#define rgba2y(c)  ( (( 263*_r(c)  + 516*_g(c) + 100*_b(c)) &gt;&gt; 10) + 16  )
++#define rgba2u(c)  ( (( 450*_r(c) - 376*_g(c) -  73*_b(c)) &gt;&gt; 10) + 128 )
++#define rgba2v(c)  ( ((-152*_r(c) - 298*_g(c) + 450*_b(c)) &gt;&gt; 10) + 128 )
++
++uint8_t ADMVideoSubDVB::getFrameNumberNoAlloc(uint32_t frame, uint32_t *len, ADMImage *data, uint32_t *flags) 
++{
++uint8_t *org=NULL;
++
++      // Read the original PIC
++        
++        if(!_in-&gt;getFrameNumberNoAlloc(frame, len, data, flags))
++                return 0;
++
++        if(!_inited) 
++        {
++          return 0; 
++        }
++        // Read the compressed DVB....
++        
++        uint32_t packetLen,dts,pts;
++          if(!demuxer-&gt;readPes(readBuffer,&amp;packetLen, &amp;dts,&amp;pts)) return 1;
++          binary-&gt;dataLength=packetLen-3; // -2 for stream iD, -1 for ????
++          if(packetLen&lt;=5) return 1;
++          // And decompress...
++          decoder-&gt;uncompress(binary,&amp;sub);
++            
++          // Process All rectangles
++          
++            printf(&quot;Found %d rects to process\n&quot;,sub.num_rects);
++            for(int i=0;i&lt;sub.num_rects;i++)
++            {
++              AVSubtitleRect *r=&amp;(sub.rects[i]);
++              // First convert RGB to Y+ALPHA
++              for(int col=0;col&lt;r-&gt;nb_colors;col++)
++              {
++                    // Color is RGB, convert to YUV
++                    uint32_t y,a;
++                    uint32_t rgb=r-&gt;rgba_palette[col];
++                
++                          y=rgba2y(rgb);
++                          a=_a(rgb);
++                          r-&gt;rgba_palette[col]=y+(a&lt;&lt;8);
++                          printf(&quot;Color %d, alpha %u luma %u rgb:%x\n&quot;,col,a,y,rgb);
++              }
++              // Palette is ready, display !
++              if(r-&gt;x&gt;_info.width || r-&gt;y&gt;_info.height)
++              {
++                  printf(&quot;[DVBSUB]Box is outside image\n&quot;);
++                  goto _skip;
++              }
++                  printf(&quot;x :%d\n&quot;,r-&gt;x);
++                  printf(&quot;y :%d\n&quot;,r-&gt;y);
++                  printf(&quot;w :%d\n&quot;,r-&gt;w);
++                  printf(&quot;h :%d\n&quot;,r-&gt;h);
++
++                  {
++                      uint32_t clipW,clipH;
++                      
++                      clipW=FFMIN(_info.width,r-&gt;x+r-&gt;w)-r-&gt;x;
++                      clipH=FFMIN(_info.height,r-&gt;y+r-&gt;h)-r-&gt;y;
++                      
++                      ADMImage image(r-&gt;w,r-&gt;h);
++                      ADMImage alphaImage(r-&gt;w,r-&gt;h);
++                      
++                      uint8_t *ptr=image.data;
++                      uint8_t *ptrAlpha=alphaImage.data;
++                      uint8_t *in=r-&gt;bitmap;
++                      for(int yy=0;yy&lt;r-&gt;h;yy++)
++                      {
++                          for(int xx=0;xx&lt;r-&gt;w;xx++)
++                          {
++                            uint32_t alpha;
++                            uint32_t val=*in++;
++                            
++                                  val=r-&gt;rgba_palette[val];
++                                  alpha=val&gt;&gt;8;
++                                  val&amp;=0xff;
++                                  
++                                  *ptr++=val;
++                                  *ptrAlpha++=alpha;
++                          }
++                      }
++              
++                      // Merge Luma
++                      
++                      for(int yy=0;yy&lt;clipH;yy++)
++                      {
++                          org=data-&gt;data+(yy+r-&gt;y)*_info.width+r-&gt;x;
++                          
++                          ptrAlpha=alphaImage.data+yy*r-&gt;w;
++                          ptr=image.data+yy*r-&gt;w;
++                        
++                          for(int xx=0;xx&lt;clipW;xx++)
++                          {
++                            uint32_t val,before,alpha;
++                            
++                                  before=*org;
++                                  val=*ptr++;
++                                  alpha=*ptrAlpha++;
++                                  
++                                  val=val*alpha+(255-alpha)*before;
++                                  val&gt;&gt;=8;
++                                  *org++=val;
++                          }
++                      }
++              }
++               // Delete palette &amp; data
++_skip:
++               av_free(r-&gt;rgba_palette);
++               av_free(r-&gt;bitmap);
++            } // Next rec..
++            memset(&amp;sub,0,sizeof(sub));
++        
++        return 1;
++}
++
++uint8_t	ADMVideoSubDVB::getCoupledConf(CONFcouple **conf) 
++{
++
++        *conf=NULL; //new CONFcouple(0);
++#if 0
++#define _COUPLE_SET(x) (*conf)-&gt;setCouple(#x, _params-&gt;x);
++        _COUPLE_SET(font_scale)
++        _COUPLE_SET(line_spacing)
++        _COUPLE_SET(top_margin)
++        _COUPLE_SET(bottom_margin)
++        _COUPLE_SET(subfile)
++        _COUPLE_SET(fonts_dir)
++        _COUPLE_SET(extract_embedded_fonts)
++#endif
++     
++        return 1;
++}
++/************************************************/
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/CMakeLists.txt	2007-07-22 09:28:23 UTC (rev 3431)
++++ branches/avidemux_2.4_branch/avidemux/ADM_videoFilter/CMakeLists.txt	2007-07-22 16:05:17 UTC (rev 3432)
+@@ -23,5 +23,6 @@
+ ADM_vidTdeint.cpp
+ ADM_vidChromaShift.cpp  
+ ADM_vidAnimated.cpp
++ADM_vidDvbSub.cpp
+ )
+ ADD_LIBRARY(ADM_videoFilter STATIC ${ADM_videoFilter_SRCS})
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000705.html">[Avidemux-svn-commit] r3431 -	branches/avidemux_2.4_branch/addons/tsscan
+</A></li>
+	<LI>Next message: <A HREF="000708.html">[Avidemux-svn-commit] r3433 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces:	ADM_GTK/ADM_dialogFactory ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#707">[ date ]</a>
+              <a href="thread.html#707">[ thread ]</a>
+              <a href="subject.html#707">[ subject ]</a>
+              <a href="author.html#707">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

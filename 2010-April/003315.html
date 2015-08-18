@@ -1,0 +1,177 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6111 -	branches/avidemux_2.5_branch_gruntster/scripts/video
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6111%20-%0A%09branches/avidemux_2.5_branch_gruntster/scripts/video&In-Reply-To=%3C201004101922.o3AJM5rx020250%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003314.html">
+   <LINK REL="Next"  HREF="003316.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6111 -	branches/avidemux_2.5_branch_gruntster/scripts/video</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6111%20-%0A%09branches/avidemux_2.5_branch_gruntster/scripts/video&In-Reply-To=%3C201004101922.o3AJM5rx020250%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6111 -	branches/avidemux_2.5_branch_gruntster/scripts/video">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sat Apr 10 21:22:05 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003314.html">[Avidemux-svn-commit] r6110 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder:	ADM_vidEnc_x264/qt4 ADM_vidEnc_xvid/qt4
+</A></li>
+        <LI>Next message: <A HREF="003316.html">[Avidemux-svn-commit] r6112 - in	branches/avidemux_2.5_branch_gruntster/scripts/auto: . Optical Disc
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3315">[ date ]</a>
+              <a href="thread.html#3315">[ thread ]</a>
+              <a href="subject.html#3315">[ subject ]</a>
+              <a href="author.html#3315">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2010-04-10 21:22:00 +0200 (Sat, 10 Apr 2010)
+New Revision: 6111
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/scripts/video/autoWizard.js
+   branches/avidemux_2.5_branch_gruntster/scripts/video/filter.js
+   branches/avidemux_2.5_branch_gruntster/scripts/video/functions.js
+Log:
+[script] tweak system scripts so they're a bit more reusable
+
+Modified: branches/avidemux_2.5_branch_gruntster/scripts/video/autoWizard.js
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/scripts/video/autoWizard.js	2010-04-10 12:23:14 UTC (rev 6110)
++++ branches/avidemux_2.5_branch_gruntster/scripts/video/autoWizard.js	2010-04-10 19:22:00 UTC (rev 6111)
+@@ -7,8 +7,11 @@
+     var dlgWizard = new DialogFactory(title);
+     var i;
+ 
+-    for (i = 0; i &lt; resolutions.length; i++)
+-        mnuResolution.addItem(resolutions[i][0].toString() + &quot; x &quot; + resolutions[i][1].toString());
++    if (resolutions != null)
++    {
++        for (i = 0; i &lt; resolutions.length; i++)
++            mnuResolution.addItem(resolutions[i][0].toString() + &quot; x &quot; + resolutions[i][1].toString());
++    }
+ 
+     for (i = 0; i &lt; aspectRatios.length; i++)
+     {
+@@ -26,12 +29,14 @@
+             mnuCodec.addItem(codecs[i]);
+     }
+ 
+-    dlgWizard.addControl(mnuResolution);
++    if (resolutions != null)
++        dlgWizard.addControl(mnuResolution);
++
+     dlgWizard.addControl(mnuSourceRatio);
+     dlgWizard.addControl(mnuDestinationRatio);
+ 
+     if (dlgWizard.show())
+-        return [[resolutions[mnuResolution.index][0], resolutions[mnuResolution.index][1]],
++        return [[resolutions == null ? -1 : resolutions[mnuResolution.index][0], resolutions == null ? -1 : resolutions[mnuResolution.index][1]],
+             [aspectRatios[mnuSourceRatio.index][0], aspectRatios[mnuSourceRatio.index][1]],
+             [aspectRatios[mnuDestinationRatio.index][0], aspectRatios[mnuDestinationRatio.index][1]], codecs == null ? -1 : mnuCodec.index];
+     else
+
+Modified: branches/avidemux_2.5_branch_gruntster/scripts/video/filter.js
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/scripts/video/filter.js	2010-04-10 12:23:14 UTC (rev 6110)
++++ branches/avidemux_2.5_branch_gruntster/scripts/video/filter.js	2010-04-10 19:22:00 UTC (rev 6111)
+@@ -4,23 +4,11 @@
+ {
+     var app = new Avidemux();
+     var filters = app.video.appliedFilters;
+-    var width, height, fps1000;
++    var props = getVideoProperties(app.video);
++    var width = props[0];
++    var height = props[1];
++    var fps1000 = props[2];
+ 
+-    if (filters.length &gt; 0)
+-    {
+-        var lastFilter = app.video.appliedFilters[filters.length - 1];
+-
+-        width = lastFilter.width;
+-        height = lastFilter.height;
+-        fps1000 = lastFilter.fps1000;
+-    }
+-    else
+-    {
+-        width = app.video.width;
+-        height = app.video.height;
+-        fps1000 = app.video.fps1000;
+-    }
+-
+     // Resizing
+     var scaledWidth = rescaleVideoDimension(width, sourceRatio, destinationRatio, getColourEncodingSystem(fps1000));
+     var rX = scaledWidth / targetX;
+
+Modified: branches/avidemux_2.5_branch_gruntster/scripts/video/functions.js
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/scripts/video/functions.js	2010-04-10 12:23:14 UTC (rev 6110)
++++ branches/avidemux_2.5_branch_gruntster/scripts/video/functions.js	2010-04-10 19:22:00 UTC (rev 6111)
+@@ -34,5 +34,28 @@
+     else if (fps1000 &gt; 29670 &amp;&amp; fps1000 &lt; 30270)
+         encodingSystem = &quot;NTSC&quot;;
+ 
+-    return encodingSystem;
++    return encodingSystem;
++}
++
++function getVideoProperties(video)
++{
++    var filters = video.appliedFilters;
++    var width, height, fps1000;
++
++    if (filters.length &gt; 0)
++    {
++        var lastFilter = video.appliedFilters[filters.length - 1];
++
++        width = lastFilter.width;
++        height = lastFilter.height;
++        fps1000 = lastFilter.fps1000;
++    }
++    else
++    {
++        width = video.width;
++        height = video.height;
++        fps1000 = video.fps1000;
++    }
++
++    return [width, height, fps1000];
+ }
+\ No newline at end of file
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003314.html">[Avidemux-svn-commit] r6110 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder:	ADM_vidEnc_x264/qt4 ADM_vidEnc_xvid/qt4
+</A></li>
+	<LI>Next message: <A HREF="003316.html">[Avidemux-svn-commit] r6112 - in	branches/avidemux_2.5_branch_gruntster/scripts/auto: . Optical Disc
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3315">[ date ]</a>
+              <a href="thread.html#3315">[ thread ]</a>
+              <a href="subject.html#3315">[ subject ]</a>
+              <a href="author.html#3315">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

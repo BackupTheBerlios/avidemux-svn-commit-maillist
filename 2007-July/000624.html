@@ -1,0 +1,365 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3347 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3347%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr&In-Reply-To=%3C200707081719.l68HJW9V030557%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000623.html">
+   <LINK REL="Next"  HREF="000625.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3347 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3347%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr&In-Reply-To=%3C200707081719.l68HJW9V030557%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3347 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jul  8 19:19:32 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000623.html">[Avidemux-svn-commit] r3346 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+        <LI>Next message: <A HREF="000625.html">[Avidemux-svn-commit] r3348 - in	branches/avidemux_2.4_branch/avidemux: . ADM_ocr	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_GTK/ADM_ocr	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#624">[ date ]</a>
+              <a href="thread.html#624">[ thread ]</a>
+              <a href="subject.html#624">[ subject ]</a>
+              <a href="author.html#624">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-07-08 19:19:30 +0200 (Sun, 08 Jul 2007)
+New Revision: 3347
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr/adm_editglyph.cpp
+Log:
+new file
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr/adm_editglyph.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr/adm_editglyph.cpp	2007-07-08 15:25:04 UTC (rev 3346)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr/adm_editglyph.cpp	2007-07-08 17:19:30 UTC (rev 3347)
+@@ -0,0 +1,289 @@
++/***************************************************************************
++    copyright            : (C) 2007 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;config.h&quot;
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++#include &lt;string.h&gt;
++#include &quot;default.h&quot;
++#include &quot;gtk/gtk.h&quot;
++#include &lt;ADM_assert.h&gt;
++
++
++
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
++#include &quot;ADM_toolkit/filesel.h&quot;
++
++#include &quot;../ADM_GTK/ADM_toolkit_gtk/toolkit_gtk.h&quot;
++#include &quot;../ADM_GTK/ADM_toolkit_gtk/toolkit_gtk_include.h&quot;
++
++#include &quot;ADM_ocr/adm_glyph.h&quot;
++
++static GtkWidget *create_dialog1 (void);
++static admGlyph *currentGlyph=NULL;
++static GtkWidget *dialog;
++
++static uint8_t loadGlyph(char *name,admGlyph *head,uint32_t *outNb);
++static gboolean glyphDraw( void );
++static void glyphUpdate(void );
++/**
++    \fn DIA_glyphEdit
++    \brief Dialog to edit glyph
++*/
++uint8_t DIA_glyphEdit(void)
++{
++  char *glyphName;
++  admGlyph head(1,1);
++  
++  
++  uint32_t nbGlyph=0;
++  uint8_t ret=0;
++  // First select a file
++  
++   GUI_FileSelRead(_(&quot;Select GlyphFile to edit&quot;), &amp;glyphName);
++  if(!glyphName) return 0;
++  
++  // Try to load it
++  if(!loadGlyph(glyphName,&amp;head,&amp;nbGlyph) || !nbGlyph)
++  {
++    destroyGlyphTree(&amp;head);
++    return 0;
++  }
++  // Convert the linear glyph to glyph array
++  admGlyph *glyphArray[nbGlyph];
++  admGlyph *cur=head.next;
++  uint32_t idx=0;
++  while(cur)
++  {
++     glyphArray[idx++]=cur;
++     cur=cur-&gt;next;
++  }
++  ADM_assert(idx&lt;=nbGlyph);
++  nbGlyph=idx;
++  // Glyph loaded, here we go
++  currentGlyph=head.next;
++  dialog=create_dialog1 ();
++  gtk_register_dialog(dialog);
++  
++  // Register callbacks
++  #define ASSOCIATE(x,y)   gtk_dialog_add_action_widget (GTK_DIALOG (dialog), WID(x),y)
++  #define CONNECT(x,y,z) 	gtk_signal_connect(GTK_OBJECT(WID(x)), #y,GTK_SIGNAL_FUNC(z),   NULL);
++#define ACTION_PREV 10
++#define ACTION_NEXT 20
++  ASSOCIATE(buttonPrev,ACTION_PREV);
++  ASSOCIATE(buttonNext,ACTION_NEXT);
++  
++  CONNECT(drawingarea1,expose_event,glyphDraw);
++  gtk_widget_show(dialog);
++  glyphUpdate();
++  while(1)
++  {
++   gint b=gtk_dialog_run(GTK_DIALOG(dialog));
++    switch(b)
++    {
++      case ACTION_PREV: 
++                        printf(&quot;PREV\n&quot;);
++                        if(currentGlyph!=head.next)
++                        {
++                           admGlyph *father;
++                           father=glyphSearchFather(currentGlyph,&amp;head);
++                           if(father)
++                           {
++                               currentGlyph=father;
++                               glyphUpdate();
++                           }
++                          
++                        }
++                        continue;break;
++      case ACTION_NEXT: 
++                        printf(&quot;NEXT\n&quot;);
++                        if(currentGlyph-&gt;next)
++                        {
++                          currentGlyph=currentGlyph-&gt;next; 
++                          glyphUpdate();
++                        }
++                        continue;break; 
++    }
++    break; // exit while(1)
++  }
++  
++  gtk_unregister_dialog(dialog);
++  gtk_widget_destroy(dialog);
++  
++  destroyGlyphTree(&amp;head);
++  return ret;
++
++}
++/**
++    \fn glyphUpdate
++    \brief Update all fields in the dialog wrt currentGlyph
++*/
++void glyphUpdate(void )
++{
++  if(!currentGlyph) return;
++  gtk_widget_set_usize(WID(drawingarea1), currentGlyph-&gt;width+4, currentGlyph-&gt;height+4);
++  glyphDraw();
++  if(currentGlyph-&gt;code)
++  {
++    gtk_editable_delete_text(GTK_EDITABLE(WID(entry1)), 0,-1); 
++    // Set our text
++    gtk_entry_set_text (GTK_ENTRY (WID(entry1)), currentGlyph-&gt;code);
++  }
++}
++/**
++    \fn     glyphDraw
++    \brief  display glyph
++*/
++gboolean glyphDraw( void )
++{
++    if(!currentGlyph) return true;
++    gdk_draw_gray_image(WID(drawingarea1)-&gt;window, WID(drawingarea1)-&gt;style-&gt;fg_gc[GTK_STATE_SELECTED /*GTK_STATE_NORMAL*/],
++                        2,                          // X
++                        2,                          // y
++                        currentGlyph-&gt;width,                          //width
++                        currentGlyph-&gt;height,                          //h*2, // heigth
++                        GDK_RGB_DITHER_NONE,
++                        currentGlyph-&gt;data, // buffer
++                        currentGlyph-&gt;width );
++    return true;
++}
++
++/**
++    \fn loadGlyph
++    \brief Load a glyph set
++*/
++uint8_t loadGlyph(char *name,admGlyph *head,uint32_t *outNb)
++{
++  FILE *out;
++  admGlyph *glyph,*nw;
++  uint32_t N,w,h,slen;
++  uint32_t nbGlyphs;
++ 
++  glyph=head;
++  out=fopen(name,&quot;rb&quot;);
++  if(!out)
++  {
++    GUI_Error_HIG(_(&quot;File error&quot;), _(&quot;Could not read \&quot;%s\&quot;.&quot;), name);
++    return 0;
++  }
++#define READ(x) fread(&amp;(x),sizeof(x),1,out);
++    nbGlyphs=0;
++    READ(N);
++    while(N--)
++    {
++        
++      READ(w);
++      READ(h);
++      nw=new admGlyph(w,h);
++      fread(nw-&gt;data,w*h,1,out);
++      READ(slen);
++      if(slen)
++      {
++        nw-&gt;code=new char[slen+1];
++        fread(nw-&gt;code,slen,1,out);
++        nw-&gt;code[slen]=0;
++      }
++      glyph-&gt;next=nw;
++      glyph=nw;
++      nbGlyphs++;
++    }
++    
++    fclose(out);
++    *outNb=nbGlyphs;
++    return 1;
++
++}
++
++
++//**********************************
++GtkWidget *create_dialog1 (void)
++{
++  GtkWidget *dialog1;
++  GtkWidget *dialog_vbox1;
++  GtkWidget *vbox2;
++  GtkWidget *drawingarea1;
++  GtkWidget *entry1;
++  GtkWidget *hbox1;
++  GtkWidget *buttonPrev;
++  GtkWidget *buttonNext;
++  GtkWidget *hseparator1;
++  GtkWidget *button3;
++  GtkWidget *dialog_action_area1;
++  GtkWidget *closebutton1;
++
++  dialog1 = gtk_dialog_new ();
++  gtk_window_set_title (GTK_WINDOW (dialog1), _(&quot;dialog1&quot;));
++  gtk_window_set_type_hint (GTK_WINDOW (dialog1), GDK_WINDOW_TYPE_HINT_DIALOG);
++
++  dialog_vbox1 = GTK_DIALOG (dialog1)-&gt;vbox;
++  gtk_widget_show (dialog_vbox1);
++
++  vbox2 = gtk_vbox_new (FALSE, 0);
++  gtk_widget_show (vbox2);
++  gtk_box_pack_start (GTK_BOX (dialog_vbox1), vbox2, TRUE, TRUE, 0);
++
++  drawingarea1 = gtk_drawing_area_new ();
++  gtk_widget_show (drawingarea1);
++  gtk_box_pack_start (GTK_BOX (vbox2), drawingarea1, TRUE, TRUE, 0);
++
++  entry1 = gtk_entry_new ();
++  gtk_widget_show (entry1);
++  gtk_box_pack_start (GTK_BOX (vbox2), entry1, FALSE, FALSE, 0);
++
++  hbox1 = gtk_hbox_new (FALSE, 0);
++  gtk_widget_show (hbox1);
++  gtk_box_pack_start (GTK_BOX (vbox2), hbox1, TRUE, TRUE, 0);
++
++  buttonPrev = gtk_button_new_from_stock (&quot;gtk-media-previous&quot;);
++  gtk_widget_show (buttonPrev);
++  gtk_box_pack_start (GTK_BOX (hbox1), buttonPrev, TRUE, TRUE, 0);
++
++  buttonNext = gtk_button_new_from_stock (&quot;gtk-media-next&quot;);
++  gtk_widget_show (buttonNext);
++  gtk_box_pack_start (GTK_BOX (hbox1), buttonNext, TRUE, TRUE, 0);
++
++  hseparator1 = gtk_hseparator_new ();
++  gtk_widget_show (hseparator1);
++  gtk_box_pack_start (GTK_BOX (hbox1), hseparator1, TRUE, TRUE, 0);
++
++  button3 = gtk_button_new_from_stock (&quot;gtk-save-as&quot;);
++  gtk_widget_show (button3);
++  gtk_box_pack_start (GTK_BOX (hbox1), button3, FALSE, FALSE, 0);
++
++  dialog_action_area1 = GTK_DIALOG (dialog1)-&gt;action_area;
++  gtk_widget_show (dialog_action_area1);
++  gtk_button_box_set_layout (GTK_BUTTON_BOX (dialog_action_area1), GTK_BUTTONBOX_END);
++
++  closebutton1 = gtk_button_new_from_stock (&quot;gtk-close&quot;);
++  gtk_widget_show (closebutton1);
++  gtk_dialog_add_action_widget (GTK_DIALOG (dialog1), closebutton1, GTK_RESPONSE_CLOSE);
++  GTK_WIDGET_SET_FLAGS (closebutton1, GTK_CAN_DEFAULT);
++
++  /* Store pointers to all widgets, for use by lookup_widget(). */
++  GLADE_HOOKUP_OBJECT_NO_REF (dialog1, dialog1, &quot;dialog1&quot;);
++  GLADE_HOOKUP_OBJECT_NO_REF (dialog1, dialog_vbox1, &quot;dialog_vbox1&quot;);
++  GLADE_HOOKUP_OBJECT (dialog1, vbox2, &quot;vbox2&quot;);
++  GLADE_HOOKUP_OBJECT (dialog1, drawingarea1, &quot;drawingarea1&quot;);
++  GLADE_HOOKUP_OBJECT (dialog1, entry1, &quot;entry1&quot;);
++  GLADE_HOOKUP_OBJECT (dialog1, hbox1, &quot;hbox1&quot;);
++  GLADE_HOOKUP_OBJECT (dialog1, buttonPrev, &quot;buttonPrev&quot;);
++  GLADE_HOOKUP_OBJECT (dialog1, buttonNext, &quot;buttonNext&quot;);
++  GLADE_HOOKUP_OBJECT (dialog1, hseparator1, &quot;hseparator1&quot;);
++  GLADE_HOOKUP_OBJECT (dialog1, button3, &quot;button3&quot;);
++  GLADE_HOOKUP_OBJECT_NO_REF (dialog1, dialog_action_area1, &quot;dialog_action_area1&quot;);
++  GLADE_HOOKUP_OBJECT (dialog1, closebutton1, &quot;closebutton1&quot;);
++
++  return dialog1;
++}
++
++
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000623.html">[Avidemux-svn-commit] r3346 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+	<LI>Next message: <A HREF="000625.html">[Avidemux-svn-commit] r3348 - in	branches/avidemux_2.4_branch/avidemux: . ADM_ocr	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_GTK/ADM_ocr	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#624">[ date ]</a>
+              <a href="thread.html#624">[ thread ]</a>
+              <a href="subject.html#624">[ subject ]</a>
+              <a href="author.html#624">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

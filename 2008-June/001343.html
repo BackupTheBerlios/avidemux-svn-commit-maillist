@@ -1,0 +1,412 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4087 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4087%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200806072025.m57KPllW020023%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001342.html">
+   <LINK REL="Next"  HREF="001344.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4087 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4087%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200806072025.m57KPllW020023%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4087 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jun  7 22:25:47 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001342.html">[Avidemux-svn-commit] r4086 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+        <LI>Next message: <A HREF="001344.html">[Avidemux-svn-commit] r4088 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1343">[ date ]</a>
+              <a href="thread.html#1343">[ thread ]</a>
+              <a href="subject.html#1343">[ subject ]</a>
+              <a href="author.html#1343">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-06-07 22:25:47 +0200 (Sat, 07 Jun 2008)
+New Revision: 4087
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+Log:
+[MKV] Display # of audio packets
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2008-06-07 20:24:16 UTC (rev 4086)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2008-06-07 20:25:47 UTC (rev 4087)
+@@ -33,14 +33,14 @@
+ 
+ /**
+     \fn ~mkvAudio
+-    
++
+ */
+  mkvAudio ::~mkvAudio()
+ {
+   if(_clusterParser)  delete _clusterParser;
+   _clusterParser=NULL;
+     if(_parser) delete _parser;
+-  _parser=NULL; 
++  _parser=NULL;
+ 
+ }
+ 
+@@ -65,7 +65,7 @@
+ uint8_t             mkvAudio::extraData(uint32_t *l,uint8_t **d)
+ {
+   *l=_track-&gt;extraDataLen;
+-  *d=_track-&gt;extraData; 
++  *d=_track-&gt;extraData;
+ }
+ /**
+     \fn getPacket
+@@ -89,10 +89,25 @@
+       _clusterParser-&gt;readBin(dest,_Laces[_currentLace]);
+       *packlen= _Laces[_currentLace];
+       vprintf(&quot;Continuing lacing : %u bytes, lacing %u/%u\n&quot;,*packlen,_currentLace,_maxLace);
++
++      if(_currentLace==_maxLace-1)
++      {
++          float f;
++          f=_frameDurationInSample;
++          f/=_maxLace;
++          uint32_t total=(uint32_t)floor(f);
++          total*=(_maxLace-1);
++          *samples=_frameDurationInSample-total;
++          ADM_assert(_frameDurationInSample&gt;=total);
++      }else
++      {
++          float f;
++          f=_frameDurationInSample;
++          f/=_maxLace;
++          *samples=(uint32_t )floor(f);
++      }
++      *timecode=_curTimeCode;
+       _currentLace++;
+-      *samples=_frameDurationInSample;
+-      *timecode=_curTimeCode;
+-      
+       return 1;
+     }
+     while(1)
+@@ -104,14 +119,14 @@
+           if(!goToCluster(_currentCluster+1))
+           {
+             printf(&quot;[MKVAUDIO] cannot go to next cluster\n&quot;);
+-            return 0; 
++            return 0;
+           }
+           _currentCluster++;
+         }
+         // Ok read a new block
+         while(!_clusterParser-&gt;finished())
+         {
+-          
++
+             _clusterParser-&gt;readElemId(&amp;id,&amp;len);
+             pos=_clusterParser-&gt;tell();
+             if(!ADM_searchMkvTag( (MKV_ELEM_ID)id,&amp;ss,&amp;type))
+@@ -120,23 +135,23 @@
+               _clusterParser-&gt;skip(len);
+               continue;
+             }
+-            
++
+             vprintf(&quot;[MKVAudio]Found tag %x (%s) at 0x%llx len %u\n&quot;,id,ss,_clusterParser-&gt;tell(),len);
+-            
++
+             switch(id)
+             {
+               default:
+               case MKV_TIMECODE:     _clusterParser-&gt;skip(len);  break;
+               case MKV_BLOCK_GROUP:    break;
+-              case MKV_SIMPLE_BLOCK: 
+-              case MKV_BLOCK: 
++              case MKV_SIMPLE_BLOCK:
++              case MKV_BLOCK:
+               {
+                   uint32_t tid=_clusterParser-&gt;readEBMCode();
+                   uint64_t tail=pos+len;
+                   uint64_t head=pos;
+-                  
++
+                   // FIXME WARNING ASSUME TRACK FITS ON 1 BYTE!
+-                  len--; 
++                  len--;
+                   vprintf(&quot;Tid = %u, my tid=%u\n&quot;,tid,_track-&gt;streamIndex);
+                   if(tid!=_track-&gt;streamIndex)
+                     {
+@@ -155,19 +170,19 @@
+                     uint32_t lacing=((flags&gt;&gt;1)&amp;3);
+                     switch(lacing)
+                     {
+-                      case 0 : // no lacing 
+-                          
++                      case 0 : // no lacing
++
+                               vprintf(&quot;No lacing :%d bytes\n&quot;,remaining);
+                               _clusterParser-&gt;readBin(dest,remaining);
+-                              *packlen=remaining; 
++                              *packlen=remaining;
+                               *samples=_frameDurationInSample;
+                               _currentLace=_maxLace=0;
+-                              
++
+                               return 1;
+                       case 1: //Xiph lacing
+                         {
+                                 int nbLaces=_clusterParser-&gt;readu8()+1;
+-                                
++
+                                 ADM_assert(nbLaces&lt;MKV_MAX_LACES);
+                                 for(int i=0;i&lt;nbLaces-1;i++)
+                                 {
+@@ -178,40 +193,40 @@
+                                   _Laces[i]=lce;
+                                 }
+                                 int64_t d=_clusterParser-&gt;tell();
+-                                
++
+                                 d=tail-d;
+                                 /* We have the remaining size after laces, substract the already known lace size */
+                                 for(int i=0;i&lt;nbLaces-1;i++)
+                                 {
+-                                  d-=_Laces[i]; 
++                                  d-=_Laces[i];
+                                 }
+                                 // What is left is the sift of the last lace
+                                 if(d&gt;0)
+-                                  _Laces[nbLaces-1]=(uint32_t)d; 
++                                  _Laces[nbLaces-1]=(uint32_t)d;
+                                 else
+                                 {
+                                   printf(&quot;[MKVAUDIO] OOps overflow on Xiph\n&quot;);
+-                                  nbLaces--; 
++                                  nbLaces--;
+                                 }
+ 
+-                                
++
+                                 _currentLace=0;
+                                 _maxLace=nbLaces;
+                                 return getPacket(dest, packlen, samples);
+                               }
+-                              
++
+                               break;
+                       case 2 : // constant size lacing
+                               {
+                                 int nbLaces=_clusterParser-&gt;readu8()+1;
+-                                
++
+                                 remaining--;
+                                 int bsize=remaining/nbLaces;
+                                 vprintf(&quot;NbLaces :%u lacesize:%u\n&quot;,nbLaces,bsize);
+                                 ADM_assert(nbLaces&lt;MKV_MAX_LACES);
+                                 for(int i=0;i&lt;nbLaces;i++)
+                                 {
+-                                  _Laces[i]=bsize; 
++                                  _Laces[i]=bsize;
+                                 }
+                                 _currentLace=0;
+                                 _maxLace=nbLaces;
+@@ -220,13 +235,13 @@
+                               break;
+                       case 3: // Ebml lacing
+                         {
+-                                
++
+                                 int nbLaces=_clusterParser-&gt;readu8()+1;
+                                 int32_t curSize=_clusterParser-&gt;readEBMCode();
+                                 int32_t delta;
+-                                
++
+                                 vprintf(&quot;Ebml nbLaces :%u lacesize(0):%u\n&quot;,nbLaces,curSize);
+-                                
++
+                                 _Laces[0]=curSize;
+                                 ADM_assert(nbLaces&lt;MKV_MAX_LACES);
+                                 for(int i=1;i&lt;nbLaces-1;i++)
+@@ -235,24 +250,24 @@
+                                   vprintf(&quot;Ebml delta :%d lacesize[%d]-&gt;:%d\n&quot;,delta,i,curSize+delta);
+                                   curSize+=delta;
+                                   ADM_assert(curSize&gt;0);
+-                                  _Laces[i]=curSize; 
+-                                 
++                                  _Laces[i]=curSize;
++
+                                 }
+                                 int64_t d=_clusterParser-&gt;tell();
+-                                
++
+                                 d=tail-d;
+                                 /* We have the remaining size after laces, substract the already known lace size */
+                                 for(int i=0;i&lt;nbLaces-1;i++)
+                                 {
+-                                  d-=_Laces[i]; 
++                                  d-=_Laces[i];
+                                 }
+                                 // What is left is the sift of the last lace
+                                 if(d&gt;0)
+-                                  _Laces[nbLaces-1]=(uint32_t)d; 
++                                  _Laces[nbLaces-1]=(uint32_t)d;
+                                 else
+                                 {
+                                   printf(&quot;[MKVAUDIO] OOps overflow on ebml\n&quot;);
+-                                  nbLaces--; 
++                                  nbLaces--;
+                                 }
+                                 _currentLace=0;
+                                 _maxLace=nbLaces;
+@@ -263,7 +278,7 @@
+                             printf(&quot;Unsupported lacing %u\n&quot;,lacing);
+                             _clusterParser-&gt;seek(pos+len);
+                     }
+-                
++
+               }
+               break;
+             }
+@@ -272,33 +287,35 @@
+   return 0;
+ }
+ /**
+-      \fn mkvAudio 
++      \fn mkvAudio
+ */
+- mkvAudio::mkvAudio(const char *name,mkvTrak *track,mkvIndex *clust,uint32_t nbClusters) 
++ mkvAudio::mkvAudio(const char *name,mkvTrak *track,mkvIndex *clust,uint32_t nbClusters)
+   : AVDMGenericAudioStream()
+ {
+   _nbClusters=nbClusters;
+   _clusters=clust;
+   ADM_assert(_clusters);
+   _destroyable = 1;
+-  
++
+    _parser=new ADM_ebml_file();
+    ADM_assert(_parser-&gt;open(name));
+-  _track=track; 
++  _track=track;
+   ADM_assert(_track);
+-  
+-  
++
++
+   // Compute total length in byte
+   _length=_track-&gt;_sizeInBytes; // FIXME
+-  
++
+   float f=_track-&gt;wavHeader.frequency;
+   f*=_track-&gt;_defaultFrameDuration;
+   f=f/1000000.;
+-  
++
+   _frameDurationInSample=(uint32_t)floor(f+0.5);
+-  
++
+   _wavheader=new WAVHeader;
+   memcpy(_wavheader,&amp;(_track-&gt;wavHeader),sizeof(WAVHeader));
++  printf(&quot;[MKVAUDIO] found %lu packets\n&quot;,track-&gt;nbPackets);
++  printf(&quot;[MKVAUDIO] Default duration %u us\n&quot;,_track-&gt;_defaultFrameDuration);
+   printf(&quot;[MKVAUDIO] found %lu bytes, %u samples per frame\n&quot;,_length,_frameDurationInSample);
+   _currentLace=_maxLace=0;
+   _clusterParser=NULL;
+@@ -328,20 +345,21 @@
+ uint8_t mkvAudio::goToCluster(uint32_t x)
+ {
+   ADM_assert(_nbClusters);
+-  
++
+   if(x&gt;=_nbClusters)
+   {
+-    printf(&quot;Exceeding max cluster : asked: %u max :%u\n&quot;,x,_nbClusters); 
++    printf(&quot;Exceeding max cluster : asked: %u max :%u\n&quot;,x,_nbClusters);
+     return 0;  // FIXME
+   }
+-  
++
+   if( _clusterParser) delete _clusterParser;
+   _clusterParser=NULL;
+-  
++
+   //************/
+   _parser-&gt;seek(_clusters[x].pos);
+   _clusterParser=new ADM_ebml_file(_parser,_clusters[x].size);
+   _currentLace=_maxLace=0;
++
+   printf(&quot;switching to cluster :%u/%u\n&quot;,x,_nbClusters);
+   return 1;
+ }
+@@ -360,16 +378,16 @@
+               if(target&gt;=_clusters[i].timeCode &amp;&amp; target&lt;_clusters[i+1].timeCode)
+               {
+                 clus=i;
+-                i=_nbClusters; 
++                i=_nbClusters;
+               }
+             }
+             if(clus==-1) clus=_nbClusters-1; // Hopefully in the last one
+-            
++
+             target-=_clusters[clus].timeCode; // now the time is relative
+             goToCluster(clus);
+             _currentCluster=clus;
+             _curTimeCode=_clusters[clus].timeCode;
+-            
++
+             printf(&quot;[MKVAUDIO] Asked for %u ms, go to cluster %u which starts at %u\n&quot;,mstime,clus,_curTimeCode);
+             if(clus&lt;_nbClusters-1)
+               printf(&quot;[MKVAUDIO] next cluster starts at %u\n&quot;,_clusters[clus+1].timeCode);
+@@ -383,9 +401,9 @@
+             {
+               uint32_t curTime=_clusters[_currentCluster].timeCode;
+               vprintf(&quot;Wanted: %u clus : %u Timecode:%u=&gt; %u\n&quot;,mstime,curTime,timecode,timecode+curTime);
+-              ADM_assert(len&lt;MAX_SEEK_BUFFER); 
+-              
+-              if(timecode+curTime&gt;=mstime) 
++              ADM_assert(len&lt;MAX_SEEK_BUFFER);
++
++              if(timecode+curTime&gt;=mstime)
+               {
+                 printf(&quot;[MKV audio] fine seek to %u (clu)+%u=%u\n&quot;,curTime,timecode,timecode+curTime);
+                 return 1;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001342.html">[Avidemux-svn-commit] r4086 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+	<LI>Next message: <A HREF="001344.html">[Avidemux-svn-commit] r4088 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1343">[ date ]</a>
+              <a href="thread.html#1343">[ thread ]</a>
+              <a href="subject.html#1343">[ subject ]</a>
+              <a href="author.html#1343">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

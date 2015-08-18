@@ -1,0 +1,194 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5149 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5149%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src&In-Reply-To=%3C200907251643.n6PGhaPS023070%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002363.html">
+   <LINK REL="Next"  HREF="002365.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5149 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5149%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src&In-Reply-To=%3C200907251643.n6PGhaPS023070%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5149 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sat Jul 25 18:43:36 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002363.html">[Avidemux-svn-commit] r5148 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces:	ADM_dialog ADM_gui
+</A></li>
+        <LI>Next message: <A HREF="002365.html">[Avidemux-svn-commit] r5150 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2364">[ date ]</a>
+              <a href="thread.html#2364">[ thread ]</a>
+              <a href="subject.html#2364">[ subject ]</a>
+              <a href="author.html#2364">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-07-25 18:43:31 +0200 (Sat, 25 Jul 2009)
+New Revision: 5149
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/FAC_bitrate.cpp
+Log:
+[dlgFactory] make updateMe method of GTK bitrate control work
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/FAC_bitrate.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/FAC_bitrate.cpp	2009-07-25 16:38:54 UTC (rev 5148)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src/FAC_bitrate.cpp	2009-07-25 16:43:31 UTC (rev 5149)
+@@ -61,6 +61,29 @@
+ 	return mode;
+ }
+ 
++static void updatePulldown(COMPRES_PARAMS *copy, GtkComboBox *combo)
++{
++	int index = 0, set = -1;
++
++#undef LOOKUP
++#define LOOKUP(A,B) \
++	if(copy-&gt;capabilities &amp; ADM_ENC_CAP_##A) \
++	{ \
++		if (copy-&gt;mode == COMPRESS_##B) set = index; \
++			index++; \
++	} \
++
++	LOOKUP(CBR, CBR);
++	LOOKUP(CQ, CQ);
++	LOOKUP(SAME, SAME);
++	LOOKUP(AQ, AQ);
++	LOOKUP(2PASS, 2PASS);
++	LOOKUP(2PASS_BR, 2PASS_BITRATE);
++
++	if (set != -1)
++		gtk_combo_box_set_active(combo, set);
++}
++
+  diaElemBitrate::diaElemBitrate(COMPRES_PARAMS *p,const char *toggleTitle,const char *tip)
+   : diaElemBitrateBase()
+ {
+@@ -175,26 +198,10 @@
+   w[3]=spin;
+   myWidget=(void *)w;
+   
+-  int index=0,set=-1;
+-#undef LOOKUP
+-#define LOOKUP(A,B) \
+-  if(copy.capabilities &amp; ADM_ENC_CAP_##A) \
+-  { \
+-	  if(copy.mode==COMPRESS_##B) set=index; \
+-	  index++; \
+-  } \
+-  
+-  LOOKUP(CBR,CBR);
+-  LOOKUP(CQ,CQ);
+-  LOOKUP(SAME,SAME);
+-  LOOKUP(AQ,AQ);
+-  LOOKUP(2PASS,2PASS);
+-  LOOKUP(2PASS_BR,2PASS_BITRATE);
+-  if(set!=-1) gtk_combo_box_set_active(GTK_COMBO_BOX(combo),set);
++  updatePulldown(&amp;copy, GTK_COMBO_BOX(combo));
+ }
+ 
+ 
+-
+ void diaElemBitrate::getMe(void)
+ {
+   
+@@ -262,43 +269,45 @@
+ 
+ void diaElemBitrate::updateMe(void)
+ {
++  memcpy(&amp;copy, param, sizeof(copy));
++
+   // Read current value
+   GtkWidget **w=(GtkWidget **)myWidget;
+   GtkComboBox *combo=(GtkComboBox *)w[2];
+   GtkSpinButton *spin=(GtkSpinButton*)w[3];
+   GtkLabel *label=(GtkLabel*)w[1];
+-  int rank=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
+-  COMPRESSION_MODE mode=readPulldown(&amp;copy,rank);
+-  
+-//#undef P
++  int index = 0, set = 0;
++
+ #undef M
+ #undef S
+-//#define P(x) gtk_label_set_text_with_mnemonic(GTK_LABEL(label),QT_TR_NOOP(#x));
+ #define M(x,y) gtk_spin_button_set_range  (GTK_SPIN_BUTTON(spin),x,y)
+ #define S(x)   gtk_spin_button_set_value  (GTK_SPIN_BUTTON(spin),x)
+-  switch(mode)
++
++  updatePulldown(&amp;copy, GTK_COMBO_BOX(combo));
++
++  switch (copy.mode)
+   {
+-    case COMPRESS_CBR: //CBR
++    case COMPRESS_CBR:
+           gtk_label_set_text_with_mnemonic(GTK_LABEL(label),QT_TR_NOOP(&quot;_Bitrate (kb/s):&quot;));
+           M(0,20000);
+           S(copy.bitrate);
+           break; 
+-    case COMPRESS_<A HREF="CQ://">CQ://</A> CQ
++    case COMPRESS_CQ:
+           gtk_label_set_text_with_mnemonic(GTK_LABEL(label),QT_TR_NOOP(&quot;_Quantizer:&quot;));
+           M(minQ,maxQ);
+           S(copy.qz);
+           break;
+-    case COMPRESS_<A HREF="AQ://">AQ://</A> CQ
+-              gtk_label_set_text_with_mnemonic(GTK_LABEL(label),QT_TR_NOOP(&quot;A_vg Quantizer:&quot;));
+-              M(2,64);
+-              S(copy.qz);
+-              break;
+-    case COMPRESS_2PASS : // 2pass Filesize
++    case COMPRESS_AQ:
++          gtk_label_set_text_with_mnemonic(GTK_LABEL(label),QT_TR_NOOP(&quot;A_vg Quantizer:&quot;));
++          M(2,64);
++          S(copy.qz);
++          break;
++    case COMPRESS_2PASS:
+           gtk_label_set_text_with_mnemonic(GTK_LABEL(label),QT_TR_NOOP(&quot;_Video size (MB):&quot;));
+           M(1,8000);
+           S(copy.finalsize);
+           break;
+-    case COMPRESS_2PASS_BITRATE : // 2pass Avg
++    case COMPRESS_2PASS_BITRATE:
+           gtk_label_set_text_with_mnemonic(GTK_LABEL(label),QT_TR_NOOP(&quot;_Average bitrate (kb/s):&quot;));
+           M(0,20000);
+           S(copy.avg_bitrate);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002363.html">[Avidemux-svn-commit] r5148 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces:	ADM_dialog ADM_gui
+</A></li>
+	<LI>Next message: <A HREF="002365.html">[Avidemux-svn-commit] r5150 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_GTK/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2364">[ date ]</a>
+              <a href="thread.html#2364">[ thread ]</a>
+              <a href="subject.html#2364">[ subject ]</a>
+              <a href="author.html#2364">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

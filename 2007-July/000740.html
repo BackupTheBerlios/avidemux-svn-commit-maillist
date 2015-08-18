@@ -1,0 +1,375 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3465 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_mplex ADM_libraries/ADM_xvidratectl	ADM_outputs/oplug_mpegFF
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3465%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%0A%09ADM_libraries/ADM_mplex%20ADM_libraries/ADM_xvidratectl%0A%09ADM_outputs/oplug_mpegFF&In-Reply-To=%3C200707311951.l6VJps7u012852%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000739.html">
+   
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3465 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_mplex ADM_libraries/ADM_xvidratectl	ADM_outputs/oplug_mpegFF</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3465%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%0A%09ADM_libraries/ADM_mplex%20ADM_libraries/ADM_xvidratectl%0A%09ADM_outputs/oplug_mpegFF&In-Reply-To=%3C200707311951.l6VJps7u012852%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3465 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_mplex ADM_libraries/ADM_xvidratectl	ADM_outputs/oplug_mpegFF">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Jul 31 21:51:54 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000739.html">[Avidemux-svn-commit] r3464 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4:	. ADM_ocr
+</A></li>
+        
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#740">[ date ]</a>
+              <a href="thread.html#740">[ thread ]</a>
+              <a href="subject.html#740">[ subject ]</a>
+              <a href="author.html#740">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2007-07-31 21:51:36 +0200 (Tue, 31 Jul 2007)
+New Revision: 3465
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex/ADM_mplexmuxer.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex/multiplexor.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex/multiplexor.hpp
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_xvidratectl/ADM_oldxvid.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_xvidratectl/ADM_ratecontrol.h
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp
+Log:
+fix mem leaks (DVD/xVCD + MPEG)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex/ADM_mplexmuxer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex/ADM_mplexmuxer.cpp	2007-07-31 17:36:01 UTC (rev 3464)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex/ADM_mplexmuxer.cpp	2007-07-31 19:51:36 UTC (rev 3465)
+@@ -182,7 +182,7 @@
+         mplexStreamDescriptor audioDesc;
+         mplexStreamDescriptor videoDesc;
+ 
+-        printf(&quot;[Muxer Slave Thread] Slave thread : creating job &amp; muxer\n&quot;);
++        printf(&quot;[Muxer Slave Thread] Creating job &amp; muxer\n&quot;);
+ 
+         
+         printf(&quot;output file created\n&quot;);
+@@ -205,10 +205,12 @@
+         
+         Multiplexor mux(job, *outputStream);
+                
+-        printf(&quot;Slave :Muxing\n&quot;);
++        printf(&quot;[Muxer Slave Thread] Muxing\n&quot;);
+         mux.Multiplex();
++		mux.Close();
++
+         slaveRunning=0;
+-        printf(&quot;Slace Thread exiting\n&quot;);
++        printf(&quot;[Muxer Slave Thread] Exiting\n&quot;);
+         pthread_exit(0);
+ }        
+ //___________________________________________________________________________
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex/multiplexor.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex/multiplexor.cpp	2007-07-31 17:36:01 UTC (rev 3464)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex/multiplexor.cpp	2007-07-31 19:51:36 UTC (rev 3465)
+@@ -63,7 +63,15 @@
+ 
+ }
+ 
++void Multiplexor::Close(void)
++{
++	std::vector&lt;ElementaryStream *&gt;::iterator str;
+ 
++	for( str = estreams.begin(); str &lt; estreams.end(); ++str )
++		delete (*str);
++}
++
++
+ /******************************************************************
+  *
+  * Initialisation of stream syntax paramters based on selected user
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex/multiplexor.hpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex/multiplexor.hpp	2007-07-31 17:36:01 UTC (rev 3464)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_mplex/multiplexor.hpp	2007-07-31 19:51:36 UTC (rev 3465)
+@@ -13,14 +13,11 @@
+ class Multiplexor
+ {
+ public:
+-	Multiplexor(MultiplexJob &amp;job, OutputStream &amp;output);
++	Multiplexor(MultiplexJob &amp;job, OutputStream &amp;output);	
++	void Close(void);
+ 	void Multiplex ();
+-
+-
+-	void ByteposTimecode( bitcount_t bytepos, clockticks &amp;ts );
+-	
++	void ByteposTimecode( bitcount_t bytepos, clockticks &amp;ts );	
+ 	inline Sys_header_struc *SystemHeader() { return &amp;sys_header; }
+-
+ 	unsigned int PacketPayload(	MuxStream &amp;strm,
+ 								bool buffers, bool PTSstamp, bool DTSstamp );
+ 	unsigned int WritePacket( unsigned int     max_packet_data_size,
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_xvidratectl/ADM_oldxvid.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_xvidratectl/ADM_oldxvid.cpp	2007-07-31 17:36:01 UTC (rev 3464)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_xvidratectl/ADM_oldxvid.cpp	2007-07-31 19:51:36 UTC (rev 3465)
+@@ -29,6 +29,11 @@
+ 	_state=RS_IDLE;
+ 	_nbFrames++;
+ }
++
++ADM_ratecontrol::~ADM_ratecontrol()
++{
++	delete _logname;
++}
+ #if 0 // RMED
+ extern &quot;C&quot; {
+ #include &quot;ADM_encoder/xvid_vbr.h&quot;
+@@ -42,7 +47,6 @@
+ 		vbrFinish(&amp;mpegvbr);
+ 	}
+ 	_state=RS_IDLE;
+-
+ }
+ //
+ ADM_oldXvidRc::ADM_oldXvidRc(uint32_t fps1000, char *logname) : ADM_ratecontrol(fps1000,logname)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_xvidratectl/ADM_ratecontrol.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_xvidratectl/ADM_ratecontrol.h	2007-07-31 17:36:01 UTC (rev 3464)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_xvidratectl/ADM_ratecontrol.h	2007-07-31 19:51:36 UTC (rev 3465)
+@@ -43,7 +43,7 @@
+ 		ADM_rstate _state;
+ public:
+ 			ADM_ratecontrol(uint32_t fps1000, char *logname);
+-	virtual 	~ADM_ratecontrol() {};
++	virtual 	~ADM_ratecontrol();
+ 	/** Maxbr &amp; minbr in Bps, vbvsize in kBytes); Default is none */
+ 	virtual 	uint8_t setVBVInfo(uint32_t maxbr,uint32_t minbr, uint32_t vbvsize) FORBIDDEN ;
+ 	virtual		uint8_t startPass1( void )FORBIDDEN;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp	2007-07-31 17:36:01 UTC (rev 3464)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp	2007-07-31 19:51:36 UTC (rev 3465)
+@@ -91,15 +91,13 @@
+ uint8_t oplug_mpegff(const char *name, ADM_OUT_FORMAT type)
+ {
+ AVDMGenericVideoStream *_incoming;
+-//EncoderFFMPEGMpeg1  *encoder;
+-Encoder  *encoder;
+-
++Encoder  *encoder=NULL;
+ ADMMpegMuxer	*muxer=NULL;
+ FILE 		*file=NULL;
+ uint8_t		audioBuffer[48000];
+ uint32_t	audioLen=0;
+ uint32_t _w,_h,_fps1000,_page,total;	
+-AVDMGenericAudioStream	*audio;
++AVDMGenericAudioStream	*audio=NULL;
+ uint32_t len,flags;
+ uint32_t size;
+ ADM_MUXER_TYPE mux;
+@@ -110,6 +108,7 @@
+ uint32_t  total_sample=0;
+ ADMBitstream bitstream(0);
+ uint32_t audioSum=0;
++DIA_encoding  *encoding;
+ 
+         twoPass=new char[strlen(name)+6];
+         twoFake=new char[strlen(name)+6];
+@@ -141,7 +140,7 @@
+                     if(!currentaudiostream)
+                     {
+                       GUI_Error_HIG(_(&quot;There is no audio track&quot;), NULL);
+-                        return 0;
++					  goto finishvcdff;
+                     }
+                     audio=mpt_getAudioStream();
+                     mux=MUXER_TS;
+@@ -152,7 +151,7 @@
+                 if(!currentaudiostream)
+                 {
+                   GUI_Error_HIG(_(&quot;There is no audio track&quot;), NULL);
+-                        return 0;
++				  goto finishvcdff;
+                 }
+                 audio=mpt_getAudioStream();
+                 // Have to check the type
+@@ -162,7 +161,7 @@
+                 if(!audio)
+                 {
+                   GUI_Error_HIG(_(&quot;Audio track is not suitable&quot;), NULL);
+-                        return 0;
++				  goto finishvcdff;
+                 }
+                 // Check
+                 WAVHeader *hdr=audio-&gt;getInfo();	
+@@ -172,8 +171,7 @@
+                         if(hdr-&gt;frequency!=44100 ||  hdr-&gt;encoding != WAV_MP2)
+                         {
+                             GUI_Error_HIG((&quot;Incompatible audio&quot;),_( &quot;For VCD, audio must be 44.1 kHz MP2.&quot;));
+-                            deleteAudioFilter(audio);
+-                            return 0;
++							goto finishvcdff;
+                         }
+                         mux=MUXER_VCD;
+                         printf(&quot;X*CD: Using VCD PS\n&quot;);
+@@ -192,9 +190,8 @@
+                             if(hdr-&gt;frequency!=48000 || 
+                                 (hdr-&gt;encoding != WAV_MP2 &amp;&amp; hdr-&gt;encoding!=WAV_AC3 &amp;&amp; hdr-&gt;encoding!=WAV_LPCM))
+                             {
+-                                deleteAudioFilter(audio);
+                                 GUI_Error_HIG(_(&quot;Incompatible audio&quot;), _(&quot;For DVD, audio must be 48 kHz MP2, AC3 or LPCM.&quot;));
+-                                return 0 ;
++								goto finishvcdff;
+                             }
+                             mux=MUXER_DVD;
+                             printf(&quot;X*VCD: Using DVD PS\n&quot;);
+@@ -248,19 +245,14 @@
+ 
+       encoder-&gt;setLogFile(twoPass,total);
+       if(!encoder-&gt;configure(_incoming))
+-      {
+-              delete encoder;
+-              return 0;
+-      }
++              goto finishvcdff;
+ 
+-
+       _buffer=new uint8_t[_page]; // Might overflow if _page only
+       _outbuffer=new uint8_t[_page];
+ 
+       ADM_assert(  _buffer);
+       ADM_assert(  _outbuffer);
+-    
+-      DIA_encoding  *encoding;
++
+       encoding =new DIA_encoding(_fps1000);
+       switch(current_codec)
+       {
+@@ -329,10 +321,7 @@
+                                         }
+                                         encoding-&gt;setFrame(i,bitstream.len,bitstream.out_quantizer,total);
+                                         if(!encoding-&gt;isAlive())
+-                                        {
+-
+                                               goto finishvcdff;
+-                                        }
+                                 }
+                         }
+                         encoder-&gt;startPass2();
+@@ -358,11 +347,8 @@
+               {
+                 if(!muxer-&gt;open(name,0,mux,avifileinfo,audio-&gt;getInfo()))
+                 {
+-                  delete muxer;
+-                  muxer=NULL;
+-                  deleteAudioFilter(audio);
+                   printf(&quot;Muxer init failed\n&quot;);
+-                  return 0 ;
++				  goto finishvcdff;
+                 }
+                 double sample_time;
+ 
+@@ -378,7 +364,7 @@
+                 if(!file)
+                 {
+                   GUI_Error_HIG(_(&quot;File error&quot;), _(&quot;Cannot open \&quot;%s\&quot; for writing.&quot;), name);
+-                  return 0 ;
++				  goto finishvcdff;
+                 }
+               }
+           if(encoder-&gt;isDualPass())
+@@ -435,7 +421,6 @@
+                  {
+                    printf(&quot;[mpegFF]Both audio &amp; video done\n&quot;);
+                    if(context.audioDone==1 &amp;&amp; context.videoDone==1) ret=1;
+-                   else ret=0;
+                    accessMutex.unlock();
+                    goto finishvcdff;
+                  }
+@@ -454,7 +439,6 @@
+              {
+                printf(&quot;[mpegFF]Both audio &amp; video done\n&quot;);
+                if(context.audioDone==1 &amp;&amp; context.videoDone==1) ret=1;
+-               else ret=0;
+                accessMutex.unlock();
+                goto finishvcdff;
+              }
+@@ -515,31 +499,31 @@
+                 encoding-&gt;setFrame(i,bitstream.len,bitstream.out_quantizer,total);
+                 encoding-&gt;setAudioSize(audioSum);
+                 if(!encoding-&gt;isAlive ())
+-                        {
+-                                  ret=0;        
+                                   goto finishvcdff;
+-                        }
+         }
+         ret=1;
+ finishvcdff:
+         printf(&quot;[MPEGFF] Finishing..\n&quot;);
+         delete encoding;
+         end();
++
+         if(file)
+         {
+                 fclose(file);
+                 file=NULL;
+         }
+-        else
+-        {  
+-            if(muxer)
+-            {
++        else if(muxer)
++        {
+                 muxer-&gt;close();
+                 delete muxer;
+                 muxer=NULL;
+-            }
+         }
++
+         delete encoder;
++
++		if (audio)
++			deleteAudioFilter(audio);
++
+         return ret;
+ }
+ 	
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000739.html">[Avidemux-svn-commit] r3464 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4:	. ADM_ocr
+</A></li>
+	
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#740">[ date ]</a>
+              <a href="thread.html#740">[ thread ]</a>
+              <a href="subject.html#740">[ subject ]</a>
+              <a href="author.html#740">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

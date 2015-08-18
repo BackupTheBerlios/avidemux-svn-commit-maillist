@@ -1,0 +1,276 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4656 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_plugin plugins/ADM_videoEncoder/ADM_vidEnc_x264	plugins/ADM_videoEncoder/ADM_vidEnc_xvid
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4656%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09avidemux/ADM_plugin%20plugins/ADM_videoEncoder/ADM_vidEnc_x264%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_xvid&In-Reply-To=%3C200903042249.n24MnmIW022275%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001885.html">
+   <LINK REL="Next"  HREF="001887.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4656 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_plugin plugins/ADM_videoEncoder/ADM_vidEnc_x264	plugins/ADM_videoEncoder/ADM_vidEnc_xvid</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4656%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09avidemux/ADM_plugin%20plugins/ADM_videoEncoder/ADM_vidEnc_x264%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_xvid&In-Reply-To=%3C200903042249.n24MnmIW022275%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4656 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_plugin plugins/ADM_videoEncoder/ADM_vidEnc_x264	plugins/ADM_videoEncoder/ADM_vidEnc_xvid">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Wed Mar  4 23:49:48 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001885.html">[Avidemux-svn-commit] r4655 -	branches/avidemux_2.5_branch_gruntster/cmake/patches
+</A></li>
+        <LI>Next message: <A HREF="001887.html">[Avidemux-svn-commit] r4657 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1886">[ date ]</a>
+              <a href="thread.html#1886">[ thread ]</a>
+              <a href="subject.html#1886">[ subject ]</a>
+              <a href="author.html#1886">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-03-04 23:49:41 +0100 (Wed, 04 Mar 2009)
+New Revision: 4656
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp
+Log:
+[videnc] fix 2nd pass encoding
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp	2009-03-04 21:41:17 UTC (rev 4655)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp	2009-03-04 22:49:41 UTC (rev 4656)
+@@ -165,14 +165,27 @@
+ uint8_t externalEncoder::startPass(void)
+ {
+ 	vidEncPassParameters passParameters;
++	int ret;
+ 
+ 	memset(&amp;passParameters, 0, sizeof(vidEncPassParameters));
+ 	passParameters.structSize = sizeof(vidEncPassParameters);
+ 	passParameters.logFileName = _logFileName;
+ 	passParameters.useExistingLogFile = _useExistingLogFile;
+ 
+-	_openPass = (_plugin-&gt;beginPass(_plugin-&gt;encoderId, &amp;passParameters) == ADM_VIDENC_ERR_SUCCESS);
++	ret = _plugin-&gt;beginPass(_plugin-&gt;encoderId, &amp;passParameters);
+ 
++	if (ret == ADM_VIDENC_ERR_PASS_SKIP)
++	{
++		printf(&quot;[externalEncoder] skipping pass\n&quot;);
++
++		return 1;
++	}
++
++	if (ret != ADM_VIDENC_ERR_SUCCESS)
++		printf(&quot;[externalEncoder] begin pass failed: %d\n&quot;, ret);
++
++	_openPass = (ret == ADM_VIDENC_ERR_SUCCESS);
++
+ 	if (_openPass &amp;&amp; _globalHeader)
+ 	{
+ 		_extraData = passParameters.extraData;
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h	2009-03-04 21:41:17 UTC (rev 4655)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h	2009-03-04 22:49:41 UTC (rev 4656)
+@@ -24,9 +24,10 @@
+ #define ADM_VIDENC_ERR_CLOSED -1
+ #define ADM_VIDENC_ERR_ALREADY_OPEN -2
+ #define ADM_VIDENC_ERR_INVALID_ENCODER_ID -3
+-#define ADM_VIDENC_ERR_PASS_CLOSED -4
+-#define ADM_VIDENC_ERR_PASS_ALREADY_OPEN -5
+-#define ADM_VIDENC_ERR_PASS_COUNT_REACHED -6
++#define ADM_VIDENC_ERR_PASS_SKIP -4
++#define ADM_VIDENC_ERR_PASS_CLOSED -5
++#define ADM_VIDENC_ERR_PASS_ALREADY_OPEN -6
++#define ADM_VIDENC_ERR_PASS_COUNT_REACHED -7
+ 
+ #define ADM_VIDENC_MODE_CBR 1
+ #define ADM_VIDENC_MODE_CQP 2
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-03-04 21:41:17 UTC (rev 4655)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-03-04 22:49:41 UTC (rev 4656)
+@@ -121,7 +121,12 @@
+ 	}
+ 
+ 	if (_loader-&gt;isAvailable())
+-		return _loader-&gt;showX264ConfigDialog(configParameters, properties, &amp;_encodeOptions, &amp;_options);
++		if (_loader-&gt;showX264ConfigDialog(configParameters, properties, &amp;_encodeOptions, &amp;_options))
++		{
++			updateEncodeParameters(NULL);
++
++			return 1;
++		}
+ 	else
+ 		return 0;
+ }
+@@ -155,7 +160,10 @@
+ 		success = _options.fromXml(pluginOptions);
+ 
+ 	if (encodeOptions &amp;&amp; success)
++	{
+ 		memcpy(&amp;_encodeOptions, encodeOptions, sizeof(vidEncOptions));
++		updateEncodeParameters(NULL);
++	}
+ 
+ 	if (success)
+ 		return ADM_VIDENC_ERR_SUCCESS;
+@@ -218,6 +226,12 @@
+ 	if (_currentPass == _passCount)
+ 		return ADM_VIDENC_ERR_PASS_COUNT_REACHED;
+ 
++	if (_passCount &gt; 1 &amp;&amp; _currentPass == 0 &amp;&amp; passParameters-&gt;useExistingLogFile)
++	{
++		_currentPass++;
++		return ADM_VIDENC_ERR_PASS_SKIP;
++	}
++
+ 	_openPass = true;
+ 	_currentPass++;
+ 	_currentFrame = 0;
+@@ -235,9 +249,6 @@
+ 		strcpy(logFileName, passParameters-&gt;logFileName);
+ #endif
+ 
+-		if (passParameters-&gt;useExistingLogFile)
+-			_currentPass++;
+-
+ 		if (_currentPass == 1)
+ 		{
+ 			_param.rc.b_stat_write = 1;
+@@ -532,7 +543,6 @@
+ 		finishPass();
+ 
+ 	_opened = false;
+-	_passCount = 0;
+ 	_currentPass = 0;
+ 
+ 	if (_buffer)
+@@ -680,7 +690,12 @@
+ 		case ADM_VIDENC_MODE_2PASS_SIZE:
+ 			_passCount = 2;
+ 			_param.rc.i_rc_method = X264_RC_ABR;
+-			_param.rc.i_bitrate = calculateBitrate(properties-&gt;fpsNum, properties-&gt;fpsDen, properties-&gt;frameCount, _encodeOptions.encodeModeParameter) / 1000;
++
++			if (properties)
++				_param.rc.i_bitrate = calculateBitrate(properties-&gt;fpsNum, properties-&gt;fpsDen, properties-&gt;frameCount, _encodeOptions.encodeModeParameter) / 1000;
++			else
++				_param.rc.i_bitrate = 1500;
++
+ 			break;
+ 		case ADM_VIDENC_MODE_2PASS_ABR:
+ 			_passCount = 2;
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp	2009-03-04 21:41:17 UTC (rev 4655)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp	2009-03-04 22:49:41 UTC (rev 4656)
+@@ -149,7 +149,12 @@
+ 	}
+ 
+ 	if (_loader-&gt;isAvailable())
+-		return _loader-&gt;showXvidConfigDialog(configParameters, properties, &amp;_encodeOptions, &amp;_options);
++		if (_loader-&gt;showXvidConfigDialog(configParameters, properties, &amp;_encodeOptions, &amp;_options))
++		{
++			updateEncodeParameters(NULL);
++
++			return 1;
++		}
+ 	else
+ 		return 0;
+ }
+@@ -183,7 +188,10 @@
+ 		success = _options.fromXml(pluginOptions);
+ 
+ 	if (encodeOptions &amp;&amp; success)
++	{
+ 		memcpy(&amp;_encodeOptions, encodeOptions, sizeof(vidEncOptions));
++		updateEncodeParameters(NULL);
++	}
+ 
+ 	if (success)
+ 		return ADM_VIDENC_ERR_SUCCESS;
+@@ -240,6 +248,12 @@
+ 	if (_currentPass == _passCount)
+ 		return ADM_VIDENC_ERR_PASS_COUNT_REACHED;
+ 
++	if (_passCount &gt; 1 &amp;&amp; _currentPass == 0 &amp;&amp; passParameters-&gt;useExistingLogFile)
++	{
++		_currentPass++;
++		return ADM_VIDENC_ERR_PASS_SKIP;
++	}
++
+ 	_openPass = true;
+ 	_currentPass++;
+ 	_currentFrame = 0;
+@@ -258,9 +272,6 @@
+ 		strcpy(_logFileName, passParameters-&gt;logFileName);
+ #endif
+ 
+-		if (passParameters-&gt;useExistingLogFile)
+-			_currentPass++;
+-
+ 		if (_currentPass == 1)
+ 		{
+ 			_xvid_plugin_2pass1.filename = _logFileName;
+@@ -376,7 +387,6 @@
+ 		finishPass();
+ 
+ 	_opened = false;
+-	_passCount = 0;
+ 	_currentPass = 0;
+ 
+ 	if (_xvid_enc_create.handle)
+@@ -444,8 +454,12 @@
+ 			break;
+ 		case ADM_VIDENC_MODE_2PASS_SIZE:
+ 			_passCount = 2;
+-			_xvid_plugin_2pass2.bitrate = calculateBitrate(properties-&gt;fpsNum, properties-&gt;fpsDen, properties-&gt;frameCount, _encodeOptions.encodeModeParameter);
+ 
++			if (properties)
++				_xvid_plugin_2pass2.bitrate = calculateBitrate(properties-&gt;fpsNum, properties-&gt;fpsDen, properties-&gt;frameCount, _encodeOptions.encodeModeParameter);
++			else
++				_xvid_plugin_2pass2.bitrate = 1500;
++
+ 			break;
+ 		case ADM_VIDENC_MODE_2PASS_ABR:
+ 			_passCount = 2;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001885.html">[Avidemux-svn-commit] r4655 -	branches/avidemux_2.5_branch_gruntster/cmake/patches
+</A></li>
+	<LI>Next message: <A HREF="001887.html">[Avidemux-svn-commit] r4657 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1886">[ date ]</a>
+              <a href="thread.html#1886">[ thread ]</a>
+              <a href="subject.html#1886">[ subject ]</a>
+              <a href="author.html#1886">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

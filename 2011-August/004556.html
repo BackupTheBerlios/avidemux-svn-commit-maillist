@@ -1,0 +1,628 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7405 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7405%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau&In-Reply-To=%3C20110814132849.50590481366%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004555.html">
+   <LINK REL="Next"  HREF="004557.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7405 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7405%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau&In-Reply-To=%3C20110814132849.50590481366%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7405 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Aug 14 15:28:49 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004555.html">[Avidemux-svn-commit] r7404 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl:	. glVdpau
+</A></li>
+        <LI>Next message: <A HREF="004557.html">[Avidemux-svn-commit] r7406 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVdpau:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4556">[ date ]</a>
+              <a href="thread.html#4556">[ thread ]</a>
+              <a href="subject.html#4556">[ subject ]</a>
+              <a href="author.html#4556">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-08-14 15:28:49 +0200 (Sun, 14 Aug 2011)
+New Revision: 7405
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeint.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeintGl.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeint.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/CMakeLists.txt
+Log:
+[vdpau] Begin splitting openGL part
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeint.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeint.cpp	2011-08-14 13:28:47 UTC (rev 7404)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeint.cpp	2011-08-14 13:28:49 UTC (rev 7405)
+@@ -1,38 +1,47 @@
+ /**
+     \brief VDPAU filters Deinterlacer
+     \author mean (C) 2010
+-    This is slow as we copy back and forth data to/from the video cards
+-    
+-    On a Q6600
++  
++    This version uses openGL to convert the output surface to YV12
+ 
+-    FullHD: 
+-            Readback ~ 5 ms, RGB 2 YUV ~ 20 ms : 100% CPU
+-    720
+-            Readback ~ 2 ms, RGB2YUV ~ 10 ms  : 50% CPU
+-            
+ 
+-
+ */
+-#include &quot;ADM_cpp.h&quot;
++#define __STDC_CONSTANT_MACROS
++#define GL_GLEXT_PROTOTYPES
++
++#include &lt;QtGui/QPainter&gt;
++
++#include &lt;GL/gl.h&gt;
++#include &lt;GL/glext.h&gt;
++
++#include &lt;QtGui/QImage&gt;
++#include &lt;QtOpenGL/QtOpenGL&gt;
++#include &lt;QtOpenGL/QGLShader&gt;
+ #include &lt;list&gt;
+-#include &quot;ADM_default.h&quot;
++
++#include &quot;ADM_coreConfig.h&quot;
+ #ifdef USE_VDPAU
+ extern &quot;C&quot; {
+ #include &quot;libavcodec/avcodec.h&quot;
+ #include &quot;libavcodec/vdpau.h&quot;
+ }
+ 
++#define ADM_LEGACY_PROGGY
++#include &quot;ADM_default.h&quot;
++
+ #include &quot;ADM_coreVideoFilterInternal.h&quot;
+ #include &quot;ADM_videoFilterCache.h&quot;
+ #include &quot;DIA_factory.h&quot;
+ #include &quot;ADM_vidMisc.h&quot;
++
++#include &quot;T_openGL.h&quot;
++#include &quot;T_openGLFilter.h&quot;
++
++
+ #include &quot;vdpauFilterDeint.h&quot;
+ #include &quot;vdpauFilterDeint_desc.cpp&quot;
+ 
+ #include &quot;ADM_coreVdpau/include/ADM_coreVdpau.h&quot;
+-//
+-#define ADM_INVALID_FRAME_NUM 0x80000000
+-#define ADM_NB_SURFACES 5
+ 
+ //#define DO_BENCHMARK
+ #define NB_BENCH 100
+@@ -43,32 +52,19 @@
+ #define aprintf(...) {}
+ #endif
+ 
+-enum
+-{
+-    ADM_KEEP_TOP=0,
+-    ADM_KEEP_BOTTOM=1,
+-    ADM_KEEP_BOTH=2
+-};
++#include &quot;ADM_vidVdpauFilterDeint.h&quot;
++
+ /**
+-    \class VDPSlot
++    \fn
+ */
+-class VDPSlot
+-{
+-public:
+-                              VDPSlot() ;
+-                             ~VDPSlot();
+-            VdpVideoSurface   surface;
+-            bool              isExternal;
+-            uint64_t          pts;
+-            uint32_t          frameNumber;
+-            ADMImage          *image;
+-};
+-
+ VDPSlot::VDPSlot()
+ {
+     surface=VDP_INVALID_HANDLE;
+     image=NULL;
+ }
++/**
++    \fn
++*/
+ VDPSlot::~VDPSlot()
+ {
+     if(image) delete image;
+@@ -80,54 +76,14 @@
+     surface=VDP_INVALID_HANDLE;
+ }
+ 
+-/**
+-    \class vdpauVideoFilterDeint
+-*/
+-class vdpauVideoFilterDeint : public  ADM_coreVideoFilter
+-{
+-protected:
+-                    VDPSlot              slots[3];
+-                    bool                 eof;
+-                    bool                 secondField;
+-                    uint64_t             nextPts;
+-                    ADMColorScalerSimple *scaler;
+-                    bool                 passThrough;
+-                    bool                 setupVdpau(void);
+-                    bool                 cleanupVdpau(void);
+-                    bool                 updateConf(void);
+-                    uint8_t             *tempBuffer;
+-                    vdpauFilterDeint     configuration;
+-                    VdpOutputSurface     outputSurface;
+-                    std::list &lt;VdpVideoSurface&gt; freeSurface;
+-                    VdpVideoSurface      surfacePool[ADM_NB_SURFACES];
+-                    VdpVideoMixer        mixer;
+-protected:
+-                    bool                 rotateSlots(void);
+-                    bool                 clearSlots(void);
+-                    bool                 uploadImage(ADMImage *next,const VdpVideoSurface surface) ;
+-                    bool                 fillSlot(int slot,ADMImage *image);
+-                    bool                 getResult(ADMImage *image);
+-                    bool                 sendField(bool topField);
+-
+-public:
+-        virtual bool         goToTime(uint64_t usSeek); 
+-                             vdpauVideoFilterDeint(ADM_coreVideoFilter *previous,CONFcouple *conf);
+-                             ~vdpauVideoFilterDeint();
+-
+-        virtual const char   *getConfiguration(void);                 /// Return  current configuration as a human readable string
+-        virtual bool         getNextFrame(uint32_t *fn,ADMImage *image);           /// Return the next image
+-        virtual bool         getCoupledConf(CONFcouple **couples) ;   /// Return the current filter configuration
+-        virtual bool         configure(void) ;                        /// Start graphical user interface
+-};
+-
+ // Add the hook to make it valid plugin
+ DECLARE_VIDEO_FILTER(   vdpauVideoFilterDeint,   // Class
+                         1,0,0,              // Version
+-                        ADM_UI_GTK+ADM_UI_QT4,     // We need a display for VDPAU; so no cli...
+-                        VF_INTERLACING,            // Category
+-                        &quot;vdpauDeint&quot;,            // internal name (must be uniq!)
+-                        &quot;vdpauDeint&quot;,            // Display name
+-                        &quot;VDPAU deinterlacer (+resize).&quot; // Description
++                        ADM_UI_QT4+ADM_UI_GL,         // UI
++                        VF_OPENGL,            // Category Category
++                        &quot;vdpauDeintGl&quot;,            // internal name (must be uniq!)
++                        &quot;vdpauDeintGl&quot;,            // Display name
++                        &quot;VDPAU deinterlacer+resize, openGl version (faster).&quot; // Description
+                     );
+ 
+ //
+@@ -203,7 +159,7 @@
+     }
+     // allocate our (dummy) images
+     for(int i=0;i&lt;3;i++)
+-        slots[i].image=new ADMImageDefault( previousFilter-&gt;getInfo()-&gt;width, 
++        xslots[i].image=new ADMImageDefault( previousFilter-&gt;getInfo()-&gt;width, 
+                                             previousFilter-&gt;getInfo()-&gt;height);
+                                             
+     if(VDP_STATUS_OK!=admVdpau::mixerCreate(previousFilter-&gt;getInfo()-&gt;width,
+@@ -244,10 +200,10 @@
+     if(scaler) delete scaler;
+     scaler=NULL;
+     for(int i=0;i&lt;3;i++)
+-       if(slots[i].image)
++       if(xslots[i].image)
+         {
+-            delete slots[i].image;
+-            slots[i].image=NULL;
++            delete xslots[i].image;
++            xslots[i].image=NULL;
+         }
+ 
+     return true;
+@@ -402,7 +358,7 @@
+     }else
+     {   // use the provided surface
+         aprintf(&quot;Deint Image is already vdpau, slot %d \n&quot;,slot);
+-        ADMImage *img=slots[slot].image;
++        ADMImage *img=xslots[slot].image;
+         img-&gt;duplicateFull(image); // increment ref count
+         // get surface
+         img-&gt;hwDownloadFromRef();
+@@ -412,9 +368,9 @@
+         external=true;
+     }
+     nextPts=image-&gt;Pts;
+-    slots[slot].pts=image-&gt;Pts;
+-    slots[slot].surface=tgt;
+-    slots[slot].isExternal=external;
++    xslots[slot].pts=image-&gt;Pts;
++    xslots[slot].surface=tgt;
++    xslots[slot].isExternal=external;
+     return true;
+ }
+ 
+@@ -423,8 +379,8 @@
+ */
+ bool vdpauVideoFilterDeint::rotateSlots(void)
+ {
+-    VDPSlot *s=&amp;(slots[0]);
+-    ADMImage *img=slots[0].image;
++    VDPSlot *s=&amp;(xslots[0]);
++    ADMImage *img=xslots[0].image;
+     if(s-&gt;surface!=VDP_INVALID_HANDLE)
+         if(!s-&gt;isExternal)
+         {
+@@ -436,10 +392,10 @@
+             s-&gt;image-&gt;hwDecRefCount();
+             s-&gt;surface=VDP_INVALID_HANDLE;
+         }
+-    slots[0]=slots[1];
+-    slots[1]=slots[2];
+-    slots[2].surface=VDP_INVALID_HANDLE;
+-    slots[2].image=img;
++    xslots[0]=xslots[1];
++    xslots[1]=xslots[2];
++    xslots[2].surface=VDP_INVALID_HANDLE;
++    xslots[2].image=img;
+     return true;
+ }
+ /**
+@@ -449,7 +405,7 @@
+ {
+     for(int i=0;i&lt;3;i++)
+     {
+-           VDPSlot *s=&amp;(slots[i]);  
++           VDPSlot *s=&amp;(xslots[i]);  
+            if(s-&gt;surface!=VDP_INVALID_HANDLE)
+             {
+                 if(s-&gt;isExternal)
+@@ -476,7 +432,7 @@
+     // PREVIOUS
+     for(int i=0;i&lt;3;i++)
+     {
+-        in[i]=slots[i].surface;
++        in[i]=xslots[i].surface;
+         aprintf(&quot;Mixing %d %d\n&quot;,i,(int)in[i]);
+     }
+     //
+@@ -509,70 +465,7 @@
+ #endif 
+     return r;
+ }
+-/**
+-    \fn     getResult
+-    \brief  Convert the output surface into an ADMImage
+-*/
+-bool vdpauVideoFilterDeint::getResult(ADMImage *image)
+-{
+ 
+-#ifdef DO_BENCHMARK
+-    ADMBenchmark bmark;
+-    for(int i=0;i&lt;NB_BENCH;i++)
+-    {
+-        bmark.start();
+-#endif
+-  
+-    if(VDP_STATUS_OK!=admVdpau::outputSurfaceGetBitsNative(outputSurface,
+-                                                            tempBuffer, 
+-                                                            info.width,info.height))
+-    {
+-        ADM_warning(&quot;[Vdpau] Cannot copy back data from output surface\n&quot;);
+-        return false;
+-    }
+-  
+-                     
+-#ifdef DO_BENCHMARK
+-        bmark.end();
+-    }
+-    ADM_warning(&quot;Read surface Benchmark\n&quot;);
+-    bmark.printResult();
+-#endif 
+-    // Convert from VDP_RGBA_FORMAT_B8G8R8A8 to YV12
+-    uint32_t sourceStride[3]={info.width*4,0,0};
+-    uint8_t  *sourceData[3]={tempBuffer,NULL,NULL};
+-    uint32_t destStride[3];
+-    uint8_t  *destData[3];
+-
+-    image-&gt;GetPitches(destStride);
+-    image-&gt;GetWritePlanes(destData);
+-
+-    // Invert U&amp;V
+-    uint32_t ts;
+-    uint8_t  *td;
+-#if 0
+-    ts=destStride[2];destStride[2]=destStride[1];destStride[1]=ts;
+-    td=destData[1];destData[2]=destData[2];destData[1]=td;
+-#endif
+-
+-
+-#ifdef DO_BENCHMARK
+-    ADMBenchmark bmark2;
+-    for(int i=0;i&lt;NB_BENCH;i++)
+-    {
+-        bmark2.start();
+-#endif
+-    scaler-&gt;convertPlanes(  sourceStride,destStride,     
+-                            sourceData,destData);
+-#ifdef DO_BENCHMARK
+-        bmark2.end();
+-    }
+-    ADM_warning(&quot;RGB-&gt;YUV Benchmark\n&quot;);
+-    bmark2.printResult();
+-#endif
+-
+-    return true;
+-}
+ /**
+     \fn getNextFrame
+     \brief 
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeint.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeint.h	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeint.h	2011-08-14 13:28:49 UTC (rev 7405)
+@@ -0,0 +1,75 @@
++/**
++    \brief VDPAU filters Deinterlacer
++    \author mean (C) 2010
++  
++    This version uses openGL to convert the output surface to YV12
++
++
++*/
++
++//
++#define ADM_INVALID_FRAME_NUM 0x80000000
++#define ADM_NB_SURFACES 5
++
++
++enum
++{
++    ADM_KEEP_TOP=0,
++    ADM_KEEP_BOTTOM=1,
++    ADM_KEEP_BOTH=2
++};
++/**
++    \class VDPSlot
++*/
++class VDPSlot
++{
++public:
++                              VDPSlot() ;
++                             ~VDPSlot();
++            VdpVideoSurface   surface;
++            bool              isExternal;
++            uint64_t          pts;
++            uint32_t          frameNumber;
++            ADMImage          *image;
++};
++
++/**
++    \class vdpauVideoFilterDeint
++*/
++class vdpauVideoFilterDeint : public  ADM_coreVideoFilter
++{
++protected:
++                    VDPSlot              xslots[3];
++                    bool                 eof;
++                    bool                 secondField;
++                    uint64_t             nextPts;
++                    ADMColorScalerSimple *scaler;
++                    bool                 passThrough;
++                    bool                 setupVdpau(void);
++                    bool                 cleanupVdpau(void);
++                    bool                 updateConf(void);
++                    uint8_t             *tempBuffer;
++                    vdpauFilterDeint     configuration;
++                    VdpOutputSurface     outputSurface;
++                    std::list &lt;VdpVideoSurface&gt; freeSurface;
++                    VdpVideoSurface      surfacePool[ADM_NB_SURFACES];
++                    VdpVideoMixer        mixer;
++protected:
++                    bool                 rotateSlots(void);
++                    bool                 clearSlots(void);
++                    bool                 uploadImage(ADMImage *next,const VdpVideoSurface surface) ;
++                    bool                 fillSlot(int slot,ADMImage *image);
++                    bool                 getResult(ADMImage *image);
++                    bool                 sendField(bool topField);
++
++public:
++        virtual bool         goToTime(uint64_t usSeek); 
++                             vdpauVideoFilterDeint(ADM_coreVideoFilter *previous,CONFcouple *conf);
++                             ~vdpauVideoFilterDeint();
++
++        virtual const char   *getConfiguration(void);                 /// Return  current configuration as a human readable string
++        virtual bool         getNextFrame(uint32_t *fn,ADMImage *image);           /// Return the next image
++        virtual bool         getCoupledConf(CONFcouple **couples) ;   /// Return the current filter configuration
++        virtual bool         configure(void) ;                        /// Start graphical user interface
++};
++// EOF
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeintGl.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeintGl.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/ADM_vidVdpauFilterDeintGl.cpp	2011-08-14 13:28:49 UTC (rev 7405)
+@@ -0,0 +1,128 @@
++/**
++    \brief VDPAU filters Deinterlacer
++    \author mean (C) 2010
++  
++    This version uses openGL to convert the output surface to YV12
++
++
++*/
++
++
++#define __STDC_CONSTANT_MACROS
++#define GL_GLEXT_PROTOTYPES
++
++#       include &lt;GL/gl.h&gt;
++#       include &lt;GL/glext.h&gt;
++
++#include &lt;QtGui/QImage&gt;
++#include &lt;QtOpenGL/QtOpenGL&gt;
++#include &lt;QtOpenGL/QGLShader&gt;
++#include &lt;list&gt;
++
++#include &quot;ADM_coreConfig.h&quot;
++#ifdef USE_VDPAU
++extern &quot;C&quot; {
++#include &quot;libavcodec/avcodec.h&quot;
++#include &quot;libavcodec/vdpau.h&quot;
++}
++
++#define ADM_LEGACY_PROGGY
++#include &quot;ADM_default.h&quot;
++
++#include &quot;ADM_coreVideoFilterInternal.h&quot;
++#include &quot;ADM_videoFilterCache.h&quot;
++#include &quot;DIA_factory.h&quot;
++#include &quot;ADM_vidMisc.h&quot;
++
++#include &quot;T_openGL.h&quot;
++#include &quot;T_openGLFilter.h&quot;
++
++
++#include &quot;vdpauFilterDeint.h&quot;
++#include &quot;ADM_vidVdpauFilterDeint.h&quot;
++#include &quot;ADM_coreVdpau/include/ADM_coreVdpau.h&quot;
++//
++#define ADM_INVALID_FRAME_NUM 0x80000000
++#define ADM_NB_SURFACES 5
++
++//#define DO_BENCHMARK
++#define NB_BENCH 100
++
++#if 0
++#define aprintf printf
++#else
++#define aprintf(...) {}
++#endif
++/**
++    \fn     getResult
++    \brief  Convert the output surface into an ADMImage
++*/
++bool vdpauVideoFilterDeint::getResult(ADMImage *image)
++{
++
++#ifdef DO_BENCHMARK
++    ADMBenchmark bmark;
++    for(int i=0;i&lt;NB_BENCH;i++)
++    {
++        bmark.start();
++#endif
++  
++    if(VDP_STATUS_OK!=admVdpau::outputSurfaceGetBitsNative(outputSurface,
++                                                            tempBuffer, 
++                                                            info.width,info.height))
++    {
++        ADM_warning(&quot;[Vdpau] Cannot copy back data from output surface\n&quot;);
++        return false;
++    }
++  
++                     
++#ifdef DO_BENCHMARK
++        bmark.end();
++    }
++    ADM_warning(&quot;Read surface Benchmark\n&quot;);
++    bmark.printResult();
++#endif 
++    // Convert from VDP_RGBA_FORMAT_B8G8R8A8 to YV12
++    uint32_t sourceStride[3]={info.width*4,0,0};
++    uint8_t  *sourceData[3]={tempBuffer,NULL,NULL};
++    uint32_t destStride[3];
++    uint8_t  *destData[3];
++
++    image-&gt;GetPitches(destStride);
++    image-&gt;GetWritePlanes(destData);
++
++    // Invert U&amp;V
++    uint32_t ts;
++    uint8_t  *td;
++#if 0
++    ts=destStride[2];destStride[2]=destStride[1];destStride[1]=ts;
++    td=destData[1];destData[2]=destData[2];destData[1]=td;
++#endif
++
++
++#ifdef DO_BENCHMARK
++    ADMBenchmark bmark2;
++    for(int i=0;i&lt;NB_BENCH;i++)
++    {
++        bmark2.start();
++#endif
++    scaler-&gt;convertPlanes(  sourceStride,destStride,     
++                            sourceData,destData);
++#ifdef DO_BENCHMARK
++        bmark2.end();
++    }
++    ADM_warning(&quot;RGB-&gt;YUV Benchmark\n&quot;);
++    bmark2.printResult();
++#endif
++
++    return true;
++}
++#else // USE_VDPAU
++static void dummy_fun(void)
++{
++    return ;
++}
++#endif // use VDPAU
++
++//****************
++// EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/CMakeLists.txt	2011-08-14 13:28:47 UTC (rev 7404)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/glVdpau/CMakeLists.txt	2011-08-14 13:28:49 UTC (rev 7405)
+@@ -1,6 +1,6 @@
+ INCLUDE(vf_plugin)
+ INCLUDE(vf_plugin_qt4gl)
+ IF(NOT WIN32 AND NOT APPLE)
+-        SET(ADM_vf_vdpauFilterDeint_SRCS ADM_vidVdpauFilterDeint.cpp )
++        SET(ADM_vf_vdpauFilterDeint_SRCS ADM_vidVdpauFilterDeint.cpp ADM_vidVdpauFilterDeintGl.cpp)
+         INIT_VIDEO_FILTER_GLQT4(ADM_vf_vdpauGl &quot;${ADM_vf_vdpauFilterDeint_SRCS}&quot; &quot;ADM_vf_vdpauGl.h&quot; &quot;ADM_vf_vdpauGl&quot; &quot;${ADM_vf_vdpauFilterDeint_SRCS}&quot;)
+ ENDIF(NOT WIN32 AND NOT APPLE)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004555.html">[Avidemux-svn-commit] r7404 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl:	. glVdpau
+</A></li>
+	<LI>Next message: <A HREF="004557.html">[Avidemux-svn-commit] r7406 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVdpau:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4556">[ date ]</a>
+              <a href="thread.html#4556">[ thread ]</a>
+              <a href="subject.html#4556">[ subject ]</a>
+              <a href="author.html#4556">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

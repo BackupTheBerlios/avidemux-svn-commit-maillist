@@ -1,0 +1,301 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4729 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4729%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904081801.n38I1lor031754%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001956.html">
+   <LINK REL="Next"  HREF="001958.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4729 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4729%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904081801.n38I1lor031754%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4729 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Apr  8 20:01:47 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001956.html">[Avidemux-svn-commit] r4728 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_coreDemuxerMpeg/include	avidemux/ADM_coreDemuxerMpeg/src plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="001958.html">[Avidemux-svn-commit] r4730 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1957">[ date ]</a>
+              <a href="thread.html#1957">[ thread ]</a>
+              <a href="subject.html#1957">[ subject ]</a>
+              <a href="author.html#1957">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-04-08 20:01:46 +0200 (Wed, 08 Apr 2009)
+New Revision: 4729
+
+Modified:
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+Log:
+[MpegTs] Search PAT, skeleton for PMT
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp	2009-04-07 05:40:14 UTC (rev 4728)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp	2009-04-08 18:01:46 UTC (rev 4729)
+@@ -27,6 +27,7 @@
+ 
+ static bool detectTs(const char *file);
+ static bool checkMarker(uint8_t *buffer, uint32_t bufferSize,uint32_t block);
++static bool scanForPrograms(const char *file);
+ uint8_t   tsIndexer(const char *file);
+ /**
+     \fn Probe
+@@ -43,14 +44,7 @@
+         return false;
+     }
+ 
+-    tsPacket *t=new tsPacket();
+-    t-&gt;open(fileName,FP_PROBE);
+-    uint8_t b[200];
+-    uint32_t l,current,max;
+-    t-&gt;getNextPSI(0,b,&amp;l,&amp;current,&amp;max);
+-    delete t;
+-    printf(&quot;[TS Demuxer] Probed...\n&quot;);
+-    return 0;
++   
+ 
+     sprintf(index,&quot;%s.idx&quot;,fileName);
+ again:    
+@@ -69,6 +63,7 @@
+     if(count) return false;
+     printf(&quot;[TSDemuxer] Creating index..\n&quot;);
+     count++;
++    if(scanForPrograms(fileName)==false) return 0;
+     if(true==tsIndexer(fileName)) goto again;
+     printf(&quot;[TSDemuxer] Failed..\n&quot;);
+    return 0;
+@@ -137,4 +132,68 @@
+     if(!syncOk) return false;
+     if(syncOk&gt;5*syncKo) return true;
+ }
++/**
++    \fn scanForPrograms
++*/
++bool scanForPrograms(const char *file)
++{
++    uint8_t buffer[200];
++    uint32_t len,current,max;
++
++    vector &lt;uint32_t&gt;listOfPmt;
++
++    tsPacket *t=new tsPacket();
++    t-&gt;open(file,FP_PROBE);
++    // 1 search the pat...
++    if(t-&gt;getNextPSI(0,buffer,&amp;len,&amp;current,&amp;max)==true)
++    {
++        uint8_t *r=buffer;
++        while(len&gt;4)
++        {
++            uint32_t prg=((0x1F&amp;r[0])&lt;&lt;8)+r[1];
++            uint32_t pid=((0x1F&amp;r[2])&lt;&lt;8)+r[3];
++            r+=4;
++            len-=4;
++            printf(&quot;[TsDemuxer] Pat : Prg:%d Pid: 0x%04x\n&quot;,prg,pid);
++            listOfPmt.push_back(pid);
++        }
++        if(listOfPmt.size())
++        {
++            for(int i=0;i&lt;listOfPmt.size();i++)
++            {
++                uint32_t pid=listOfPmt[i];
++                 if(t-&gt;getNextPSI(pid,buffer,&amp;len,&amp;current,&amp;max)==true)
++                 {
++                    // We should be protected by CRC here
++                    r=buffer;
++                    printf(&quot;[TsDemuxer] PCR 0x%x\n&quot;,(r[0]&lt;&lt;8)+r[1]);
++                    r+=2;  
++                    int programInfoLength=(r[0]&lt;&lt;8)+r[1];
++                            programInfoLength&amp;=0xfff;
++                            r+=2;
++                            while(programInfoLength)
++                            {
++                                    printf(&quot;[PMT] PMT :%02x StreamType: 0x%x\n&quot;,*r++);    
++                                    printf(&quot;[PMT] PMT :%02x Pid:        0x%x\n&quot;,(r[0]&lt;&lt;8)+r[1]);
++                                    r+=2;
++                                    int esInfoLength=((r[0]&lt;&lt;8)+r[1])&amp;0xfff;
++                                    printf(&quot;[PMT] PMT :%02x Es Info Length: %d\n&quot;,esInfoLength);
++                                    r+=esInfoLength;
++                                    programInfoLength-=4;
++                                    programInfoLength=esInfoLength;
++
++                            }
++
++
++                 }
++
++            }
++
++        }
++
++    }
++    delete t;
++    printf(&quot;[TS Demuxer] Probed...\n&quot;);
++    return 0;
++}
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-07 05:40:14 UTC (rev 4728)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-08 18:01:46 UTC (rev 4729)
+@@ -4,6 +4,10 @@
+     copyright            : (C) 2005-2009 by mean
+     email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+         
++    Warning : For PSI packet (PAT &amp; PMT) we assume they fit into one TS packet
++                Else we fail miserably.
++
++
+  ***************************************************************************/
+ 
+ /***************************************************************************
+@@ -124,7 +128,7 @@
+     \fn getNextPsiPacket
+     \brief Take a raw packet of type pid &amp; remove the header
+ */
+-bool tsPacket::getNextPacket_NoHeader(uint32_t pid,uint8_t *buffer,uint32_t *olen)
++bool tsPacket::getNextPacket_NoHeader(uint32_t pid,uint8_t *buffer,uint32_t *olen,bool psi)
+ {
+     uint8_t scratch[188+4];
+ nextPack:
+@@ -152,7 +156,7 @@
+     start=scratch+3;
+     end=scratch+187;
+ 
+-    if(fieldControl &amp; 2) // Adaptation layer
++    if((fieldControl &amp; 2)|| psi) // Adaptation layer
+     {
+         int payloadSize=*start++;
+         start+=payloadSize;
+@@ -166,7 +170,7 @@
+ 
+ /**
+     \fn getNextPsiPacket
+-    \brief Take a raw packet of type pid &amp; remove the header
++    \brief Take a raw packet of type pid &amp; remove the header (PSI)
+ */
+ #define DUMMY(x,n) {dummy=get_bits(&amp;s,n);printf(&quot;[TS]: &quot;#x&quot; =0x%x %d\n&quot;,dummy,dummy);}
+ bool tsPacket::getNextPSI(uint32_t pid,uint8_t *buffer,uint32_t *olen,uint32_t *count, uint32_t *countMax)
+@@ -175,19 +179,8 @@
+     uint32_t len;
+ nextPack2:
+ 
+-    if(false==getNextPacket_NoHeader(pid,(uint8_t *)scratch,&amp;len)) return false;
++    if(false==getNextPacket_NoHeader(pid,(uint8_t *)scratch,&amp;len,true)) return false;    
+ 
+-    // Verify CRC
+-    uint32_t crc1=mpegTsCRC(scratch,len-4);
+-
+-    uint8_t *c=scratch+len-4;
+-    uint32_t crc2=(c[0]&lt;&lt;24)+(c[1]&lt;&lt;16)+(c[2]&lt;&lt;8)+c[3];
+-    if(crc1!=crc2)
+-    {
+-        printf(&quot;[MpegTs] getNextPSI bad checksum :%04x vs %04x\n&quot;,crc1,crc2);
+-        goto nextPack2;
+-    }
+-
+     GetBitContext s;
+     uint32_t tableId;
+     uint32_t sectionLength=0;
+@@ -198,23 +191,42 @@
+     init_get_bits( &amp;s,scratch, (len-4)*8);
+ 
+     DUMMY(tableId,8);
+-    printf(&quot;[TS] Pid :%x TableId %02x\n&quot;,pid,tableId);
+     skip_bits(&amp;s,1);             // Section syntax indicator
+     if(get_bits(&amp;s,1))             // Marker
+     {
+           printf(&quot;[MpegTs] getNextPSI Missing 0 marker\n&quot;);
+           goto nextPack2;
+     }
++    skip_bits(&amp;s,2);
+     sectionLength=get_bits(&amp;s,12);    // Section Length
++    if(sectionLength+3&gt;len) goto nextPack2;
+     transportStreamId=get_bits(&amp;s,16);// transportStreamId
++    printf(&quot;[MpegTs] Section length    =%d\n&quot;,sectionLength);
++    printf(&quot;[MpegTs] transportStreamId =%d\n&quot;,transportStreamId);
+     skip_bits(&amp;s,2);                  // ignored
+     DUMMY(VersionNumber,5);         // Version number
+     DUMMY(CurrentNext,1);           // Current Next indicator
+     *count=get_bits(&amp;s,8);           // Section number
+     *countMax=get_bits(&amp;s,8);        // Section last number
+ 
++    if(*count!=*countMax) return false; // we dont handle split psi at the moment
++
++    uint8_t *c=scratch+sectionLength-4+3;
++
++// Verify CRC
++    uint32_t crc1=mpegTsCRC(scratch,sectionLength-4+3);
++    uint32_t crc2=(c[0]&lt;&lt;24)+(c[1]&lt;&lt;16)+(c[2]&lt;&lt;8)+c[3];
++    if(crc1!=crc2)
++    {
++        printf(&quot;[MpegTs] getNextPSI bad checksum :%04x vs %04x\n&quot;,crc1,crc2);
++        goto nextPack2;
++    }
++
++
+     int hdr=(8+16+16+8+8+8)/8;
+-    *olen=len-4-hdr;
++    int payloadsize=sectionLength-4-5; // Remove checksum &amp; header
++    if(payloadsize&lt;4) goto nextPack2;
++    *olen=payloadsize;
+     memcpy(buffer,scratch+hdr,*olen);
+     return true;
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-07 05:40:14 UTC (rev 4728)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-08 18:01:46 UTC (rev 4729)
+@@ -30,7 +30,7 @@
+     virtual uint64_t    getPos(void);
+     virtual bool        setPos(uint64_t pos);
+ protected:
+-    bool                getNextPacket_NoHeader(uint32_t pid,uint8_t *buffer,uint32_t *len);
++    bool                getNextPacket_NoHeader(uint32_t pid,uint8_t *buffer,uint32_t *len,bool psi);
+     bool                getSinglePacket(uint8_t *buffer);
+ public:
+     bool                getNextPSI(uint32_t pid,uint8_t *buffer,uint32_t *olen,uint32_t *count, uint32_t *countMax);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001956.html">[Avidemux-svn-commit] r4728 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_coreDemuxerMpeg/include	avidemux/ADM_coreDemuxerMpeg/src plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="001958.html">[Avidemux-svn-commit] r4730 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1957">[ date ]</a>
+              <a href="thread.html#1957">[ thread ]</a>
+              <a href="subject.html#1957">[ subject ]</a>
+              <a href="author.html#1957">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

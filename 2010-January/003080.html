@@ -1,0 +1,261 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5875 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5875%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C201001231930.o0NJUjGv020682%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003079.html">
+   <LINK REL="Next"  HREF="003081.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5875 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5875%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C201001231930.o0NJUjGv020682%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5875 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jan 23 20:30:45 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003079.html">[Avidemux-svn-commit] r5874 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="003081.html">[Avidemux-svn-commit] r5876 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_UIs/ADM_QT4/include ADM_editor	ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3080">[ date ]</a>
+              <a href="thread.html#3080">[ thread ]</a>
+              <a href="subject.html#3080">[ subject ]</a>
+              <a href="author.html#3080">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-01-23 20:30:41 +0100 (Sat, 23 Jan 2010)
+New Revision: 5875
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+Log:
+[editor] Go to previous frame across segments
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.cpp	2010-01-23 19:30:38 UTC (rev 5874)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.cpp	2010-01-23 19:30:41 UTC (rev 5875)
+@@ -239,5 +239,14 @@
+     }
+     return NULL;
+ }
+-
++/**
++    \fn getLast
++    \brief Return the most recent image from cache
++*/
++ADMImage *EditorCache::getLast(void)
++{
++    if(readIndex==writeIndex) return NULL;
++    int index=(writeIndex-1)%_nbImage;
++    return _elem[index].image;
++}
+ // EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.h	2010-01-23 19:30:38 UTC (rev 5874)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edCache.h	2010-01-23 19:30:41 UTC (rev 5875)
+@@ -41,5 +41,6 @@
+             ADMImage    *getByPts(uint64_t Pts);            
+             ADMImage    *getAfter(uint64_t Pts);
+             ADMImage    *getBefore(uint64_t Pts);
++            ADMImage    *getLast(void);
+ };
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2010-01-23 19:30:38 UTC (rev 5874)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2010-01-23 19:30:41 UTC (rev 5875)
+@@ -184,7 +184,7 @@
+     \fn NextPicture
+     \brief decode &amp; returns the next picture
+ */
+-bool        ADM_Composer::nextPicture(ADMImage *image)
++bool        ADM_Composer::nextPicture(ADMImage *image,bool dontcross)
+ {
+ uint64_t pts;
+ uint64_t tail;
+@@ -232,6 +232,11 @@
+ 
+ // Try to get an image for the following segment....
+ np_nextSeg:
++        if(true==dontcross)
++        {
++            ADM_warning(&quot;Not allowed to cross segment\n&quot;);
++            return false;
++        }
+         if(_currentSegment+1&lt;_segments.getNbSegments())
+         {
+             if(switchToNextSegment()==false)
+@@ -258,6 +263,7 @@
+ bool ADM_Composer::decodeTillPictureAtPts(uint64_t targetPts,ADMImage *image)
+ {
+  // Go to the previous keyframe and decode forward...
++                uint32_t thisSeg=_currentSegment;
+                 _SEGMENT *seg=_segments.getSegment(_currentSegment);
+                 int ref=seg-&gt;_reference;
+ 
+@@ -282,13 +288,15 @@
+                 // Now forward till we reach out frame
+                 while(1)
+                 {
+-                    if(false==nextPicture(image))
++                    if(false==nextPicture(image,true))
+                     {
+                             ADM_warning(&quot;Error in decoding forward&quot;);
+                             return false;
+                     }
+-                    if(image-&gt;Pts==targetPts)
++                    if(image-&gt;Pts&gt;=targetPts)
+                             break;
++                    if(thisSeg!=_currentSegment)
++                            break;
+                 }
+                 if(image-&gt;Pts!=targetPts)
+                 {
+@@ -325,7 +333,6 @@
+                 return true;
+             }
+         }
+-        ADM_info(&quot;Previous pic: %&quot;LLU&quot;\n&quot;,_currentPts);
+         ADM_info(&quot;while looking for frame %&quot;LLU&quot;\n&quot;,_currentPts);
+         vid-&gt;_videoCache-&gt;dump();
+         // The previous is not available
+@@ -372,9 +379,45 @@
+         ADM_assert(segNo+1==_currentSegment);
+         // it is basically the same as above except the exit condition is that the frame is out of reach
+         // Either because we reached end of segment or end of source for that segment
+-        ADM_error(&quot;Searching across segment is not implemented\n&quot;);
+-       
+-        return false;
++        ADM_info(&quot;Searching across segment....\n&quot;);
++        if(false==switchToSegment(segNo))
++        {
++            ADM_error(&quot;Cannot switch to previous segment to get previous frame\n&quot;);
++            return false;
++        }
++        
++        seg=_segments.getSegment(_currentSegment);
++        vid=_segments.getRefVideo(seg-&gt;_reference);
++        
++
++        decodeTillPictureAtPts(targetPts,image);
++        _currentSegment=segNo;
++        // We may have overshot...
++        uint64_t last=vid-&gt;lastDecodedPts;
++        _segments.LinearToRefTime(_currentSegment,targetPts,&amp;refPts);
++        ADMImage *candidate=vid-&gt;_videoCache-&gt;getLast();
++        if(!candidate)
++        {
++            ADM_error(&quot;No frame in cache !\n&quot;);
++            return false;
++        }
++        while(1)
++        {
++            if(candidate-&gt;Pts&lt;refPts) // got it!
++            {
++                break;
++            }
++            // Try to go before...
++            ADMImage *img=vid-&gt;_videoCache-&gt;getBefore(candidate-&gt;Pts);
++            if(!img) break;
++            candidate=img;
++        }
++        image-&gt;duplicate(candidate);
++        updateImageTiming(seg,image);
++        SET_CURRENT_PTS(image-&gt;Pts);
++        return true;
++        
++        
+ }
+ /**
+     \fn samePicture
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2010-01-23 19:30:38 UTC (rev 5874)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2010-01-23 19:30:41 UTC (rev 5875)
+@@ -153,7 +153,7 @@
+                     uint64_t    getCurrentFramePts(void);
+                     bool        goToTimeVideo(uint64_t time);
+                     bool        goToIntraTimeVideo(uint64_t time);
+-                    bool        nextPicture(ADMImage *image);
++                    bool        nextPicture(ADMImage *image,bool dontcross=false);
+                     bool        samePicture(ADMImage *image);
+                     bool        previousPicture(ADMImage *image);
+                     bool        rewind(void);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2010-01-23 19:30:38 UTC (rev 5874)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2010-01-23 19:30:41 UTC (rev 5875)
+@@ -533,19 +533,19 @@
+     ADM_assert(seg);
+     if(linear&lt;seg-&gt;_startTimeUs)
+     {
+-        ADM_error(&quot;This given time is not in the segment: Given time %&quot;LLU&quot;, seg start at %&quot;LLU&quot;\n&quot;,
++        ADM_warning(&quot;This given time is not in the segment: Given time %&quot;LLU&quot;, seg start at %&quot;LLU&quot;\n&quot;,
+                         linear, seg-&gt;_startTimeUs);
+-        return false;
+     }
+     if(linear&gt;=seg-&gt;_startTimeUs+seg-&gt;_durationUs)
+     {
+-        ADM_error(&quot;This given time is not in the segment: Given time %&quot;LLU&quot;, seg end at %&quot;LLU&quot;\n&quot;,
++        ADM_warning(&quot;This given time is not in the segment: Given time %&quot;LLU&quot;, seg end at %&quot;LLU&quot;\n&quot;,
+                         linear, seg-&gt;_startTimeUs+seg-&gt;_durationUs);
+-        return false;
+ 
+     }
+-    *refTime=seg-&gt;_refStartTimeUs+linear;
+-    *refTime-=seg-&gt;_startTimeUs;
++    int64_t time=(int64_t)seg-&gt;_refStartTimeUs+(int64_t)linear;
++    time-=(int64_t)seg-&gt;_startTimeUs;
++    if(time&lt;0) return false;
++    *refTime=(uint64_t )time;
+     return true;
+ }
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003079.html">[Avidemux-svn-commit] r5874 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="003081.html">[Avidemux-svn-commit] r5876 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_UIs/ADM_QT4/include ADM_editor	ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3080">[ date ]</a>
+              <a href="thread.html#3080">[ thread ]</a>
+              <a href="subject.html#3080">[ subject ]</a>
+              <a href="author.html#3080">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

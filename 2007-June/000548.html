@@ -1,0 +1,619 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3256 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3256%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv&In-Reply-To=%3C200706160850.l5G8ohEj010711%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000547.html">
+   <LINK REL="Next"  HREF="000549.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3256 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3256%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv&In-Reply-To=%3C200706160850.l5G8ohEj010711%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3256 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jun 16 10:50:43 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000547.html">[Avidemux-svn-commit] r3255 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat
+</A></li>
+        <LI>Next message: <A HREF="000549.html">[Avidemux-svn-commit] r3257 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#548">[ date ]</a>
+              <a href="thread.html#548">[ thread ]</a>
+              <a href="subject.html#548">[ subject ]</a>
+              <a href="author.html#548">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-06-16 10:50:43 +0200 (Sat, 16 Jun 2007)
+New Revision: 3256
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flvAudio.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flvIndex.cpp
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/CMakeLists.txt
+Log:
+more flv stuff
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp	2007-06-15 20:28:35 UTC (rev 3255)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp	2007-06-16 08:50:43 UTC (rev 3256)
+@@ -146,10 +146,11 @@
+   pos=ftello(_fd);;
+   printf(&quot;pos:%u/%u\n&quot;,pos,fileSize); 
+   // Create our video index
+-  videoTrack=new flvTrak;
+-  memset(videoTrack,0,sizeof(flvTrak));
+-  videoTrack-&gt;_index=new flvIndex[50];
+-  videoTrack-&gt;_indexMax=50;
++  videoTrack=new flvTrak(50);
++  if(_isaudiopresent) 
++    audioTrack=new flvTrak(50);
++  else
++    videoTrack=NULL;
+   // Loop
+   while(pos&lt;fileSize-14)
+   {
+@@ -167,11 +168,17 @@
+           {
+             if(!_isaudiopresent) break;
+             uint8_t flags=read8();
++            int of=1+4+3+3+1+4;
+             remaining--;
+             int format=flags&gt;&gt;4;
+             int fq=(flags&gt;&gt;2)&amp;3;
+             int bps=(flags&gt;&gt;1) &amp; 1;
+             int channel=(flags) &amp; 1;
++            if(!audioTrack-&gt;_nbIndex) // first frame..
++            {
++               setAudioHeader(format,fq,bps,channel);
++            }
++            insertAudio(pos+of,remaining,pts);
+           }
+           break;
+       case FLV_TAG_TYPE_VIDEO:
+@@ -232,25 +239,64 @@
+    
+         
+     videoTrack-&gt;_index[0].flags=AVI_KEY_FRAME;
++    
++    // audio track
++    _audioStream=new flvAudio(name,audioTrack,&amp;wavHeader);
+   printf(&quot;[FLV]FLV successfully read\n&quot;);
+   
+   return 1;
+ }
+ /**
++      \fn setAudioHeader
++      \brief Build WavHeader from info
++
++*/
++uint8_t   flvHeader::setAudioHeader(uint32_t format,uint32_t fq,uint32_t bps,uint32_t channels)
++{
++  switch(fq)
++  {
++    case 3: wavHeader.frequency=44100;break;  
++    case 2: wavHeader.frequency=22050;break;
++    case 1: wavHeader.frequency=11025;break;
++    case 0: 
++          if(format==5) wavHeader.frequency=8000;
++          else wavHeader.frequency=5512;
++          break;
++    default: printf(&quot;[FLV]Unknown frequency:%u\n&quot;,fq);
++  }
++  switch(format)
++  {
++    case 2: wavHeader.encoding=WAV_MP3;break;
++    case 3: wavHeader.encoding=WAV_PCM;break; 
++    case 0: wavHeader.encoding=WAV_LPCM;break;
++    case 1: wavHeader.encoding=WAV_MSADPCM;break;
++    default:
++          printf(&quot;[FLV]Unsupported audio codec:%u\n&quot;,format);    
++  }
++  switch(channels)
++  {
++    case 1: wavHeader.channels=2;break; 
++    case 0: wavHeader.channels=1;break;
++        default:
++          printf(&quot;[FLV]Unsupported channel mode :%u\n&quot;,channels);    
++  }
++  switch(bps)
++  {
++    case 1: wavHeader.bitspersample=16;break; 
++    case 0: wavHeader.bitspersample=8;break;
++        default:
++          printf(&quot;[FLV]Unsupported bps mode :%u\n&quot;,bps);    
++  }
++  wavHeader.byterate=(64000)/8; // 64 kbits default
++  return 1; 
++}
++/**
+       \fn insertVideo
+       \brief add a frame to the index, grow the index if needed
+ */
+ uint8_t flvHeader::insertVideo(uint32_t pos,uint32_t size,uint32_t frameType,uint32_t pts)
+ {
+-    if(videoTrack-&gt;_indexMax==videoTrack-&gt;_nbIndex)
+-    {
+-      // Grow
+-      flvIndex *ix=new flvIndex[ videoTrack-&gt;_indexMax*2];
+-      memcpy(ix,videoTrack-&gt;_index,sizeof(flvIndex)*videoTrack-&gt;_nbIndex);
+-      delete [] videoTrack-&gt;_index;
+-      videoTrack-&gt;_index=ix;
+-      videoTrack-&gt;_indexMax*=2;
+-    }
++    videoTrack-&gt;grow();
+     flvIndex *x=&amp;(videoTrack-&gt;_index[videoTrack-&gt;_nbIndex]);
+     x-&gt;size=size;
+     x-&gt;pos=pos;
+@@ -266,12 +312,31 @@
+     videoTrack-&gt;_nbIndex++;
+     return 1;
+ }    
++/**
++      \fn insertVideo
++      \brief add a frame to the index, grow the index if needed
++*/
++uint8_t flvHeader::insertAudio(uint32_t pos,uint32_t size,uint32_t pts)
++{
++    audioTrack-&gt;grow();
++    flvIndex *x=&amp;(audioTrack-&gt;_index[audioTrack-&gt;_nbIndex]);
++    x-&gt;size=size;
++    x-&gt;pos=pos;
++    x-&gt;timeCode=pts;
++    x-&gt;flags=0;
++    audioTrack-&gt;_nbIndex++;
++    return 1;
++}    
++
+ /*
+   __________________________________________________________
+ */
+ WAVHeader *flvHeader::getAudioInfo(void )
+ {
+-  return NULL;
++  if(_isaudiopresent)
++    return &wavHeader;
++  else
++      return NULL;
+ }
+ /*
+     __________________________________________________________
+@@ -279,6 +344,11 @@
+ 
+ uint8_t flvHeader::getAudioStream(AVDMGenericAudioStream **audio)
+ {
++  if(_isaudiopresent)
++  {
++    *audio=_audioStream;
++    return 1;
++  }
+   *audio=NULL;
+   return 0; 
+ }
+@@ -308,11 +378,13 @@
+   if(videoTrack) delete videoTrack;
+   if(audioTrack) delete audioTrack;
+   if(_fd) fclose(_fd);
+-    _fd=NULL;
+-    _filename=NULL;
+-    videoTrack=NULL;
+-    audioTrack=NULL;
++  if(_audioStream) delete _audioStream;
+   
++  _fd=NULL;
++  _filename=NULL;
++  videoTrack=NULL;
++  audioTrack=NULL;
++  _audioStream=NULL;
+ }
+ /*
+     __________________________________________________________
+@@ -332,6 +404,8 @@
+     _filename=NULL;
+     videoTrack=NULL;
+     audioTrack=NULL;
++    _audioStream=NULL;
++    memset(&amp;wavHeader,0,sizeof(wavHeader));
+     
+ }
+ /*
+@@ -437,12 +511,20 @@
+ */
+ uint8_t  flvHeader::getAudioStreamsInfo(uint32_t *nbStreams, audioInfo **infos)
+ {
+-    
++    if(!_isaudiopresent)
+     {
+         *nbStreams=0;
+         *infos=NULL;
+         return 1;
+     }
+-    
++    *nbStreams=1;
++    audioInfo *nfo=new audioInfo;
++    nfo-&gt;encoding=wavHeader.encoding;
++    nfo-&gt;bitrate=(wavHeader.byterate*8)/1000;;
++    nfo-&gt;channels=(wavHeader.channels);
++    nfo-&gt;frequency=(wavHeader.frequency);
++    nfo-&gt;av_sync=0;
++    *infos=nfo;
++    return 1;
+ }
+ //EOF
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.h	2007-06-15 20:28:35 UTC (rev 3255)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.h	2007-06-16 08:50:43 UTC (rev 3256)
+@@ -32,9 +32,13 @@
+     uint32_t timeCode;  // Time code in ms from start
+ }flvIndex;
+ //**********************************************
+-typedef struct 
++class flvTrak 
+ {
+-  /* Index in mkv */
++public:
++          flvTrak(int nb);
++          ~flvTrak();
++  uint8_t grow(void);
++  //
+   uint32_t  streamIndex;
+   uint32_t  length;
+   uint8_t    *extraData;
+@@ -44,9 +48,32 @@
+   uint32_t  _indexMax; // Max size of the index
+   uint32_t  _sizeInBytes; // Approximate size in bytes of that stream
+   uint32_t  _defaultFrameDuration; // in us!
+-}flvTrak;
++};
+ 
++class flvAudio : public AVDMGenericAudioStream
++{
++  protected:
++    FILE                        *_fd;
++    flvTrak                     *_track;
++    uint32_t                    _curTimeCode;
++    uint8_t                      goToBlock(uint32_t x);
++    uint32_t                    _curBlock;
++    uint8_t                     getPacket(uint8_t *dest, uint32_t *packlen, uint32_t *samples,uint32_t *timecode);
++  public:
++                                flvAudio(const char *name,flvTrak *track,WAVHeader *hdr);
++                                
++                                
++    virtual                     ~flvAudio();
++    virtual uint32_t            read(uint32_t len,uint8_t *buffer);
++    virtual uint8_t             goTo(uint32_t newoffset);
++            uint8_t	        goToTime(uint32_t mstime);
++    virtual uint8_t             getPacket(uint8_t *dest, uint32_t *len, uint32_t *samples);
++    
++    virtual uint8_t             extraData(uint32_t *l,uint8_t **d);
++            
++};
+ 
++//*****************************************************
+ class flvHeader         :public vidHeader
+ {
+   protected:
+@@ -55,11 +82,11 @@
+     char                    *_filename;
+     flvTrak                 *videoTrack;
+     flvTrak                 *audioTrack;
+-    
++    WAVHeader               wavHeader;
+     uint8_t                 changeAudioStream(uint32_t newstream);
+     uint32_t                getCurrentAudioStreamNumber(void);
+     uint8_t                 getAudioStreamsInfo(uint32_t *nbStreams, audioInfo **infos);
+-    
++    flvAudio                *_audioStream;
+     /* */
+     
+     uint8_t     read(uint32_t len, uint8_t *where);
+@@ -69,6 +96,11 @@
+     uint32_t    read32(void);
+     uint8_t     Skip(uint32_t len);
+     uint8_t     insertVideo(uint32_t pos,uint32_t size,uint32_t frameType,uint32_t pts);
++    uint8_t     insertAudio(uint32_t pos,uint32_t size,uint32_t pts);
++    uint8_t     setAudioHeader(uint32_t format,uint32_t fq,uint32_t bps,uint32_t channels);
++    
++    
++    
+     uint8_t     getFrameSize (uint32_t frame, uint32_t * size);
+   public:
+ 
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flvAudio.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flvAudio.cpp	2007-06-15 20:28:35 UTC (rev 3255)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flvAudio.cpp	2007-06-16 08:50:43 UTC (rev 3256)
+@@ -0,0 +1,167 @@
++/***************************************************************************
++    copyright            : (C) 2006 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;config.h&quot;
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++
++#include &lt;string.h&gt;
++
++#include &quot;math.h&quot;
++
++#include &quot;default.h&quot;
++#include &quot;ADM_editor/ADM_Video.h&quot;
++#include &lt;ADM_assert.h&gt;
++
++#include &quot;fourcc.h&quot;
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
++
++#include &quot;ADM_flv.h&quot;
++
++#define vprintf(...) {}
++
++/**
++    \fn ~flvAudio
++    
++*/
++ flvAudio ::~flvAudio()
++{
++  
++  if(_fd) fclose(_fd);
++  _fd=NULL;
++}
++
++uint32_t    flvAudio::read(uint32_t len,uint8_t *buffer)
++{
++  uint32_t l,sam;
++  if(!getPacket(buffer, &amp;l, &amp;sam)) return 0;
++  return l;
++}
++/**
++      \fn goTo
++*/
++uint8_t             flvAudio::goTo(uint32_t newoffset)
++{
++  goToBlock(0);
++  return 1;
++}
++/**
++      \fn extraData
++*/
++uint8_t             flvAudio::extraData(uint32_t *l,uint8_t **d)
++{
++  *l=0;
++  *d=NULL;
++}
++/**
++    \fn getPacket
++*/
++uint8_t             flvAudio::getPacket(uint8_t *dest, uint32_t *packlen, uint32_t *samples)
++{
++  uint32_t t;
++  return  getPacket(dest, packlen,samples,&amp;t);
++}
++uint8_t             flvAudio::getPacket(uint8_t *dest, uint32_t *packlen, uint32_t *samples,uint32_t *timecode)
++{
++  flvIndex *x;
++    if(!goToBlock(_curBlock))
++    {
++      printf(&quot;[FLVAUDIO] Get packet out of bound\n&quot;);
++      return 0;
++    }
++    x=&amp;(_track-&gt;_index[_curBlock]);
++    fread(dest,x-&gt;size,1,_fd);
++    *packlen=x-&gt;size;
++    *timecode=x-&gt;timeCode;
++    int delta=0;
++    if(_curBlock&lt;_track-&gt;_nbIndex-1)
++    {
++      delta= _track-&gt;_index[_curBlock+1].timeCode-x-&gt;timeCode;
++    }
++    else
++      delta=_track-&gt;_index[1].timeCode-_track-&gt;_index[0].timeCode;
++    // convert delta in ms to delta in sample
++    // 
++    float f=delta;
++    f=f*_wavheader-&gt;frequency;
++    f/=1000;
++    *samples=floor(f+0.49);
++    _curBlock++;
++    //
++    return 1;
++}
++/**
++      \fn flvAudio 
++*/
++   flvAudio::flvAudio(const char *name,flvTrak *track,WAVHeader *hdr)
++  : AVDMGenericAudioStream()
++{
++  _destroyable = 0; // Will be destroyed with master track
++  _track=track;
++    ADM_assert(_track);
++  _fd=fopen(name,&quot;rb&quot;);
++  ADM_assert(_fd);
++
++  _wavheader=new WAVHeader;
++  memcpy(_wavheader,hdr,sizeof(WAVHeader));
++  
++  // Compute total length in byte
++  _length=0;
++  // 
++  for(int i=0;i&lt;_track-&gt;_nbIndex;i++)
++    _length+=_track-&gt;_index[i].size;
++  
++  printf(&quot;[FLVAUDIO] found %lu bytes\n&quot;,_length);
++  goToBlock(0);
++}
++/**
++    \fn goToCluster
++    \brief Change the cluster parser...
++*/
++uint8_t flvAudio::goToBlock(uint32_t x)
++{
++  if(x&gt;=_track-&gt;_nbIndex)
++  {
++    printf(&quot;[FLVAUDIO]Exceeding max cluster : asked: %u max :%u\n&quot;,x,_track-&gt;_nbIndex); 
++    return 0;  // FIXME
++  }
++  _curBlock=x;
++  fseeko(_fd,_track-&gt;_index[_curBlock].pos,SEEK_SET);
++  return 1;
++}
++/**
++      \fn goToTime
++      \brief seek in the current track until we meet the time give (in ms)
++*/
++ uint8_t	flvAudio::goToTime(uint32_t mstime)
++{
++uint32_t target=mstime;
++uint32_t _nbClusters=_track-&gt;_nbIndex;
++
++      // First identify the cluster...
++      int clus=-1;
++            for(int i=0;i&lt;_nbClusters-1;i++)
++            {
++              if(target&gt;=_track-&gt;_index[i].timeCode &amp;&amp; target&lt;_track-&gt;_index[i+1].timeCode)
++              {
++                clus=i;
++                i=_nbClusters; 
++              }
++            }
++            if(clus==-1) clus=_nbClusters-1; // Hopefully in the last one
++            goToBlock(clus);
++            return 1;
++}
++
++//EOF
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flvIndex.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flvIndex.cpp	2007-06-15 20:28:35 UTC (rev 3255)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flvIndex.cpp	2007-06-16 08:50:43 UTC (rev 3256)
+@@ -0,0 +1,62 @@
++/***************************************************************************
++    copyright            : (C) 2007 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++    
++      Handle flvTrack/index
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;config.h&quot;
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++
++#include &lt;string.h&gt;
++
++#include &quot;math.h&quot;
++
++#include &quot;default.h&quot;
++#include &quot;ADM_editor/ADM_Video.h&quot;
++#include &lt;ADM_assert.h&gt;
++
++#include &quot;fourcc.h&quot;
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
++
++#include &quot;ADM_flv.h&quot;
++
++flvTrak::flvTrak(int nb)
++{
++  memset(this,0,sizeof(flvTrak)); 
++  _index=new flvIndex[nb];
++  _indexMax=nb;
++}
++flvTrak::~flvTrak()
++{
++  if(_index) delete [] _index;
++  _index=NULL;
++}
++/**
++      \fn grow
++      \brief reallocate index if needed
++*/
++uint8_t flvTrak::grow(void)
++{
++   if(_indexMax==_nbIndex)
++    {
++      // Grow
++      flvIndex *ix=new flvIndex[ _indexMax*2];
++      memcpy(ix,_index,sizeof(flvIndex)*_nbIndex);
++      delete [] _index;
++      _index=ix;
++      _indexMax*=2;
++    }
++    return 1;
++}
++//EOF
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/CMakeLists.txt	2007-06-15 20:28:35 UTC (rev 3255)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/CMakeLists.txt	2007-06-16 08:50:43 UTC (rev 3256)
+@@ -1,6 +1,8 @@
+ 
+ SET(ADM_flv_SRCS 
+ ADM_flv.cpp
++ADM_flvIndex.cpp
++ADM_flvAudio.cpp
+ )
+ ADD_LIBRARY(ADM_flv STATIC ${ADM_flv_SRCS})
+ include_directories(..)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000547.html">[Avidemux-svn-commit] r3255 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat
+</A></li>
+	<LI>Next message: <A HREF="000549.html">[Avidemux-svn-commit] r3257 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#548">[ date ]</a>
+              <a href="thread.html#548">[ thread ]</a>
+              <a href="subject.html#548">[ subject ]</a>
+              <a href="author.html#548">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

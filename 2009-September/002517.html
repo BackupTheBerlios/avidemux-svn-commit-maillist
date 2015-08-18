@@ -1,0 +1,572 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5304 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreMuxer/include avidemux_core/ADM_coreMuxer/src	avidemux_plugins/ADM_muxers/muxerFlv	avidemux_plugins/ADM_muxers/muxerMp4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5304%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreMuxer/include%20avidemux_core/ADM_coreMuxer/src%0A%09avidemux_plugins/ADM_muxers/muxerFlv%0A%09avidemux_plugins/ADM_muxers/muxerMp4&In-Reply-To=%3C200909031842.n83IgTIg027932%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002516.html">
+   <LINK REL="Next"  HREF="002518.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5304 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreMuxer/include avidemux_core/ADM_coreMuxer/src	avidemux_plugins/ADM_muxers/muxerFlv	avidemux_plugins/ADM_muxers/muxerMp4</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5304%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreMuxer/include%20avidemux_core/ADM_coreMuxer/src%0A%09avidemux_plugins/ADM_muxers/muxerFlv%0A%09avidemux_plugins/ADM_muxers/muxerMp4&In-Reply-To=%3C200909031842.n83IgTIg027932%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5304 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreMuxer/include avidemux_core/ADM_coreMuxer/src	avidemux_plugins/ADM_muxers/muxerFlv	avidemux_plugins/ADM_muxers/muxerMp4">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Sep  3 20:42:29 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002516.html">[Avidemux-svn-commit] r5303 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv
+</A></li>
+        <LI>Next message: <A HREF="002518.html">[Avidemux-svn-commit] r5305 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers:	. muxerMkv
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2517">[ date ]</a>
+              <a href="thread.html#2517">[ thread ]</a>
+              <a href="subject.html#2517">[ subject ]</a>
+              <a href="author.html#2517">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-09-03 20:42:29 +0200 (Thu, 03 Sep 2009)
+New Revision: 5304
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/include/ADM_coreMuxerFfmpeg.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src/ADM_coreMuxerFfmpeg.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv/muxerFlv.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv/muxerFlv.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4/muxerMP4.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4/muxerMP4.h
+Log:
+[Flv/Mp4 muxers] Also factorize main loop
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/include/ADM_coreMuxerFfmpeg.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/include/ADM_coreMuxerFfmpeg.h	2009-09-03 13:52:10 UTC (rev 5303)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/include/ADM_coreMuxerFfmpeg.h	2009-09-03 18:42:29 UTC (rev 5304)
+@@ -32,6 +32,11 @@
+ class muxerFFmpeg : public ADM_muxer
+ {
+ protected:
++        virtual bool muxerRescaleVideoTime(uint64_t *time)=0;
++        virtual bool muxerRescaleAudioTime(uint64_t *time,uint32_t fq)=0;
++protected:
++        bool saveLoop(const char *title);
++protected:
+         AVOutputFormat *fmt;
+         AVFormatContext *oc;
+         AVStream *audio_st;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src/ADM_coreMuxerFfmpeg.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src/ADM_coreMuxerFfmpeg.cpp	2009-09-03 13:52:10 UTC (rev 5303)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src/ADM_coreMuxerFfmpeg.cpp	2009-09-03 18:42:29 UTC (rev 5304)
+@@ -20,6 +20,13 @@
+ #include &quot;fourcc.h&quot;
+ #include &quot;ADM_coreMuxerFfmpeg.h&quot;
+ #include &quot;ADM_muxerUtils.h&quot;
++
++#if 1
++#define aprintf(...) {}
++#else
++#define aprintf printf
++#endif
++
+ /**
+     \fn muxerFFmpeg
+ */
+@@ -265,4 +272,140 @@
+         printf(&quot;[FF] Audio initialized\n&quot;);
+         return true;
+ }
++/**
++
++*/
++bool muxerFFmpeg::saveLoop(const char *title)
++{
++#define AUDIO_BUFFER_SIZE 48000*6*sizeof(float)
++
++    printf(&quot;[FF] Saving\n&quot;);
++    uint32_t bufSize=vStream-&gt;getWidth()*vStream-&gt;getHeight()*3;
++    uint8_t *buffer=new uint8_t[bufSize];
++    uint32_t len,flags;
++    uint64_t pts,dts,rawDts;
++    uint64_t lastVideoDts=0;
++    uint64_t videoIncrement;
++    int ret;
++    int written=0;
++    bool result=true;
++
++    float f=(float)vStream-&gt;getAvgFps1000();
++    f=1000./f;
++    f*=1000000;
++    videoIncrement=(uint64_t)f;
++
++    uint8_t *audioBuffer=new uint8_t[AUDIO_BUFFER_SIZE];
++
++
++    printf(&quot;[MP4]avg fps=%u\n&quot;,vStream-&gt;getAvgFps1000());
++    AVRational *scale=&amp;(video_st-&gt;codec-&gt;time_base);
++    uint64_t videoDuration=vStream-&gt;getVideoDuration();
++    
++    encoding=createWorking(title);
++
++    while(true==vStream-&gt;getPacket(&amp;len, buffer, bufSize,&amp;pts,&amp;dts,&amp;flags))
++    {
++	AVPacket pkt;
++
++            float p=0.5;
++            if(videoDuration)
++                    p=lastVideoDts/videoDuration;
++            p=p*100;
++            encoding-&gt;update((uint32_t)p);
++            if(!encoding-&gt;isAlive()) 
++            {
++                result=false;
++                break;
++            }
++            int64_t xpts=(int64_t)pts;
++            int64_t xdts=(int64_t)dts;
++            if(pts==ADM_NO_PTS) xpts=-1;
++            if(dts==ADM_NO_PTS) xdts=-1;
++            aprintf(&quot;[FF:V] Pts: %&quot;LLD&quot; DTS:%&quot;LLD&quot; ms\n&quot;,xpts/1000,xdts/1000);
++
++            aprintf(&quot;[FF:V] LastDts:%08&quot;LLU&quot; Dts:%08&quot;LLU&quot; (%04&quot;LLU&quot;) Delta : %&quot;LLU&quot;\n&quot;,
++                        lastVideoDts,dts,dts/1000000,dts-lastVideoDts);
++            rawDts=dts;
++            if(rawDts==ADM_NO_PTS)
++            {
++                lastVideoDts+=videoIncrement;
++            }else
++            {
++                lastVideoDts=dts;
++            }
++            muxerRescaleVideoTime(&amp;pts);
++            muxerRescaleVideoTime(&amp;dts);
++
++            aprintf(&quot;[FF:V] RawDts:%lu Scaled Dts:%lu\n&quot;,rawDts,dts);
++            aprintf(&quot;[FF:V] Rescaled: Len : %d flags:%x Pts:%&quot;LLU&quot; Dts:%&quot;LLU&quot;\n&quot;,len,flags,pts,dts);
++
++            av_init_packet(&amp;pkt);
++            pkt.dts=dts;
++            if(vStream-&gt;providePts()==true)
++            {
++                pkt.pts=pts;
++            }else
++            {
++                pkt.pts=pkt.dts;
++            }
++            pkt.stream_index=0;
++            pkt.data= buffer;
++            pkt.size= len;
++            if(flags &amp; 0x10) // FIXME AVI_KEY_FRAME
++                        pkt.flags |= PKT_FLAG_KEY;
++            ret =av_write_frame(oc, &amp;pkt);
++            aprintf(&quot;[FF]Frame:%u, DTS=%08lu PTS=%08lu\n&quot;,written,dts,pts);
++            if(ret)
++            {
++                printf(&quot;[FF]Error writing video packet\n&quot;);
++                break;
++            }
++            written++;
++            // Now send audio until they all have DTS &gt; lastVideoDts+increment
++            for(int audio=0;audio&lt;nbAStreams;audio++)
++            {
++                uint32_t audioSize,nbSample;
++                uint64_t audioDts;
++                ADM_audioStream*a=aStreams[audio];
++                uint32_t fq=a-&gt;getInfo()-&gt;frequency;
++                int nb=0;
++                while(a-&gt;getPacket(audioBuffer,&amp;audioSize, AUDIO_BUFFER_SIZE,&amp;nbSample,&amp;audioDts))
++                {
++                    // Write...
++                    nb++;
++                    AVPacket pkt;
++                    uint64_t rescaledDts;
++                    rescaledDts=audioDts;
++                    muxerRescaleAudioTime(&amp;rescaledDts,a-&gt;getInfo()-&gt;frequency);
++                    aprintf(&quot;[FF] A: Video frame  %d, audio Dts :%&quot;LLU&quot; size :%&quot;LU&quot; nbSample : %&quot;LU&quot; rescaled:%&quot;LLU&quot;\n&quot;,
++                                    written,audioDts,audioSize,nbSample,rescaledDts);
++                    av_init_packet(&amp;pkt);
++                    
++                    pkt.dts=rescaledDts;
++                    pkt.pts=rescaledDts;
++                    pkt.stream_index=1+audio;
++                    pkt.data= audioBuffer;
++                    pkt.size= audioSize;
++                    ret =av_write_frame(oc, &amp;pkt);
++                    if(ret)
++                    {
++                        printf(&quot;[FF]Error writing audio packet\n&quot;);
++                        break;
++                    }
++                    aprintf(&quot;[FF] A:%&quot;LU&quot; ms vs V: %&quot;LU&quot; ms\n&quot;,(uint32_t)audioDts/1000,(uint32_t)(lastVideoDts+videoIncrement)/1000);
++                    if(audioDts!=ADM_NO_PTS)
++                    {
++                        if(audioDts&gt;lastVideoDts+videoIncrement) break;
++                    }
++                }
++                if(!nb) printf(&quot;[FF] A: No audio for video frame %d\n&quot;,written);
++            }
++
++    }
++    delete [] buffer;
++    delete [] audioBuffer;
++    printf(&quot;[FF] Wrote %d frames, nb audio streams %d\n&quot;,written,nbAStreams);
++    return result;
++}
+ // EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv/muxerFlv.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv/muxerFlv.cpp	2009-09-03 13:52:10 UTC (rev 5303)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv/muxerFlv.cpp	2009-09-03 18:42:29 UTC (rev 5304)
+@@ -141,113 +141,22 @@
+ */
+ bool muxerFlv::save(void)
+ {
+-    printf(&quot;[FLV] Saving\n&quot;);
+-    uint32_t bufSize=vStream-&gt;getWidth()*vStream-&gt;getHeight()*3;
+-    uint8_t *buffer=new uint8_t[bufSize];
+-    uint32_t len,flags;
+-    uint64_t pts,dts,rawDts;
+-    uint64_t lastVideoDts=0;
+-    int ret;
+-    bool result=true;
+-    int written=0;
+-#define AUDIO_BUFFER_SIZE 48000*6*sizeof(float)
+-    uint8_t *audioBuffer=new uint8_t[AUDIO_BUFFER_SIZE];
++    return saveLoop(&quot;FLV&quot;);
++}
+ 
+ 
+-    printf(&quot;[FLV]avg fps=%u\n&quot;,vStream-&gt;getAvgFps1000());
++bool muxerFlv::muxerRescaleVideoTime(uint64_t *time)
++{
+     AVRational *scale=&amp;(video_st-&gt;codec-&gt;time_base);
+-    initUI(&quot;Saving Flv file..&quot;);
+-    while(true==vStream-&gt;getPacket(&amp;len, buffer, bufSize,&amp;pts,&amp;dts,&amp;flags))
+-    {
+-	AVPacket pkt;
+-            printf(&quot;[MP5] LastDts:%08&quot;LLU&quot; Dts:%08&quot;LLU&quot; (%04&quot;LLU&quot;) Delta : %&quot;LLD&quot;\n&quot;,lastVideoDts,dts,dts/1000000,dts-lastVideoDts);
+-            rawDts=dts;
+-            if(rawDts==ADM_NO_PTS)
+-            {
+-                lastVideoDts+=videoIncrement;
+-            }else
+-            {
+-                lastVideoDts=dts;
+-            }
+-            if(false==updateUI(lastVideoDts))
+-            {
+-                result=false;
+-                goto abt;
+-             }
+-#define RESCALE(x) x=rescaleLavPts(x,scale);
+-
+-            dts=lastVideoDts/1000;
+-
+-            aprintf(&quot;[FLV] RawDts:%lu Scaled Dts:%lu\n&quot;,rawDts,dts);
+-            aprintf(&quot;[FLV] Rescaled: Len : %d flags:%x Pts:%llu Dts:%llu\n&quot;,len,flags,pts,dts);
+-            RESCALE(pts);
+-            av_init_packet(&amp;pkt);
+-            pkt.dts=dts;
+-            if(vStream-&gt;providePts()==true)
+-            {
+-                pkt.pts=pts;
+-            }else
+-            {
+-                pkt.pts=pkt.dts;
+-            }
+-            pkt.stream_index=0;
+-            pkt.data= buffer;
+-            pkt.size= len;
+-            if(flags &amp; 0x10) // FIXME AVI_KEY_FRAME
+-                        pkt.flags |= PKT_FLAG_KEY;
+-            ret =av_write_frame(oc, &amp;pkt);
+-            aprintf(&quot;[FLV]Frame:%u, DTS=%08lu PTS=%08lu\n&quot;,written,dts,pts);
+-            if(ret)
+-            {
+-                printf(&quot;[LavFormat]Error writing video packet\n&quot;);
+-                break;
+-            }
+-            written++;
+-            // Now send audio until they all have DTS &gt; lastVideoDts+increment
+-            for(int audio=0;audio&lt;nbAStreams;audio++)
+-            {
+-                uint32_t audioSize,nbSample;
+-                uint64_t audioDts,rescaled;
+-                ADM_audioStream*a=aStreams[audio];
+-                uint32_t fq=a-&gt;getInfo()-&gt;frequency;
+-                int nb=0;
+-                while(a-&gt;getPacket(audioBuffer,&amp;audioSize, AUDIO_BUFFER_SIZE,&amp;nbSample,&amp;audioDts))
+-                {
+-                    // Write...
+-                    nb++;
+-                    AVPacket pkt;
+-                    rescaled=audioDts/1000;
+-
+-                    aprintf(&quot;[FLV] Video frame  %d, audio Dts :%lu size :%lu nbSample : %lu rescaled:%lu\n&quot;,written,audioDts,audioSize,nbSample,rescaledDts);
+-                    av_init_packet(&amp;pkt);
+-                    pkt.dts=rescaled;
+-                    pkt.pts=rescaled;
+-                    pkt.stream_index=1+audio;
+-                    pkt.data= audioBuffer;
+-                    pkt.size= audioSize;
+-                    ret =av_write_frame(oc, &amp;pkt);
+-                    if(ret)
+-                    {
+-                        printf(&quot;[LavFormat]Error writing audio packet\n&quot;);
+-                        break;
+-                    }
+-                    aprintf(&quot;%u vs %u\n&quot;,audioDts/1000,(lastVideoDts+videoIncrement)/1000);
+-                    if(audioDts!=ADM_NO_PTS)
+-                    {
+-                        if(audioDts&gt;lastVideoDts+videoIncrement) break;
+-                    }
+-                }
+-                if(!nb) printf(&quot;[FLV] No audio for video frame %d\n&quot;,written);
+-            }
+-
+-    }
+-abt:
+-    closeUI();
+-    delete [] buffer;
+-    delete [] audioBuffer;
+-    printf(&quot;[FLV] Wrote %d frames, nb audio streams %d\n&quot;,written,nbAStreams);
+-    return result;
++    *time=rescaleLavPts(*time,scale);
++    return true;
+ }
++bool muxerFlv::muxerRescaleAudioTime(uint64_t *time,uint32_t fq)
++{
++    *time=*time/1000;
++    return true;
++}
++
+ /**
+     \fn close
+     \brief Cleanup is done in the dtor
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv/muxerFlv.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv/muxerFlv.h	2009-09-03 13:52:10 UTC (rev 5303)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv/muxerFlv.h	2009-09-03 18:42:29 UTC (rev 5304)
+@@ -31,6 +31,8 @@
+ {
+ protected:
+ 
++        bool muxerRescaleVideoTime(uint64_t *time);
++        bool muxerRescaleAudioTime(uint64_t *time,uint32_t fq);
+ public:
+                 muxerFlv();
+         virtual ~muxerFlv();
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4/muxerMP4.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4/muxerMP4.cpp	2009-09-03 13:52:10 UTC (rev 5303)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4/muxerMP4.cpp	2009-09-03 18:42:29 UTC (rev 5304)
+@@ -127,138 +127,28 @@
+ */
+ bool muxerMP4::save(void) 
+ {
+-    printf(&quot;[MP4] Saving\n&quot;);
+-    uint32_t bufSize=vStream-&gt;getWidth()*vStream-&gt;getHeight()*3;
+-    uint8_t *buffer=new uint8_t[bufSize];
+-    uint32_t len,flags;
+-    uint64_t pts,dts,rawDts;
+-    uint64_t lastVideoDts=0;
+-    uint64_t videoIncrement;
+-    int ret;
+-    int written=0;
+-    bool result=true;
+-
+-    float f=(float)vStream-&gt;getAvgFps1000();
+-    f=1000./f;
+-    f*=1000000;
+-    videoIncrement=(uint64_t)f;
+-#define AUDIO_BUFFER_SIZE 48000*6*sizeof(float)
+-    uint8_t *audioBuffer=new uint8_t[AUDIO_BUFFER_SIZE];
+-
+-
+-    printf(&quot;[MP4]avg fps=%u\n&quot;,vStream-&gt;getAvgFps1000());
+-    AVRational *scale=&amp;(video_st-&gt;codec-&gt;time_base);
+-    uint64_t videoDuration=vStream-&gt;getVideoDuration();
+-
+     const char *title=QT_TR_NOOP(&quot;Saving mp4&quot;);
+     if(muxerConfig.muxerType==MP4_MUXER_PSP) title=QT_TR_NOOP(&quot;Saving PSP&quot;);
+-    encoding=createWorking(title);
++    return saveLoop(title);
++}
+ 
+-    while(true==vStream-&gt;getPacket(&amp;len, buffer, bufSize,&amp;pts,&amp;dts,&amp;flags))
+-    {
+-	AVPacket pkt;
++bool muxerMP4::muxerRescaleVideoTime(uint64_t *time)
++{
++    AVRational *scale=&amp;(video_st-&gt;codec-&gt;time_base);
++    *time=rescaleLavPts(*time,scale);
++    return true;
++}
++bool muxerMP4::muxerRescaleAudioTime(uint64_t *time,uint32_t fq)
++{
++  AVPacket pkt;
++    double f=*time;
++    f*=fq; // In samples
++    f/=1000.*1000.; // In sec
+ 
+-            float p=0.5;
+-            if(videoDuration)
+-                    p=lastVideoDts/videoDuration;
+-            p=p*100;
+-            encoding-&gt;update((uint32_t)p);
+-            if(!encoding-&gt;isAlive()) 
+-            {
+-                result=false;
+-                break;
+-            }
+-            int64_t xpts=(int64_t)pts;
+-            int64_t xdts=(int64_t)dts;
+-            if(pts==ADM_NO_PTS) xpts=-1;
+-            if(dts==ADM_NO_PTS) xdts=-1;
+-            aprintf(&quot;[MP4:V] Pts: %&quot;LLD&quot; DTS:%&quot;LLD&quot; ms\n&quot;,xpts/1000,xdts/1000);
+ 
+-            aprintf(&quot;[MP4:V] LastDts:%08&quot;LLU&quot; Dts:%08&quot;LLU&quot; (%04&quot;LLU&quot;) Delta : %&quot;LLU&quot;\n&quot;,
+-                        lastVideoDts,dts,dts/1000000,dts-lastVideoDts);
+-            rawDts=dts;
+-            if(rawDts==ADM_NO_PTS)
+-            {
+-                lastVideoDts+=videoIncrement;
+-            }else
+-            {
+-                lastVideoDts=dts;
+-            }
+-            pts=rescaleLavPts(pts,scale);
+-            dts=rescaleLavPts(dts,scale);
+-            aprintf(&quot;[MP4:V] RawDts:%lu Scaled Dts:%lu\n&quot;,rawDts,dts);
+-            aprintf(&quot;[MP4:V] Rescaled: Len : %d flags:%x Pts:%&quot;LLU&quot; Dts:%&quot;LLU&quot;\n&quot;,len,flags,pts,dts);
+-
+-            av_init_packet(&amp;pkt);
+-            pkt.dts=dts;
+-            if(vStream-&gt;providePts()==true)
+-            {
+-                pkt.pts=pts;
+-            }else
+-            {
+-                pkt.pts=pkt.dts;
+-            }
+-            pkt.stream_index=0;
+-            pkt.data= buffer;
+-            pkt.size= len;
+-            if(flags &amp; 0x10) // FIXME AVI_KEY_FRAME
+-                        pkt.flags |= PKT_FLAG_KEY;
+-            ret =av_write_frame(oc, &amp;pkt);
+-            aprintf(&quot;[MP4]Frame:%u, DTS=%08lu PTS=%08lu\n&quot;,written,dts,pts);
+-            if(ret)
+-            {
+-                printf(&quot;[LavFormat]Error writing video packet\n&quot;);
+-                break;
+-            }
+-            written++;
+-            // Now send audio until they all have DTS &gt; lastVideoDts+increment
+-            for(int audio=0;audio&lt;nbAStreams;audio++)
+-            {
+-                uint32_t audioSize,nbSample;
+-                uint64_t audioDts;
+-                ADM_audioStream*a=aStreams[audio];
+-                uint32_t fq=a-&gt;getInfo()-&gt;frequency;
+-                int nb=0;
+-                while(a-&gt;getPacket(audioBuffer,&amp;audioSize, AUDIO_BUFFER_SIZE,&amp;nbSample,&amp;audioDts))
+-                {
+-                    // Write...
+-                    nb++;
+-                    AVPacket pkt;
+-                    double f=audioDts;
+-                    f*=fq; // In samples
+-                    f/=1000.*1000.; // In sec
+-                   
+-                    
+-                    uint64_t rescaledDts=(uint64_t)(f+0.4);
+-                    aprintf(&quot;[MP4] A: Video frame  %d, audio Dts :%&quot;LLU&quot; size :%&quot;LU&quot; nbSample : %&quot;LU&quot; rescaled:%&quot;LLU&quot;\n&quot;,
+-                                    written,audioDts,audioSize,nbSample,rescaledDts);
+-                    av_init_packet(&amp;pkt);
+-                    pkt.dts=rescaledDts;
+-                    pkt.pts=rescaledDts;
+-                    pkt.stream_index=1+audio;
+-                    pkt.data= audioBuffer;
+-                    pkt.size= audioSize;
+-                    ret =av_write_frame(oc, &amp;pkt);
+-                    if(ret)
+-                    {
+-                        printf(&quot;[LavFormat]Error writing audio packet\n&quot;);
+-                        break;
+-                    }
+-                    aprintf(&quot;[MP4] A:%&quot;LU&quot; ms vs V: %&quot;LU&quot; ms\n&quot;,(uint32_t)audioDts/1000,(uint32_t)(lastVideoDts+videoIncrement)/1000);
+-                    if(audioDts!=ADM_NO_PTS)
+-                    {
+-                        if(audioDts&gt;lastVideoDts+videoIncrement) break;
+-                    }
+-                }
+-                if(!nb) printf(&quot;[MP4] A: No audio for video frame %d\n&quot;,written);
+-            }
+-
+-    }
+-    delete [] buffer;
+-    delete [] audioBuffer;
+-    printf(&quot;[MP4] Wrote %d frames, nb audio streams %d\n&quot;,written,nbAStreams);
+-    return result;
++    *time=(uint64_t)(f+0.4);
+ }
++  
+ /**
+     \fn close
+     \brief Cleanup is done in the dtor
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4/muxerMP4.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4/muxerMP4.h	2009-09-03 13:52:10 UTC (rev 5303)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4/muxerMP4.h	2009-09-03 18:42:29 UTC (rev 5304)
+@@ -36,7 +36,8 @@
+ class muxerMP4 : public muxerFFmpeg
+ {
+ protected:
+-
++        bool muxerRescaleVideoTime(uint64_t *time);
++        bool muxerRescaleAudioTime(uint64_t *time,uint32_t fq);
+ public:
+                 muxerMP4();
+         virtual ~muxerMP4();
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002516.html">[Avidemux-svn-commit] r5303 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerFlv
+</A></li>
+	<LI>Next message: <A HREF="002518.html">[Avidemux-svn-commit] r5305 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers:	. muxerMkv
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2517">[ date ]</a>
+              <a href="thread.html#2517">[ thread ]</a>
+              <a href="subject.html#2517">[ subject ]</a>
+              <a href="author.html#2517">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

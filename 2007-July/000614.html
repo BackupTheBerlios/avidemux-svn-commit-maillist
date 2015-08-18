@@ -1,0 +1,330 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3337 - in branches/avidemux_2.4_branch: .	avidemux avidemux/ADM_audiodevice cmake
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3337%20-%20in%20branches/avidemux_2.4_branch%3A%20.%0A%09avidemux%20avidemux/ADM_audiodevice%20cmake&In-Reply-To=%3C200707061008.l66A8OHr018844%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000613.html">
+   <LINK REL="Next"  HREF="000615.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3337 - in branches/avidemux_2.4_branch: .	avidemux avidemux/ADM_audiodevice cmake</H1>
+    <B>mihailzenkov at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3337%20-%20in%20branches/avidemux_2.4_branch%3A%20.%0A%09avidemux%20avidemux/ADM_audiodevice%20cmake&In-Reply-To=%3C200707061008.l66A8OHr018844%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3337 - in branches/avidemux_2.4_branch: .	avidemux avidemux/ADM_audiodevice cmake">mihailzenkov at mail.berlios.de
+       </A><BR>
+    <I>Fri Jul  6 12:08:24 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000613.html">[Avidemux-svn-commit] r3336 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_commonUI
+</A></li>
+        <LI>Next message: <A HREF="000615.html">[Avidemux-svn-commit] r3338 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#614">[ date ]</a>
+              <a href="thread.html#614">[ thread ]</a>
+              <a href="subject.html#614">[ subject ]</a>
+              <a href="author.html#614">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mihailzenkov
+Date: 2007-07-06 12:08:22 +0200 (Fri, 06 Jul 2007)
+New Revision: 3337
+
+Modified:
+   branches/avidemux_2.4_branch/ConfigureChecks.cmake
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.h
+   branches/avidemux_2.4_branch/avidemux/CMakeLists.txt
+   branches/avidemux_2.4_branch/cmake/conf_summary.cmake
+   branches/avidemux_2.4_branch/config.h.cmake
+Log:
+jack: add libsamplerate
+
+Modified: branches/avidemux_2.4_branch/ConfigureChecks.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/ConfigureChecks.cmake	2007-07-06 01:03:19 UTC (rev 3336)
++++ branches/avidemux_2.4_branch/ConfigureChecks.cmake	2007-07-06 10:08:22 UTC (rev 3337)
+@@ -205,6 +205,10 @@
+ endif(USE_AFTEN)
+ SET(CMAKE_REQUIRED_FLAGS &quot;&quot;)
+ ########################################
++# SRC
++########################################
++ADM_CHECK_HL(libsamplerate samplerate.h samplerate src_get_version USE_SRC)
++########################################
+ # ICONV
+ ########################################
+ # search ICON.h
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.cpp	2007-07-06 01:03:19 UTC (rev 3336)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.cpp	2007-07-06 10:08:22 UTC (rev 3337)
+@@ -13,6 +13,7 @@
+ #include &lt;stdio.h&gt;
+ #include &lt;stdint.h&gt;
+ 
++
+ #include &quot;default.h&quot;
+ #include &quot;ADM_audiodevice.h&quot;
+ #include &lt;ADM_assert.h&gt;
+@@ -20,9 +21,17 @@
+ #include &quot;ADM_audiodevice/ADM_deviceALSA.h&quot;
+ #include &quot;ADM_audiodevice/ADM_deviceJack.h&quot;
+ 
++
++#define BUFSIZE 16385
++
+ jackAudioDevice::jackAudioDevice()
+ {
+ 	client = NULL;
++	ringbuffer = NULL;
++	#ifdef USE_SRC
++	src_out_buf = NULL;
++	src_state = NULL;
++	#endif
+ }
+ 
+ void jackAudioDevice::jack_shutdown(void *arg)
+@@ -33,9 +42,18 @@
+ uint8_t jackAudioDevice::stop()
+ {
+ 	if (client) {
++		printf(&quot;[JACK] Stop\n&quot;);
+ 		jack_client_close(client);
+ 		client = NULL;
+-		jack_ringbuffer_free(ringbuffer);
++		if (ringbuffer)
++			jack_ringbuffer_free(ringbuffer);
++		ringbuffer = NULL;
++		#ifdef USE_SRC
++		delete src_out_buf;
++		src_out_buf = NULL;
++		src_delete(src_state);
++		src_state = NULL;
++		#endif
+ 	}
+ 
+ 	return 1;
+@@ -63,11 +81,36 @@
+ 	if (status &amp; JackServerStarted)
+ 		printf(&quot;[JACK] Server started\n&quot;);
+ 
++	if (jack_get_sample_rate(client) == fq) {
++		jack_set_process_callback(client, process_callback, this);
++	} else {
++		printf(&quot;[JACK] audio stream sample rate: %i\n&quot;, fq);
++		printf(&quot;[JACK] jack server sample rate: %i\n&quot;, (int)jack_get_sample_rate(client));
++		#ifdef USE_SRC
++			src_out_buf = new float[BUFSIZE * channels];
++			src_state = src_new(SRC_SINC_FASTEST, channels, NULL);
++			if (!src_state) {
++				printf(&quot;[JACK] Can't init libsamplerate\n&quot;);
++				stop();
++				return 0;
++			}
++			src_data.data_out = src_out_buf;
++			src_data.output_frames = BUFSIZE;
++			src_data.src_ratio = jack_get_sample_rate(client) / (double)fq;
++			src_data.end_of_input = 0;
++//			printf(&quot;[JACK] ratio: %f\n&quot;, src_data.src_ratio);
++		#else
++			printf(&quot;[JACK] For play this, you need avidemux compiled with libsamplerate support\n&quot;);
++			stop();
++			return 0;
++		#endif
++	}
++
++	ringbuffer = jack_ringbuffer_create(BUFSIZE * channels * sizeof(jack_default_audio_sample_t));
++
+ 	jack_set_process_callback(client, process_callback, this);
+ 	jack_on_shutdown(client, jack_shutdown, this);
+ 
+-	ringbuffer = jack_ringbuffer_create(65536 * channels);
+-
+ 	char name[10];
+ 	for (int i = 0; i &lt; channels; i++) {
+ 		snprintf(name, 10, &quot;output-%d&quot;, i);
+@@ -75,7 +118,7 @@
+ 		if (!ports[i]) {
+ 			printf(&quot;[JACK] Can't create new port\n&quot;);
+ 			stop();
+-			return 0; 
++			return 0;
+ 		}
+ 	}
+ 
+@@ -126,8 +169,6 @@
+ 	if (read != nframes)
+ 		printf(&quot;[JACK] UNDERRUN!\n&quot;);
+ 
+-
+-
+ 	return 0;
+ }
+ 
+@@ -139,18 +180,52 @@
+ 
+ uint8_t jackAudioDevice::play(uint32_t len, float *data)
+ {
++//	static int min = 5000;
++	static int sleep = (int)((float)BUFSIZE / jack_get_sample_rate(client) / 2. * 1000000.);
+ 	size_t write;
++	float writef;
++	len /= _channels;
+ 
++	#ifdef USE_SRC
++	if (src_out_buf) {
++		while (len) {
++			writef = jack_ringbuffer_write_space(ringbuffer);
++			writef /= src_data.src_ratio * sizeof(jack_default_audio_sample_t) * _channels;
++			write = (size_t)writef;
++			if (write &gt;= len) {
++				src_data.data_in = data;
++				src_data.input_frames = len;
++				src_process(src_state, &amp;src_data);
++				jack_ringbuffer_write(ringbuffer,
++					(char *)src_out_buf,
++					src_data.output_frames_gen * sizeof(jack_default_audio_sample_t) * _channels);
++/*
++				if (len != src_data.input_frames_used)
++					printf(&quot;[JACK] len %i != %i input_frames_used\n&quot;, len, src_data.input_frames_used);
++				if (len &lt; min)
++					min = len;
++				printf(&quot;[JACK] %i %i %i %f %i\n&quot;,min, src_data.input_frames_used, src_data.output_frames_gen, writef, len);
++				data += src_data.input_frames_used * _channels;
++				len -= src_data.input_frames_used;
++*/
++				return 1;
++			} else {
++				printf(&quot;[JACK] OVERRUN!\n&quot;);
++				usleep(sleep);
++			}
++		}
++	} else
++	#endif
+ 	while (len) {
+-		if ((write = jack_ringbuffer_write_space(ringbuffer) / sizeof(jack_default_audio_sample_t)) &gt; _channels) {
+-			if (write &gt; len)
+-				write = len;
+-			jack_ringbuffer_write(ringbuffer, (char *)data, write * sizeof(jack_default_audio_sample_t));
+-			data += write;
+-			len -= write;
++		writef = jack_ringbuffer_write_space(ringbuffer);
++		writef /= sizeof(jack_default_audio_sample_t) * _channels;
++		write = (size_t)writef;
++		if (write &gt;= len) {
++			jack_ringbuffer_write(ringbuffer, (char *)data, len * sizeof(jack_default_audio_sample_t) * _channels);
++			return 1;
+ 		} else {
+ 			printf(&quot;[JACK] OVERRUN!\n&quot;);
+-			usleep(10000);
++			usleep(sleep);
+ 		}
+ 	}
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.h	2007-07-06 01:03:19 UTC (rev 3336)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.h	2007-07-06 10:08:22 UTC (rev 3337)
+@@ -11,6 +11,10 @@
+ #include &lt;jack/jack.h&gt;
+ #include &lt;jack/ringbuffer.h&gt;
+ 
++#ifdef USE_SRC
++#include &lt;samplerate.h&gt;
++#endif
++
+ #define MAX_CHANNELS 9
+ 
+ class jackAudioDevice : public audioDevice
+@@ -30,5 +34,10 @@
+ 	jack_port_t *ports[MAX_CHANNELS];
+ 	jack_client_t *client;
+ 	jack_ringbuffer_t *ringbuffer;
++	#ifdef USE_SRC
++	float *src_out_buf;
++	SRC_STATE *src_state;
++	SRC_DATA src_data;
++	#endif
+ };
+ #endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/CMakeLists.txt	2007-07-06 01:03:19 UTC (rev 3336)
++++ branches/avidemux_2.4_branch/avidemux/CMakeLists.txt	2007-07-06 10:08:22 UTC (rev 3337)
+@@ -354,6 +354,11 @@
+ add_libs_all_targets(iconv)
+ endif(NEEED_LIBICONV)
+ 
++#libsamplerate
++if(USE_SRC)
++add_libs_all_targets(samplerate)
++endif(USE_SRC)
++
+ # Xml2
+ add_libs_all_targets(xml2 )
+ ###########################################
+
+Modified: branches/avidemux_2.4_branch/cmake/conf_summary.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/cmake/conf_summary.cmake	2007-07-06 01:03:19 UTC (rev 3336)
++++ branches/avidemux_2.4_branch/cmake/conf_summary.cmake	2007-07-06 10:08:22 UTC (rev 3337)
+@@ -39,5 +39,6 @@
+ ADM_DISPLAY(&quot;FontConfig&quot; USE_FONTCONFIG)
+ ADM_DISPLAY(&quot;Gettext   &quot; HAVE_GETTEXT)
+ ADM_DISPLAY(&quot;Xvideo    &quot; USE_XV)
++ADM_DISPLAY(&quot;samplerate&quot; USE_SRC)
+ MESSAGE(&quot;*******************&quot;)
+ MESSAGE(&quot;*******************&quot;)
+
+Modified: branches/avidemux_2.4_branch/config.h.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/config.h.cmake	2007-07-06 01:03:19 UTC (rev 3336)
++++ branches/avidemux_2.4_branch/config.h.cmake	2007-07-06 10:08:22 UTC (rev 3337)
+@@ -489,6 +489,9 @@
+ /* libpng is available */
+ #cmakedefine USE_PNG
+ 
++/* use libsamplerate */
++#cmakedefine USE_SRC
++
+ /* SDL detected */
+ #cmakedefine USE_SDL
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000613.html">[Avidemux-svn-commit] r3336 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_commonUI
+</A></li>
+	<LI>Next message: <A HREF="000615.html">[Avidemux-svn-commit] r3338 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#614">[ date ]</a>
+              <a href="thread.html#614">[ thread ]</a>
+              <a href="subject.html#614">[ subject ]</a>
+              <a href="author.html#614">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

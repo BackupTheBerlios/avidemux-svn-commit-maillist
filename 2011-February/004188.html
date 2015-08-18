@@ -1,0 +1,211 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7019 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/qt4/ADM_userInterfaces/ADM_gui	avidemux_plugins/ADM_autoScrips
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7019%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux/qt4/ADM_userInterfaces/ADM_gui%0A%09avidemux_plugins/ADM_autoScrips&In-Reply-To=%3C20110225184733.53CED481393%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004187.html">
+   <LINK REL="Next"  HREF="004189.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7019 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/qt4/ADM_userInterfaces/ADM_gui	avidemux_plugins/ADM_autoScrips</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7019%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux/qt4/ADM_userInterfaces/ADM_gui%0A%09avidemux_plugins/ADM_autoScrips&In-Reply-To=%3C20110225184733.53CED481393%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7019 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/qt4/ADM_userInterfaces/ADM_gui	avidemux_plugins/ADM_autoScrips">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Feb 25 19:47:33 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004187.html">[Avidemux-svn-commit] r7018 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/qt4/ADM_userInterfaces/ADM_gui	avidemux_core/ADM_core/include avidemux_plugins	avidemux_plugins/ADM_autoScrips
+</A></li>
+        <LI>Next message: <A HREF="004189.html">[Avidemux-svn-commit] r7020 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4188">[ date ]</a>
+              <a href="thread.html#4188">[ thread ]</a>
+              <a href="subject.html#4188">[ subject ]</a>
+              <a href="author.html#4188">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-02-25 19:47:33 +0100 (Fri, 25 Feb 2011)
+New Revision: 7019
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_autoScrips/CMakeLists.txt
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui/Q_gui2_menu.cpp
+Log:
+[auto] Begin hooking auto script to UI
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp	2011-02-25 18:47:30 UTC (rev 7018)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp	2011-02-25 18:47:33 UTC (rev 7019)
+@@ -55,6 +55,7 @@
+ extern uint8_t GUI_jobs(void);
+ extern const char * GUI_getCustomJsScript(uint32_t nb);
+ extern const char * GUI_getCustomPyScript(uint32_t nb);
++extern const char * GUI_getAutoPyScript(uint32_t nb);
+ 
+ extern uint8_t GUI_getFrameContent(ADMImage *image, uint32_t frame);
+ extern int     GUI_handleVFilter (void);
+@@ -130,6 +131,13 @@
+       A_parseTinyPyScript(custom);
+       return ;
+   }
++  if(action&gt;=ACT_AUTO_BASE_PY &amp;&amp; action &lt;ACT_AUTO_END_PY)
++  {
++      int i=action-ACT_AUTO_BASE_PY;
++      const char *custom=GUI_getAutoPyScript(i);
++      A_parseTinyPyScript(custom);
++      return ;
++  }
+   switch (action)
+     {
+         case ACT_TimeShift:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui/Q_gui2_menu.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui/Q_gui2_menu.cpp	2011-02-25 18:47:30 UTC (rev 7018)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui/Q_gui2_menu.cpp	2011-02-25 18:47:33 UTC (rev 7019)
+@@ -65,6 +65,9 @@
+             case PY_AUTO:
+                 disconnect(customActions[pool][i], SIGNAL(triggered()), this, SLOT(autoPy()));
+                 break;
++            default:
++                ADM_assert(0);
++                break;
+             }
+ 			delete customActions[pool][i];
+ 			delete customNames[pool][i];
+@@ -83,32 +86,44 @@
+ 	clearCustomMenu();
+ 
+ 	char *customdir = ADM_getCustomDir();
+-
++    char *autoDir =   ADM_getAutoDir();
++    ADM_info(&quot;Auto script folder %s\n&quot;,autoDir);
+ 	if (!customdir)
+ 	{
+ 		printf(&quot;No custom dir...\n&quot;);
+ 		return;
+ 	}
+     string customFolder(customdir);
++    string autoFolder(autoDir);
++    string topDir;
+     for(int pool=0;pool&lt;NB_POOL;pool++)
+     {
+         string myDir,subDir;
+-        string ext;
++        string ext,topDir;
+         /* Collect the name */
+         switch(pool)
+         {
+             case JS_CUSTOM:
+                 subDir=string(&quot;/js/&quot;);
+                 ext=string(&quot;.js&quot;);
++                topDir=customFolder;
+                 break;
+             case PY_CUSTOM:
+                 subDir=string(&quot;/py/&quot;);
+                 ext=string(&quot;.py&quot;);
++                topDir=customFolder;
+                 break;
+             case PY_AUTO:
+-                continue;
++                subDir=string(&quot;/&quot;);
++                ext=string(&quot;.py&quot;);
++                topDir=autoFolder;
++                break;
++            default:
++                ADM_assert(0);
++                break;
+         }
+-        myDir=customFolder+subDir;
++        myDir=topDir+subDir;
++        ADM_info(&quot;Scanning %s\n&quot;,myDir.c_str());
+         if (! buildDirectoryContent(&amp;(ADM_nbCustom[pool]), myDir.c_str(), customNames[pool], ADM_MAX_CUSTOM_SCRIPT,ext.c_str()))
+         {
+             ADM_warning(&quot;Failed to build custom dir content (%s)\n&quot;,myDir.c_str());
+@@ -121,7 +136,13 @@
+ 
+             for(int i=0; i &lt; ADM_nbCustom[pool]; i++)
+             {
+-                QAction *action= new QAction(QString::fromUtf8(ADM_GetFileName(customNames[pool][i])), NULL);
++                const char *menuName=ADM_GetFileName(customNames[pool][i]);
++                if(pool==PY_AUTO)
++                {
++                    if(!strncmp(menuName,&quot;ADM_&quot;,4)) // Dont display py script starting by ADM_
++                            continue;
++                }
++                QAction *action= new QAction(QString::fromUtf8(menuName), NULL);
+                 //ADM_info(&quot;\t%s\n&quot;,ADM_GetFileName(customNames[pool][i]));
+                 customActions[pool][i] = action;
+                 switch(pool)
+@@ -139,12 +160,18 @@
+                     break;
+                 }
+                 case PY_AUTO:
+-                    continue;
++                    autoMenu-&gt;addAction(action);
++                    connect(action, SIGNAL(triggered()), this, SLOT(autoPy()));  
++                    break;
++                default:
++                    ADM_assert(0);
++                    break;
++
+                 }
+             }
+         }
+         else
+-            ADM_info(&quot;No custom scripts\n&quot;);
++            ADM_info(&quot;No custom scripts in %s\n&quot;,myDir.c_str());
+     }
+ 	ADM_info(&quot;Custom menu built\n&quot;);
+ }
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_autoScrips/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_autoScrips/CMakeLists.txt	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_autoScrips/CMakeLists.txt	2011-02-25 18:47:33 UTC (rev 7019)
+@@ -0,0 +1,5 @@
++SET(AUTOSCRIPT_DIR &quot;${AVIDEMUX_LIB_DIR}/ADM_plugins6/autoScripts/&quot;)
++
++FILE(GLOB py_files ${CMAKE_CURRENT_SOURCE_DIR}/*.py)
++install(FILES ${py_files} DESTINATION &quot;${AUTOSCRIPT_DIR}&quot;)
++
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004187.html">[Avidemux-svn-commit] r7018 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/qt4/ADM_userInterfaces/ADM_gui	avidemux_core/ADM_core/include avidemux_plugins	avidemux_plugins/ADM_autoScrips
+</A></li>
+	<LI>Next message: <A HREF="004189.html">[Avidemux-svn-commit] r7020 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4188">[ date ]</a>
+              <a href="thread.html#4188">[ thread ]</a>
+              <a href="subject.html#4188">[ subject ]</a>
+              <a href="author.html#4188">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

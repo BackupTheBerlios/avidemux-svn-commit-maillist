@@ -1,0 +1,690 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5612 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5612%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script&In-Reply-To=%3C200912040648.nB46m1xM027774%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002820.html">
+   <LINK REL="Next"  HREF="002822.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5612 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5612%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script&In-Reply-To=%3C200912040648.nB46m1xM027774%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5612 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Dec  4 07:48:01 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002820.html">[Avidemux-svn-commit] r5611 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264
+</A></li>
+        <LI>Next message: <A HREF="002822.html">[Avidemux-svn-commit] r5613 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_shell
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2821">[ date ]</a>
+              <a href="thread.html#2821">[ thread ]</a>
+              <a href="subject.html#2821">[ subject ]</a>
+              <a href="author.html#2821">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-12-04 07:47:59 +0100 (Fri, 04 Dec 2009)
+New Revision: 5612
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSDebug.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSDebug.h
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_Avidemux.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSFunctions.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSGlobal.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSGlobal.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_jsShell.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/CMakeLists.txt
+Log:
+[JS] Put all debug functions in the same file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_Avidemux.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_Avidemux.cpp	2009-12-03 19:13:25 UTC (rev 5611)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_Avidemux.cpp	2009-12-04 06:47:59 UTC (rev 5612)
+@@ -39,12 +39,13 @@
+ JSFunctionSpec *ADM_JsVideoGetFunctions(void);
+ JSPropertySpec *ADM_JsClassGetProperties(void);
+ JSFunctionSpec *ADM_JsClassGetFunctions(void);
++JSFunctionSpec *ADM_JsDebugGetFunctions(void);
+ 
+ static void dumpFunc(JSFunctionSpec *f)
+ {
+     while(f-&gt;name)
+     {
+-        printf(&quot;\t%s(..)\n&quot;,f-&gt;name);
++        jsLog(JS_LOG_NORMAL,&quot;     %s(..)\n&quot;,f-&gt;name);
+         f++;
+     }
+ }
+@@ -52,7 +53,7 @@
+ {
+     while(f-&gt;name)
+     {
+-        printf(&quot;\t%s=xxx\n&quot;,f-&gt;name);
++        jsLog(JS_LOG_NORMAL,&quot;     %s=xxx\n&quot;,f-&gt;name);
+         f++;
+     }
+ }
+@@ -62,18 +63,20 @@
+ */
+ void ADM_dumpJSHooks(void)
+ {
+-    printf(&quot;Dumping JS interface\n&quot;);
+-    printf(&quot;********************\n&quot;);
+-    printf(&quot;app.\n&quot;);
++    jsLog(JS_LOG_NORMAL,&quot;Dumping JS interface\n&quot;);
++    jsLog(JS_LOG_NORMAL,&quot;********************\n&quot;);
++    jsLog(JS_LOG_NORMAL,&quot;Debug functions :\n&quot;);
++    dumpFunc(ADM_JsDebugGetFunctions());
++    jsLog(JS_LOG_NORMAL,&quot;app.\n&quot;);
+     dumpFunc(ADM_JsClassGetFunctions());
+     dumpProps(ADM_JsClassGetProperties());
+-    printf(&quot;app.video\n&quot;);
++    jsLog(JS_LOG_NORMAL,&quot;app.video\n&quot;);
+     dumpFunc(ADM_JsVideoGetFunctions());
+     dumpProps(ADM_JsVideoGetProperties());
+-    printf(&quot;app.audio\n&quot;);
++    jsLog(JS_LOG_NORMAL,&quot;app.audio\n&quot;);
+     dumpFunc(ADM_JsAudioGetFunctions());
+     dumpProps(ADM_JsAudioGetProperties());
+-    printf(&quot;Done\n&quot;);
+-    printf(&quot;****\n&quot;);
++    jsLog(JS_LOG_NORMAL,&quot;Done\n&quot;);
++    jsLog(JS_LOG_NORMAL,&quot;****\n&quot;);
+ 
+ }
+\ No newline at end of file
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSDebug.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSDebug.cpp	2009-12-03 19:13:25 UTC (rev 5611)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSDebug.cpp	2009-12-04 06:47:59 UTC (rev 5612)
+@@ -0,0 +1,147 @@
++/**
++    \file ADM_JSDebug.cpp
++    \brief Debug oriented functions for avidemux JS/JS shell
++    \author mean (c) 2009 <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++
++
++*/
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;ADM_default.h&quot;
++#include &lt;string.h&gt;
++#include &lt;pthread.h&gt;
++#include &quot;DIA_coreToolkit.h&quot;
++#include &quot;ADM_JSGlobal.h&quot;
++#include &quot;ADM_JSDebug.h&quot;
++#include &quot;ADM_JSif.h&quot;
++/**/
++
++JS_PROTOTYPE displayError;
++JS_PROTOTYPE displayInfo;
++JS_PROTOTYPE print;
++JS_PROTOTYPE displayInfo;
++JS_PROTOTYPE assertTest;
++JS_PROTOTYPE crashTest;
++JS_PROTOTYPE help;
++/**/
++static JSFunctionSpec adm_debug_functions[] = {
++  /*    name          native          nargs    */
++  {&quot;displayError&quot;,  displayError,       1},
++  {&quot;displayInfo&quot;,   displayInfo,        1},
++  {&quot;print&quot;,         print,              1},
++  {&quot;assert&quot;,        assertTest,         0},
++  {&quot;crashTest&quot;,     crashTest,          0},
++  {&quot;help&quot;,          help,               0},
++  {0}
++};
++
++void ADM_dumpJSHooks(void);
++/**
++    \fn JS_AvidemuxRegisterDebugFunction
++*/
++bool JS_AvidemuxRegisterDebugFunction(JSContext *cx,JSObject *global)
++{
++	if(JS_DefineFunctions(cx, global, adm_debug_functions) == true)
++		return true;
++
++	ADM_warning(&quot;Unable to define functions\n&quot;);
++	return false;
++}
++/**
++    \fn ADM_JsDebugGetFunctions
++
++*/
++JSFunctionSpec *ADM_JsDebugGetFunctions(void)
++{
++    return adm_debug_functions;
++}
++
++/**
++    \fn displayError
++    \brief error popup
++*/
++JSBool displayError(JSContext *cx, JSObject *obj, uintN argc, 
++                                       jsval *argv, jsval *rval)
++{// begin displayError
++	// default return value
++	if(argc != 1)
++		return JS_FALSE;
++	if(JSVAL_IS_STRING(argv[0]) == false)
++		return JS_FALSE;
++	char  *stringa = JS_GetStringBytes(JSVAL_TO_STRING(argv[0]));
++	GUI_Verbose();
++	GUI_Error_HIG(&quot;Error&quot;,stringa);
++	GUI_Quiet();
++
++	return JS_TRUE;
++}// end displayError
++/**
++    \fn displayInfo
++    \brief info popup
++*/
++
++JSBool displayInfo(JSContext *cx, JSObject *obj, uintN argc, 
++                                       jsval *argv, jsval *rval)
++{// begin displayInfo
++	// default return value
++	if(argc != 1)
++		return JS_FALSE;
++	if(JSVAL_IS_STRING(argv[0]) == false)
++		return JS_FALSE;
++	char  *stringa = JS_GetStringBytes(JSVAL_TO_STRING(argv[0]));
++	GUI_Verbose();
++	GUI_Info_HIG(ADM_LOG_IMPORTANT,&quot;Info&quot;,stringa);
++	GUI_Quiet();
++	return JS_TRUE;
++}// end displayInfo
++ /**
++    \fn print
++*/
++JSBool print(JSContext *cx, JSObject *obj, uintN argc, 
++                                       jsval *argv, jsval *rval)
++{// begin print
++        if(argc != 1)
++                return JS_FALSE;
++        char *out=JS_GetStringBytes(JS_ValueToString(cx, argv[0]));
++        jsLog(JS_LOG_NORMAL,&quot;%s&quot;,out);
++        return JS_TRUE;
++}// end print
++/**
++    \fn crashTest
++    \brief Force a crash
++*/
++JSBool crashTest(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
++{
++  
++  int *foobar=NULL;
++  *foobar=0; // CRASH!
++  return JS_TRUE;
++}
++/**
++    \fn assertTest
++    \brief Force a crash
++*/
++JSBool assertTest(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
++{
++  
++  ADM_assert(0);
++  return JS_TRUE;
++}
++/**
++    \fn help
++    \brief dump avidemux specific functions
++*/
++JSBool help(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
++{
++  
++  ADM_dumpJSHooks();
++  return JS_TRUE;
++}
++
++// EOF
+\ No newline at end of file
+
+Copied: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSDebug.h (from rev 5607, branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.h)
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.h	2009-12-02 19:02:25 UTC (rev 5607)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSDebug.h	2009-12-04 06:47:59 UTC (rev 5612)
+@@ -0,0 +1,22 @@
++/**
++    \file ADM_JSDebug.h
++    \brief Debug oriented functions for avidemux JS/JS shell
++    \author mean (c) 2009 <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++
++
++*/
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#ifndef ADMJS_DEBUG_H
++#define ADMJS_DEBUG_H
++
++
++
++#endif
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSFunctions.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSFunctions.cpp	2009-12-03 19:13:25 UTC (rev 5611)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSFunctions.cpp	2009-12-04 06:47:59 UTC (rev 5612)
+@@ -47,14 +47,11 @@
+ std::vector &lt;std::string&gt; g_vIncludes;
+ extern char **environ;
+ extern char *script_getVar(char *in, int *r);
+-extern bool jsLog(const char *v);
+ 
+-JSBool displayError(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+-JSBool displayInfo(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
++
+ JSBool fileWriteSelect(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+ JSBool dirSelect(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+ JSBool fileReadSelect(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+-JSBool print(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+ 
+ JSBool allFilesFrom(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+ JSBool nextFile(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+@@ -84,18 +81,13 @@
+ JSBool facNotch(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+ JSBool facThreadCount(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+ JSBool facSlider(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+-JSBool crashTest(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+-JSBool assertTest(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+ 
+ 
+ static JSFunctionSpec adm_functions[] = {
+   /*    name          native          nargs    */
+-  {&quot;displayError&quot;,      displayError,         1},
+-  {&quot;displayInfo&quot;,       displayInfo,        1},
+   {&quot;fileReadSelect&quot;,    fileReadSelect,        0},
+   {&quot;fileWriteSelect&quot;,   fileWriteSelect,        0},
+   {&quot;dirSelect&quot;,         dirSelect,        0},
+-  {&quot;print&quot;,             print,        1},
+   {&quot;allFilesFrom&quot;,      allFilesFrom,        0},
+   {&quot;nextFile&quot;,          nextFile,        0},
+   {&quot;setSuccess&quot;,          setSuccess,        1},
+@@ -121,8 +113,6 @@
+   {&quot;dialogFactoryMatrix&quot;,       facMatrix,        0},
+   {&quot;dialogFactoryNotch&quot;,       facNotch,		  0},
+   {&quot;dialogFactoryThreadCount&quot;, facThreadCount,		  0},
+-  {&quot;crashTest&quot;,               crashTest,          0},
+-  {&quot;assertTest&quot;,               assertTest,        0},
+   {0}
+ };
+ 
+@@ -174,36 +164,6 @@
+ 	return JS_TRUE;
+ }// end setSuccess
+ 
+-JSBool displayError(JSContext *cx, JSObject *obj, uintN argc, 
+-                                       jsval *argv, jsval *rval)
+-{// begin displayError
+-	// default return value
+-	if(argc != 1)
+-		return JS_FALSE;
+-	if(JSVAL_IS_STRING(argv[0]) == false)
+-		return JS_FALSE;
+-	char  *stringa = JS_GetStringBytes(JSVAL_TO_STRING(argv[0]));
+-	GUI_Verbose();
+-	GUI_Error_HIG(&quot;Error&quot;,stringa);
+-	GUI_Quiet();
+-
+-	return JS_TRUE;
+-}// end displayError
+-JSBool displayInfo(JSContext *cx, JSObject *obj, uintN argc, 
+-                                       jsval *argv, jsval *rval)
+-{// begin displayInfo
+-	// default return value
+-	if(argc != 1)
+-		return JS_FALSE;
+-	if(JSVAL_IS_STRING(argv[0]) == false)
+-		return JS_FALSE;
+-	char  *stringa = JS_GetStringBytes(JSVAL_TO_STRING(argv[0]));
+-	GUI_Verbose();
+-	GUI_Info_HIG(ADM_LOG_IMPORTANT,&quot;Info&quot;,stringa);
+-	GUI_Quiet();
+-	return JS_TRUE;
+-}// end displayInfo
+-
+ JSBool fileReadSelect(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin fileReadSelect
+@@ -243,18 +203,6 @@
+         *rval=STRING_TO_JSVAL(JS_NewStringCopyZ(cx,name));
+         return JS_TRUE;
+ }
+-/**
+-
+-*/
+-JSBool print(JSContext *cx, JSObject *obj, uintN argc, 
+-                                       jsval *argv, jsval *rval)
+-{// begin print
+-        if(argc != 1)
+-                return JS_FALSE;
+-        char *out=JS_GetStringBytes(JS_ValueToString(cx, argv[0]));
+-        jsLog(out);
+-        return JS_TRUE;
+-}// end print
+ /*****************************************************
+         To process a whole directiry at a time
+ *******************************************************/
+@@ -503,18 +451,5 @@
+   return JS_TRUE;
+ }// end systemExecute
+ 
+-JSBool crashTest(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
+-{
+-  
+-  int *foobar=NULL;
+-  *foobar=0; // CRASH!
+-  return JS_TRUE;
+-}
+-JSBool assertTest(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
+-{
+-  
+-  ADM_assert(0);
+-  return JS_TRUE;
+-}
+ 
+ //EOF 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSGlobal.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSGlobal.cpp	2009-12-03 19:13:25 UTC (rev 5611)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSGlobal.cpp	2009-12-04 06:47:59 UTC (rev 5612)
+@@ -19,49 +19,46 @@
+ #include &quot;ADM_JSAvidemux.h&quot;
+ #include &quot;ADM_JSDirectorySearch.h&quot;
+ #include &quot;ADM_jsShell.h&quot;
+-
++#include &lt;stdarg.h&gt;
+ extern uint8_t JS_AvidemuxFunction(JSContext *cx,JSObject *global);
++extern bool JS_AvidemuxRegisterDebugFunction(JSContext *cx,JSObject *global);
+ extern void A_Resync(void);
++extern bool isJsLogRedirected(void);
+ extern char * actual_workbench_file;
+-
+-void
+-printJSError(JSContext *cx, const char *message, JSErrorReport *report)
++/**
++    \fn printJSError
++*/
++void  printJSError(JSContext *cx, const char *message, JSErrorReport *report)
+ {// begin printJSError
+ int quiet=GUI_isQuiet();
+ char buf[4];
+ FILE *fd = ADM_fopen(report-&gt;filename,&quot;rb&quot;);
+-        if(quiet)
+-                GUI_Verbose();
+-	if( fd ){
++    if(quiet)
++            GUI_Verbose();
++	if( fd )
++    {
+ 		fread(buf,1,4,fd);
+ 		fclose(fd);
+ 	}
+-	if( strncmp(buf,&quot;//AD&quot;,4) ){
++	if( strncmp(buf,&quot;//AD&quot;,4) )
++    {
+             if (report-&gt;filename || report-&gt;lineno)
+-		GUI_Error_HIG(&quot;Spidermonkey ECMAScript Error&quot;,
+-		              &quot;%s: line %d:\nMsg: %s\n&quot;
++                jsLog(JS_LOG_ERROR,&quot;%s: line %d:\nMsg: %s\n&quot;
+                               &quot;Not an ECMAScript file. Try open it with 'File' -&gt; 'Open...'&quot;,
+                               report-&gt;filename,
+                               report-&gt;lineno,
+                               message);
+             else
+-		GUI_Error_HIG(&quot;Spidermonkey ECMAScript Error&quot;,
+-                              &quot;Not an ECMAScript file. Try open it with 'File' -&gt; 'Open...'&quot;);
+-	}else{
+-		GUI_Error_HIG(&quot;Spidermonkey ECMAScript Error&quot;, 
+-			&quot;%s: line %d:\nMsg: %s\n&quot;,
+-			report-&gt;filename,
+-			report-&gt;lineno,
+-			message);
++                jsLog(JS_LOG_ERROR,&quot;Not an ECMAScript file. Try open it with 'File' -&gt; 'Open...'&quot;);
++    
++	}else
++    {
++            jsLog(JS_LOG_ERROR,&quot;%s: line %d:\nMsg: %s\n&quot;,report-&gt;filename,report-&gt;lineno,message);
+ 	}
+-        fprintf(stderr, &quot;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@  Spidermonkey ECMAScript Error\n&quot;);
+-        if (report-&gt;filename || report-&gt;lineno)
+-            fprintf(stderr, &quot;\t%s: line %d:\n\tMsg: %s\n&quot;,
+-                   report-&gt;filename, report-&gt;lineno, message);
++       
++    if(quiet)
++            GUI_Quiet();
+ 
+-        if(quiet)
+-                GUI_Quiet();
+-
+ }// end printJSError
+ 
+ bool SpidermonkeyInit()
+@@ -97,7 +94,8 @@
+ 			JSObject *dsObj = ADM_JSDirectorySearch::JSInit(cx, global);
+ 			// register error handler
+ 			JS_SetErrorReporter(cx, printJSError);
+-                        JS_AvidemuxFunction(cx,global);
++            JS_AvidemuxFunction(cx,global);
++            JS_AvidemuxRegisterDebugFunction(cx,global);
+ 			return true;
+ 		}// end context created
+ 	}// end runtime created
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSGlobal.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSGlobal.h	2009-12-03 19:13:25 UTC (rev 5611)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSGlobal.h	2009-12-04 06:47:59 UTC (rev 5612)
+@@ -5,16 +5,19 @@
+ 
+ #include &quot;ADM_smjs/jsapi.h&quot;
+ #include &lt;pthread.h&gt;
++#include &quot;ADM_JSif.h&quot;
++bool jsLog(JS_LOG_TYPE type, const char *fmt,...);
+ 
+ // javscript debugging helper
+ void printJSError(JSContext *cx, const char *message, JSErrorReport *report);
+ bool SpidermonkeyInit();
+ void SpidermonkeyDestroy();
+-bool parseECMAScript(const char *name);
+-bool interactiveECMAScript(const char *name);
+ void JS_setSuccess(bool bSuccess);
+ void *StartThreadSpidermonkey(void *pData);
+ 
++
++typedef JSBool JS_PROTOTYPE(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
++
+ #ifdef JSDECLARE
+ #define JSVAR(a,b,c) a b=c
+ #else
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.cpp	2009-12-03 19:13:25 UTC (rev 5611)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.cpp	2009-12-04 06:47:59 UTC (rev 5612)
+@@ -18,9 +18,10 @@
+ #include &quot;ADM_JSGlobal.h&quot;
+ #include &quot;ADM_JSAvidemux.h&quot;
+ #include &quot;ADM_jsShell.h&quot;
++#include &quot;ADM_JSif.h&quot;
++#include &lt;stdarg.h&gt;
++
+ void    A_Resync(void);
+-
+-
+ static jsLoggerFunc *jsLogger=NULL;
+ static void *jsLoggerCookie=NULL;
+ 
+@@ -49,6 +50,14 @@
+ 	return g_bJSSuccess;
+ }// end parseECMAScript
+ /**
++    \fn jsLogger
++*/
++bool isJsLogRedirected(void)
++{
++    if(jsLogger) return true;
++    return false;
++}
++/**
+     \fn jsEvaluate
+ */
+ static bool jsEvaluate(const char *str)
+@@ -72,13 +81,25 @@
+ /**
+     \fn jsLog
+ */
+-bool jsLog(const char *v)
++bool jsLog(JS_LOG_TYPE type, const char *prf,...)
+ {
+-    if(!jsLogger)
+-        fprintf(stderr,&quot;&lt;i&gt;%s&lt;/i&gt;\n&quot;,v);
+-    else    
+-        jsLogger(jsLoggerCookie,v);
+-    return true;
++ static char print_buffer[1024];
++  	
++		va_list 	list;
++		va_start(list,	prf);
++		vsnprintf(print_buffer,1023,prf,list);
++		va_end(list);
++		print_buffer[1023]=0; // ensure the string is terminated
++        if(true==isJsLogRedirected())
++            jsLogger(jsLoggerCookie,type,print_buffer);
++        else
++        {
++            if(type==JS_LOG_ERROR)
++                GUI_Error_HIG(&quot;Spidermonkey ECMAScript Error&quot;,&quot;%s&quot;,print_buffer);
++            else
++                ADM_warning(&quot;[JS]%s&quot;,print_buffer);
++        }
++        return true;
+ }
+ /**
+     \fn ADM_jsRegisterLogger
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.h	2009-12-03 19:13:25 UTC (rev 5611)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.h	2009-12-04 06:47:59 UTC (rev 5612)
+@@ -13,7 +13,26 @@
+  ***************************************************************************/
+ #ifndef ADM_JS_IF_H
+ #define ADM_JS_IF_H
++
+ /**
++    \enum JS_LOG_TYPE
++*/
++typedef enum
++{
++    JS_LOG_NORMAL,
++    JS_LOG_ERROR
++}JS_LOG_TYPE;
++/**
++    \typedef jsLoggerFunc
++*/
++typedef bool (jsLoggerFunc)(void *cookie,JS_LOG_TYPE type,const char *);
++/*
++
++*/
++bool ADM_jsRegisterLogger(void *cookie,jsLoggerFunc *fun);
++bool ADM_jsUnregisterLogger(void);
++
++/**
+     \fn parseECMAScript
+     \brief Compile &amp; execute ecma script
+ */
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_jsShell.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_jsShell.h	2009-12-03 19:13:25 UTC (rev 5611)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_jsShell.h	2009-12-04 06:47:59 UTC (rev 5612)
+@@ -15,12 +15,9 @@
+ 
+ #ifndef ADM_JS_SHELL_H
+ #define ADM_JS_SHELL_H
+-
++#include &quot;ADM_JSif.h&quot;
+ typedef bool (jsShellEvaluate)(const char *str);
+ bool ADM_startShell(jsShellEvaluate *eval);
+ 
+-typedef bool (jsLoggerFunc)(void *cookie,const char *);
+-bool ADM_jsRegisterLogger(void *cookie,jsLoggerFunc *fun);
+-bool ADM_jsUnregisterLogger(void);
+ 
+ #endif // ADM_JS_SHELL_H
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/CMakeLists.txt	2009-12-03 19:13:25 UTC (rev 5611)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/CMakeLists.txt	2009-12-04 06:47:59 UTC (rev 5612)
+@@ -2,7 +2,7 @@
+ 	ADM_AvidemuxAudio.cpp  ADM_AvidemuxVideo.cpp    ADM_JSAvidemux.cpp       ADM_JSDirectorySearch.cpp  ADM_JSGlobal.cpp
+ 	ADM_Avidemux.cpp       ADM_JSAvidemuxAudio.cpp  ADM_JSAvidemuxVideo.cpp  ADM_JSFunctions.cpp        DirectorySearch.cpp
+         ADM_JSFunctionsNonRegFactory.cpp
+-        ADM_JSif.cpp
++        ADM_JSif.cpp ADM_JSDebug.cpp
+ )
+ 
+ ADD_LIBRARY(ADM_script6 STATIC ${ADM_script_SRCS})
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002820.html">[Avidemux-svn-commit] r5611 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264
+</A></li>
+	<LI>Next message: <A HREF="002822.html">[Avidemux-svn-commit] r5613 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_shell
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2821">[ date ]</a>
+              <a href="thread.html#2821">[ thread ]</a>
+              <a href="subject.html#2821">[ subject ]</a>
+              <a href="author.html#2821">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

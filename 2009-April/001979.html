@@ -1,0 +1,573 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4750 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4750%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904211804.n3LI4KrR031319%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001977.html">
+   <LINK REL="Next"  HREF="001978.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4750 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4750%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904211804.n3LI4KrR031319%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4750 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Apr 21 20:04:20 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001977.html">[Avidemux-svn-commit] r4749 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="001978.html">[Avidemux-svn-commit] r4751 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1979">[ date ]</a>
+              <a href="thread.html#1979">[ thread ]</a>
+              <a href="subject.html#1979">[ subject ]</a>
+              <a href="author.html#1979">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-04-21 20:04:20 +0200 (Tue, 21 Apr 2009)
+New Revision: 4750
+
+Modified:
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.h
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.h
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+Log:
+[TsDemuxer] Probe audio
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.cpp	2009-04-21 18:04:16 UTC (rev 4749)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.cpp	2009-04-21 18:04:20 UTC (rev 4750)
+@@ -35,166 +35,73 @@
+ #define LPCM_AUDIO_VALUE 0xA0
+ #define DTS_AC3_AUDIO_VALUE 0x00
+ 
+-static bool addAudioTrack(int pid, listOfTsAudioTracks *list, tsPacketLinear *p);
++bool tsGetAudioInfo(tsPacketLinear *p,tsAudioTrackInfo *trackInfo);
+ static bool tsCheckMp2Audio(WAVHeader *hdr, uint8_t *data, uint32_t dataSize);
+-/**
+-    \fn listOfPsAudioTracks
+-    \brief returns a list of audio track found, null if none found
+ 
+-*/
+-listOfTsAudioTracks *tsProbeAudio(const char *fileName)
+-{
+-    uint32_t size;
+-    uint64_t dts,pts,startAt;
+-    uint8_t buffer[PACKET_PROBE_SIZE];
+-    uint64_t fileSize;
+-
+-    listOfTsAudioTracks *tracks=new listOfTsAudioTracks;
+-    tsPacketLinear *packet=new tsPacketLinear(0xE0);
+-
+-    printf(&quot;[MpegPS] Probing audio for %s\n&quot;,fileName);
+-
+-    if(!packet-&gt;open(fileName,FP_APPEND)) goto end;
+-    fileSize=packet-&gt;getSize();
+-
+-    packet-&gt;setPos(fileSize/2); // Jump in the middle of the stream
+-#if 0
+-    while(packet-&gt;getPacketOfType(0xE0,PACKET_PROBE_SIZE,&amp;size,&amp;dts,&amp;pts,buffer,&amp;startAt))
+-    {
+-
+-        packetStats *stat=packet-&gt;getStat(0xE0);
+-        if(stat-&gt;count &gt; PROBE_PACKET_VIDEO_COUNT)
+-                break;
+-
+-    }
+-    // Now synthetize
+-    for(int i=0x0;i&lt;0xFF;i++)   
+-    {
+-        packetStats *stat=packet-&gt;getStat(i);
+-        if(stat-&gt;count)
+-        {
+-            printf(&quot;[PsProbeAudo] Pid:%x count:%&quot;LX&quot; size:%&quot;LD&quot;\n&quot;,i,stat-&gt;count,stat-&gt;size);
+-        }
+-
+-         if(stat-&gt;count&gt;=PROBE_MIN_PACKET &amp;&amp; stat-&gt;size&gt;PROBE_MIN_SIZE)
+-         {
+-                packet-&gt;setPos(fileSize/2); 
+-                addAudioTrack(i,tracks,packet);
+-         }
+-
+-    }
+-#endif
+-end:
+-    printf(&quot;[PsDemux] Audio probe done, found %lu tracks\n&quot;,tracks-&gt;size());
+-    delete packet;
+-    
+-    if(tracks-&gt;size()==0) 
+-    {   
+-        delete tracks;
+-        return NULL;
+-    }
+-    return tracks;
+-}
+ /**
+     \fn addAudioTrack
+     \brief gather information about audio &amp; add audio track to the list
+ 
+ */
+-bool addAudioTrack(int pid, listOfTsAudioTracks *list, tsPacketLinear *p)
++bool tsGetAudioInfo(tsPacketLinear *p,tsAudioTrackInfo *trackInfo)
+ {
+ #define PROBE_ANALYZE_SIZE 6000 // Should be enough in all cases (need ~ 2 blocks)
+ uint8_t audioBuffer[PROBE_ANALYZE_SIZE];
+-        uint64_t pts,dts,startAt;
+-        uint32_t packetSize;
++uint64_t pts,dts,startAt;
++        
++        
++        // dont even try if it is not audio
++        if(trackInfo-&gt;trackType!=ADM_TS_MPEG2 &amp;&amp;trackInfo-&gt;trackType!=ADM_TS_AC3) return false;
+ 
+-        //
+-        int masked=pid&amp;0xF0;
+-        if(masked!=MP2_AUDIO_VALUE &amp;&amp;  // MP2
+-            masked!=LPCM_AUDIO_VALUE &amp;&amp; // PCM
+-            masked!=DTS_AC3_AUDIO_VALUE  // AC3 &amp; DTS
+-            ) return false;
+-
+         // Go back where we were
+-        p-&gt;changePid(pid); 
+-        p-&gt;getPacketOfType(pid,PROBE_ANALYZE_SIZE, &amp;packetSize,&amp;pts,&amp;dts,audioBuffer,&amp;startAt);
++        p-&gt;changePid(trackInfo-&gt;esId); 
+         //Realign
+-        p-&gt;seek(startAt,0);
++        p-&gt;seek(0,0);
+         int rd=PROBE_ANALYZE_SIZE;
+         if(!p-&gt;read(PROBE_ANALYZE_SIZE,audioBuffer))
++        {
++            printf(&quot;[tsAudioProbe] Cannot get info about pid %d 0x%x\n&quot;,trackInfo-&gt;esId,trackInfo-&gt;esId);
+             return false;
+-        tsAudioTrackInfo *info=new tsAudioTrackInfo;
+-        info-&gt;esID=pid;
++        }
+         uint32_t fq,br,chan,off;
+-        switch(pid &amp; 0xF0)
++        switch(trackInfo-&gt;trackType)
+         {
+-            case LPCM_AUDIO_VALUE: // LPCM
+-                            info-&gt;header.frequency=48000;
+-                            info-&gt;header.channels=2;
+-                            info-&gt;header.byterate=48000*4;
+-                            info-&gt;header.encoding=WAV_LPCM;
+-                            break;
+-            case MP2_AUDIO_VALUE: // MP2
++            case ADM_TS_MPEG2: // MP2
+                             {
+-                                if(! tsCheckMp2Audio(&amp;(info-&gt;header),audioBuffer,rd))
++                                if(! tsCheckMp2Audio(&amp;(trackInfo-&gt;wav),audioBuffer,rd))
+                                 {
+-                                    printf(&quot;[PsProbeAudio] Failed to get info on track :%x (MP2)\n&quot;,pid);
++                                    printf(&quot;[PsProbeAudio] Failed to get info on track :%x (MP2)\n&quot;,trackInfo-&gt;esId);
+                                     goto er;
+                                 }
+                             }
+                             break;
+-            case DTS_AC3_AUDIO_VALUE: // AC3 or DTS
+-                            if(pid&gt;=0x8) // DTS
++            case ADM_TS_AC3: // AC3 or DTS
++                            // AC3
+                             {
+-                                info-&gt;header.encoding=WAV_DTS;
+-                                uint32_t flags,nbSample;
+-                                if(!ADM_DCAGetInfo(audioBuffer, rd, &amp;fq, &amp;br, &amp;chan,&amp;off,&amp;flags,&amp;nbSample))
+-                                {
+-                                        printf(&quot;[PsProbeAudio] Failed to get info on track :%x\n&quot;,pid);
+-                                        goto er;
+-                                }
+-                                info-&gt;header.frequency=fq;
+-                                info-&gt;header.channels=chan;
+-                                info-&gt;header.byterate=(br);
+-                                break;
+-                            }else // AC3
+-                            {
+-                                info-&gt;header.encoding=WAV_AC3;
++                                trackInfo-&gt;wav.encoding=WAV_AC3;
+                                 if(!ADM_AC3GetInfo(audioBuffer, rd, &amp;fq, &amp;br, &amp;chan,&amp;off))
+                                 {
+-                                        printf(&quot;[PsProbeAudio] Failed to get info on track :%x\n&quot;,pid);
++                                        printf(&quot;[PsProbeAudio] Failed to get info on track :%x\n&quot;,trackInfo-&gt;esId);
+                                         goto er;
+                                 }
+-                                info-&gt;header.frequency=fq;
+-                                info-&gt;header.channels=chan;
+-                                info-&gt;header.byterate=(br);
++                                trackInfo-&gt;wav.frequency=fq;
++                                trackInfo-&gt;wav.channels=chan;
++                                trackInfo-&gt;wav.byterate=(br);
+                                 break;
+                             }
+                             
+             default:
+-                        ADM_assert(0);
++                        printf(&quot;[tsAudioProbe] Unsupported audio format pid %d 0x%x\n&quot;,trackInfo-&gt;esId,trackInfo-&gt;esId);
++                        return false;
+ 
+         }
+-        list-&gt;push_back(info);
+         return true;
+ er:
+-        delete info;
+         return false;
++
+ }
++
+ /**
+-        \fn DestroyListOfPsAudioTracks
+-        \brief cleanly destroy it
+-*/
+-bool DestroyListOfTsAudioTracks(listOfTsAudioTracks *list)
+-{
+-    while( list-&gt;size())
+-    {
+-        delete (*list)[0];
+-        list-&gt;erase(list-&gt;begin());
+-    }
+-    delete list;
+-    return true;
+-}
+-/**
+     \fn psCheckMp2Audio
+     \brief Wait to have 2 audio packets to make sure it is not a false detection (that happens with mp2/mp3 audio)
+ */
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.h	2009-04-21 18:04:16 UTC (rev 4749)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.h	2009-04-21 18:04:20 UTC (rev 4750)
+@@ -16,19 +16,9 @@
+  ***************************************************************************/
+ #ifndef ADM_TS_AUDIO_PROBE_H
+ #define ADM_TS_AUDIO_PROBE_H
+-#include &lt;vector&gt;
+-using std::vector;
+-typedef struct
+-{
+-    WAVHeader header;
+-    uint32_t  esID;
+-}tsAudioTrackInfo;
++#include &quot;ADM_tsPatPmt.h&quot;
+ 
+-typedef vector &lt;tsAudioTrackInfo*&gt; listOfTsAudioTracks;
++// Get infos about one audio track
++bool tsGetAudioInfo(tsPacketLinear *p,tsAudioTrackInfo *trackInfo);
+ 
+-/// Returns a list of audio tracks found in the file.
+-listOfTsAudioTracks *tsProbeAudio(const char *fileName);
+-bool DestroyListOfTsAudioTracks(listOfTsAudioTracks *list);
+-
+-
+ #endif
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-21 18:04:16 UTC (rev 4749)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-21 18:04:20 UTC (rev 4750)
+@@ -92,9 +92,9 @@
+         listOfTsAudioTracks    *audioTracks;
+         DIA_workingBase  *ui;
+ public:
+-                TsIndexer(void);
++                TsIndexer(listOfTsAudioTracks *tr);
+                 ~TsIndexer();
+-        bool    run(const char *file,uint32_t nbTracks, ADM_TS_TRACK *Tracks);
++        bool    runMpeg2(const char *file,ADM_TS_TRACK *videoTrac);
+         bool    writeVideo(PSVideo *video);
+         bool    writeAudio(void);
+         bool    writeSystem(const char *filename,bool append);
+@@ -111,6 +111,7 @@
+ 
+     ADM_TS_TRACK *tracks;
+     uint32_t nbTracks;
++    listOfTsAudioTracks *audioTrack;
+ 
+     if(TS_scanForPrograms(file,&amp;nbTracks,&amp;tracks)==false) 
+     {
+@@ -119,10 +120,29 @@
+     }
+     ADM_assert(tracks);
+     ADM_assert(nbTracks);
+-    
+-
+-    TsIndexer *dx=new TsIndexer;
+-    r=dx-&gt;run(file,nbTracks,tracks);
++    //
++    // Now extract the datas from audio tracks &amp; verify they are here
++    tsPacketLinear *p=new tsPacketLinear(0);
++    p-&gt;open(file,FP_DONT_APPEND);
++    for(int i=1;i&lt;nbTracks;i++)
++    {
++        tsAudioTrackInfo trk;
++        if(true==tsGetAudioInfo(p,&amp;trk))
++        {
++                
++        }
++    }
++    delete p;
++    printf(&quot;[TsIndexer] Audio probed, doing video\n&quot;);
++    //
++    TsIndexer *dx=new TsIndexer(audioTrack);
++    switch(tracks[0].trackType)
++    {
++    case ADM_TS_MPEG2: r=dx-&gt;runMpeg2(file,&amp;(tracks[0]));break;
++    default:
++                        r=0;
++                        break;
++    }
+     delete dx;
+     delete [] tracks;
+     return r;
+@@ -131,12 +151,13 @@
+ /**
+     \fn TsIndexer
+ */
+-TsIndexer::TsIndexer(void)
++TsIndexer::TsIndexer(listOfTsAudioTracks *trk)
+ {
+     index=NULL;
+     pkt=NULL;
+     audioTracks=NULL;
+     ui=createWorking (&quot;Indexing&quot;);
++    audioTracks=trk;
+ }
+ 
+ /**
+@@ -146,14 +167,13 @@
+ {
+     if(index) qfclose(index);
+     if(pkt) delete pkt;
+-    if( audioTracks) DestroyListOfTsAudioTracks(audioTracks);
+     if(ui) delete ui;
+     ui=NULL;
+ }
+ /**
+     \fn run
+ */  
+-bool TsIndexer::run(const char *file,uint32_t nbTracks, ADM_TS_TRACK *Tracks)
++bool TsIndexer::runMpeg2(const char *file,ADM_TS_TRACK *videoTrac)
+ {
+ uint32_t temporal_ref,val;
+ uint64_t fullSize;
+@@ -164,13 +184,13 @@
+ indexerData  data;    
+ dmxPacketInfo info;
+ 
+-    if(!nbTracks) return false;
+-    if(Tracks[0].trackType!=ADM_TS_MPEG2)
++    if(!videoTrac) return false;
++    if(videoTrac[0].trackType!=ADM_TS_MPEG2)
+     {
+         printf(&quot;[Ts Indexer] Only Mpeg2 video supported\n&quot;);
+         return false;
+     }
+-    video.pid=Tracks[0].trackPid;
++    video.pid=videoTrac[0].trackPid;
+ 
+     memset(&amp;data,0,sizeof(data));
+     char indexName[strlen(file)+5];
+@@ -182,7 +202,7 @@
+         return false;
+     }
+     writeSystem(file,true);
+-    pkt=new tsPacketLinearTracker(nbTracks, Tracks);
++    pkt=new tsPacketLinearTracker(videoTrac-&gt;trackPid, audioTracks);
+ 
+     FP_TYPE append=FP_APPEND;
+     pkt-&gt;open(file,append);
+@@ -224,7 +244,7 @@
+                           video.fps= FPS[val &amp; 0xf];
+                           pkt-&gt;forward(4);
+                           writeVideo(&amp;video);
+-                          //writeAudio();
++                          writeAudio();
+                           //pkt-&gt;resetStats();
+                           qfprintf(index,&quot;[Data]&quot;);
+                           break;
+@@ -288,7 +308,6 @@
+         qfprintf(index,&quot;\n[End]\n&quot;);
+         qfclose(index);
+         index=NULL;
+-        if(audioTracks) DestroyListOfTsAudioTracks( audioTracks);
+         audioTracks=NULL;
+         delete pkt;
+         pkt=NULL;
+@@ -400,13 +419,13 @@
+     for(int i=0;i&lt;audioTracks-&gt;size();i++)
+     {
+         char head[30];
+-        tsAudioTrackInfo *t=(*audioTracks)[i];
++        tsAudioTrackInfo *t=&amp;(*audioTracks)[i];
+         sprintf(head,&quot;Track%1d&quot;,i);
+-        qfprintf(index,&quot;%s.pid=%x\n&quot;,head,t-&gt;esID);
+-        qfprintf(index,&quot;%s.codec=%d\n&quot;,head,t-&gt;header.encoding);
+-        qfprintf(index,&quot;%s.fq=%d\n&quot;,head,t-&gt;header.frequency);
+-        qfprintf(index,&quot;%s.chan=%d\n&quot;,head,t-&gt;header.channels);
+-        qfprintf(index,&quot;%s.br=%d\n&quot;,head,t-&gt;header.byterate);
++        qfprintf(index,&quot;%s.pid=%x\n&quot;,head,t-&gt;esId);
++        qfprintf(index,&quot;%s.codec=%d\n&quot;,head,t-&gt;wav.encoding);
++        qfprintf(index,&quot;%s.fq=%d\n&quot;,head,t-&gt;wav.frequency);
++        qfprintf(index,&quot;%s.chan=%d\n&quot;,head,t-&gt;wav.channels);
++        qfprintf(index,&quot;%s.br=%d\n&quot;,head,t-&gt;wav.byterate);
+     }
+     return true;
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp	2009-04-21 18:04:16 UTC (rev 4749)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp	2009-04-21 18:04:20 UTC (rev 4750)
+@@ -138,7 +138,7 @@
+     }
+     {
+         //
+-    #if 1 // TO REMOVE
++    #if 0 // TO REMOVE
+         TS_PESpacket pes(list[videoIndex].trackPid);
+         t-&gt;getNextPES(&amp;pes);printf(&quot;pts :%lld dts:%lld\n&quot;,pes.pts,pes.dts);
+         t-&gt;getNextPES(&amp;pes);printf(&quot;pts :%lld dts:%lld\n&quot;,pes.pts,pes.dts);
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.h	2009-04-21 18:04:16 UTC (rev 4749)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.h	2009-04-21 18:04:20 UTC (rev 4750)
+@@ -17,7 +17,7 @@
+  ***************************************************************************/
+ #ifndef ADM_TS_PAT_PMT_H
+ #define ADM_TS_PAT_PMT_H
+-
++#include &quot;ADM_audiodef.h&quot;
+ #define ADM_TS_MAX_EXTRADATA 256
+ /**
+     \typedef ADM_TS_VIDEO_TYPE
+@@ -42,7 +42,21 @@
+     uint8_t           extraData[ADM_TS_MAX_EXTRADATA];
+ }ADM_TS_TRACK;
+ 
++/**
++    \struct tsAudioTrackInfo
++*/
++typedef struct
++{
++    WAVHeader         wav;
++    uint32_t          esId;
++    ADM_TS_TRACK_TYPE trackType;
++    uint32_t          extraDataLen;
++    uint8_t           extraData[ADM_TS_MAX_EXTRADATA];
++}tsAudioTrackInfo;
+ 
++typedef vector &lt;tsAudioTrackInfo &gt; listOfTsAudioTracks;
++
++
+ /**
+     \fn TS_scanForPrograms
+     \brief Analyze a stream and returns tracks within
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-21 18:04:16 UTC (rev 4749)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-21 18:04:20 UTC (rev 4750)
+@@ -681,7 +681,7 @@
+ */
+ bool    tsPacketLinear::changePid(uint32_t pid) 
+ {
+-    pesPacket-&gt;pid=(pid&amp;0xff);
++    pesPacket-&gt;pid=pid;
+     pesPacket-&gt;offset=pesPacket-&gt;payloadSize;
+     return true;
+ }
+@@ -689,10 +689,10 @@
+ /**
+     \fn tsPacketLinearTracker
+ */
+-tsPacketLinearTracker::tsPacketLinearTracker(uint32_t nb,ADM_TS_TRACK *tracks) : tsPacketLinear(tracks[0].trackPid)
++tsPacketLinearTracker::tsPacketLinearTracker(uint32_t pid,listOfTsAudioTracks *audio) : tsPacketLinear(pid)
+ {
++    int nb=audio-&gt;size();
+     otherPes=new TS_PESpacket(0);
+-    ADM_assert(nb);
+     totalTracks=nb;
+     if(!nb)    
+     {
+@@ -705,7 +705,8 @@
+     memset(stats,0,sizeof(packetTSStats)*nb);
+     for(int i=0;i&lt;nb;i++)
+     {
+-        stats[i].pid=tracks[i].trackPid;
++        
++        stats[i].pid=(*audio)[i].esId;
+         stats[i].startDts=ADM_NO_PTS;
+     }
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-21 18:04:16 UTC (rev 4749)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-21 18:04:20 UTC (rev 4750)
+@@ -7,11 +7,13 @@
+ 
+ #ifndef DMXtsPacket_H
+ #define DMXtsPacket_H
+-
++#include &lt;vector&gt;
++using std::vector;
+ #include &quot;dmxPacket.h&quot;
+ #include &quot;ADM_tsPatPmt.h&quot;
+ #include &quot;ADM_Video.h&quot;
+ 
++
+ #define TS_MARKER       0x47
+ #define TS_PACKET_LEN   188
+ #define TS_PSI_MAX_LEN  1024
+@@ -174,7 +176,7 @@
+         packetTSStats *stats;
+         uint32_t      totalTracks;
+ public:
+-                tsPacketLinearTracker(uint32_t nb,ADM_TS_TRACK *tracks);
++                tsPacketLinearTracker(uint32_t videoPid,listOfTsAudioTracks *audioTracks);
+                 ~tsPacketLinearTracker();
+         bool    getStats(uint32_t *nb,packetTSStats *stats);
+ };
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001977.html">[Avidemux-svn-commit] r4749 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="001978.html">[Avidemux-svn-commit] r4751 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1979">[ date ]</a>
+              <a href="thread.html#1979">[ thread ]</a>
+              <a href="subject.html#1979">[ subject ]</a>
+              <a href="author.html#1979">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

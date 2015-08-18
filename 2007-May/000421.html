@@ -1,0 +1,227 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3126 -	branches/avidemux_2.4_branch/avidemux/ADM_colorspace
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3126%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_colorspace&In-Reply-To=%3C200705221717.l4MHHoTN004921%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000420.html">
+   <LINK REL="Next"  HREF="000422.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3126 -	branches/avidemux_2.4_branch/avidemux/ADM_colorspace</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3126%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_colorspace&In-Reply-To=%3C200705221717.l4MHHoTN004921%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3126 -	branches/avidemux_2.4_branch/avidemux/ADM_colorspace">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue May 22 19:17:50 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000420.html">[Avidemux-svn-commit] r3125 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libwrapper
+</A></li>
+        <LI>Next message: <A HREF="000422.html">[Avidemux-svn-commit] r3127 - branches/avidemux_2.4_branch/po
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#421">[ date ]</a>
+              <a href="thread.html#421">[ thread ]</a>
+              <a href="subject.html#421">[ subject ]</a>
+              <a href="author.html#421">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-05-22 19:17:47 +0200 (Tue, 22 May 2007)
+New Revision: 3126
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.cpp
+Log:
+speedup RGBA to BGRA conversion, used by the QT version
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.cpp	2007-05-22 11:50:41 UTC (rev 3125)
++++ branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.cpp	2007-05-22 17:17:47 UTC (rev 3126)
+@@ -111,7 +111,45 @@
+     h=hh;
+     return 1;
+ }
++/**
++      \fn invertRGB
++      \brief Do RGBA-&gt;BGRA swap
++      howmuch is in pixel, i.e. you have to multiply it by 4 to get the nb of bytes!
++*/
++static void ADM_RGBA2BGRA(uint8_t *ptr, uint32_t howmuch)
++{
++#if ((defined( ARCH_X86)  || defined(ARCH_X86_64)))
++    __asm__(
++                        &quot;1: mov            (%0),%%eax \n&quot;
++                        &quot;bswap          %%eax \n&quot;
++                        &quot;rorl           $8,%%eax \n&quot;
++                        &quot;mov            %%eax,(%0) \n&quot;
++                        &quot;add            $4,%0 \n&quot;
++                        &quot;dec            %1 \n&quot;
++                        &quot;jne            1b\n&quot;
++                : : &quot;r&quot; (ptr),&quot;r&quot; (howmuch)
++                );
++#else
++uint8_t r,g,b,a;
++                  for(int xx=0;xx&lt;howmuch;xx++)
++                  {
++                      r=ptr[0];
++                      g=ptr[1];
++                      b=ptr[2];
++                      a=ptr[3];
++                      ptr[0]=b;
++                      ptr[1]=g;
++                      ptr[2]=r;
++                      ptr[3]=a;
++                      ptr+=4;
++                  }
++#endif
++}
++/**
++      \fn scale
++      \brief Do the actual colorconversion
+ 
++*/
+  uint8_t ColYuvRgb::scale(uint8_t *src, uint8_t *target)
+  {
+     uint8_t *srd[3];
+@@ -142,31 +180,10 @@
+ 
+         if(_inverted)
+         {
+-#if (defined( ARCH_X86)  || defined(ARCH_X86_64))
+-            if( 0 &amp;&amp; CpuCaps::hasMMX())
+-            {
+-            }
+-            else
+-#endif
+-            {
+                 uint8_t r,g,b,a;
+                 uint8_t *ptr=target;
+                 int pel=h*w;
+-                for(int yy=0;yy&lt;pel;yy++)
+-                {
+-                      r=ptr[0];
+-                      g=ptr[1];
+-                      b=ptr[2];
+-                      a=ptr[3];
+-                      ptr[0]=b;
+-                      ptr[1]=g;
+-                      ptr[2]=r;
+-                      ptr[3]=a;
+-                      ptr+=4;
+-                }
+-            }
+-          
+-          
++                ADM_RGBA2BGRA(ptr,pel);
+         }
+ #if  defined( ADM_BIG_ENDIAN)
+         uint8_t r,g,b,a;
+@@ -192,7 +209,7 @@
+ /**
+       \fn scale
+       \brief Change colorspace but and put result in the target image , which is bigger
+-
++        Normally not used !
+ */
+  uint8_t ColYuvRgb::scale(uint8_t *src, uint8_t *target,uint32_t startx,uint32_t starty, uint32_t tw,uint32_t th,uint32_t totalW,uint32_t totalH)
+  {
+@@ -224,36 +241,15 @@
+ 
+     if(_inverted)
+     {
+-#if (defined( ARCH_X86)  || defined(ARCH_X86_64))
+-            if( 0 &amp;&amp; CpuCaps::hasMMX())
++            uint8_t r,g,b,a;
++            uint8_t *ptr=NULL;
++            int pel=th;
++            for(int yy=0;yy&lt;th;yy++)
+             {
++              ptr=target+(startx*4)+(starty+yy)*totalW*4;;
++              ADM_RGBA2BGRA(ptr,tw);
+             }
+-            else
+-#endif
+-            {
+-                uint8_t r,g,b,a;
+-                uint8_t *ptr=NULL;
+-                int pel=th;
+-                for(int yy=0;yy&lt;th;yy++)
+-                {
+-                  ptr=target+(startx*4)+(starty+yy)*totalW*4;;
+-                  for(int xx=0;xx&lt;tw;xx++)
+-                  {
+-                      r=ptr[0];
+-                      g=ptr[1];
+-                      b=ptr[2];
+-                      a=ptr[3];
+-                      ptr[0]=b;
+-                      ptr[1]=g;
+-                      ptr[2]=r;
+-                      ptr[3]=a;
+-                      ptr+=4;
+-                  }
+-                }
+-            }
+-          
+-          
+-        }
++     }
+ #if  defined( ADM_BIG_ENDIAN)
+         uint8_t r,g,b,a;
+         uint8_t *ptr=target;
+@@ -261,18 +257,7 @@
+         for(int yy=0;yy&lt;th;yy++)
+                 {
+                   *ptr=target+(startx*4)+(starty+yy)*totalW*4;;
+-                  for(int xx=0;xx&lt;tw;xx++)
+-                  {
+-                      r=ptr[0];
+-                      g=ptr[1];
+-                      b=ptr[2];
+-                      a=ptr[3];
+-                      ptr[0]=a;
+-                      ptr[1]=b;
+-                      ptr[2]=g;
+-                      ptr[3]=r;
+-                      ptr+=4;
+-                  }
++                  invertRGB(ptr,tw);
+                 }
+         
+ #endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000420.html">[Avidemux-svn-commit] r3125 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libwrapper
+</A></li>
+	<LI>Next message: <A HREF="000422.html">[Avidemux-svn-commit] r3127 - branches/avidemux_2.4_branch/po
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#421">[ date ]</a>
+              <a href="thread.html#421">[ thread ]</a>
+              <a href="subject.html#421">[ subject ]</a>
+              <a href="author.html#421">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,183 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5345 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5345%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src&In-Reply-To=%3C200909191834.n8JIYbV6022200%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002556.html">
+   <LINK REL="Next"  HREF="002558.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5345 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5345%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src&In-Reply-To=%3C200909191834.n8JIYbV6022200%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5345 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Sep 19 20:34:37 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002556.html">[Avidemux-svn-commit] r5344 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate:	include src
+</A></li>
+        <LI>Next message: <A HREF="002558.html">[Avidemux-svn-commit] r5346 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2557">[ date ]</a>
+              <a href="thread.html#2557">[ thread ]</a>
+              <a href="subject.html#2557">[ subject ]</a>
+              <a href="author.html#2557">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-09-19 20:34:36 +0200 (Sat, 19 Sep 2009)
+New Revision: 5345
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiocopy.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_encoder.cpp
+Log:
+[audio] Add a function to create a copy stream for audio (with rescaling of timestamp
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/CMakeLists.txt	2009-09-19 16:03:22 UTC (rev 5344)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/CMakeLists.txt	2009-09-19 18:34:36 UTC (rev 5345)
+@@ -13,6 +13,7 @@
+ audiofilter_SRC.cpp
+ audiofilter_encoder.cpp
+ audiofilter_interface.cpp
++audiocopy.cpp
+ ADM_audioResample.cpp
+ audiofilter.cpp
+ ADM_libsamplerate/samplerate.c  
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiocopy.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiocopy.cpp	2009-09-19 16:03:22 UTC (rev 5344)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiocopy.cpp	2009-09-19 18:34:36 UTC (rev 5345)
+@@ -0,0 +1,77 @@
++/***************************************************************************
++            \file audiofilter_encoder.cpp
++            \brief Generate a access class = to the output of encoder + filterchain
++              (c) 2006 Mean , <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_editor/ADM_edit.hxx&quot;
++#include &lt;math.h&gt;
++
++extern ADM_Composer *video_body;
++
++/**
++        \fn ADM_audioStream
++        \brief Base class for audio stream
++
++*/
++class ADM_audioStreamCopy : public ADM_audioStream
++{
++        protected:
++                        ADM_audioStream *in;
++                        uint64_t        startTime;
++        public:
++
++                       ADM_audioStreamCopy(ADM_audioStream *input,uint64_t startTime, int64_t shift);  
++virtual                 WAVHeader                *getInfo(void) {return in-&gt;getInfo();};
++virtual uint8_t         getPacket(uint8_t *buffer,uint32_t *size, uint32_t sizeMax,uint32_t *nbSample,uint64_t *dts);
++//virtual bool            goToTime(uint64_t nbUs);
++virtual bool            getExtraData(uint32_t *l, uint8_t **d);
++        uint64_t        getDurationInUs(void);
++};
++// Pass Through class, just do the timing
++
++ADM_audioStreamCopy::ADM_audioStreamCopy(ADM_audioStream *input,uint64_t startTime, int64_t shift) : 
++                    ADM_audioStream(NULL,NULL)
++{
++    in=input;
++    this-&gt;startTime=startTime;
++    in-&gt;goToTime(startTime);
++#warning handle shift ???
++}
++bool            ADM_audioStreamCopy::getExtraData(uint32_t *l, uint8_t **d)
++{
++    return in-&gt;getExtraData(l,d); 
++}
++uint64_t ADM_audioStreamCopy::getDurationInUs(void)
++{
++       return in-&gt;getDurationInUs();
++}
++uint8_t         ADM_audioStreamCopy::getPacket(uint8_t *buffer,uint32_t *size, uint32_t sizeMax,uint32_t *nbSample,uint64_t *dts)
++{
++again:
++    if(false==in-&gt;getPacket(buffer,size,sizeMax,nbSample,dts)) return false;
++    if(*dts!=ADM_NO_PTS &amp;&amp; *dts&lt;startTime) goto again;
++    *dts=*dts-startTime;
++    return true;
++
++}
++/**
++        \fn audioCreateCopyStream
++*/
++ADM_audioStream *audioCreateCopyStream(uint64_t startTime,int32_t shift,ADM_audioStream *input)
++{
++  return new ADM_audioStreamCopy(input,startTime,shift);
++}
++
++// EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_encoder.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_encoder.cpp	2009-09-19 16:03:22 UTC (rev 5344)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_encoder.cpp	2009-09-19 18:34:36 UTC (rev 5345)
+@@ -64,7 +64,7 @@
+ /**
+     \fn createEncodingAccess
+ */
+-ADM_audioStream *createEncodingStream(uint64_t startTime,int32_t shift)
++ADM_audioStream *audioCreateEncodingStream(uint64_t startTime,int32_t shift)
+ {
+     printf(&quot;[AccessFilter] Creating access filter\n&quot;);
+     // 1-Create access filter
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002556.html">[Avidemux-svn-commit] r5344 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate:	include src
+</A></li>
+	<LI>Next message: <A HREF="002558.html">[Avidemux-svn-commit] r5346 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2557">[ date ]</a>
+              <a href="thread.html#2557">[ thread ]</a>
+              <a href="subject.html#2557">[ subject ]</a>
+              <a href="author.html#2557">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

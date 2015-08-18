@@ -1,0 +1,757 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4248 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4248%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4&In-Reply-To=%3C200807191758.m6JHwEEp025429%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001493.html">
+   <LINK REL="Next"  HREF="001495.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4248 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4248%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4&In-Reply-To=%3C200807191758.m6JHwEEp025429%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4248 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jul 19 19:58:14 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001493.html">[Avidemux-svn-commit] r4247 - in	branches/avidemux_2.5_branch_gruntster: cmake	plugins/ADM_audioDecoders/ADM_ad_faad
+</A></li>
+        <LI>Next message: <A HREF="001495.html">[Avidemux-svn-commit] r4249 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_libraries/ADM_ffmpeg/ADM_lavformat ADM_outputs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1494">[ date ]</a>
+              <a href="thread.html#1494">[ thread ]</a>
+              <a href="subject.html#1494">[ subject ]</a>
+              <a href="author.html#1494">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-07-19 19:58:13 +0200 (Sat, 19 Jul 2008)
+New Revision: 4248
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_atom.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_atom.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Indexer.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Leaf.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4audio.cpp
+Log:
+[Merge] r4213, 64 Bits mp4 support
+
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_atom.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_atom.cpp	2008-07-19 16:12:51 UTC (rev 4247)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_atom.cpp	2008-07-19 17:58:13 UTC (rev 4248)
+@@ -19,12 +19,9 @@
+  ***************************************************************************/
+ #include &quot;config.h&quot;
+ 
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+ #include &lt;string.h&gt;
+ #include &lt;math.h&gt;
+ 
+-#include &quot;ADM_assert.h&quot;
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_editor/ADM_Video.h&quot;
+ 
+@@ -37,7 +34,7 @@
+ adm_atom::adm_atom(adm_atom *atom)
+ {
+ 	_fd=atom-&gt;_fd;
+-	_atomStart=ftell(_fd);
++	_atomStart=ftello(_fd);
+ 	_atomSize=read32();
+ 	_atomFCC=read32();
+ 	// Gross hack for some (buggy ?) movie
+@@ -46,10 +43,14 @@
+ 		printf(&quot;3GP:Workaround: detected wrong sized atom!\nTrying to continue\n&quot;);
+ 		_atomStart+=4;
+ 		_atomSize-=4;
+-		fseek(_fd,_atomStart,SEEK_SET);
++		fseeko(_fd,_atomStart,SEEK_SET);
+ 		_atomSize=read32();
+ 		_atomFCC=read32();
+ 	}
++
++	if (fourCC::check(_atomFCC, (uint8_t *)&quot;tadm&quot;) &amp;&amp; _atomSize == 1)	// mdat
++		_atomSize=read64();
++
+ #ifdef ATOM_DEBUG
+ 	dumpAtom();
+ #endif
+@@ -64,14 +65,14 @@
+ }
+ adm_atom::adm_atom(FILE *fd )
+ {
+-uint32_t orgpos;
++int64_t orgpos;
+ 	_fd=fd;
+         orgpos=ftello(fd);
+-	fseek(_fd,0,SEEK_END);
++	fseeko(_fd,0,SEEK_END);
+ 	_atomFCC=fourCC::get((uint8_t *)&quot;MOVI&quot;);
+-	_atomSize=ftell(_fd);//-orgpos;
++	_atomSize=ftello(_fd);//-orgpos;
+ 
+-	fseek(_fd,orgpos,SEEK_SET);
++	fseeko(_fd,orgpos,SEEK_SET);
+ 	_atomStart=0;
+ #ifdef ATOM_DEBUG
+ 	dumpAtom();
+@@ -85,9 +86,9 @@
+ }
+ uint8_t adm_atom::skipBytes( uint32_t nb )
+ {
+-uint32_t pos;
+-	fseek(_fd,nb,SEEK_CUR);
+-	pos=ftell(_fd);
++int64_t pos;
++	fseeko(_fd,nb,SEEK_CUR);
++	pos=ftello(_fd);
+ 	if(pos&gt;_atomStart+_atomSize+1) ADM_assert(0);	
+ 	return 1;
+ }
+@@ -124,16 +125,20 @@
+ 
+ }
+ 
++uint64_t adm_atom::read64( void )
++{
++	uint64_t a1 = read32();
++
++	return (a1 &lt;&lt; 32) + read32();
++}
++
+ uint32_t adm_atom::getFCC( void )
+ {
+ 	return _atomFCC;
+ }
+-uint32_t adm_atom::getSize( void )
++
++int64_t adm_atom::getRemainingSize( void )
+ {
+-	return _atomSize-8;
+-}
+-uint32_t adm_atom::getRemainingSize( void )
+-{
+         int64_t pos=ftello(_fd);
+         
+         return _atomStart+_atomSize-pos;
+@@ -141,9 +146,9 @@
+ 
+ uint8_t adm_atom::readPayload( uint8_t *whereto, uint32_t rd)
+ {
+-	uint32_t pos;
++	int64_t pos;
+ 
+-	pos=ftell(_fd);
++	pos=ftello(_fd);
+ 	if(pos+rd&gt;_atomSize+_atomStart)
+ 	{
+ 		printf(&quot;\n Going out of atom's bound!! (%ld  / %ld )\n&quot;,pos+rd,_atomSize+_atomStart);
+@@ -172,7 +177,7 @@
+ 
+ uint8_t adm_atom::skipAtom( void )
+ {
+-	fseek(_fd,_atomStart+_atomSize,SEEK_SET);
++	fseeko(_fd,_atomStart+_atomSize,SEEK_SET);
+ #ifdef _3G_LOGO
+         printf(&quot;Branching to %x ending atom &quot;,_atomStart+_atomSize);
+         fourCC::printBE(_atomFCC);
+@@ -184,7 +189,7 @@
+ }
+ uint8_t adm_atom::isDone( void )
+ {
+-	uint32_t pos=ftell(_fd);
++	int64_t pos=ftello(_fd);
+ 
+ 	if(pos&gt;=(_atomStart+_atomSize)) return 1;
+ 	return 0;
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_atom.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_atom.h	2008-07-19 16:12:51 UTC (rev 4247)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_atom.h	2008-07-19 17:58:13 UTC (rev 4248)
+@@ -23,7 +23,7 @@
+ {
+ private:
+ 		FILE 		*_fd;
+-		uint32_t	_atomStart,_atomSize;
++		int64_t		_atomStart,_atomSize;
+ 		uint32_t	_atomFCC;
+ 		uint8_t		dumpAtom( void );
+ public:
+@@ -33,12 +33,12 @@
+ 		uint8_t	        skipAtom( void );
+                 uint32_t        getStartPos(void) {return _atomStart;}
+ 		uint32_t	getFCC( void );
+-		uint32_t	getSize( void );
+-                uint32_t        getRemainingSize( void );
++		int64_t        getRemainingSize( void );
+ 		uint8_t		readPayload( uint8_t *whereto, uint32_t rd );
+ 		uint8_t		isDone(void );
+ 		uint8_t		skipBytes(uint32_t nb );
+ 
++		uint64_t	read64( void );
+ 		uint32_t	read32( void );
+ 		uint16_t	read16( void );
+ 		uint8_t	        read( void );
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4.cpp	2008-07-19 16:12:51 UTC (rev 4247)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4.cpp	2008-07-19 17:58:13 UTC (rev 4248)
+@@ -54,12 +54,9 @@
+  ***************************************************************************/
+ #include &quot;config.h&quot;
+ 
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+ #include &lt;string.h&gt;
+ #include &lt;math.h&gt;
+ 
+-#include &quot;ADM_assert.h&quot;
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_editor/ADM_Video.h&quot;
+ 
+@@ -123,7 +120,7 @@
+     {
+       return 0; 
+     }
+-    uint32_t offset=VDEO.index[framenum].offset; //+_mdatOffset;
++    uint64_t offset=VDEO.index[framenum].offset; //+_mdatOffset;
+ 
+ 
+     fseeko(_fd,offset,SEEK_SET);
+@@ -226,14 +223,14 @@
+         fseeko(_fd,0,SEEK_SET);
+         if(check[0]=='m' &amp;&amp; check[1]=='d' &amp;&amp;check[2]=='a' &amp;&amp; check[3]=='t')
+         {
+-                        uint32_t of;
++                        uint64_t of;
+                                         printf(&quot;Data first, header later...\n&quot;);
+                                         of=atom-&gt;read32();
+                                         if(of==1)
+                                         {
+-                                          atom-&gt;read32();
+-                                          atom-&gt;read32();
+-                                          of=atom-&gt;read32();
++                                          atom-&gt;read32();	// size
++                                          atom-&gt;read32();	// fcc
++                                          of=atom-&gt;read64();
+                                         }
+                                         fseeko(_fd,of,SEEK_SET);        
+                                         printf(&quot;Header starts at %x\n&quot;,of);
+@@ -330,7 +327,7 @@
+             _audioTracks[audio]=new MP4Audio(name,&amp;(_tracks[1+audio]));   
+             
+         }
+-        fseek(_fd,0,SEEK_SET);
++        fseeko(_fd,0,SEEK_SET);
+         printf(&quot;3gp/mov file successfully read..\n&quot;);
+         return 1;
+ }
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4.h	2008-07-19 16:12:51 UTC (rev 4247)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4.h	2008-07-19 17:58:13 UTC (rev 4248)
+@@ -38,7 +38,7 @@
+       uint32_t nbSync;
+       uint32_t nbCtts;
+       
+-      uint32_t *Co;
++	  uint64_t *Co;
+       uint32_t *Sz;
+       uint32_t *Sc;
+       uint32_t *Sn;
+@@ -86,15 +86,12 @@
+ protected:
+ 
+            	uint32_t 					_nb_chunks;
+-		uint64_t					_abs_position;
+-		uint32_t					_rel_position;
+-
+               	uint32_t 					_current_index;
+ 	    	MP4Index 					*_index;
+ 		FILE						*_fd;
+ 		uint32_t					_extraLen;
+ 		uint8_t						*_extraData;
+-		uint32_t                                         _audioDuration;
++		uint64_t                                         _audioDuration;
+ 		
+ 		
+ public:
+@@ -129,7 +126,7 @@
+           uint8_t                       decodeEsds(void *ztom,uint32_t trackType);
+           uint8_t                       updateCtts(MPsampleinfo *info );
+           uint32_t                      _videoScale;
+-          uint32_t                      _movieDuration; // in ms
++          int64_t						_movieDuration; // in ms
+           uint32_t                      _videoFound;
+           uint8_t	                indexify(
+                                                 MP4Track *track,   
+@@ -141,7 +138,7 @@
+         uint8_t                       _reordered;		
+         FILE                          *_fd;
+         MP4Track                      _tracks[_3GP_MAX_TRACKS];
+-        uint32_t                      _audioDuration;
++        int64_t                      _audioDuration;
+         uint32_t                      _currentAudioTrack;
+         uint8_t                       parseAtomTree(adm_atom *atom);
+         MP4Audio                      *_audioTracks[_3GP_MAX_TRACKS-1];
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp	2008-07-19 16:12:51 UTC (rev 4247)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp	2008-07-19 17:58:13 UTC (rev 4248)
+@@ -15,12 +15,8 @@
+  ***************************************************************************/
+ #include &quot;config.h&quot;
+ 
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+-#include &lt;string.h&gt;
+ #include &lt;math.h&gt;
+ 
+-#include &quot;ADM_assert.h&quot;
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_editor/ADM_Video.h&quot;
+ 
+@@ -107,23 +103,36 @@
+ */
+ void MP4Header::parseMvhd(void *ztom)
+ {
+-  adm_atom *tom=(adm_atom *)ztom;
+-  tom-&gt;skipBytes(12);
+-  uint32_t scale,duration=1000;
++	adm_atom *tom = (adm_atom*)ztom;
++	int version = tom-&gt;read();
+ 
+-        scale=tom-&gt;read32();
+-        duration=tom-&gt;read32();
+-        _videoScale=scale;
+-        printf(&quot;Warning : scale is not in ms %lu !\n&quot;,_videoScale);
+-        if(_videoScale)
+-        {
+-                        duration=1000*duration; // In ms
+-                        duration/=_videoScale;
+-        }else
+-          _videoScale=1000;
+-        printf(&quot;Movie duration :%s\n&quot;,ms2timedisplay(duration));
+-        _movieDuration=duration;
++	tom-&gt;skipBytes(3);	// flags
++
++	if (version == 1)
++		tom-&gt;skipBytes(16);
++	else
++		tom-&gt;skipBytes(8);
++
++	int scale = tom-&gt;read32();
++	uint64_t duration = (version == 1) ? tom-&gt;read64() : tom-&gt;read32();
++
++	_videoScale = scale;
++
++	printf(&quot;Warning: scale is not in ms %lu!\n&quot;, _videoScale);
++
++	if (_videoScale)
++	{
++		duration = 1000 * duration; // In ms
++		duration /= _videoScale;
++	}
++	else
++		_videoScale = 1000;
++
++	printf(&quot;Movie duration: %s\n&quot;, ms2timedisplay(duration));
++
++	_movieDuration = duration;
+ }
++
+ /**
+       \fn parseMvhd
+       \brief Parse mvhd header
+@@ -151,20 +160,31 @@
+      {
+        case ADM_MP4_TKHD:
+               {
+-                      son.skipBytes(12);
+-                      adm_printf(ADM_PRINT_DEBUG,&quot;Track Id: %lu\n&quot;,son.read32());
+-                      son.skipBytes(4);
+-                      adm_printf(ADM_PRINT_DEBUG,&quot;Duration: %lu (ms)\n&quot;,(son.read32()*1000)/_videoScale);
+-                      son.skipBytes(8);
+-                      son.skipBytes(4); // layers
+-                      son.skipBytes(40); // layers
++				  int version = son.read();
+ 
+-                      w=son.read32()&gt;&gt;16;
+-                      h=son.read32()&gt;&gt;16;
+-                      adm_printf(ADM_PRINT_DEBUG,&quot;tkhd : %ld %ld\n&quot;,w,h);
++				  son.skipBytes(3);
+ 
++				  if (version == 1)
++					  tom-&gt;skipBytes(16);
++				  else
++					  tom-&gt;skipBytes(8);
++
++				  adm_printf(ADM_PRINT_DEBUG,&quot;Track Id: %lu\n&quot;, son.read32());
++				  son.skipBytes(4);
++
++				  uint64_t duration = (version == 1) ? son.read64() : son.read32();
++
++				  adm_printf(ADM_PRINT_DEBUG, &quot;Duration: %lu (ms)\n&quot;, (duration * 1000) / _videoScale);
++				  son.skipBytes(8);
++				  son.skipBytes(8);
++				  son.skipBytes(36);
++
++				  w = son.read32() &gt;&gt; 16;
++				  h = son.read32() &gt;&gt; 16;
++
++				  adm_printf(ADM_PRINT_DEBUG,&quot;tkhd: %ld %ld\n&quot;, w, h);
++				  break;
+               }
+-              break;
+         case ADM_MP4_MDIA:
+         {
+             parseMdia(&amp;son,&amp;trackType,w,h);
+@@ -187,7 +207,7 @@
+   ADMAtoms id;
+   uint32_t container;
+   uint32_t trackScale=_videoScale;
+-  uint32_t trackDuration;
++  uint64_t trackDuration;
+   *trackType=TRACK_OTHER;
+   uint8_t r=0;
+   printf(&quot;&lt;&lt;Parsing Mdia&gt;&gt;\n&quot;);
+@@ -204,21 +224,31 @@
+      {
+        case ADM_MP4_MDHD:
+        {
+-                uint32_t version=son.read(),duration;
+-                son.skipBytes(3); // flags + version
+-                son.skipBytes(4); // creation time
+-                son.skipBytes(4); // mod time
+-                if(version==1) son.skipBytes(8);
+-                trackScale=son.read32(); //
+-                adm_printf(ADM_PRINT_DEBUG,&quot;MDHD,Trackscale in mdhd:%u\n&quot;,trackScale);
+-                if(!trackScale) trackScale=600; // default
+-                duration=son.read32();
+-                adm_printf(ADM_PRINT_DEBUG,&quot;MDHD,duration in mdhd:%u (unscaled)\n&quot;,duration);
+-                duration=(uint32_t)((duration*1000.)/trackScale);
+-                adm_printf(ADM_PRINT_DEBUG,&quot;MDHD,duration in mdhd:%u (scaled ms)\n&quot;,duration);
+-                trackDuration=duration;
+-                printf(&quot;MDHD,Track duration :%s, trackScale :%u\n&quot;,ms2timedisplay((1000*duration)/trackScale),trackScale);
+-                break;
++		   int version = son.read();
++
++		   son.skipBytes(3); // flags
++
++		   if (version == 1)
++			   son.skipBytes(16);
++		   else
++			   son.skipBytes(8);
++
++		   trackScale = son.read32();
++
++		   adm_printf(ADM_PRINT_DEBUG, &quot;MDHD, Trackscale in mdhd: %u\n&quot;, trackScale);
++
++		   if (!trackScale)
++			   trackScale = 600; // default
++
++		   uint64_t duration = (version == 1) ? son.read64() : son.read32();
++
++		   adm_printf(ADM_PRINT_DEBUG, &quot;MDHD, duration in mdhd: %u (unscaled)\n&quot;, duration);
++		   duration = (duration * 1000.) / trackScale;
++		   adm_printf(ADM_PRINT_DEBUG, &quot;MDHD, duration in mdhd: %u (scaled ms)\n&quot;, duration);
++		   trackDuration = duration;
++		   printf(&quot;MDHD, Track duration: %s, trackScale: %u\n&quot;, ms2timedisplay((1000 * duration) / trackScale), trackScale);
++
++		   break;
+        }
+        case ADM_MP4_HDLR:
+        {
+@@ -343,7 +373,7 @@
+                 printf(&quot;Using myscale %lu\n&quot;,trackScale);
+                 info.SttsN=new uint32_t[info.nbStts];
+                 info.SttsC=new uint32_t[info.nbStts];
+-                double dur;
++                //double dur;
+                 for(int i=0;i&lt;info.nbStts;i++)
+                 {
+ 
+@@ -446,32 +476,34 @@
+             break;
+        case ADM_MP4_STCO:
+        {
+-          son.read32();
+-          info.nbCo=son.read32();
+-          printf(&quot;\t\tnbCo:%u\n&quot;,info.nbCo);
+-          info.Co=new uint32_t[info.nbCo];
+-          for(int j=0;j&lt; info.nbCo;j++)
+-          {
+-                  info.Co[j]=son.read32();
+-                  adm_printf(ADM_PRINT_VERY_VERBOSE,&quot;Chunk offset : %u / %u  : %u\n&quot;,  j,info.nbCo,info.Co[j]);
+-          }
++		   son.skipBytes(4);
+ 
++		   info.nbCo = son.read32();
++		   printf(&quot;\t\tnbCo: %u\n&quot;, info.nbCo);
++
++		   info.Co = new uint64_t[info.nbCo];
++
++		   for(int j = 0; j &lt; info.nbCo; j++)
++		   {
++			   info.Co[j] = son.read32();
++			   adm_printf(ADM_PRINT_VERY_VERBOSE, &quot;Chunk offset: %u / %u : %&quot;LLU&quot;\n&quot;, j, info.nbCo - 1, info.Co[j]);
++		   }
+        }
+        break;
+        case ADM_MP4_STCO64:
+        {
+-         printf(&quot;Incomplete support for 64 bits quicktime!!\n&quot;);
+-          son.read32();
+-          info.nbCo=son.read32();
+-          printf(&quot;\t\tnbCo:%u\n&quot;,info.nbCo);
+-          info.Co=new uint32_t[info.nbCo];
+-          for(int j=0;j&lt; info.nbCo;j++)
+-          {
+-                  son.read32(); // Ignore MSB
+-                  info.Co[j]=son.read32();
+-                  adm_printf(ADM_PRINT_VERY_VERBOSE,&quot;Chunk offset : %u / %u  : %lu\n&quot;,  j,info.nbCo,info.Co[j]);
+-          }
++		   son.skipBytes(4);
+ 
++		   info.nbCo = son.read32();
++		   printf(&quot;\t\tnbCo: %u\n&quot;, info.nbCo);
++
++		   info.Co = new uint64_t[info.nbCo];
++
++		   for(int j = 0; j&lt; info.nbCo; j++)
++		   {
++			   info.Co[j] = son.read64();
++			   adm_printf(ADM_PRINT_VERY_VERBOSE, &quot;Chunk offset: %u / %u : %&quot;LLU&quot;\n&quot;, j, info.nbCo - 1, info.Co[j]);
++		   }
+        }
+        break;
+        case ADM_MP4_STSD:
+@@ -797,7 +829,7 @@
+                                             break;
+                                     case MKFCCR('Q','D','M','2'):
+                                         {
+-                                            uint32_t sz;
++                                            int64_t sz;
+                                               audioCodec(QDM2);
+                                               sz=son.getRemainingSize();
+                                               _tracks[1+nbAudioTrack].extraDataSize=sz;
+@@ -924,7 +956,7 @@
+             // Mark keyframes
+             for(int i=0;i&lt;info.nbSync;i++)
+             {
+-              int sync=info.Sync[i];
++              uint32_t sync=info.Sync[i];
+               if(sync) sync--;
+               _tracks[0].index[sync].intra=AVI_KEY_FRAME;
+             }
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Indexer.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Indexer.cpp	2008-07-19 16:12:51 UTC (rev 4247)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Indexer.cpp	2008-07-19 17:58:13 UTC (rev 4248)
+@@ -15,12 +15,9 @@
+  ***************************************************************************/
+ #include &quot;config.h&quot;
+ 
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+ #include &lt;string.h&gt;
+ #include &lt;math.h&gt;
+ 
+-#include &quot;ADM_assert.h&quot;
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_editor/ADM_Video.h&quot;
+ 
+@@ -53,7 +50,7 @@
+         printf(&quot;Build Track index\n&quot;);
+ 	*outNbChunk=0;
+ 	aprintf(&quot;+_+_+_+_+_+\n&quot;);
+-	aprintf(&quot;co : %lu sz: %lu sc: %lu co[0]%lu \n&quot;,info-&gt;nbCo,info-&gt;nbSz,info-&gt;nbSc,info-&gt;Co[0]);
++	aprintf(&quot;co : %lu sz: %lu sc: %lu co[0] %&quot;LLU&quot;\n&quot;,info-&gt;nbCo,info-&gt;nbSz,info-&gt;nbSc,info-&gt;Co[0]);
+ 	aprintf(&quot;+_+_+_+_+_+\n&quot;);
+ 
+ 	ADM_assert(info-&gt;Sc);
+@@ -71,7 +68,7 @@
+           
+           
+           uint32_t totalBytes=info-&gt;SzIndentical*info-&gt;nbSz;
+-          printf(&quot;All the same size : %u (total size %u bytes)\n&quot;,info-&gt;SzIndentical,totalBytes);
++          printf(&quot;All the same size: %u (total size %u bytes)\n&quot;,info-&gt;SzIndentical,totalBytes);
+               //
+               // Each chunk contains N samples=N bytes
+               int samplePerChunk[info-&gt;nbCo];
+@@ -82,8 +79,7 @@
+ 
+                   for(int j=info-&gt;Sc[i]-1;j&lt;info-&gt;nbCo;j++)
+                   {
+-                    uint32_t mx;
+-                        adm_printf(ADM_PRINT_VERY_VERBOSE,&quot;For chunk %lu , %lu samples\n&quot;,j,info-&gt;Sn[i]);
++                        adm_printf(ADM_PRINT_VERY_VERBOSE,&quot;For chunk %lu, %lu samples\n&quot;,j,info-&gt;Sn[i]);
+                         samplePerChunk[j]=info-&gt;Sn[i];
+                   }
+               }
+@@ -244,7 +240,7 @@
+           }
+ 	// if no sample to chunk we map directly
+ 	// first build the # of sample per chunk table
+-        uint32_t totalchunk=0,max=0;
++        uint32_t totalchunk=0;
+ 
+         // Search the maximum
+         for(i=0;i&lt;info-&gt;nbSc-1;i++)
+@@ -253,9 +249,9 @@
+         }
+         totalchunk+=(info-&gt;nbCo-info-&gt;Sc[info-&gt;nbSc-1]+1)*info-&gt;Sn[info-&gt;nbSc-1];
+ 
+-        adm_printf(ADM_PRINT_VERY_VERBOSE,&quot;#of chunk %d max per chunk %d Max # of sample %d\n&quot;,info-&gt;nbCo,max,totalchunk);
++        adm_printf(ADM_PRINT_VERY_VERBOSE,&quot;# of chunks %d, max # of samples %d\n&quot;,info-&gt;nbCo, totalchunk);
+ 
+-        uint32_t chunkCount[totalchunk+1];
++        uint32_t *chunkCount = new uint32_t[totalchunk+1];
+ 	for(i=0;i&lt;info-&gt;nbSc;i++)
+ 	{
+ 		for(j=info-&gt;Sc[i]-1;j&lt;info-&gt;nbCo;j++)
+@@ -286,6 +282,8 @@
+ 
+ 
+ 	}
++
++	delete [] chunkCount;
+         
+         
+         track-&gt;nbIndex=cur;;
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Leaf.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Leaf.cpp	2008-07-19 16:12:51 UTC (rev 4247)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Leaf.cpp	2008-07-19 17:58:13 UTC (rev 4248)
+@@ -16,9 +16,6 @@
+  ***************************************************************************/
+ #include &quot;config.h&quot;
+ 
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+-
+ #include &lt;string.h&gt;
+ 
+ #include &lt;math.h&gt;
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4audio.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4audio.cpp	2008-07-19 16:12:51 UTC (rev 4247)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_mp4/ADM_mp4audio.cpp	2008-07-19 17:58:13 UTC (rev 4248)
+@@ -23,8 +23,6 @@
+  ***************************************************************************/
+ #include &quot;config.h&quot;
+ 
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+ #include &lt;string.h&gt;
+ #include &lt;math.h&gt;
+ 
+@@ -44,8 +42,6 @@
+ 	_fd=fopen(name,&quot;rb&quot;);
+         ADM_assert(_fd);
+ 	_current_index=0;
+-	_abs_position=0;
+-	_rel_position=0;
+ 	_pos=0;
+ 	_index=track-&gt;index;
+ 
+@@ -61,9 +57,8 @@
+ 	// compute length
+ 	_length=0;
+ 	for(uint32_t i=0;i&lt;_nb_chunks;i++)
+-		{
+-			_length+=track-&gt;index[i].size;
+-		}
++		_length+=track-&gt;index[i].size;
++
+ 	printf(&quot;\n [MP4 audio] : %lu bytes (%lu chunks)\n&quot;,_length,_nb_chunks);
+ 
+ 	printf(&quot;Byterate     :%d\n&quot;,_wavheader-&gt;byterate);
+@@ -123,13 +118,8 @@
+ 	  fseeko(_fd,_index[_current_index].offset,SEEK_SET);
+ 	  r=fread(dest,1,_index[_current_index].size,_fd);
+           if(!r)
+-          {
+             printf(&quot;[MP4 Audio] Cannot read \n&quot;); 
+-          }
+-          else
+-          {
+-            
+-          }
++
+ 	  if(_current_index==_nb_chunks-1)
+ 	  {
+ 	  	
+@@ -145,10 +135,12 @@
+                         delta*=_wavheader-&gt;frequency;
+                         delta/=1000.; // mss -&gt; second
+                         *samples=(uint32_t)floor(delta);
+-                }else *samples=1024;
++                }
++				else
++					*samples=1024;
++
+                 printf(&quot;[MP4Audio]: Last sample %d current chunk %d nb chunk %d\n&quot;,
+                                 *samples,_current_index,_nb_chunks);
+-                
+ 	  }
+ 	  else
+ 	  {
+@@ -159,7 +151,6 @@
+ 		delta*=_wavheader-&gt;frequency;
+ 		delta/=1000.*1000.; // us -&gt; second
+ 		*samples=(uint32_t)floor(delta);
+-	     
+ 	  }
+ #if 0
+           printf(&quot;[MP4Audio]Read %u bytes\n&quot;, r);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001493.html">[Avidemux-svn-commit] r4247 - in	branches/avidemux_2.5_branch_gruntster: cmake	plugins/ADM_audioDecoders/ADM_ad_faad
+</A></li>
+	<LI>Next message: <A HREF="001495.html">[Avidemux-svn-commit] r4249 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_libraries/ADM_ffmpeg/ADM_lavformat ADM_outputs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1494">[ date ]</a>
+              <a href="thread.html#1494">[ thread ]</a>
+              <a href="subject.html#1494">[ subject ]</a>
+              <a href="author.html#1494">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

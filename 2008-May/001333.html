@@ -1,0 +1,201 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4076 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_libraries/ADM_lavcodec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4076%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%0A%09ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200805301645.m4UGjY3W013145%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001332.html">
+   <LINK REL="Next"  HREF="001334.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4076 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_libraries/ADM_lavcodec</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4076%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%0A%09ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200805301645.m4UGjY3W013145%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4076 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_libraries/ADM_lavcodec">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri May 30 18:45:34 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001332.html">[Avidemux-svn-commit] r4075 - in	branches/avidemux_2.5_branch_gruntster/avidemux: .	ADM_UIs/ADM_GTK/include ADM_UIs/ADM_QT4/include	ADM_coreImage/include
+</A></li>
+        <LI>Next message: <A HREF="001334.html">[Avidemux-svn-commit] r4077 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1333">[ date ]</a>
+              <a href="thread.html#1333">[ thread ]</a>
+              <a href="subject.html#1333">[ subject ]</a>
+              <a href="author.html#1333">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-05-30 18:45:31 +0200 (Fri, 30 May 2008)
+New Revision: 4076
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/h263.c
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/h263dec.c
+Log:
+[Decoder] Merge correct fix for slice end not reached from 2.5 and revert old incorrect fix
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2008-05-29 18:03:47 UTC (rev 4075)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2008-05-30 16:45:31 UTC (rev 4076)
+@@ -44,7 +44,7 @@
+ AVCodec *codec=avcodec_find_decoder(x);\
+ if(!codec) {GUI_Alert(QT_TR_NOOP(&quot;Internal error finding codec&quot;#x));ADM_assert(0);} \
+   codecId=x; \
+-  _context-&gt;workaround_bugs=1*FF_BUG_AUTODETECT +1*FF_BUG_NO_PADDING;/**/ \
++  _context-&gt;workaround_bugs=1*FF_BUG_AUTODETECT +0*FF_BUG_NO_PADDING;/**/ \
+   _context-&gt;error_concealment=3; \
+   if (avcodec_open(_context, codec) &lt; 0)  \
+                       { \
+@@ -445,6 +445,7 @@
+   _refCopy = 1;			// YUV420 only
+   WRAP_Open (CODEC_ID_MSMPEG4V3);
+ }
++//**************************************************
+ decoderFFMpeg4VopPacked::decoderFFMpeg4VopPacked (uint32_t w, uint32_t h):decoderFF (w,
+ 	   h)
+ {
+@@ -455,6 +456,18 @@
+   WRAP_Open (CODEC_ID_MPEG4);
+   printf(&quot;[lavc] Non low delay mpeg4 decoder initialized\n&quot;);
+ }
++uint8_t decoderFFMpeg4VopPacked::uncompress (ADMCompressedImage * in, ADMImage * out)
++{
++    // For pseudo startcode
++    if(in-&gt;dataLength)
++    {
++        in-&gt;data[in-&gt;dataLength]=0;
++        in-&gt;data[in-&gt;dataLength+1]=0;
++    }
++    return decoderFF::uncompress(in,out);
++
++}
++
+ decoderFFMpeg4::decoderFFMpeg4 (uint32_t w, uint32_t h, uint32_t fcc,uint32_t l, uint8_t * d):decoderFF (w,
+ 	   h)
+ {
+@@ -471,6 +484,18 @@
+   //  _context-&gt;flags|=FF_DEBUG_VIS_MV;
+   WRAP_Open (CODEC_ID_MPEG4);
+ }
++uint8_t decoderFFMpeg4::uncompress (ADMCompressedImage * in, ADMImage * out)
++{
++    // For pseudo startcode
++    if(in-&gt;dataLength)
++    {
++        in-&gt;data[in-&gt;dataLength]=0;
++        in-&gt;data[in-&gt;dataLength+1]=0;
++    }
++    return decoderFF::uncompress(in,out);
++
++}
++//************************************
+ decoderFFDV::decoderFFDV (uint32_t w, uint32_t h, uint32_t l, uint8_t * d):decoderFF (w,
+ 	   h)
+ {
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h	2008-05-29 18:03:47 UTC (rev 4075)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.h	2008-05-30 16:45:31 UTC (rev 4076)
+@@ -90,6 +90,7 @@
+ 
+ public:
+   decoderFFMpeg4VopPacked (uint32_t w, uint32_t h);
++  uint8_t uncompress (ADMCompressedImage * in, ADMImage * out);
+   // mpeg4 can have B-frame
+   virtual uint8_t bFramePossible (void)
+   {
+@@ -108,6 +109,7 @@
+ 
+ public:
+   decoderFFMpeg4 (uint32_t w, uint32_t h, uint32_t fcc,uint32_t l, uint8_t * d);
++  uint8_t uncompress (ADMCompressedImage * in, ADMImage * out);
+   // mpeg4 can have B-frame
+   virtual uint8_t bFramePossible (void)
+   {
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/h263.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/h263.c	2008-05-29 18:03:47 UTC (rev 4075)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/h263.c	2008-05-30 16:45:31 UTC (rev 4076)
+@@ -3122,15 +3122,7 @@
+     int bits_count= get_bits_count(&amp;s-&gt;gb);
+     int v= show_bits(&amp;s-&gt;gb, 16);
+ 
+-    // MEANX if( s-&gt;workaround_bugs&amp;FF_BUG_NO_PADDING){
+-    if(s-&gt;lavc_build==4655 || s-&gt;xvid_build ) // Breaks multithreaded decoding meanx
+-    {
+-    #if 0
+-    #undef printf
+-    printf(&quot;bugs: %X lavc_build:%d xvid_build:%d divx_version:%d divx_build:%d %s\n&quot;,
+-               s-&gt;workaround_bugs, s-&gt;lavc_build, s-&gt;xvid_build, s-&gt;divx_version, s-&gt;divx_build,
+-               s-&gt;divx_packed ? &quot;p&quot; : &quot;&quot;);
+-    #endif
++     if( s-&gt;workaround_bugs&amp;FF_BUG_NO_PADDING){
+         return 0;
+     }
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/h263dec.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/h263dec.c	2008-05-29 18:03:47 UTC (rev 4075)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/h263dec.c	2008-05-30 16:45:31 UTC (rev 4076)
+@@ -272,7 +272,6 @@
+     /* try to detect the padding bug */
+     if(      s-&gt;codec_id==CODEC_ID_MPEG4
+        &amp;&amp;   (s-&gt;workaround_bugs&amp;FF_BUG_AUTODETECT) 
+-       &amp;&amp;  !(s-&gt;workaround_bugs&amp;FF_BUG_NO_PADDING) // MEANX
+        &amp;&amp;    s-&gt;gb.size_in_bits - get_bits_count(&amp;s-&gt;gb) &gt;=0
+        &amp;&amp;    s-&gt;gb.size_in_bits - get_bits_count(&amp;s-&gt;gb) &lt; 48
+ //       &amp;&amp;   !s-&gt;resync_marker
+@@ -295,10 +294,7 @@
+                 s-&gt;padding_bug_score++;
+         }
+     }
+- // MEANX : slice end not reached when autodetect is set
+-      if( !(s-&gt;workaround_bugs&amp;FF_BUG_NO_PADDING) &amp;&amp;
+-            s-&gt;workaround_bugs&amp;FF_BUG_AUTODETECT ){
+-    //if(s-&gt;workaround_bugs&amp;FF_BUG_AUTODETECT ){
++      if( s-&gt;workaround_bugs&amp;FF_BUG_AUTODETECT ){
+         if(s-&gt;padding_bug_score &gt; -2 &amp;&amp; !s-&gt;data_partitioning /*&amp;&amp; (s-&gt;divx_version || !s-&gt;resync_marker)*/)
+             s-&gt;workaround_bugs |=  FF_BUG_NO_PADDING;
+         else
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001332.html">[Avidemux-svn-commit] r4075 - in	branches/avidemux_2.5_branch_gruntster/avidemux: .	ADM_UIs/ADM_GTK/include ADM_UIs/ADM_QT4/include	ADM_coreImage/include
+</A></li>
+	<LI>Next message: <A HREF="001334.html">[Avidemux-svn-commit] r4077 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1333">[ date ]</a>
+              <a href="thread.html#1333">[ thread ]</a>
+              <a href="subject.html#1333">[ subject ]</a>
+              <a href="author.html#1333">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

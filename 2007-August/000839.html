@@ -1,0 +1,474 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3565 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder	ADM_outputs/oplug_mpegFF ADM_userInterfaces/ADM_commonUI
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3565%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_encoder%0A%09ADM_outputs/oplug_mpegFF%20ADM_userInterfaces/ADM_commonUI&In-Reply-To=%3C200708281532.l7SFWxKr005716%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000838.html">
+   <LINK REL="Next"  HREF="000840.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3565 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder	ADM_outputs/oplug_mpegFF ADM_userInterfaces/ADM_commonUI</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3565%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_encoder%0A%09ADM_outputs/oplug_mpegFF%20ADM_userInterfaces/ADM_commonUI&In-Reply-To=%3C200708281532.l7SFWxKr005716%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3565 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder	ADM_outputs/oplug_mpegFF ADM_userInterfaces/ADM_commonUI">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Aug 28 17:32:59 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000838.html">[Avidemux-svn-commit] r3564 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+        <LI>Next message: <A HREF="000840.html">[Avidemux-svn-commit] r3566 - in	branches/avidemux_2.4_branch/avidemux: ADM_encoder	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#839">[ date ]</a>
+              <a href="thread.html#839">[ thread ]</a>
+              <a href="subject.html#839">[ subject ]</a>
+              <a href="author.html#839">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-08-28 17:32:58 +0200 (Tue, 28 Aug 2007)
+New Revision: 3565
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flv1.cpp
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_encoder/ADM_encCodecDesc.h
+   branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/CMakeLists.txt
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/Makefile.am
+Log:
+[FLV] simple configuration dialog + [LAVC] some fixes about lavc encoding
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2007-08-26 12:29:26 UTC (rev 3564)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2007-08-28 15:32:58 UTC (rev 3565)
+@@ -65,7 +65,7 @@
+ /*****************************************/
+ ffmpegEncoderCQ::~ffmpegEncoderCQ ()
+   {
+-    printf(&quot;Deleting ffmpegCQencoder\n&quot;);
++    printf(&quot;[LAVCODEC]Deleting ffmpegCQencoder\n&quot;);
+     //stopEncoder ();
+     if (_statfile)
+       {
+@@ -91,7 +91,7 @@
+ ffmpegEncoder::ffmpegEncoder (uint32_t width, uint32_t height, FF_CODEC_ID id):encoder (width,
+ 	 height)
+ {
+-  printf (&quot;Build: %d\n&quot;, LIBAVCODEC_BUILD);
++  printf (&quot;[LAVCODEC]Build: %d\n&quot;, LIBAVCODEC_BUILD);
+ 
+   _id = id;
+   _swap = 0;
+@@ -126,7 +126,7 @@
+ ffmpegEncoder::~ffmpegEncoder ()
+ {
+   printf (&quot;[lavc] encoder destroying..\n&quot;);
+-  if (_isMT)
++  if (_isMT &amp;&amp; _context)
+     {
+       printf (&quot;[lavc] killing threads\n&quot;);
+       avcodec_thread_free (_context);
+@@ -202,7 +202,7 @@
+     {
+       if (FRAME_FILM == identMovieType (rate))
+ 	{
+-	  printf (&quot;Pulldown activated...\n&quot;);
++	  printf (&quot;[LAVCODEC]Pulldown activated...\n&quot;);
+ 	  _context-&gt;flags2 |= CODEC_FLAG2_32_PULLDOWN;
+ 	}
+     }
+@@ -211,7 +211,7 @@
+ #else
+   _context-&gt;max_b_frames = 2;
+ #endif
+-  printf (&quot;Using 2 b frames\n&quot;);
++  printf (&quot;[LAVCODEC]Using 2 b frames\n&quot;);
+   if (_id == FF_MPEG2)
+     {
+       _context-&gt;mpeg_quant = 1;	//1; // Should be mpeg quant 
+@@ -224,7 +224,7 @@
+     {
+       if (_settings.widescreen)
+ 	{
+-          printf(&quot;WideScreen\n&quot;);
++          printf(&quot;[LAVCODEC]WideScreen\n&quot;);
+ 	  _context-&gt;sample_aspect_ratio.num = 16;
+ 	  _context-&gt;sample_aspect_ratio.den = 9;
+ 	}
+@@ -277,17 +277,19 @@
+ 
+   //
+   //_context-&gt;dsp_mask= FF_MM_FORCE;
+-  printf (&quot;Mpeg12 settings:\n____________\n&quot;);
+-  printf (&quot;FF Max rate   (header) : %lu kbps\n&quot;,
++  printf (&quot;[LAVCODEC]Mpeg12 settings:\n____________\n&quot;);
++  printf (&quot;[LAVCODEC]FF Max rate   (header) : %lu kbps\n&quot;,
+ 	  (_context-&gt;rc_max_rate_header) / 1000);
+-  printf (&quot;FF Buffer Size(header) : %lu bits / %lu kB\n&quot;,
++  printf (&quot;[LAVCODEC]FF Buffer Size(header) : %lu bits / %lu kB\n&quot;,
+ 	  (_context-&gt;rc_buffer_size_header),
+ 	  _context-&gt;rc_buffer_size_header / (8 * 1024));
+-  printf (&quot;FF Max rate   (rc) : %lu kbps\n&quot;, (_context-&gt;rc_max_rate) / 1000);
+-  printf (&quot;FF Buffer Size(rc) : %lu bits / %lu kB\n&quot;,
++  printf (&quot;[LAVCODEC]FF Max rate   (rc) : %lu kbps\n&quot;, (_context-&gt;rc_max_rate) / 1000);
++  printf (&quot;[LAVCODEC]FF Buffer Size(rc) : %lu bits / %lu kB\n&quot;,
+ 	  (_context-&gt;rc_buffer_size), _context-&gt;rc_buffer_size / (8 * 1024));
+ 
+-  printf (&quot;FF GOP Size    : %lu\n&quot;, _context-&gt;gop_size);
++  printf (&quot;[LAVCODEC]FF GOP Size    : %lu\n&quot;, _context-&gt;gop_size);
++  printf (&quot;[LAVCODEC]FF Bitrate    : %lu (kb/s)\n&quot;, _context-&gt;bit_rate/1000);
++  
+   return 1;
+ }
+ 
+@@ -406,7 +408,7 @@
+ {
+ 
+   _context-&gt;gop_size = size;
+-  printf (&quot;Gop size is now %d\n&quot;, _context-&gt;gop_size);
++  printf (&quot;[LAVCODEC]Gop size is now %d\n&quot;, _context-&gt;gop_size);
+   return 1;
+ 
+ }
+@@ -431,7 +433,7 @@
+ uint8_t
+ ffmpegEncoderCQ::init (uint32_t val, uint32_t fps1000, uint8_t vbr)
+ {
+-
++  printf (&quot;[LAVCODEC] Using Q=%u\n&quot;,val); 
+   mplayer_init ();
+   _qual = val;
+   _vbr = vbr;
+@@ -513,9 +515,12 @@
+   {
+   1000, fps1000};
+ 
+-  _context-&gt;bit_rate = _br;
++  if(_id==FF_MPEG2 || _id==FF_MPEG1)
++	  _context-&gt;bit_rate = _br;
++  else
++	  _context-&gt;bit_rate = _br*1000;
+ 
+-  printf (&quot;--&gt; br: %lu&quot;, _br);
++  printf (&quot;[LAVCODEC] Using  bitrate in context :%lu kbps&quot;,_context-&gt;bit_rate/1000);
+ 
+   return initContext ();
+ 
+@@ -663,7 +668,7 @@
+     }
+   else
+     {
+-      if (_id == FF_MPEG1 || _id == FF_MPEG2)
++      if (_id == FF_MPEG1 || _id == FF_MPEG2 || _id == FF_FLV1)
+ 	{
+ 	  _context-&gt;gop_size = _settings.gop_size;
+ 	}
+@@ -671,8 +676,8 @@
+ 	{
+ 	  _context-&gt;gop_size = 250;
+ 	}
+-#define SETX(x) _context-&gt;x=_settings.x; printf(#x&quot; : %d\n&quot;,_settings.x);
+-#define SETX_COND(x) if(_settings.is_##x) {_context-&gt;x=_settings.x; printf(#x&quot; : %d\n&quot;,_settings.x);} else\
++#define SETX(x) _context-&gt;x=_settings.x; printf(&quot;[LAVCODEC]&quot;#x&quot; : %d\n&quot;,_settings.x);
++#define SETX_COND(x) if(_settings.is_##x) {_context-&gt;x=_settings.x; printf(&quot;[LAVCODEC]&quot;#x&quot; : %d\n&quot;,_settings.x);} else\
+ 		{ printf(#x&quot; is not activated\n&quot;);}
+       SETX (me_method);
+       SETX (qmin);
+@@ -686,9 +691,9 @@
+ #undef SETX
+ #undef SETX_COND
+ 
+-#define SETX(x)  _context-&gt;x=_settings.x; printf(#x&quot; : %f\n&quot;,_settings.x);
+-#define SETX_COND(x)  if(_settings.is_##x) {_context-&gt;x=_settings.x; printf(#x&quot; : %f\n&quot;,_settings.x);} else  \
+-									{printf(#x&quot; No activated\n&quot;);}
++#define SETX(x)  _context-&gt;x=_settings.x; printf(&quot;[LAVCODEC]&quot;#x&quot; : %f\n&quot;,_settings.x);
++#define SETX_COND(x)  if(_settings.is_##x) {_context-&gt;x=_settings.x; printf(&quot;[LAVCODEC]&quot;#x&quot; : %f\n&quot;,_settings.x);} else  \
++									{printf(&quot;[LAVCODEC]&quot;#x&quot; No activated\n&quot;);}
+       SETX_COND (lumi_masking);
+       SETX_COND (dark_masking);
+       SETX (qcompress);
+@@ -699,7 +704,7 @@
+ #undef SETX
+ #undef SETX_COND
+ 
+-#define SETX(x) if(_settings.x){ _context-&gt;flags|=CODEC_FLAG##x;printf(#x&quot; is set\n&quot;);}
++#define SETX(x) if(_settings.x){ _context-&gt;flags|=CODEC_FLAG##x;printf(&quot;[LAVCODEC]&quot;#x&quot; is set\n&quot;);}
+       SETX (_GMC);
+ 
+ 
+@@ -729,7 +734,7 @@
+ 	{
+ 	  _context-&gt;sample_aspect_ratio.num = 16;
+ 	  _context-&gt;sample_aspect_ratio.den = 9;
+-	  printf (&quot;16/9 aspect ratio is set.\n&quot;);
++	  printf (&quot;[LAVCODEC]16/9 aspect ratio is set.\n&quot;);
+ 
+ 	}
+ #undef SETX
+@@ -830,7 +835,7 @@
+ {
+   *d = (uint8_t *) _context-&gt;extradata;
+   *l = _context-&gt;extradata_size;
+-  printf (&quot;We got some extra data: %lu\n&quot;, *l);
++  printf (&quot;[LAVCODEC]We got some extra data: %lu\n&quot;, *l);
+   if (*l)
+     return 1;
+ 
+@@ -856,7 +861,7 @@
+   _context-&gt;bit_rate = 0;
+   _context-&gt;bit_rate_tolerance = 1024 * 8 * 1000;
+   _context-&gt;gop_size = 250;
+-  printf (&quot;FFV1 codec initializing...\n&quot;);
++  printf (&quot;[LAVCODEC]FFV1 codec initializing...\n&quot;);
+   return initContext ();
+ }
+ 
+@@ -885,7 +890,7 @@
+   _context-&gt;bit_rate = 0;
+   _context-&gt;bit_rate_tolerance = 1024 * 8 * 1000;
+   _context-&gt;gop_size = 250;
+-  printf (&quot;FF Mjpeg codec initializing %d %% -&gt; q =%d...\n&quot;, val, _qual);
++  printf (&quot;[LAVCODEC]FF Mjpeg codec initializing %d %% -&gt; q =%d...\n&quot;, val, _qual);
+   return initContext ();
+ }
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_encoder/ADM_encCodecDesc.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_encoder/ADM_encCodecDesc.h	2007-08-26 12:29:26 UTC (rev 3564)
++++ branches/avidemux_2.4_branch/avidemux/ADM_encoder/ADM_encCodecDesc.h	2007-08-28 15:32:58 UTC (rev 3565)
+@@ -2,6 +2,7 @@
+ #define ADM_CODEC_CONFIG_
+ 
+ uint8_t DIA_DVDffParam (COMPRES_PARAMS * incoming);
++uint8_t DIA_flv1Param(COMPRES_PARAMS *incoming);
+ #define REQUANT_AS_CODE
+ #include &quot;ADM_vidEncode.hxx&quot;
+ // Yv12
+@@ -65,6 +66,45 @@
+   0,				// NAQ
+   0				// DUMMY 
+ };
++FFcodecSetting ffmpeg4Extra_FLV1 = {
++  ME_EPZS,			//     ME
++  0,				//          GMC     
++  0,				// 4MV
++  0,				//           _QPEL;   
++  0,				//           _TREILLIS_QUANT
++  2,				//           qmin;
++  31,				//          qmax;
++  3,				//           max_qdiff;
++  0,				//           max_b_frames;
++  0,				//          mpeg_quant;
++  1,				//
++  -2,				//                 luma_elim_threshold;
++  1,				//
++  -5,				// chroma_elim_threshold;
++  0.05,				//lumi_masking;
++  1,				// is lumi
++  0.01,				//dark_masking; 
++  1,				// is dark
++  0.5,				// qcompress amount of qscale change between easy &amp; hard scenes (0.0-1.0
++  0.5,				// qblur;    amount of qscale smoothing over time (0.0-1.0) 
++  0,				// min bitrate in kB/S
++  0,				// max bitrate
++  0,				// default matrix
++  100,				// no gop size
++  NULL,
++  NULL,
++  0,				// interlaced
++  0,				// WLA: bottom-field-first
++  0,				// wide screen
++  2,				// mb eval = distortion
++  8000,				// vratetol 8Meg
++  0,				// is temporal
++  0.0,				// temporal masking
++  0,				// is spatial
++  0.0,				// spatial masking
++  0,				// NAQ
++  0				// DUMMY 
++};
+ 
+ COMPRES_PARAMS ffmpegH263Codec = {
+   CodecH263,
+@@ -135,16 +175,16 @@
+   &quot;FLV1 (lavc)&quot;,
+   &quot;FLV1&quot;,
+   &quot;FLV1&quot;,
+-  COMPRESS_CQ,
++  COMPRESS_CBR,
+   4,
+   1500,
+   700,
+   1000, // AVG
+-  ADM_ENC_CAP_CBR + ADM_ENC_CAP_CQ ,
++  ADM_ENC_CAP_CBR,
+   ADM_EXTRA_PARAM,
+-  &amp;ffmpeg4Extra,
++  &amp;ffmpeg4Extra_FLV1,
+   sizeof (ffmpeg4Extra),
+-  NULL
++  &amp;DIA_flv1Param
+ };
+ COMPRES_PARAMS ffmpegSnow = {
+   CodecSnow,
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp	2007-08-26 12:29:26 UTC (rev 3564)
++++ branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp	2007-08-28 15:32:58 UTC (rev 3565)
+@@ -304,8 +304,9 @@
+   _in = instream;
+ 
+  
+-  _codec = new ffmpegEncoderCQ (_w, _h, _id);
+-  _codec-&gt;init (_param.qz, _fps, 0);
++  _codec = new ffmpegEncoderCBR (_w, _h, _id);
++  _codec-&gt;setConfig (&amp;_settings);
++  _codec-&gt;init (_param.bitrate, _fps, 0);
+   _state=enc_CQ;
+   return 1;
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp	2007-08-26 12:29:26 UTC (rev 3564)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp	2007-08-28 15:32:58 UTC (rev 3565)
+@@ -453,6 +453,7 @@
+          //**********************************************************
+ 
+       bitstream.data=_outbuffer;
++      bitstream.bufferSize=_page;
+       for(uint32_t i=0;i&lt;total;i++)
+       {
+        	// get frame
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/CMakeLists.txt	2007-08-26 12:29:26 UTC (rev 3564)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/CMakeLists.txt	2007-08-28 15:32:58 UTC (rev 3565)
+@@ -10,7 +10,7 @@
+ DIA_bitrateHisto.cpp  DIA_flyAsharp.cpp       DIA_flyDialog.cpp    DIA_lavcodec.cpp    DIA_prefs.cpp     DIA_SVCD.cpp       GUI_sdlRender.cpp
+ DIA_builtin.cpp       DIA_flyChromaShift.cpp  DIA_flyHue.cpp       DIA_lavDecoder.cpp  DIA_requant.cpp   DIA_tdeint.cpp     GUI_xvRender.cpp
+ DIA_animated.cpp      DIA_ocr.cpp DIA_tsSub.cpp
+-DIA_flyEq2.cpp
++DIA_flyEq2.cpp          DIA_flv1.cpp
+ )
+ ADD_LIBRARY(${ADM_LIB} STATIC ${${ADM_LIB}_SRCS})
+ ADD_ADM_LIB(${ADM_LIB} ADM_userInterfaces)
+
+Copied: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flv1.cpp (from rev 3561, branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_DVDff.cpp)
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_DVDff.cpp	2007-08-25 22:48:09 UTC (rev 3561)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_flv1.cpp	2007-08-28 15:32:58 UTC (rev 3565)
+@@ -0,0 +1,56 @@
++/*
++    Simplified dialog for FLV1 codec
++    Only bitrate and gop size
++
++
++*/
++#include &lt;config.h&gt;
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++
++
++#include &quot;ADM_lavcodec.h&quot;
++
++#include &quot;default.h&quot;
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
++#include &quot;ADM_codecs/ADM_codec.h&quot;
++#include &quot;ADM_encoder/ADM_vidEncode.hxx&quot;
++#include &quot;ADM_codecs/ADM_ffmpegConfig.h&quot;
++#include &quot;DIA_factory.h&quot;
++#include &quot;ADM_assert.h&quot; 
++
++#include &quot;ADM_codecs/ADM_codec.h&quot;
++#include &quot;ADM_encoder/ADM_vidEncode.hxx&quot;
++#include &quot;ADM_assert.h&quot; 
++#include &quot;DIA_factory.h&quot;
++#include &quot;../../ADM_libraries/ADM_libmpeg2enc/ADM_mpeg2enc.h&quot;
++
++/**
++      \fn DIA_DVDffParam
++      \brief Dialog to set encoding options for SVCD/DVD lavcodec based
++*/
++//____________________________________________
++
++uint8_t DIA_flv1Param(COMPRES_PARAMS *incoming)
++{
++	
++
++	int ret;
++	FFcodecSetting *conf=(FFcodecSetting *)incoming-&gt;extraSettings;
++	ADM_assert(incoming-&gt;extraSettingsLen==sizeof(FFcodecSetting));
++
++                      
++         diaElemUInteger  bitrate(&amp;(incoming-&gt;bitrate),_(&quot;_Bitrate (kb/s):&quot;),100,9000);
++         diaElemUInteger  gop(&amp;(conf-&gt;gop_size),_(&quot;_GOP size:&quot;),1,250);
++
++         diaElem *elems[2]={&amp;bitrate,&amp;gop};
++    
++  if( diaFactoryRun(&quot;FLV1 Configuration&quot;,2,elems))
++  {
++    return 1;
++  }
++  return 0;
++}	
++// EOF
++
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/Makefile.am
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/Makefile.am	2007-08-26 12:29:26 UTC (rev 3564)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/Makefile.am	2007-08-28 15:32:58 UTC (rev 3565)
+@@ -14,7 +14,8 @@
+ DIA_animated.cpp \
+ DIA_ocr.cpp \
+ DIA_tsSub.cpp \
+-DIA_flyEq2.cpp
++DIA_flyEq2.cpp \
++DIA_flv1.cpp
+ 
+ commonObjs:=$(subst .cpp,.o,$(libADM_CommonUI_a_SOURCES))
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000838.html">[Avidemux-svn-commit] r3564 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+	<LI>Next message: <A HREF="000840.html">[Avidemux-svn-commit] r3566 - in	branches/avidemux_2.4_branch/avidemux: ADM_encoder	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#839">[ date ]</a>
+              <a href="thread.html#839">[ thread ]</a>
+              <a href="subject.html#839">[ subject ]</a>
+              <a href="author.html#839">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

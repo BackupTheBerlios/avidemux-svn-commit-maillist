@@ -1,0 +1,795 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2789 - in	branches/avidemux_2.4_branch/avidemux: . ADM_colorspace ADM_video
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2789%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%20ADM_colorspace%20ADM_video&In-Reply-To=%3C200702011945.l11JjRnk002757%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000113.html">
+   <LINK REL="Next"  HREF="000115.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2789 - in	branches/avidemux_2.4_branch/avidemux: . ADM_colorspace ADM_video</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2789%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%20ADM_colorspace%20ADM_video&In-Reply-To=%3C200702011945.l11JjRnk002757%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2789 - in	branches/avidemux_2.4_branch/avidemux: . ADM_colorspace ADM_video">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Feb  1 20:45:27 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000113.html">[Avidemux-svn-commit] r2788 - in	branches/avidemux_2.4_branch/avidemux: . ADM_editor	ADM_filter ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_NONE/ADM_gui2	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI
+</A></li>
+        <LI>Next message: <A HREF="000115.html">[Avidemux-svn-commit] r2790 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_NONE/ADM_gui2	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#114">[ date ]</a>
+              <a href="thread.html#114">[ thread ]</a>
+              <a href="subject.html#114">[ subject ]</a>
+              <a href="author.html#114">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-02-01 20:45:25 +0100 (Thu, 01 Feb 2007)
+New Revision: 2789
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_preview.cpp
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.h
+   branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_genvideo.hxx
+   branches/avidemux_2.4_branch/avidemux/Makefile.am
+   branches/avidemux_2.4_branch/avidemux/avi_vars.h
+   branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp
+   branches/avidemux_2.4_branch/avidemux/gui_action.hxx
+   branches/avidemux_2.4_branch/avidemux/guiplay.cpp
+Log:
+new preview stuff, not 100% done
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.cpp	2007-02-01 19:44:22 UTC (rev 2788)
++++ branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.cpp	2007-02-01 19:45:25 UTC (rev 2789)
+@@ -189,6 +189,98 @@
+         return 1;
+  }
+ 
++/**
++      \fn scale
++      \brief Change colorspace but and put result in the target image , which is bigger
++
++*/
++ uint8_t ColYuvRgb::scale(uint8_t *src, uint8_t *target,uint32_t startx,uint32_t starty, uint32_t tw,uint32_t th,uint32_t totalW,uint32_t totalH)
++ {
++    uint8_t *srd[3];
++    uint8_t *dst[3];
++    int ssrc[3];
++    int ddst[3];
++
++    ADM_assert(_context);
++    
++    uint32_t page;
++
++    page=tw*th;
++    srd[0]=src;
++    srd[1]=src+page;
++    srd[2]=src+((page*5)&gt;&gt;2);
++
++    ssrc[0]=tw;
++    ssrc[1]=ssrc[2]=tw&gt;&gt;1;
++
++    
++    dst[0]=target+(startx*4)+starty*totalW*4;
++    dst[1]=NULL;
++    dst[2]=NULL;
++    ddst[0]=totalW*4;
++    ddst[1]=ddst[2]=0;
++
++    sws_scale((SwsContext *)_context,srd,ssrc,0,th,dst,ddst);
++
++    if(_inverted)
++    {
++#if (defined( ARCH_X86)  || defined(ARCH_X86_64))
++            if( 0 &amp;&amp; CpuCaps::hasMMX())
++            {
++            }
++            else
++#endif
++            {
++                uint8_t r,g,b,a;
++                uint8_t *ptr=NULL;
++                int pel=th;
++                for(int yy=0;yy&lt;th;yy++)
++                {
++                  ptr=target+(startx*4)+(starty+yy)*totalW*4;;
++                  for(int xx=0;xx&lt;tw;xx++)
++                  {
++                      r=ptr[0];
++                      g=ptr[1];
++                      b=ptr[2];
++                      a=ptr[3];
++                      ptr[0]=b;
++                      ptr[1]=g;
++                      ptr[2]=r;
++                      ptr[3]=a;
++                      ptr+=4;
++                  }
++                }
++            }
++          
++          
++        }
++#if  defined( ADM_BIG_ENDIAN)
++        uint8_t r,g,b,a;
++        uint8_t *ptr=target;
++        int pel=h*w;
++        for(int yy=0;yy&lt;th;yy++)
++                {
++                  *ptr=target+(startx*4)+(starty+yy)*totalW*4;;
++                  for(int xx=0;xx&lt;tw;xx++)
++                  {
++                      r=ptr[0];
++                      g=ptr[1];
++                      b=ptr[2];
++                      a=ptr[3];
++                      ptr[0]=a;
++                      ptr[1]=b;
++                      ptr[2]=g;
++                      ptr[3]=r;
++                      ptr+=4;
++                  }
++                }
++        
++#endif
++  return 1;
++ }
++
++ 
++ 
+ //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ uint8_t ColYv12Rgb24::reset(uint32_t ww, uint32_t hh)
+  {
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.h	2007-02-01 19:44:22 UTC (rev 2788)
++++ branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.h	2007-02-01 19:45:25 UTC (rev 2789)
+@@ -58,7 +58,8 @@
+                 ColYuvRgb(uint32_t w, uint32_t h,uint32_t inv=0): ColBase(w,h) {_inverted=inv;};
+                 ~ColYuvRgb(){clean();};
+       virtual  uint8_t reset(uint32_t neww, uint32_t newh);
+-      virtual  uint8_t scale(uint8_t *src, uint8_t *target);  
++      virtual  uint8_t scale(uint8_t *src, uint8_t *target);
++      virtual  uint8_t scale(uint8_t *src, uint8_t *target,uint32_t startx,uint32_t starty, uint32_t w,uint32_t h,uint32_t totalW,uint32_t totalH);    
+  };
+  //********************************************
+ 
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_preview.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_preview.cpp	2007-02-01 19:44:22 UTC (rev 2788)
++++ branches/avidemux_2.4_branch/avidemux/ADM_preview.cpp	2007-02-01 19:45:25 UTC (rev 2789)
+@@ -0,0 +1,233 @@
++/***************************************************************************
++    
++    Handle preview mode
++    
++    It is displayed in 3 layers
++    
++    
++    Engine : Call setPreviewMode and amdPreview depending on the actions
++            previewMode is the **current** preview mode
++    
++    admPreview : 
++          Allocate/desallocate ressources
++          Build preview window
++          Call display properly to display it
++          
++    GUI_PreviewXXXX
++          UI toolkit to actually display the window
++          See GUI_ui.h to see them
++                 
++    
++    
++    copyright            : (C) 2007 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++#include &lt;string.h&gt;
++#include &lt;ADM_assert.h&gt;
++#include &lt;ADM_assert.h&gt;
++#include &quot;config.h&quot;
++
++#include &quot;default.h&quot;
++
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
++#include &quot;ADM_editor/ADM_edit.hxx&quot;
++#include &quot;ADM_video/ADM_genvideo.hxx&quot;
++#include &quot;ADM_filter/video_filters.h&quot;
++
++
++#include &quot;GUI_render.h&quot;
++
++#include &quot;ADM_osSupport/ADM_debugID.h&quot;
++#define MODULE_NAME MODULE_PREVIEW
++#include &quot;ADM_osSupport/ADM_debug.h&quot;
++
++
++#include &quot;GUI_ui.h&quot;
++#define MAX(a,b) ( (a)&gt;(b) ? (a) : (b) )
++
++extern FILTER  videofilters[MAX_FILTER];
++extern uint32_t nb_active_filter;
++
++static   AVDMGenericVideoStream *preview=NULL;
++static ADMImage *previewImage;
++static ADM_PREVIEW_MODE previewMode=ADM_PREVIEW_NONE;
++static uint32_t _mainW=0,_mainH=0;
++static uint32_t _displayW=0,_displayH=0;
++/**
++      \fn getPreviewMode
++      \brief returns current preview mode
++      @return current preview mode
++
++*/
++
++ADM_PREVIEW_MODE getPreviewMode(void)
++{
++  return previewMode; 
++}
++/**
++      \fn setPreviewMode
++      \brief set current preview mode an update UI
++      @param mode  new preview mode
++
++*/
++
++ void setPreviewMode(ADM_PREVIEW_MODE mode)
++{
++  previewMode=mode; 
++  UI_setCurrentPreview( (int)mode);
++}
++
++
++/**
++      \fn admPreview::start
++      \brief start preview
++
++*/
++
++void 	admPreview::start( void )
++{
++            aprintf(&quot;--killing\n&quot;);
++            getFirstVideoFilter();
++            
++            preview=videofilters[  nb_active_filter-1].filter;
++            aprintf(&quot;--spawning\n&quot;);
++            ADM_assert(!previewImage)
++                
++            previewImage=new ADMImage(preview-&gt;getInfo()-&gt;width,preview-&gt;getInfo()-&gt;height);
++            
++            
++            switch(previewMode)
++            {
++              case  ADM_PREVIEW_SEPARATE:
++                  GUI_PreviewInit(preview-&gt;getInfo()-&gt;width,preview-&gt;getInfo()-&gt;height,0);
++                  
++                  /* no break here, not a mistake */
++              case  ADM_PREVIEW_NONE:
++              
++                  _displayW=_mainW;
++                  _displayH=_mainH;
++                  break;
++              case  ADM_PREVIEW_OUTPUT:
++                  _displayW=preview-&gt;getInfo()-&gt;width;
++                  _displayH=preview-&gt;getInfo()-&gt;height;
++                  break;
++              case  ADM_PREVIEW_SIDE:
++              {
++                  
++                  _displayH=MAX(_mainH,preview-&gt;getInfo()-&gt;height);
++                  _displayW=_mainW+preview-&gt;getInfo()-&gt;width;
++                  break;
++              }
++              case  ADM_PREVIEW_TOP:
++              {
++                  
++                  _displayW=MAX(_mainW,preview-&gt;getInfo()-&gt;width);
++                  _displayH=_mainH+preview-&gt;getInfo()-&gt;height;
++                  break;
++              }
++              default: ADM_assert(0);
++            }
++            renderResize(_displayW,_displayH,ZOOM_1_1);
++}
++/**
++      \fn admPreview::stop
++      \brief kill preview window and associated datas
++*/
++
++void admPreview::stop( void )
++{
++      if(previewMode==ADM_PREVIEW_SEPARATE)
++                GUI_PreviewEnd();
++      if(previewMode!=ADM_PREVIEW_NONE)
++      {
++          if(previewImage)
++            delete previewImage;
++          previewImage=NULL;
++      }
++      renderResize(_mainW,_mainH,ZOOM_1_1);
++}
++/**
++      \fn admPreview::setMainDimension
++      \brief Update width &amp; height of input video
++      @param w : width
++      @param h : height
++*/
++
++void admPreview::setMainDimension(uint32_t w, uint32_t h)
++{
++  _mainW=w;
++  _mainH=h;
++  _displayW=w;
++  _displayH=h;
++  renderResize(w,h,ZOOM_1_1);
++  
++}
++/**
++      \fn admPreview::update
++      \brief display data associated with framenum image
++      @param image : current main image (input)
++      @param framenum, framenumber
++*/
++
++void admPreview::update(uint32_t framenum,ADMImage *image)
++{
++    uint32_t fl,len;	
++
++    switch(previewMode)
++    {
++      case ADM_PREVIEW_NONE:
++        if(image) renderUpdateImage(image-&gt;data);
++        break;
++      case ADM_PREVIEW_OUTPUT:
++            if(framenum&lt;=preview-&gt;getInfo()-&gt;nb_frames-1)
++                  {
++                          preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
++                          renderUpdateImage(previewImage-&gt;data);
++                  }
++            break;
++      case ADM_PREVIEW_SEPARATE:
++            ADM_assert(preview);
++            ADM_assert(previewImage);
++
++          if(image) renderUpdateImage(image-&gt;data);
++          if( GUI_PreviewStillAlive())
++          {
++                  aprintf(&quot;Preview: Ask for frame %lu\n&quot;,framenum);
++                  if(framenum&lt;=preview-&gt;getInfo()-&gt;nb_frames-1)
++                  {
++                          preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
++                          GUI_PreviewUpdate(previewImage-&gt;data);
++                  }
++          }
++          break;
++      case ADM_PREVIEW_SIDE:
++              ADM_assert(preview);
++              ADM_assert(previewImage);
++  
++              renderUpdateImageBlit(image-&gt;data,0,0,_mainW,_mainH); // Main
++              preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
++              renderUpdateImageBlit(previewImage-&gt;data,_mainW,0,previewImage-&gt;_width,previewImage-&gt;_height);
++              break;
++        
++      case ADM_PREVIEW_TOP:
++              ADM_assert(preview);
++              ADM_assert(previewImage);
++  
++              renderUpdateImageBlit(image-&gt;data,0,0,_mainW,_mainH); // Main
++              preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
++              renderUpdateImageBlit(previewImage-&gt;data,0,_mainH,previewImage-&gt;_width,previewImage-&gt;_height);
++              break;
++      default: ADM_assert(0);
++    }
++}
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_genvideo.hxx
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_genvideo.hxx	2007-02-01 19:44:22 UTC (rev 2788)
++++ branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_genvideo.hxx	2007-02-01 19:45:25 UTC (rev 2789)
+@@ -41,12 +41,12 @@
+ #include &quot;ADM_image.h&quot;
+ 
+ 
+-void GUI_PreviewInit(uint32_t w , uint32_t h, uint32_t modal);
+-uint8_t 	GUI_PreviewUpdate(uint8_t *data);
+-void 	GUI_PreviewEnd( void);
+-uint8_t  	GUI_PreviewRun(uint8_t *data);
+-uint8_t GUI_StillAlive( void );
+-void GUI_PreviewShow(uint32_t w, uint32_t h, uint8_t *data);
++void     GUI_PreviewInit(uint32_t w , uint32_t h, uint32_t modal);
++uint8_t  GUI_PreviewUpdate(uint8_t *data);
++void 	 GUI_PreviewEnd( void);
++uint8_t  GUI_PreviewRun(uint8_t *data);
++uint8_t  GUI_PreviewStillAlive( void );
++void     GUI_PreviewShow(uint32_t w, uint32_t h, uint8_t *data);
+ #define Pixel uint8_t
+ typedef struct
+  {
+
+Modified: branches/avidemux_2.4_branch/avidemux/Makefile.am
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/Makefile.am	2007-02-01 19:44:22 UTC (rev 2788)
++++ branches/avidemux_2.4_branch/avidemux/Makefile.am	2007-02-01 19:45:25 UTC (rev 2789)
+@@ -41,7 +41,7 @@
+ adm_src =   guiplay.cpp  \
+ 	gui_savenew.cpp  gui_navigate.cpp gtk_gui.cpp   \
+ 	main.cpp   \
+-	gui_autodrive.cpp GUI_jobs.cpp
++	gui_autodrive.cpp GUI_jobs.cpp ADM_preview.cpp
+ 
+ 
+ avidemux2_cli_SOURCES=$(adm_src)
+
+Modified: branches/avidemux_2.4_branch/avidemux/avi_vars.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/avi_vars.h	2007-02-01 19:44:22 UTC (rev 2788)
++++ branches/avidemux_2.4_branch/avidemux/avi_vars.h	2007-02-01 19:45:25 UTC (rev 2789)
+@@ -52,27 +52,8 @@
+ =0
+ #endif
+ ;
+-EXTERN uint8_t 	mode_preview
+-#ifdef __DECLARE__
+-=0
+-#endif
+-;
+ 
+-;
+ 
+-/**
+-	This buffer is share for GUI display
+-	It leads to the buffer where the last displayed frame has been uncompressed
+-
+-*/
+-EXTERN ADMImage *rdr_decomp_buffer
+-#ifdef __DECLARE__
+-=NULL
+-#endif
+-;
+-
+-
+-
+ EXTERN AVDMGenericAudioStream *aviaudiostream;
+ EXTERN AVDMGenericAudioStream *currentaudiostream
+ #ifdef __DECLARE__
+@@ -97,16 +78,6 @@
+ #endif
+ ;
+ /**
+-	Output mode : 
+-		If 0 display incoming video_body	
+-		if 1, display filtered video
+-*/
+-EXTERN uint8_t guiOutputDisplay
+-#ifdef __DECLARE__
+-=0
+-#endif
+-;
+-/**
+ 	If set to 1, means video is in process mode_preview
+ 	If set to 0, copy mode
+ */
+
+Modified: branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp	2007-02-01 19:44:22 UTC (rev 2788)
++++ branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp	2007-02-01 19:45:25 UTC (rev 2789)
+@@ -25,11 +25,7 @@
+ #include &lt;sys/time.h&gt;
+ #include &lt;fcntl.h&gt;	/* O_RDONLY */
+ #include &lt;errno.h&gt;
+-#warning FIXME : Don't include GLIB!
+-#warning FIXME : Don't include GLIB!
+ #include &lt;glib.h&gt;
+-#warning FIXME : Don't include GLIB!
+-#warning FIXME : Don't include GLIB!
+ 
+     
+ #include &quot;ADM_lavcodec.h&quot;
+@@ -99,13 +95,10 @@
+ int A_audioSave(char *name);
+ static void ReSync (void);
+ static void cleanUp (void);
+-extern uint8_t getPreviewToggleStatus (void);
+-extern void getPreviewToggleStatus (uint8_t y);
+ extern void GUI_setName (char *n);
+ extern void DIA_properties( void);
+ extern uint8_t DIA_Preferences(void);
+ extern void  GUI_displayBitrate( void );
+-//uint8_t GUI_InitRender (GtkWidget * g, uint32_t w, uint32_t h);
+ void test_mpeg (char *name);
+ uint8_t GUI_getDoubleValue (double *valye, float min, float max,
+ 			    const char *title);
+@@ -170,6 +163,11 @@
+ uint8_t Util_saveJpg (char *name,uint32_t w, uint32_t,ADMImage *image);
+ extern const char * GUI_getCustomScript(uint32_t nb);
+ extern gboolean SliderIsShifted;
++
++ADMImage *rdr_decomp_buffer=NULL;
++
++
++
+ //___________________________________________
+ // serialization of user event throught gui
+ //
+@@ -295,12 +293,6 @@
+       ADM_aviUISetMuxer();
+       return;
+       break;
+-    case ACT_OuputToggle:
+-        guiOutputDisplay ^= 1;
+-        UI_setOutputToggleStatus (guiOutputDisplay);
+-        printf (&quot;\n Ouput is now : %d&quot;, guiOutputDisplay);
+-      return;
+-
+ #ifdef HAVE_AUDIO      
+     	case ACT_SelectDevOSS:
+ 				   AVDM_switch (DEVICE_OSS);
+@@ -466,12 +458,12 @@
+         case ACT_ZOOM_1_1:
+         case ACT_ZOOM_2_1:
+         case ACT_ZOOM_4_1:
+-
++#if 0
+                 currentZoom=(renderZoom)((action-ACT_ZOOM_1_4)+ZOOM_1_4);
+                 renderResize (avifileinfo-&gt;width, avifileinfo-&gt;height,currentZoom);
+                 renderUpdateImage (rdr_decomp_buffer-&gt;data);
+                 renderRefresh ();
+-
++#endif
+                 break;
+ 
+ 
+@@ -638,25 +630,21 @@
+ 	}
+ //        printf(&quot;\n new frame : %lu&quot;,nf);
+       break;
+-    case ACT_PreviewToggle:
+-      mode_preview^=1;
+-      UI_setPreviewToggleStatus (mode_preview);
+-
+-      printf (&quot;\n Preview is now : %d&quot;, mode_preview);
+-      if (mode_preview)
+-	{
+-
+-	  editorReignitPreview ();
+-	  video_body-&gt;activateCache();
+-	  editorUpdatePreview (curframe);
+-
+-	}
+-      else
+-      {
+-	editorKillPreview ();
+-	//video_body-&gt;desactivateCache();
++#define TOGGLE_PREVIEW ADM_PREVIEW_OUTPUT
++    case ACT_PreviewChanged:
++    {
++        ADM_PREVIEW_MODE oldpreview=getPreviewMode(),newpreview=(ADM_PREVIEW_MODE)UI_getCurrentPreview();
++          printf(&quot;Old preview %d, New preview mode : %d\n&quot;,oldpreview,newpreview);
++          
++          if(oldpreview==newpreview)
++          {
++            return;
++          }
++            admPreview::stop();
++            setPreviewMode(newpreview);
++            admPreview::start();
++            admPreview::update(curframe,rdr_decomp_buffer);
+       }
+-
+       break;
+     case ACT_StopAvi:
+       if (playing)
+@@ -894,21 +882,19 @@
+       break;
+     case ACT_VideoParameter:
+       // first remove current viewer
+-      if (mode_preview)
++      if (getPreviewMode()!=ADM_PREVIEW_NONE)
+         {
+-                
+-	        editorKillPreview ();
++	         admPreview::stop();
+         }
+       GUI_handleVFilter();
+       if( getLastVideoFilter()-&gt;getInfo()-&gt;width % 8 ){
+         GUI_Error_HIG(_(&quot;Width is not a multiple of 8&quot;),
+                       _(&quot;This will make trouble for avi files.&quot;));
+       }
+-      if (mode_preview)
++      if (getPreviewMode()!=ADM_PREVIEW_NONE)
+       {
+-        editorReignitPreview();
+-	editorUpdatePreview (curframe);
+-        UI_setPreviewToggleStatus( 1);
++         admPreview::start();
++         admPreview::update (curframe,rdr_decomp_buffer);
+       }
+       break;
+ 
+@@ -982,8 +968,11 @@
+   if (avifileinfo)		// already opened ?
+     {				// delete everything
+       // if preview is on
+-      if (mode_preview)
+-	GUI_PreviewEnd ();
++      if(getPreviewMode()!=ADM_PREVIEW_NONE)
++      {
++	admPreview::stop();
++        setPreviewMode(ADM_PREVIEW_NONE);
++      }
+       delete avifileinfo;
+       //delete wavinfo;
+       wavinfo = (WAVHeader *) NULL;
+@@ -1118,7 +1107,6 @@
+ 
+   curframe = 0;
+   getFirstVideoFilter(); // reinit first filter
+-  video_body-&gt;flushCache();
+   ADM_assert (rdr_decomp_buffer =new ADMImage(avifileinfo-&gt;width,avifileinfo-&gt;height));
+ 
+   //frameStart = 0;
+@@ -1169,7 +1157,7 @@
+     }
+ 
+   // Init renderer
+-  renderResize (avifileinfo-&gt;width, avifileinfo-&gt;height,currentZoom);
++    admPreview::setMainDimension(avifileinfo-&gt;width, avifileinfo-&gt;height);
+   curframe = 0;
+   
+ 
+@@ -1182,8 +1170,7 @@
+     }
+   else
+     {
+-      renderUpdateImage (rdr_decomp_buffer-&gt;data);
+-      renderRefresh ();
++      admPreview::update (curframe,rdr_decomp_buffer);
+       update_status_bar(rdr_decomp_buffer);
+     }
+    
+
+Modified: branches/avidemux_2.4_branch/avidemux/gui_action.hxx
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/gui_action.hxx	2007-02-01 19:44:22 UTC (rev 2788)
++++ branches/avidemux_2.4_branch/avidemux/gui_action.hxx	2007-02-01 19:45:25 UTC (rev 2789)
+@@ -159,6 +159,7 @@
+ ACT_RunScript,
+ ACT_AudioCodecChanged,
+ ACT_VideoCodecChanged,
++ACT_PreviewChanged,
+ ACT_Bitrate,
+ ACT_Ocr,
+ ACT_SelectTrack1,
+
+Modified: branches/avidemux_2.4_branch/avidemux/guiplay.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/guiplay.cpp	2007-02-01 19:44:22 UTC (rev 2788)
++++ branches/avidemux_2.4_branch/avidemux/guiplay.cpp	2007-02-01 19:45:25 UTC (rev 2789)
+@@ -60,8 +60,8 @@
+ 
+ #define EVEN(x) (x&amp;0xffffffe)
+ 
++ extern ADMImage *rdr_decomp_buffer;
+ 
+- extern void  UI_setPreviewToggleStatus( uint8_t status );
+  extern uint8_t GUI_getFrame(uint32_t frameno, ADMImage *image, uint32_t *flags);
+ //___________________________________
+ uint8_t stop_req;
+@@ -109,15 +109,9 @@
+   uint32_t remaining=avifileinfo-&gt;nb_frames-curframe;
+ 
+ 
+-    if(guiOutputDisplay)
++    if(getPreviewMode()==ADM_PREVIEW_OUTPUT)
+     {
+                 filter=getLastVideoFilter(curframe,remaining);
+-                if(mode_preview)
+-                {
+-                      editorKillPreview ();
+-                      UI_setPreviewToggleStatus( 0 );
+-                      mode_preview=0;
+-                }
+     }
+     else
+     {
+@@ -155,11 +149,7 @@
+     do
+     {
+         vids++;
+-        renderUpdateImage(buffer-&gt;data);
+-        if(mode_preview&amp;&amp;!guiOutputDisplay)
+-        {	
+-            editorUpdatePreview(played_frame);
+-        }
++        admPreview::update(played_frame,buffer);;
+         update_status_bar(buffer);
+         if (time_a == 0)
+             time_a = getTime(0);
+@@ -213,7 +203,7 @@
+ 	    }
+      	//
+             UI_purge();
+-            if(mode_preview)
++            if(getPreviewMode()==ADM_PREVIEW_SIDE || getPreviewMode()==ADM_PREVIEW_TOP)
+             {
+               UI_purge();
+               UI_purge(); 
+@@ -234,13 +224,8 @@
+ 	   getFirstVideoFilter( );
+ 	   //video_body-&gt;getUncompressedFrame(curframe, rdr_decomp_buffer,&amp;flags);
+ 	   GUI_getFrame(curframe, rdr_decomp_buffer, &amp;flags);
+-	   renderUpdateImage(rdr_decomp_buffer-&gt;data);
+-	   renderRefresh();
++           admPreview::update(curframe,rdr_decomp_buffer);
+      	   update_status_bar(rdr_decomp_buffer);
+-	   if(mode_preview)
+-	   {
+-		editorUpdatePreview(curframe);
+-	   }
+ #ifdef HAVE_AUDIO
+     if (currentaudiostream)
+       {
+@@ -398,8 +383,6 @@
+     audio_available = 1;
+ }
+ 
+-//
+-// Build audio filters
+ 
+ #endif
+ // EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000113.html">[Avidemux-svn-commit] r2788 - in	branches/avidemux_2.4_branch/avidemux: . ADM_editor	ADM_filter ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_NONE/ADM_gui2	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI
+</A></li>
+	<LI>Next message: <A HREF="000115.html">[Avidemux-svn-commit] r2790 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_NONE/ADM_gui2	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#114">[ date ]</a>
+              <a href="thread.html#114">[ thread ]</a>
+              <a href="subject.html#114">[ subject ]</a>
+              <a href="author.html#114">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

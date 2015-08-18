@@ -1,0 +1,120 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4220 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4220%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4&In-Reply-To=%3C200807161307.m6GD7VW5005639%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001467.html">
+   <LINK REL="Next"  HREF="001469.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4220 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4220%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4&In-Reply-To=%3C200807161307.m6GD7VW5005639%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4220 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Wed Jul 16 15:07:31 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001467.html">[Avidemux-svn-commit] r4219 - in branches/avidemux_2.4_branch:	avidemux platforms/windows platforms/windows/build_scripts	platforms/windows/build_scripts/avidemux_2.4	platforms/windows/build_scripts/avidemux_2.4/Tools	platforms/windows/installer
+</A></li>
+        <LI>Next message: <A HREF="001469.html">[Avidemux-svn-commit] r4221 - in	branches/avidemux_2.5_branch_gruntster/avidemux: . ADM_audio	ADM_audioEncoder ADM_audioEncoder/include	ADM_audioEncoder/src ADM_audiocodec ADM_audiodevice	ADM_audiofilter ADM_core/include ADM_core/src ADM_coreAudio	ADM_coreAudio/include ADM_coreAudio/src ADM_libraries/ADM_utilities	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_filters	ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1468">[ date ]</a>
+              <a href="thread.html#1468">[ thread ]</a>
+              <a href="subject.html#1468">[ subject ]</a>
+              <a href="author.html#1468">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-07-16 15:07:21 +0200 (Wed, 16 Jul 2008)
+New Revision: 4220
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4audio.cpp
+Log:
+[MP4] improve detection of MP2 audio
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp	2008-07-16 01:19:49 UTC (rev 4219)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4Analyzer.cpp	2008-07-16 13:07:21 UTC (rev 4220)
+@@ -1044,9 +1044,11 @@
+                                     {
+                                       switch(objectTypeIndication)
+                                       {
+-                                          case 0x69:ADIO.encoding=WAV_MP3;break;
+-                                          case 0x6b:ADIO.encoding=WAV_MP2;break;
+-                                          case 0x6d:ADIO.encoding=WAV_MP3;break;
++                                          case 0x69:
++                                          case 0x6b:
++                                          case 0x6d:
++											  ADIO.encoding=WAV_MP3;
++											  break;
+                                           case 226:ADIO.encoding=WAV_AC3;break;
+                                           break;
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4audio.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4audio.cpp	2008-07-16 01:19:49 UTC (rev 4219)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_mp4audio.cpp	2008-07-16 13:07:21 UTC (rev 4220)
+@@ -51,7 +51,22 @@
+ 
+ 	_extraLen=track-&gt;extraDataSize;
+ 	_extraData=track-&gt;extraData;
+-	
++
++	// Check if MP3 track is actually MP2
++	if (track-&gt;_rdWav.encoding == WAV_MP3 &amp;&amp; _nb_chunks &amp;&amp; _index[0].size &gt;= 4)
++	{
++		uint8_t sample[4];
++
++		fseeko(_fd, _index[0].offset, SEEK_SET);
++		fread(&amp;sample, 1, 4, _fd);
++
++		uint32_t fcc = sample[0] &lt;&lt; 24 | sample[1] &lt;&lt; 16 | sample[2] &lt;&lt; 8 | sample[3];
++		int layer = 4 - ((fcc &gt;&gt; 17) &amp; 0x3);
++
++		if (layer == 2)
++			track-&gt;_rdWav.encoding = WAV_MP2;
++	}
++
+ 	_wavheader=new WAVHeader;
+         memcpy(_wavheader,&amp;(track-&gt;_rdWav),sizeof(WAVHeader));
+ 	
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001467.html">[Avidemux-svn-commit] r4219 - in branches/avidemux_2.4_branch:	avidemux platforms/windows platforms/windows/build_scripts	platforms/windows/build_scripts/avidemux_2.4	platforms/windows/build_scripts/avidemux_2.4/Tools	platforms/windows/installer
+</A></li>
+	<LI>Next message: <A HREF="001469.html">[Avidemux-svn-commit] r4221 - in	branches/avidemux_2.5_branch_gruntster/avidemux: . ADM_audio	ADM_audioEncoder ADM_audioEncoder/include	ADM_audioEncoder/src ADM_audiocodec ADM_audiodevice	ADM_audiofilter ADM_core/include ADM_core/src ADM_coreAudio	ADM_coreAudio/include ADM_coreAudio/src ADM_libraries/ADM_utilities	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_filters	ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1468">[ date ]</a>
+              <a href="thread.html#1468">[ thread ]</a>
+              <a href="subject.html#1468">[ subject ]</a>
+              <a href="author.html#1468">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

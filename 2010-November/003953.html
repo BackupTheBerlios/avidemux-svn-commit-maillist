@@ -1,0 +1,200 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6774 - in	branches/avidemux_2.6_branch_mean/avidemux_core: .	ADM_coreSocket/include ADM_coreSocket/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6774%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core%3A%20.%0A%09ADM_coreSocket/include%20ADM_coreSocket/src&In-Reply-To=%3C20101127080130.E810C480FAA%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003952.html">
+   <LINK REL="Next"  HREF="003954.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6774 - in	branches/avidemux_2.6_branch_mean/avidemux_core: .	ADM_coreSocket/include ADM_coreSocket/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6774%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core%3A%20.%0A%09ADM_coreSocket/include%20ADM_coreSocket/src&In-Reply-To=%3C20101127080130.E810C480FAA%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6774 - in	branches/avidemux_2.6_branch_mean/avidemux_core: .	ADM_coreSocket/include ADM_coreSocket/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Nov 27 09:01:30 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003952.html">[Avidemux-svn-commit] r6773 - in	branches/avidemux_2.6_branch_mean/avidemux_core: .	ADM_coreSocket ADM_coreSocket/include ADM_coreSocket/src
+</A></li>
+        <LI>Next message: <A HREF="003954.html">[Avidemux-svn-commit] r6775 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs: include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3953">[ date ]</a>
+              <a href="thread.html#3953">[ thread ]</a>
+              <a href="subject.html#3953">[ subject ]</a>
+              <a href="author.html#3953">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-11-27 09:01:30 +0100 (Sat, 27 Nov 2010)
+New Revision: 6774
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/include/ADM_coreSocket.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/src/ADM_coreSocket.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/CMakeLists.txt
+Log:
+[coreSocket] Wrap socket management
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/include/ADM_coreSocket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/include/ADM_coreSocket.h	2010-11-27 08:01:29 UTC (rev 6773)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/include/ADM_coreSocket.h	2010-11-27 08:01:30 UTC (rev 6774)
+@@ -12,8 +12,8 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
+-#ifndef AVS_CORE_SOCKET_H
+-#define AVS_CORE_SOCKET_H
++#ifndef ADM_CORE_SOCKET_H
++#define ADM_CORE_SOCKET_H
+ #include &quot;ADM_threads.h&quot;
+ 
+ /**
+@@ -23,9 +23,10 @@
+ {
+     protected:
+         int         mySocket;
+-        admMutex    lock;
++        admMutex    lock;       
++        bool        create(void);
+     public:
+-        bool     bindAndAccept(uint32_t *port);
++        bool     createBindAndAccept(uint32_t *port);
+         bool     connectTo(uint32_t port);
+         bool     rxData(uint32_t howmuch, uint8_t *where);
+         bool     txData(uint32_t howmuch, uint8_t *where);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/src/ADM_coreSocket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/src/ADM_coreSocket.cpp	2010-11-27 08:01:29 UTC (rev 6773)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/src/ADM_coreSocket.cpp	2010-11-27 08:01:30 UTC (rev 6774)
+@@ -135,12 +135,78 @@
+   return 1;
+ }
+ /**
+-    \fn bindAndAccept
++    \fn create
++    \brief create a TCP socket
++*/
++bool ADM_Socket::create(void)
++{
++      mySocket = socket(AF_INET, SOCK_STREAM, 0);
++      if(mySocket&lt;0) return false;
++      return true;
++
++}
++/**
++    \fn createBindAndAccept
+     \brief bind to any port and accept incoming packets
+ */
+-bool     ADM_Socket::bindAndAccept(uint32_t *port)
++bool     ADM_Socket::createBindAndAccept(uint32_t *port)
+ {
+ 
++
++    if(!create())
++    {
++        ADM_error(&quot;Cannot create socket\n&quot;);
++        return false;
++    }
++
++  sockaddr_in service;
++  service.sin_family = AF_INET;
++#define BIND_ADR &quot;127.0.0.1&quot;
++    service.sin_addr.s_addr = inet_addr(BIND_ADR);
++	printf(&quot;Binding on %s\n&quot;,BIND_ADR);
++
++  *port=0;
++  service.sin_port = 0; // bind to any port
++
++#ifdef __MINGW32__
++        #define SADDR SOCKADDR
++        #define SADDR_IN SOCKADDR
++#else
++        #define SADDR struct sockaddr
++        #define SADDR_IN struct sockaddr_in    
++#endif
++
++  int one=true;
++  if (bind( mySocket,  (SADDR *)&amp;service, sizeof(service))) 
++  {
++		ADM_error(&quot;bind() failed  \n&quot;);
++		fflush(stdout);
++		close();
++		return false;
++  }
++   // Get port 
++    socklen_t len=sizeof( service);
++    if ( getsockname ( mySocket, (SADDR *)&amp; service, &amp;len ) &lt; 0 ) 
++    {
++        ADM_error(&quot;Getsockname failed\n&quot;);
++        fflush(stdout);
++        close();
++        return false;
++    }
++    *port= ntohs ( ((SADDR_IN *)&amp;service)-&gt;sin_port ); 
++     
++   // Set high buffer + low delay
++    ADM_info(&quot;Socket bound to port %u\n&quot;,(unsigned int)*port);
++
++    int er=listen(mySocket,1);
++	if(er)
++	{
++		ADM_error(&quot;Error in listen\n&quot;);
++		fflush(stdout);
++        return false;
++	}
++
++    return true;
+ }
+ /**
+     \fn ctor
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/CMakeLists.txt	2010-11-27 08:01:29 UTC (rev 6773)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/CMakeLists.txt	2010-11-27 08:01:30 UTC (rev 6774)
+@@ -71,6 +71,7 @@
+ ADD_SUBDIRECTORY(ADM_coreVideoFilter)
+ ADD_SUBDIRECTORY(ADM_ffmpeg)
+ ADD_SUBDIRECTORY(ADM_coreJobs)
++ADD_SUBDIRECTORY(ADM_coreSocket)
+ 
+ if (NOT USE_SYSTEM_SPIDERMONKEY)
+ 	ADD_SUBDIRECTORY(ADM_smjs)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003952.html">[Avidemux-svn-commit] r6773 - in	branches/avidemux_2.6_branch_mean/avidemux_core: .	ADM_coreSocket ADM_coreSocket/include ADM_coreSocket/src
+</A></li>
+	<LI>Next message: <A HREF="003954.html">[Avidemux-svn-commit] r6775 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs: include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3953">[ date ]</a>
+              <a href="thread.html#3953">[ thread ]</a>
+              <a href="subject.html#3953">[ subject ]</a>
+              <a href="author.html#3953">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

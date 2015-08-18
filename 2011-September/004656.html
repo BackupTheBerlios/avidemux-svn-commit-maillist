@@ -1,0 +1,331 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7508 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7508%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render&In-Reply-To=%3C20110912092225.30168481300%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004655.html">
+   <LINK REL="Next"  HREF="004657.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7508 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7508%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render&In-Reply-To=%3C20110912092225.30168481300%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7508 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Sep 12 11:22:25 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004655.html">[Avidemux-svn-commit] r7507 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+        <LI>Next message: <A HREF="004657.html">[Avidemux-svn-commit] r7509 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4656">[ date ]</a>
+              <a href="thread.html#4656">[ thread ]</a>
+              <a href="subject.html#4656">[ subject ]</a>
+              <a href="author.html#4656">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-09-12 11:22:24 +0200 (Mon, 12 Sep 2011)
+New Revision: 7508
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.h
+Log:
+[qtGl render] Factorize openGl init, display glError if any
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp	2011-09-12 09:22:23 UTC (rev 7507)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp	2011-09-12 09:22:24 UTC (rev 7508)
+@@ -27,8 +27,8 @@
+ #include &quot;GUI_render.h&quot;
+ 
+ #include &quot;GUI_accelRender.h&quot;
+-#include &quot;GUI_qtGlRender.h&quot;
+-
++#include &quot;GUI_qtGlRender.h&quot;
++
+ static const char *yuvToRgb =
+ 	&quot;#extension GL_ARB_texture_rectangle: enable\n&quot;
+ 	&quot;uniform sampler2DRect texY, texU, texV;\n&quot;
+@@ -57,12 +57,57 @@
+ 	&quot;  gl_FragColor = outx;\n&quot;
+ 	&quot;}\n&quot;;
+ 
++typedef void (*_glActiveTexture) (GLenum);
++static _glActiveTexture myGlActiveTexture=NULL;
++
++static bool initedOnced=false;
++static bool initedValue=false;
+ /**
++    \fn checkGlError
++*/
++static bool checkGlError(const char *op)
++{
++#if 1
++    GLenum er=glGetError();
++    if(!er) return true;
++    ADM_error(&quot;[GLERROR]%s: %d =&gt; %s\n&quot;,op,er,gluErrorString(er));
++    return false;
++#else
++
++    return true;
++#endif
++}          
++
++
++/**
++    \fn initOnce
++*/
++static bool initOnce(QGLWidget *widget)
++{
++    if(initedOnced) return initedValue;
++
++	myGlActiveTexture = (_glActiveTexture)widget-&gt;context()-&gt;getProcAddress(QLatin1String(&quot;glActiveTexture&quot;));
++    initedOnced=true;
++	if (!myGlActiveTexture)
++	{
++		initedValue = false;
++		printf(&quot;[GL Render] Active Texture function not found!\n&quot;);
++        return false;
++	}
++    initedValue=true;
++	printf(&quot;[GL Render] OpenGL Vendor: %s\n&quot;, glGetString(GL_VENDOR));
++	printf(&quot;[GL Render] OpenGL Renderer: %s\n&quot;, glGetString(GL_RENDERER));
++	printf(&quot;[GL Render] OpenGL Version: %s\n&quot;, glGetString(GL_VERSION));
++	printf(&quot;[GL Render] OpenGL Extensions: %s\n&quot;, glGetString(GL_EXTENSIONS));
++    return true;
++}
++/**
+     \fn ctor
+ */
+ 
+ QtGlAccelWidget::QtGlAccelWidget(QWidget *parent, int w, int h) : QGLWidget(parent)
+-{
++{
++    ADM_info(&quot;\t Creating glWidget\n&quot;);
+ 	memset(textureRealWidths, 0, sizeof(textureRealWidths));
+     memset(textureStrides, 0, sizeof(textureStrides));
+ 	memset(textureHeights, 0, sizeof(textureHeights));
+@@ -90,6 +135,7 @@
+ */
+ QtGlAccelWidget::~QtGlAccelWidget()
+ {
++    ADM_info(&quot;\t Deleting glWidget\n&quot;);
+     if(glProgram) delete glProgram;
+     glProgram=NULL;
+     if(textureName[0])
+@@ -127,24 +173,13 @@
+ void QtGlAccelWidget::initializeGL()
+ {
+ 	int success = 1;
+-
+-#ifndef QT_OPENGL_ES
+-	glActiveTexture = (_glActiveTexture)this-&gt;context()-&gt;getProcAddress(QLatin1String(&quot;glActiveTexture&quot;));
+-
+-	if (!glActiveTexture)
+-	{
+-		success = 0;
+-		printf(&quot;[GL Render] Active Texture function not found!\n&quot;);
+-	}
+-#endif
+-
+-	printf(&quot;[GL Render] OpenGL Vendor: %s\n&quot;, glGetString(GL_VENDOR));
+-	printf(&quot;[GL Render] OpenGL Renderer: %s\n&quot;, glGetString(GL_RENDERER));
+-	printf(&quot;[GL Render] OpenGL Version: %s\n&quot;, glGetString(GL_VERSION));
+-	printf(&quot;[GL Render] OpenGL Extensions: %s\n&quot;, glGetString(GL_EXTENSIONS));
+ 
+-
+-
++    if(!initOnce(this))
++    {
++        ADM_warning(&quot;No QtGl support\n&quot;);
++        success=false;
++        
++    }
+ 	glProgram = new QGLShaderProgram(this);
+ 
+ 	if (success &amp;&amp; !glProgram-&gt;addShaderFromSourceCode(QGLShader::Fragment, yuvToRgb))
+@@ -176,13 +211,17 @@
+ */
+ void QtGlAccelWidget::updateTexture()
+ {
+-    
++    checkGlError(&quot;Entering UpdateTexture&quot;);
+ 	if (!textureOffsets[0])
+ 	{
+ 		printf(&quot;[Render] Buffer not set\n&quot;);
+ 		return;
+ 	}
+-
++    if(!myGlActiveTexture)
++    {
++        ADM_error(&quot;No glActiveTexture\n&quot;);
++        return;
++    }
+ 	if (firstRun)
+ 	{
+ 		glViewport(0, 0, width(), height());
+@@ -193,25 +232,27 @@
+ 	}
+ 
+ //--
++        
+       // Activate texture unit &quot;tex&quot;
+         for(int xplane=2;xplane&gt;=0;xplane--)
+         {
+-            glActiveTexture(GL_TEXTURE0+xplane);
++            myGlActiveTexture(GL_TEXTURE0+xplane);
+             ADM_PLANE plane=(ADM_PLANE)xplane;
+             glBindTexture(GL_TEXTURE_RECTANGLE_NV, textureName[xplane]); // Use tex engine &quot;texNum&quot;
+             glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+             glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+             glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+             glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+-            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
++            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+ 
+-                if(!firstRun)
++                if(firstRun)
+                 {
+                     glTexImage2D(GL_TEXTURE_RECTANGLE_NV, 0, GL_LUMINANCE, 
+                                     textureStrides[xplane],
+                                     textureHeights[xplane],
+                                     0, GL_LUMINANCE, GL_UNSIGNED_BYTE, 
+                                     textureOffsets[xplane]);
++                    checkGlError(&quot;texImage2D&quot;);
+                 }else
+                 {
+                     glTexSubImage2D(GL_TEXTURE_RECTANGLE_NV, 0, 0, 0, 
+@@ -219,9 +260,10 @@
+                         textureHeights[xplane],
+                         GL_LUMINANCE, GL_UNSIGNED_BYTE, 
+                         textureOffsets[xplane]);
++                    checkGlError(&quot;subImage2D&quot;);
+                 }
+         }
+-
++        
+ 	if (firstRun)
+ 	{
+ 		firstRun = false;
+@@ -237,7 +279,8 @@
+ 	glProgram-&gt;setUniformValue(&quot;texU&quot;, 2);
+ 	glProgram-&gt;setUniformValue(&quot;texV&quot;, 1);
+     glProgram-&gt;setUniformValue(&quot;height&quot;, (float)imageHeight);
+-
++    checkGlError(&quot;setUniformValue&quot;);
++    
+     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+ 	glBegin(GL_QUADS);
+ 	glTexCoord2i(0, 0);
+@@ -256,7 +299,8 @@
+     \fn ctor
+ */
+ QtGlRender::QtGlRender(void)
+-{
++{
++    ADM_info(&quot;Creating GL Renderer\n&quot;);
+ 	glWidget = NULL;
+ 
+ }
+@@ -264,7 +308,8 @@
+     \fn dtor
+ */
+ QtGlRender::~QtGlRender(void)
+-{
++{
++    ADM_info(&quot;Destroying GL Renderer\n&quot;);
+ 	stop();
+ }
+ 
+@@ -274,7 +319,7 @@
+ 
+ bool QtGlRender::stop(void)
+ {
+-	printf(&quot;[GL Render] Renderer closed\n&quot;);
++	ADM_info(&quot;[GL Render] Renderer closed\n&quot;);
+ 	if (glWidget)
+ 		delete glWidget;
+     glWidget=NULL;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.h	2011-09-12 09:22:23 UTC (rev 7507)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.h	2011-09-12 09:22:24 UTC (rev 7508)
+@@ -19,13 +19,16 @@
+ #include &quot;GUI_render.h&quot;
+ #include &quot;GUI_accelRender.h&quot;
+ #include &quot;ADM_colorspace.h&quot;
+-
++/**
++    \class QtGlAccelWidget
++*/
+ class QtGlAccelWidget : public QGLWidget
+ {
+ private:
+ 	int             imageWidth, imageHeight;
+     int             displayWidth,displayHeight;
+-	bool            firstRun;
++	bool            firstRun;
++    
+ 
+ 	QGLShaderProgram *glProgram;
+ 	GLsizei textureRealWidths[3];
+@@ -33,10 +36,6 @@
+ 	GLsizei textureHeights[3];
+ 	uint8_t *textureOffsets[3];
+     GLuint  textureName[3];
+-#ifndef QT_OPENGL_ES
+-	typedef void (*_glActiveTexture) (GLenum);
+-	_glActiveTexture glActiveTexture;
+-#endif
+ 
+ protected:
+ 	void initializeGL();
+@@ -51,7 +50,7 @@
+ };
+ 
+ /**
+-    \fn class XvRender
++    \fn class QtGlRender
+ */
+ class QtGlRender: public VideoRenderBase
+ {
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004655.html">[Avidemux-svn-commit] r7507 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+	<LI>Next message: <A HREF="004657.html">[Avidemux-svn-commit] r7509 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4656">[ date ]</a>
+              <a href="thread.html#4656">[ thread ]</a>
+              <a href="subject.html#4656">[ subject ]</a>
+              <a href="author.html#4656">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

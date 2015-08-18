@@ -1,0 +1,158 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7523 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/common/ADM_audioFilter/src	avidemux_core/ADM_coreAudioDevice/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7523%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux/common/ADM_audioFilter/src%0A%09avidemux_core/ADM_coreAudioDevice/src&In-Reply-To=%3C20110913164642.2D84F4812C7%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004670.html">
+   <LINK REL="Next"  HREF="004672.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7523 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/common/ADM_audioFilter/src	avidemux_core/ADM_coreAudioDevice/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7523%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux/common/ADM_audioFilter/src%0A%09avidemux_core/ADM_coreAudioDevice/src&In-Reply-To=%3C20110913164642.2D84F4812C7%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7523 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/common/ADM_audioFilter/src	avidemux_core/ADM_coreAudioDevice/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Sep 13 18:46:42 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004670.html">[Avidemux-svn-commit] r7522 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="004672.html">[Avidemux-svn-commit] r7524 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4671">[ date ]</a>
+              <a href="thread.html#4671">[ thread ]</a>
+              <a href="subject.html#4671">[ subject ]</a>
+              <a href="author.html#4671">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-09-13 18:46:41 +0200 (Tue, 13 Sep 2011)
+New Revision: 7523
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audio_encoderPlugin.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audiodevice.cpp
+Log:
+[audioEncoder/audioDevice] memleak
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audio_encoderPlugin.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audio_encoderPlugin.cpp	2011-09-13 16:46:39 UTC (rev 7522)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audio_encoderPlugin.cpp	2011-09-13 16:46:41 UTC (rev 7523)
+@@ -18,8 +18,8 @@
+ #include &quot;ADM_default.h&quot;
+ #include &quot;audioencoderInternal.h&quot;
+ #include &quot;ADM_dynamicLoading.h&quot;
+-BVector &lt;ADM_audioEncoder *&gt; ListOfAudioEncoder;
+ 
++
+ static AUDIOENCODER  currentEncoder=0; //0 is always dummy
+ 
+ static AUDIOENCODER ADM_encoderByName(const char *name);
+@@ -82,6 +82,8 @@
+             
+         }
+ };
++static BVector &lt;ADM_audioEncoder *&gt; ListOfAudioEncoder;
++static BVector &lt;ADM_AudioEncoderLoader *&gt; ListOfAudioEncoderLoader;
+ 
+ /**
+         \fn ADM_ae_getPluginNbEncoders
+@@ -116,8 +118,8 @@
+ 	ADM_AudioEncoderLoader *dll=new ADM_AudioEncoderLoader(file);
+     if(!dll-&gt;initialised) Fail(CannotLoad);
+     
+-
+-    ListOfAudioEncoder.append(dll-&gt;encoderBlock); // Needed for cleanup. FIXME TODO Delete it.
++    ListOfAudioEncoderLoader.append(dll);
++    ListOfAudioEncoder.append(dll-&gt;encoderBlock);  // will be destroyed when Loader is destroyed
+     printf(&quot;[AudioEncoder] Registered filter %s as  %s\n&quot;,file,dll-&gt;encoderBlock-&gt;description);
+     return true;
+ 	// Fail!
+@@ -175,14 +177,14 @@
+ */
+ bool ADM_ae_cleanup(void)
+ {
+-    for(uint32_t i=1;i&lt;ListOfAudioEncoder.size();i++)
++    for(uint32_t i=0;i&lt;ListOfAudioEncoderLoader.size();i++)
+ 	{
+-		ADM_audioEncoder *a=ListOfAudioEncoder[i];
++		ADM_AudioEncoderLoader *a=ListOfAudioEncoderLoader[i];
+         delete a;
+-        ListOfAudioEncoder[i]=NULL;
++        ListOfAudioEncoderLoader[i]=NULL;
+ 	}
+     
+-    ListOfAudioEncoder.clear();
++    ListOfAudioEncoderLoader.clear();
+     return true;
+ }
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp	2011-09-13 16:46:39 UTC (rev 7522)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp	2011-09-13 16:46:41 UTC (rev 7523)
+@@ -376,10 +376,10 @@
+ 	quitSdl();
+ #endif
+ 
+-#ifdef HAVE_AUDIO
++
+ 	AVDM_cleanup();
+-#endif
+ 
++
+ 	destroyGUI();
+     destroyPrefs();
+     
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audiodevice.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audiodevice.cpp	2011-09-13 16:46:39 UTC (rev 7522)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audiodevice.cpp	2011-09-13 16:46:41 UTC (rev 7523)
+@@ -205,7 +205,7 @@
+     ListOfAudioDevices.clear();
+ 	if(device)
+ 	{
+-		delete device;
++// FIXME		delete device;
+ 		device=NULL;
+ 	}
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004670.html">[Avidemux-svn-commit] r7522 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="004672.html">[Avidemux-svn-commit] r7524 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4671">[ date ]</a>
+              <a href="thread.html#4671">[ thread ]</a>
+              <a href="subject.html#4671">[ subject ]</a>
+              <a href="author.html#4671">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

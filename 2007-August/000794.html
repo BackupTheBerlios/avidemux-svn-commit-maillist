@@ -1,0 +1,186 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3520 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_osSupport
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3520%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_osSupport&In-Reply-To=%3C200708161834.l7GIY8U0000831%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000793.html">
+   <LINK REL="Next"  HREF="000795.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3520 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_osSupport</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3520%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_osSupport&In-Reply-To=%3C200708161834.l7GIY8U0000831%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3520 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_osSupport">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Thu Aug 16 20:34:08 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000793.html">[Avidemux-svn-commit] r3519 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+        <LI>Next message: <A HREF="000795.html">[Avidemux-svn-commit] r3521 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#794">[ date ]</a>
+              <a href="thread.html#794">[ thread ]</a>
+              <a href="subject.html#794">[ subject ]</a>
+              <a href="author.html#794">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2007-08-16 20:34:00 +0200 (Thu, 16 Aug 2007)
+New Revision: 3520
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_cpuCap.cpp
+Log:
+[lav] OS friendly CPU detection
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2007-08-16 17:27:27 UTC (rev 3519)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmp43.cpp	2007-08-16 18:34:00 UTC (rev 3520)
+@@ -22,7 +22,6 @@
+ #include &lt;stdio.h&gt;
+ #include &lt;stdlib.h&gt;
+ #include &lt;string.h&gt;
+-#include &lt;pthread.h&gt;
+ 
+ #include &quot;ADM_assert.h&quot;
+ #include &quot;prefs.h&quot;
+@@ -37,7 +36,9 @@
+ #define MODULE_NAME  MODULE_CODEC
+ #include &quot;ADM_osSupport/ADM_debug.h&quot;
+ #include &quot;ADM_video/ADM_videoInfoExtractor.h&quot;
+-//****************************
++
++extern int ADM_cpu_num_processors(void);
++
+ #define WRAP_Open(x) \
+ {\
+ AVCodec *codec=avcodec_find_decoder(x);\
+@@ -113,7 +114,7 @@
+   prefs-&gt;get(FEATURE_THREADING_LAVC, &amp;threads);
+ 
+   if (threads == 0)
+-	  threads = pthread_num_processors_np();
++	  threads = ADM_cpu_num_processors();
+ 
+   if (threads == 1)
+ 	  threads = 0;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2007-08-16 17:27:27 UTC (rev 3519)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2007-08-16 18:34:00 UTC (rev 3520)
+@@ -24,13 +24,11 @@
+ #ifdef USE_FFMPEG
+ 
+ #define __STDC_CONSTANT_MACROS // Lavcodec crap
+-#define WIN32_CLASH
+ 
+ #include &lt;stdio.h&gt;
+ #include &lt;stdlib.h&gt;
+ #include &lt;string.h&gt;
+ #include &lt;math.h&gt;
+-#include &lt;pthread.h&gt;
+ 
+ #include &quot;ADM_lavcodec.h&quot;
+ #include &quot;avi_vars.h&quot;
+@@ -41,6 +39,7 @@
+ 
+ //#define TEST_NOB 1
+ 
++extern int ADM_cpu_num_processors(void);
+ static char LogName[500];
+ 
+ #define WRAP_Open(x) \
+@@ -371,7 +370,7 @@
+   prefs-&gt;get(FEATURE_THREADING_LAVC, &amp;threads);
+ 
+   if (threads == 0)
+-	  threads = pthread_num_processors_np();
++	  threads = ADM_cpu_num_processors();
+ 
+   if (threads == 1)
+ 	  threads = 0;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_cpuCap.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_cpuCap.cpp	2007-08-16 17:27:27 UTC (rev 3519)
++++ branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_cpuCap.cpp	2007-08-16 18:34:00 UTC (rev 3520)
+@@ -11,6 +11,14 @@
+ //
+ #include &quot;config.h&quot;
+ #include &lt;stdio.h&gt;
++
++#if defined(ADM_WIN32)
++#include &lt;pthread.h&gt;
++#elif !defined(__APPLE__)
++#include &lt;string.h&gt;
++#include &lt;sched.h&gt;
++#endif
++
+ #include &quot;default.h&quot;
+ #include &quot;admmangle.h&quot;
+ #include &quot;ADM_osSupport/ADM_cpuCap.h&quot;
+@@ -169,3 +177,24 @@
+ }
+ // EOF
+ 
++// Stolen from x264
++int ADM_cpu_num_processors(void)
++{
++#if defined(ADM_WIN32)
++    return pthread_num_processors_np();
++#elif !defined(__APPLE__)
++    unsigned int bit;
++    int np;
++
++    cpu_set_t p_aff;
++    memset( &amp;p_aff, 0, sizeof(p_aff) );
++    sched_getaffinity( 0, sizeof(p_aff), &amp;p_aff );
++
++    for( np = 0, bit = 0; bit &lt; sizeof(p_aff); bit++ )
++        np += (((uint8_t *)&amp;p_aff)[bit / 8] &gt;&gt; (bit % 8)) &amp; 1;
++
++    return np;
++#else
++    return 1;
++#endif
++}
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000793.html">[Avidemux-svn-commit] r3519 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+	<LI>Next message: <A HREF="000795.html">[Avidemux-svn-commit] r3521 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#794">[ date ]</a>
+              <a href="thread.html#794">[ thread ]</a>
+              <a href="subject.html#794">[ subject ]</a>
+              <a href="author.html#794">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,322 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6981 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6981%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20110205164321.4D51448135F%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004153.html">
+   <LINK REL="Next"  HREF="004155.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6981 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6981%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20110205164321.4D51448135F%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6981 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Feb  5 17:43:21 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004153.html">[Avidemux-svn-commit] r6980 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_faad
+</A></li>
+        <LI>Next message: <A HREF="004155.html">[Avidemux-svn-commit] r6982 -	branches/avidemux_2.6_branch_mean/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4154">[ date ]</a>
+              <a href="thread.html#4154">[ thread ]</a>
+              <a href="subject.html#4154">[ subject ]</a>
+              <a href="author.html#4154">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-02-05 17:43:21 +0100 (Sat, 05 Feb 2011)
+New Revision: 6981
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsReadIndex.cpp
+Log:
+[TS/Demux] Add extra data for audio, handle ADTS/AAC
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp	2011-02-05 16:43:19 UTC (rev 6980)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp	2011-02-05 16:43:21 UTC (rev 6981)
+@@ -16,7 +16,7 @@
+ 
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_Video.h&quot;
+-
++#include &quot;ADM_aacinfo.h&quot;
+ #include &lt;string.h&gt;
+ #include &lt;math.h&gt;
+ 
+@@ -27,17 +27,27 @@
+ #else
+     #define aprintf(...) {}
+ #endif
+-
++void        mixDump(uint8_t *ptr, uint32_t len);
+ /**
+     \fn ADM_tsAccess
+ */
+-ADM_tsAccess::ADM_tsAccess(const char *name,uint32_t pid,bool append)
++ADM_tsAccess::ADM_tsAccess(const char *name,uint32_t pid,bool append,bool aacAdts,int myLen,uint8_t  *myExtra)
+ {
+ FP_TYPE fp=FP_DONT_APPEND;
+         if(append) fp=FP_APPEND;
+         this-&gt;pid=pid;
+         if(!demuxer.open(name,fp)) ADM_assert(0);
+         packet=new TS_PESpacket(pid);
++        isAdtsAac=aacAdts;
++        if(myLen &amp;&amp; myExtra)
++        {   
++            extraData=new uint8_t [myLen];
++            extraDataLen=myLen;
++            memcpy(extraData,myExtra,extraDataLen);
++            ADM_info(&quot;Creating ts audio access with %d bytes of extradata.&quot;,myLen);
++            mixDump(extraData,extraDataLen);
++            ADM_info(&quot;\n&quot;);
++        }
+ }
+ 
+ /**
+@@ -48,6 +58,8 @@
+     demuxer.close();
+     if(packet) delete packet;
+     packet=NULL;
++    if(extraData) delete [] extraData;
++    extraData=NULL;
+ }
+ /**
+     \fn push
+@@ -134,7 +146,18 @@
+     int avail=packet-&gt;payloadSize-packet-&gt;offset;
+     if(avail&gt;maxSize) ADM_assert(0);
+     *size=avail;
+-    memcpy(buffer,packet-&gt;payload+packet-&gt;offset,avail);
++    if(true==isAdtsAac)
++    {
++        bool r=false;
++        int outsize=0;
++        *size=0;
++        r=adts.convert(avail,packet-&gt;payload+packet-&gt;offset,&amp;outsize,buffer);
++        if(false==r) return false;
++        *size=outsize;
++    }else
++    {
++        memcpy(buffer,packet-&gt;payload+packet-&gt;offset,avail);
++    }
+     *dts=timeConvert(packet-&gt;pts);
+     if(*dts!=ADM_NO_PTS) 
+     {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.cpp	2011-02-05 16:43:19 UTC (rev 6980)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.cpp	2011-02-05 16:43:21 UTC (rev 6981)
+@@ -24,6 +24,7 @@
+ #include &quot;ADM_eac3info.h&quot;
+ #include &quot;ADM_mp3info.h&quot;
+ #include &quot;ADM_dcainfo.h&quot;
++#include &quot;ADM_aacadts.h&quot;
+ // Number of video packet seen to be enough to sample the audio tracks
+ #define PROBE_PACKET_VIDEO_COUNT 500
+ // Max size of a packet. Usually it is a bit more than 2300, so 10000 should be safe
+@@ -36,9 +37,12 @@
+ #define LPCM_AUDIO_VALUE 0xA0
+ #define DTS_AC3_AUDIO_VALUE 0x00
+ 
+-bool tsGetAudioInfo(tsPacketLinear *p,tsAudioTrackInfo *trackInfo);
++bool        
++tsGetAudioInfo(tsPacketLinear *p,tsAudioTrackInfo *trackInfo);
+ static bool tsCheckMp2Audio(WAVHeader *hdr, uint8_t *data, uint32_t dataSize);
++void        mixDump(uint8_t *ptr, uint32_t len);
+ 
++
+ /**
+     \fn addAudioTrack
+     \brief gather information about audio &amp; add audio track to the list
+@@ -52,13 +56,67 @@
+         
+         
+         // dont even try if it is not audio
+-        if(trackInfo-&gt;trackType!=ADM_TS_MPEG_AUDIO &amp;&amp;trackInfo-&gt;trackType!=ADM_TS_AC3
+-                &amp;&amp; trackInfo-&gt;trackType!=ADM_TS_EAC3) return false;
+-
++        switch(trackInfo-&gt;trackType)
++        {
++            case ADM_TS_MPEG_AUDIO:
++            case ADM_TS_AC3:
++            case ADM_TS_EAC3:
++            case ADM_TS_AAC:
++                        break;
++            default:
++                ADM_warning(&quot;Unsupported audio track\n&quot;);
++                return false;
++        }
+         // Go back where we were
+         p-&gt;changePid(trackInfo-&gt;esId); 
+         //Realign
+         p-&gt;seek(0,0);
++        // This is a special case...
++        if(trackInfo-&gt;trackType==ADM_TS_AAC)
++        {
++            TS_PESpacket pes(trackInfo-&gt;esId);
++            int retries=5;
++            int offset;
++            ADM_adts2aac  adts;
++            while(retries)
++            {
++                if(false==p-&gt;getNextPES(&amp;pes))
++                {
++                    ADM_warning(&quot;Cannot get pes packet for AAC track\n&quot;);
++                    return false;
++                }
++                uint8_t *ptr=pes.payload+pes.offset;
++                int size=pes.payloadSize-pes.offset;
++                int dummySize=0;
++                if(true==adts.convert(size,ptr,&amp;dummySize,NULL))
++                        break;;
++                retries--;
++            }
++            if(!retries)
++            {
++                ADM_error(&quot;Cannot get AAC/ADTS info\n&quot;);
++                return false;
++            }
++            trackInfo-&gt;wav.encoding=WAV_AAC;    
++            trackInfo-&gt;wav.frequency=adts.getFrequency();
++            trackInfo-&gt;wav.channels=adts.getChannels();
++            trackInfo-&gt;wav.byterate=128000&gt;&gt;3;
++            
++            uint32_t eLen=0;     
++            uint8_t *eData=NULL;
++            adts.getExtraData(&amp;eLen,&amp;eData);
++            
++            if(2!=eLen) 
++            {
++                ADM_error(&quot;%d bytes of extradata, expecting 2&quot;);
++                return false;
++            }
++            trackInfo-&gt;extraDataLen=2;
++            trackInfo-&gt;extraData[0]=eData[0];
++            trackInfo-&gt;extraData[1]=eData[1];
++            ADM_info(&quot;AAC extra data : %02x %02x\n&quot;,eData[0],eData[1]);
++            return true;
++        }
+         int rd=PROBE_ANALYZE_SIZE;
+         if(!p-&gt;read(PROBE_ANALYZE_SIZE,audioBuffer))
+         {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2011-02-05 16:43:19 UTC (rev 6980)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2011-02-05 16:43:21 UTC (rev 6981)
+@@ -195,6 +195,14 @@
+         qfprintf(index,&quot;%s.fq=%d\n&quot;,head,t-&gt;wav.frequency);
+         qfprintf(index,&quot;%s.chan=%d\n&quot;,head,t-&gt;wav.channels);
+         qfprintf(index,&quot;%s.br=%d\n&quot;,head,t-&gt;wav.byterate);
++        if(t-&gt;extraDataLen)
++        {
++            qfprintf(index,&quot;%s.extraData=%d&quot;,head,t-&gt;extraDataLen);
++            uint8_t *p=t-&gt;extraData;
++            for(int i=0;i&lt;t-&gt;extraDataLen;i++)
++                qfprintf(index,&quot; %02x&quot;,p[i]);
++            qfprintf(index,&quot;\n&quot;);
++        }
+     }
+     return true;
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsReadIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsReadIndex.cpp	2011-02-05 16:43:19 UTC (rev 6980)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsReadIndex.cpp	2011-02-05 16:43:21 UTC (rev 6981)
+@@ -304,13 +304,45 @@
+             hdr.byterate=br;
+             hdr.channels=chan;
+             hdr.encoding=codec;
+-
+-        ADM_tsAccess *access=new ADM_tsAccess(name,pid,true);
+-            ADM_tsTrackDescriptor *desc=new ADM_tsTrackDescriptor;
+-            desc-&gt;stream=NULL;
+-            desc-&gt;access=access;
+-            memcpy(&amp;(desc-&gt;header),&amp;hdr,sizeof(hdr));
+-            listOfAudioTracks.push_back(desc);
++        bool aacAdts=false;
++        if(hdr.encoding==WAV_AAC) aacAdts=true;
++        sprintf(body,&quot;Track%d.ExtraData&quot;,i);
++        int extraLen=0;
++        uint8_t *extraData=NULL;
++        char *extra=index-&gt;getAsString(body);
++        if(extra)
++        {
++            vector&lt;string&gt; result;
++            // From is int=nb, hex hex
++            ADM_splitString(string(&quot; &quot;), string(extra), result);
++            if(result.size())
++            {
++                int nb=atoi(result[0].c_str());
++                printf(&quot;[tsDemux] Found %d bytes of video extra data (%s)\n&quot;,nb,result[0].c_str());
++                if(nb)
++                {
++                    extraLen=nb;
++                    extraData=new uint8_t[nb];
++                    ADM_assert(nb+1==result.size());
++                    for(int i=0;i&lt;nb;i++)
++                    {
++                        const char *m=result[i+1].c_str();
++                        extraData[i]=mk_hex(m[0],m[1]);
++                    }
++                }
++            }
++        }else
++        {
++            ADM_info(&quot;No extradata (%s)\n&quot;,body);
++        }
++        ADM_tsAccess *access=new ADM_tsAccess(name,pid,true,aacAdts,extraLen,extraData);
++        if(extraData) delete [] extraData;
++        extraData=NULL;
++        ADM_tsTrackDescriptor *desc=new ADM_tsTrackDescriptor;
++        desc-&gt;stream=NULL;
++        desc-&gt;access=access;
++        memcpy(&amp;(desc-&gt;header),&amp;hdr,sizeof(hdr));
++        listOfAudioTracks.push_back(desc);
+     }
+     return true;
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004153.html">[Avidemux-svn-commit] r6980 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_faad
+</A></li>
+	<LI>Next message: <A HREF="004155.html">[Avidemux-svn-commit] r6982 -	branches/avidemux_2.6_branch_mean/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4154">[ date ]</a>
+              <a href="thread.html#4154">[ thread ]</a>
+              <a href="subject.html#4154">[ subject ]</a>
+              <a href="author.html#4154">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

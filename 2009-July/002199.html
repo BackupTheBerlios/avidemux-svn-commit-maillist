@@ -1,0 +1,345 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4984 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4984%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec&In-Reply-To=%3C200907021340.n62DemYo005286%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002198.html">
+   <LINK REL="Next"  HREF="002200.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4984 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4984%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec&In-Reply-To=%3C200907021340.n62DemYo005286%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4984 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Thu Jul  2 15:40:48 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002198.html">[Avidemux-svn-commit] r4983 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder
+</A></li>
+        <LI>Next message: <A HREF="002200.html">[Avidemux-svn-commit] r4985 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2199">[ date ]</a>
+              <a href="thread.html#2199">[ thread ]</a>
+              <a href="subject.html#2199">[ subject ]</a>
+              <a href="author.html#2199">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-07-02 15:40:41 +0200 (Thu, 02 Jul 2009)
+New Revision: 4984
+
+Added:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffv1Encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffv1Encoder.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffvhuffEncoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffvhuffEncoder.h
+Modified:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/CMakeLists.txt
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp
+Log:
+[vidEnc] ffvhuff and ffv1 plugins
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/CMakeLists.txt	2009-07-02 10:33:50 UTC (rev 4983)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/CMakeLists.txt	2009-07-02 13:40:41 UTC (rev 4984)
+@@ -16,7 +16,7 @@
+ set_property(TARGET ADM_libswscale PROPERTY IMPORTED_LOCATION &quot;${FFMPEG_INSTALL_DIR}/${LIBSWSCALE_LIB}&quot;)
+ 
+ SET(PLUGIN_SUBDIR &quot;avcodec&quot;)
+-SET(ADM_vidEnc_avcodec_SRCS interface.c encoder.cpp huffyuvEncoder.cpp)
++SET(ADM_vidEnc_avcodec_SRCS interface.c encoder.cpp huffyuvEncoder.cpp ffvhuffEncoder.cpp ffv1Encoder.cpp)
+ 
+ ADD_LIBRARY(ADM_vidEnc_avcodec SHARED ${ADM_vidEnc_avcodec_SRCS})
+ TARGET_LINK_LIBRARIES(ADM_vidEnc_avcodec ADM_core ADM_libavcodec ADM_libswscale)
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp	2009-07-02 10:33:50 UTC (rev 4983)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp	2009-07-02 13:40:41 UTC (rev 4984)
+@@ -15,19 +15,25 @@
+  ***************************************************************************/
+ 
+ #include &quot;encoder.h&quot;
++#include &quot;ffv1Encoder.h&quot;
++#include &quot;ffvhuffEncoder.h&quot;
+ #include &quot;HuffyuvEncoder.h&quot;
+ #include &quot;ADM_inttype.h&quot;
+ 
+ int uiType;
++
++static FFV1Encoder ffv1;
++static FFVHuffEncoder ffvhuff;
+ static HuffyuvEncoder huffyuv;
+-static void* encoders = { &amp;huffyuv };
+ 
++static AvcodecEncoder* encoders[] = { &amp;ffv1, &amp;ffvhuff, &amp;huffyuv};
++
+ extern &quot;C&quot;
+ {
+ 	void *avcodecEncoder_getPointers(int _uiType, int *count)
+ 	{
+ 		uiType = _uiType;
+-		*count = sizeof(encoders) / sizeof(void*);
++		*count = sizeof(encoders) / sizeof(AvcodecEncoder*);
+ 
+ 		return &encoders;
+ 	}
+
+Added: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffv1Encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffv1Encoder.cpp	2009-07-02 10:33:50 UTC (rev 4983)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffv1Encoder.cpp	2009-07-02 13:40:41 UTC (rev 4984)
+@@ -0,0 +1,59 @@
++/***************************************************************************
++                               ffv1Encoder.cpp
++
++    begin                : Thu Jul 2 2009
++    copyright            : (C) 2009 by gruntster
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include &quot;ADM_inttype.h&quot;
++#include &quot;ffv1Encoder.h&quot;
++
++FFV1Encoder::FFV1Encoder(void)
++{
++	init(CODEC_ID_FFV1, PIX_FMT_YUV420P);
++}
++
++const char* FFV1Encoder::getEncoderType(void)
++{
++	return &quot;FFV1&quot;;
++}
++
++const char* FFV1Encoder::getEncoderDescription(void)
++{
++	return &quot;FFV1 video encoder plugin for Avidemux (c) Mean/Gruntster&quot;;
++}
++
++const char* FFV1Encoder::getFourCC(void)
++{
++	return &quot;FFV1&quot;;
++}
++
++const char* FFV1Encoder::getEncoderGuid(void)
++{
++	return &quot;4828D06D-B555-4d72-94EC-34F04F97E501&quot;;
++}
++
++int FFV1Encoder::getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize)
++{
++	if (encodeOptions)
++	{
++		encodeOptions-&gt;encodeMode = ADM_VIDENC_MODE_CQP;
++		encodeOptions-&gt;encodeModeParameter = 1000;
++	}
++
++	return 0;
++}
++
++int FFV1Encoder::setOptions(vidEncOptions *encodeOptions, char *pluginOptions)
++{
++	return 0;
++}
+
+Added: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffv1Encoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffv1Encoder.h	2009-07-02 10:33:50 UTC (rev 4983)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffv1Encoder.h	2009-07-02 13:40:41 UTC (rev 4984)
+@@ -0,0 +1,40 @@
++/***************************************************************************
++                                ffv1Encoder.h
++
++    begin                : Thu Jul 2 2009
++    copyright            : (C) 2009 by gruntster
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#ifndef ffv1Encoder_h
++#define ffv1Encoder_h
++
++#ifdef __cplusplus
++extern &quot;C&quot;
++{
++	#include &quot;ADM_vidEnc_plugin.h&quot;
++}
++
++#include &quot;encoder.h&quot;
++
++class FFV1Encoder : public AvcodecEncoder
++{
++	public:
++		FFV1Encoder(void);
++		const char* getEncoderType(void);
++		const char* getEncoderDescription(void);
++		const char* getFourCC(void);
++		const char* getEncoderGuid(void);
++		int getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize);
++		int setOptions(vidEncOptions *encodeOptions, char *pluginOptions);
++};
++#endif	// __cplusplus
++#endif	// ffv1Encoder_h
+
+Added: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffvhuffEncoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffvhuffEncoder.cpp	2009-07-02 10:33:50 UTC (rev 4983)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffvhuffEncoder.cpp	2009-07-02 13:40:41 UTC (rev 4984)
+@@ -0,0 +1,59 @@
++/***************************************************************************
++                             ffvhuffEncoder.cpp
++
++    begin                : Thu Jul 2 2009
++    copyright            : (C) 2009 by gruntster
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include &quot;ADM_inttype.h&quot;
++#include &quot;ffvhuffEncoder.h&quot;
++
++FFVHuffEncoder::FFVHuffEncoder(void)
++{
++	init(CODEC_ID_FFVHUFF, PIX_FMT_YUV420P);
++}
++
++const char* FFVHuffEncoder::getEncoderType(void)
++{
++	return &quot;FFVHuff&quot;;
++}
++
++const char* FFVHuffEncoder::getEncoderDescription(void)
++{
++	return &quot;FFVHuff video encoder plugin for Avidemux (c) Mean/Gruntster&quot;;
++}
++
++const char* FFVHuffEncoder::getFourCC(void)
++{
++	return &quot;FFVH&quot;;
++}
++
++const char* FFVHuffEncoder::getEncoderGuid(void)
++{
++	return &quot;E5D8EAC6-71C1-4f3e-A975-B655232271FB&quot;;
++}
++
++int FFVHuffEncoder::getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize)
++{
++	if (encodeOptions)
++	{
++		encodeOptions-&gt;encodeMode = ADM_VIDENC_MODE_CQP;
++		encodeOptions-&gt;encodeModeParameter = 1000;
++	}
++
++	return 0;
++}
++
++int FFVHuffEncoder::setOptions(vidEncOptions *encodeOptions, char *pluginOptions)
++{
++	return 0;
++}
+
+Added: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffvhuffEncoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffvhuffEncoder.h	2009-07-02 10:33:50 UTC (rev 4983)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/ffvhuffEncoder.h	2009-07-02 13:40:41 UTC (rev 4984)
+@@ -0,0 +1,40 @@
++/***************************************************************************
++                              ffvhuffEncoder.h
++
++    begin                : Thu Jul 2 2009
++    copyright            : (C) 2009 by gruntster
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#ifndef ffvhuffEncoder_h
++#define ffvhuffEncoder_h
++
++#ifdef __cplusplus
++extern &quot;C&quot;
++{
++	#include &quot;ADM_vidEnc_plugin.h&quot;
++}
++
++#include &quot;encoder.h&quot;
++
++class FFVHuffEncoder : public AvcodecEncoder
++{
++	public:
++		FFVHuffEncoder(void);
++		const char* getEncoderType(void);
++		const char* getEncoderDescription(void);
++		const char* getFourCC(void);
++		const char* getEncoderGuid(void);
++		int getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize);
++		int setOptions(vidEncOptions *encodeOptions, char *pluginOptions);
++};
++#endif	// __cplusplus
++#endif	// ffvhuffEncoder_h
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002198.html">[Avidemux-svn-commit] r4983 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder
+</A></li>
+	<LI>Next message: <A HREF="002200.html">[Avidemux-svn-commit] r4985 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2199">[ date ]</a>
+              <a href="thread.html#2199">[ thread ]</a>
+              <a href="subject.html#2199">[ subject ]</a>
+              <a href="author.html#2199">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,284 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5996 - in branches/avidemux_2.6_branch_mean:	avidemux_plugins/ADM_videoEncoder/xvid4 cmake
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5996%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_plugins/ADM_videoEncoder/xvid4%20cmake&In-Reply-To=%3C201003131115.o2DBFLNY025971%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003200.html">
+   <LINK REL="Next"  HREF="003202.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5996 - in branches/avidemux_2.6_branch_mean:	avidemux_plugins/ADM_videoEncoder/xvid4 cmake</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5996%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_plugins/ADM_videoEncoder/xvid4%20cmake&In-Reply-To=%3C201003131115.o2DBFLNY025971%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5996 - in branches/avidemux_2.6_branch_mean:	avidemux_plugins/ADM_videoEncoder/xvid4 cmake">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Mar 13 12:15:21 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003200.html">[Avidemux-svn-commit] r5995 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4
+</A></li>
+        <LI>Next message: <A HREF="003202.html">[Avidemux-svn-commit] r5997 -	branches/avidemux_2.6_branch_mean/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3201">[ date ]</a>
+              <a href="thread.html#3201">[ thread ]</a>
+              <a href="subject.html#3201">[ subject ]</a>
+              <a href="author.html#3201">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-03-13 12:15:21 +0100 (Sat, 13 Mar 2010)
+New Revision: 5996
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/ADM_xvid4.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4Dialog.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4_encoder.conf
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4_encoder.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4_encoder_desc.cpp
+   branches/avidemux_2.6_branch_mean/cmake/admCheckXvid.cmake
+Log:
+[xvid] add more options, partially hook them to dialog
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/ADM_xvid4.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/ADM_xvid4.cpp	2010-03-13 11:15:19 UTC (rev 5995)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/ADM_xvid4.cpp	2010-03-13 11:15:21 UTC (rev 5996)
+@@ -40,15 +40,19 @@
+     1500,           //uint32_t          avg_bitrate;  /// avg_bitrate is in kb/s!!
+     ADM_ENC_CAP_CBR+ADM_ENC_CAP_CQ+ADM_ENC_CAP_2PASS+ADM_ENC_CAP_2PASS_BR+ADM_ENC_CAP_GLOBAL+ADM_ENC_CAP_SAME
+     },
+-    
+-            false, //mpegQuant
++            XVID_PROFILE_AS_L4, // Profile
+             3, // rdMode
+             3, // MotionEstimation
+             0, // cqmMode
+             0, // arMode
+             2, // MaxBframe
+             200, // MaxKeyInterval
+-            true // Trellis
++            
++            99, // nbThreads
++            true, // rdOnBframe
++            true, //bool:hqAcPred
++            true, //bool:optimizeChrome
++            true, // Trellis
+     
+ };
+ 
+@@ -123,7 +127,7 @@
+ 
+   printf (&quot;[xvid] SIMD supported: (%x)\n&quot;, xvid_gbl_info.cpu_flags);
+ #define CPUF(x) if(xvid_gbl_info.cpu_flags  &amp; XVID_CPU_##x) printf(&quot;\t\t&quot;#x&quot; ON\n&quot;); else  printf(&quot;\t\t&quot;#x&quot; Off\n&quot;);
+-#if defined( ARCH_X86)  
++#if defined( ADM_CPU_X86)  
+   CPUF (MMX);
+   CPUF (MMXEXT);
+   CPUF (SSE);
+@@ -146,9 +150,22 @@
+   xvid_enc_create.version = XVID_VERSION;
+   xvid_enc_create.width = getWidth();
+   xvid_enc_create.height =getHeight();
+-  
+-  single.version = XVID_VERSION;
++  xvid_enc_create.profile=xvid4Settings.profile;
+ 
++  int thread;
++    switch(xvid4Settings.nbThreads)
++    {
++        default:
++        case 0:case 1: thread=1;break;
++        case 3: case 4:
++        case 2: thread=xvid4Settings.nbThreads;break;
++        
++        case 99: thread=ADM_cpu_num_processors();break;
++    }
++    ADM_info(&quot;[Xvid] Using %d threads\n&quot;,(int)thread);
++    xvid_enc_create.num_threads=thread;
++    single.version = XVID_VERSION;
++
+     switch(xvid4Settings.params.mode)
+     {
+       case COMPRESS_2PASS:
+@@ -184,7 +201,7 @@
+             return false;
+     }
+    
+-
++  
+   plugins[1].func = xvid4Encoder::hook;
+   plugins[1].param = NULL;
+   xvid_enc_create.plugins = plugins;
+@@ -307,7 +324,7 @@
+   /* Bind output buffer */
+ 
+   xvid_enc_frame.length = 0;
+-  if (xvid4Settings.mpegQuant)
++  if (xvid4Settings.cqmMode==1)
+     xvid_enc_frame.vol_flags |= XVID_VOL_MPEGQUANT;
+ 
+    switch(xvid4Settings.params.mode)
+@@ -325,9 +342,9 @@
+   xvid_enc_frame.vop_flags |= XVID_VOP_HALFPEL;
+   
+   SVOP (trellis, TRELLISQUANT);
+- // SVOP (hqac, HQACPRED);
+- // SVOP (bvhq, RD_BVOP);
+-//  SVOP (chroma_opt, CHROMAOPT);
++  SVOP (hqAcPred, HQACPRED);
++  SVOP (rdOnBFrame, RD_BVOP);
++  SVOP (optimizeChrome, CHROMAOPT);
+   
+   // ME 
+   //if (_param.chroma_me)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4Dialog.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4Dialog.cpp	2010-03-13 11:15:19 UTC (rev 5995)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4Dialog.cpp	2010-03-13 11:15:21 UTC (rev 5996)
+@@ -42,7 +42,8 @@
+ 
+ diaMenuEntry qzE[]={
+   {0,QT_TR_NOOP(&quot;H.263&quot;)},
+-  {1,QT_TR_NOOP(&quot;MPEG&quot;)}
++  {1,QT_TR_NOOP(&quot;MPEG&quot;)},
++  {2,QT_TR_NOOP(&quot;Custom&quot;)}
+ };       
+ /*
+ diaMenuEntry rdE[]={
+@@ -82,9 +83,9 @@
+ */
+          
+          diaElemUInteger  max_b_frames(PX(maxBFrame),QT_TR_NOOP(&quot;_Number of B frames:&quot;),0,32);
+-/*
+-         diaElemMenu     qzM(PX(mpeg_quant),QT_TR_NOOP(&quot;_Quantization type:&quot;),2,qzE);
+-         
++
++         diaElemMenu     qzM(PX(cqmMode),QT_TR_NOOP(&quot;_Quantization type:&quot;),2,qzE);
++/*         
+          diaElemMenu     rdM(PX(mb_eval),QT_TR_NOOP(&quot;_Macroblock decision:&quot;),3,rdE);
+          
+          diaElemUInteger filetol(PX(vratetol),QT_TR_NOOP(&quot;_Filesize tolerance (kb):&quot;),0,100000);
+@@ -106,6 +107,7 @@
+         frameMe.swallow(&amp;max_b_frames);
+         frameMe.swallow(&amp;GopSize);
+         frameMe.swallow(&amp;bitrate);
++        frameMe.swallow(&amp;qzM);
+         
+         diaElem *diaME[]={&amp;frameMe};
+         diaElemTabs tabME(QT_TR_NOOP(&quot;Motion Estimation&quot;),1,diaME);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4_encoder.conf
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4_encoder.conf	2010-03-13 11:15:19 UTC (rev 5995)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4_encoder.conf	2010-03-13 11:15:21 UTC (rev 5996)
+@@ -1,8 +1,13 @@
+ video_encode:params
++uint32_t:profile
+ uint32_t:rdMode
+ uint32_t:motionEstimation
+ uint32_t:cqmMode
+ uint32_t:arMode
+ uint32_t:maxBFrame
+ uint32_t:maxKeyFrameInterval
++uint32_t:nbThreads
++bool:rdOnBFrame
++bool:hqAcPred
++bool:optimizeChrome
+ bool:trellis
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4_encoder.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4_encoder.h	2010-03-13 11:15:19 UTC (rev 5995)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4_encoder.h	2010-03-13 11:15:21 UTC (rev 5996)
+@@ -3,13 +3,17 @@
+ #define ADM_xvid4_encoder_CONF_H
+ typedef struct {
+    COMPRES_PARAMS params;
+-   bool     mpegQuant;
++   uint32_t profile;
+    uint32_t rdMode;
+    uint32_t motionEstimation;
+    uint32_t cqmMode;
+    uint32_t arMode;
+    uint32_t maxBFrame;
+    uint32_t maxKeyFrameInterval;
++   uint32_t nbThreads;
++   bool rdOnBFrame;
++   bool hqAcPred;
++   bool optimizeChrome;
+    bool trellis;
+ }xvid4_encoder;
+ #endif //xvid4_encoder
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4_encoder_desc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4_encoder_desc.cpp	2010-03-13 11:15:19 UTC (rev 5995)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4/xvid4_encoder_desc.cpp	2010-03-13 11:15:21 UTC (rev 5996)
+@@ -1,12 +1,17 @@
+ // Automatically generated, do not edit!
+ const ADM_paramList xvid4_encoder_param[]={
+  {&quot;params&quot;,offsetof( xvid4_encoder,params),&quot;COMPRES_PARAMS&quot;,ADM_param_video_encode},
++ {&quot;profile&quot;,offsetof( xvid4_encoder,profile),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;rdMode&quot;,offsetof( xvid4_encoder,rdMode),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;motionEstimation&quot;,offsetof( xvid4_encoder,motionEstimation),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;cqmMode&quot;,offsetof( xvid4_encoder,cqmMode),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;arMode&quot;,offsetof( xvid4_encoder,arMode),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;maxBFrame&quot;,offsetof( xvid4_encoder,maxBFrame),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;maxKeyFrameInterval&quot;,offsetof( xvid4_encoder,maxKeyFrameInterval),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;nbThreads&quot;,offsetof( xvid4_encoder,nbThreads),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;rdOnBFrame&quot;,offsetof( xvid4_encoder,rdOnBFrame),&quot;bool&quot;,ADM_param_bool},
++ {&quot;hqAcPred&quot;,offsetof( xvid4_encoder,hqAcPred),&quot;bool&quot;,ADM_param_bool},
++ {&quot;optimizeChrome&quot;,offsetof( xvid4_encoder,optimizeChrome),&quot;bool&quot;,ADM_param_bool},
+  {&quot;trellis&quot;,offsetof( xvid4_encoder,trellis),&quot;bool&quot;,ADM_param_bool},
+ {NULL,0,NULL}
+ };
+
+Modified: branches/avidemux_2.6_branch_mean/cmake/admCheckXvid.cmake
+===================================================================
+--- branches/avidemux_2.6_branch_mean/cmake/admCheckXvid.cmake	2010-03-13 11:15:19 UTC (rev 5995)
++++ branches/avidemux_2.6_branch_mean/cmake/admCheckXvid.cmake	2010-03-13 11:15:21 UTC (rev 5996)
+@@ -10,6 +10,8 @@
+                         SET(USE_XVID 1)
+ 		ELSE (XVID)
+ 			MESSAGE(&quot;${MSG_DISABLE_OPTION}&quot;)
++                        SET(XVID_INCLUDE_DIR &quot;&quot;)
++                        SET(XVID_LIBRARY_DIR &quot;&quot;)
+ 		ENDIF (XVID)
+ 		MESSAGE(&quot;&quot;)
+ ENDMACRO(checkXvid)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003200.html">[Avidemux-svn-commit] r5995 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/xvid4
+</A></li>
+	<LI>Next message: <A HREF="003202.html">[Avidemux-svn-commit] r5997 -	branches/avidemux_2.6_branch_mean/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3201">[ date ]</a>
+              <a href="thread.html#3201">[ thread ]</a>
+              <a href="subject.html#3201">[ subject ]</a>
+              <a href="author.html#3201">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

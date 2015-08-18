@@ -1,0 +1,308 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3309 -	branches/avidemux_2.4_branch/avidemux/ADM_osSupport
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3309%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_osSupport&In-Reply-To=%3C200706251905.l5PJ5gWk009186%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000586.html">
+   <LINK REL="Next"  HREF="000588.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3309 -	branches/avidemux_2.4_branch/avidemux/ADM_osSupport</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3309%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_osSupport&In-Reply-To=%3C200706251905.l5PJ5gWk009186%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3309 -	branches/avidemux_2.4_branch/avidemux/ADM_osSupport">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Mon Jun 25 21:05:42 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000586.html">[Avidemux-svn-commit] r3308 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv
+</A></li>
+        <LI>Next message: <A HREF="000588.html">[Avidemux-svn-commit] r3310 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#587">[ date ]</a>
+              <a href="thread.html#587">[ thread ]</a>
+              <a href="subject.html#587">[ subject ]</a>
+              <a href="author.html#587">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2007-06-25 21:05:33 +0200 (Mon, 25 Jun 2007)
+New Revision: 3309
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_crashdump.cpp
+Log:
+dump SEH info for Win32
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_crashdump.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_crashdump.cpp	2007-06-25 18:55:42 UTC (rev 3308)
++++ branches/avidemux_2.4_branch/avidemux/ADM_osSupport/ADM_crashdump.cpp	2007-06-25 19:05:33 UTC (rev 3309)
+@@ -57,17 +57,6 @@
+ 	assert(0);
+ }
+ #elif defined(WIN32)
+-EXCEPTION_DISPOSITION exceptionHandler(struct _EXCEPTION_RECORD* pExceptionRec, void* pEstablisherFrame, struct _CONTEXT* pContextRecord, void* pDispatcherContext)
+-{
+-	static int running=0;
+-
+-	if(running)
+-		exit(1);
+-
+-	running=1;
+-	ADM_backTrack(0, &quot;&quot;);
+-}
+-
+ typedef struct STACK_FRAME
+ {
+     STACK_FRAME* ebp;	// address of the calling function frame
+@@ -75,53 +64,133 @@
+     uint32_t param[0];	// parameter list (could be empty)
+ } STACK_FRAME;
+ 
+-static void dumpBackTrace()
++static void dumpFrame(void* processId, void* frameAddr)
+ {
+-	STACK_FRAME* stackFrame;
+-	void* currentProcessId;
+-    
+-	// Get frame address using builtin GCC function.
+-	stackFrame = (STACK_FRAME*)__builtin_frame_address(0);
+-	currentProcessId = GetCurrentProcess();
++	MEMORY_BASIC_INFORMATION mbi;
++	char moduleName[MAX_PATH];
++	HMODULE moduleAddr;
++	DWORD symDisplacement;
++	IMAGEHLP_SYMBOL* pSymbol;
+ 
+-	const int maxAddrCount = 32;
+-    char moduleName[MAX_PATH];
+-    HMODULE moduleAddr;
++	if (VirtualQuery(frameAddr, &amp;mbi, sizeof(mbi)))
++	{
++		moduleName[0] = 0;
++		moduleAddr = (HMODULE)mbi.AllocationBase;
++		
++		GetModuleFileName(moduleAddr, moduleName, MAX_PATH);
+ 
+-	static char symbolBuffer[sizeof(IMAGEHLP_SYMBOL) + 512];
+-	IMAGEHLP_SYMBOL* pSymbol;
+-	DWORD symDisplacement;
+-	MEMORY_BASIC_INFORMATION mbi;
++		printf(&quot;%s(&quot;, moduleName);
+ 
+-	pSymbol = (IMAGEHLP_SYMBOL*)symbolBuffer;
+-    pSymbol-&gt;MaxNameLength = sizeof(symbolBuffer) - sizeof(IMAGEHLP_SYMBOL);
++		if (SymGetSymFromAddr(processId, (uint32_t)frameAddr, &amp;symDisplacement, pSymbol))
++			printf(&quot;%s&quot;, pSymbol-&gt;Name);
++		else
++			printf(&quot;&lt;unknown&gt;&quot;);
+ 
+-	SymInitialize(currentProcessId, NULL, TRUE);
++		printf(&quot;+0x%X) [0x%08X]\n&quot;, (uint32_t)frameAddr - (uint32_t)moduleAddr, frameAddr);
++	}
++}
++	
++static void dumpExceptionInfo(void* processId, struct _EXCEPTION_RECORD* pExceptionRec, struct _CONTEXT* pContextRecord)
++{
++	printf(&quot;\n*********** EXCEPTION **************\n&quot;);
++	printf(&quot;Registers:\n&quot;);
++	printf(&quot;EAX: %08X  EBX: %08X  ECX: %08X  EDX: %08X  ESI: %08X\n&quot;, pContextRecord-&gt;Eax, pContextRecord-&gt;Ebx, pContextRecord-&gt;Ecx, pContextRecord-&gt;Edx, pContextRecord-&gt;Esi);
++	printf(&quot;EDI: %08X  ESP: %08X  EBP: %08X  EIP: %08X  EFlags: %08X\n\n&quot;, pContextRecord-&gt;Edi, pContextRecord-&gt;Esp, pContextRecord-&gt;Ebp, pContextRecord-&gt;Eip, pContextRecord-&gt;EFlags);
+ 
+-    for (int retAddrCount = 0; (retAddrCount &lt; maxAddrCount) &amp;&amp; !IsBadReadPtr(stackFrame, sizeof(STACK_FRAME)) &amp;&amp; !IsBadCodePtr(FARPROC(stackFrame-&gt;retAddr)); retAddrCount++, stackFrame = stackFrame-&gt;ebp)
+-    {
+-		// Find the module using a return address inside that module
+-		if (VirtualQuery(stackFrame-&gt;retAddr, &amp;mbi, sizeof(mbi)))
+-        {
+-			moduleName[0] = 0;
+-			moduleAddr = (HMODULE)mbi.AllocationBase;
+-			
+-			GetModuleFileName(moduleAddr, moduleName, MAX_PATH);
++	printf(&quot;Exception Code: &quot;);
+ 
+-			printf(&quot;Frame %2d: %s(&quot;, retAddrCount, moduleName);
++	switch (pExceptionRec-&gt;ExceptionCode)
++	{
++		case EXCEPTION_ACCESS_VIOLATION:
++			printf(&quot;EXCEPTION_ACCESS_VIOLATION&quot;);
++			break;
++		case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
++			printf(&quot;EXCEPTION_ARRAY_BOUNDS_EXCEEDED&quot;);
++			break;
++		case EXCEPTION_BREAKPOINT:
++			printf(&quot;EXCEPTION_BREAKPOINT&quot;);
++			break;
++		case EXCEPTION_DATATYPE_MISALIGNMENT:
++			printf(&quot;EXCEPTION_DATATYPE_MISALIGNMENT&quot;);
++			break;
++		case EXCEPTION_FLT_DENORMAL_OPERAND:
++			printf(&quot;EXCEPTION_FLT_DENORMAL_OPERAND&quot;);
++			break;
++		case EXCEPTION_FLT_DIVIDE_BY_ZERO:
++			printf(&quot;EXCEPTION_FLT_DIVIDE_BY_ZERO&quot;);
++			break;
++		case EXCEPTION_FLT_INEXACT_RESULT:
++			printf(&quot;EXCEPTION_FLT_INEXACT_RESULT&quot;);
++			break;
++		case EXCEPTION_FLT_INVALID_OPERATION:
++			printf(&quot;EXCEPTION_FLT_INVALID_OPERATION&quot;);
++			break;
++		case EXCEPTION_FLT_OVERFLOW:
++			printf(&quot;EXCEPTION_FLT_OVERFLOW&quot;);
++			break;
++		case EXCEPTION_FLT_STACK_CHECK:
++			printf(&quot;EXCEPTION_FLT_STACK_CHECK&quot;);
++			break;
++		case EXCEPTION_FLT_UNDERFLOW:
++			printf(&quot;EXCEPTION_FLT_UNDERFLOW&quot;);
++			break;
++		case EXCEPTION_ILLEGAL_INSTRUCTION:
++			printf(&quot;EXCEPTION_ILLEGAL_INSTRUCTION&quot;);
++			break;
++		case EXCEPTION_IN_PAGE_ERROR:
++			printf(&quot;EXCEPTION_IN_PAGE_ERROR&quot;);
++			break;
++		case EXCEPTION_INT_DIVIDE_BY_ZERO:
++			printf(&quot;EXCEPTION_INT_DIVIDE_BY_ZERO&quot;);
++			break;
++		case EXCEPTION_INT_OVERFLOW:
++			printf(&quot;EXCEPTION_INT_OVERFLOW&quot;);
++			break;
++		case EXCEPTION_INVALID_DISPOSITION:
++			printf(&quot;EXCEPTION_INVALID_DISPOSITION&quot;);
++			break;
++		case EXCEPTION_NONCONTINUABLE_EXCEPTION:
++			printf(&quot;EXCEPTION_NONCONTINUABLE_EXCEPTION&quot;);
++			break;
++		case EXCEPTION_PRIV_INSTRUCTION:
++			printf(&quot;EXCEPTION_PRIV_INSTRUCTION&quot;);
++			break;
++		case EXCEPTION_SINGLE_STEP:
++			printf(&quot;EXCEPTION_SINGLE_STEP&quot;);
++			break;
++		case EXCEPTION_STACK_OVERFLOW:
++			printf(&quot;EXCEPTION_STACK_OVERFLOW&quot;);
++			break;
++		default:
++			printf(&quot;UNKNOWN&quot;);
++	}
++	
++	printf(&quot; (%08X)\n&quot;, pExceptionRec-&gt;ExceptionCode);
++	printf(&quot;Exception Flags: %08X\n&quot;, pExceptionRec-&gt;ExceptionFlags);
+ 
+-			if (SymGetSymFromAddr(currentProcessId, (uint32_t)stackFrame-&gt;retAddr, &amp;symDisplacement, pSymbol))
+-			{
+-				printf(&quot;%s&quot;, pSymbol-&gt;Name);
+-			}
+-			else
+-				printf(&quot;&lt;unknown&gt;&quot;);
++	printf(&quot;\nOrigin:\n&quot;);
++	dumpFrame(processId, (void*)pContextRecord-&gt;Eip);
++	printf(&quot;*********** EXCEPTION **************\n&quot;);
++	fflush(stdout);
++}
+ 
+-			printf(&quot;+0x%X)[0x%08X]\n&quot;, stackFrame-&gt;retAddr - (uint32_t)moduleAddr, stackFrame-&gt;retAddr);
+-        }
++static void dumpBackTrace(void* processId)
++{
++	const int maxAddrCount = 32;
++
++	printf(&quot;\n*********** BACKTRACE **************\n&quot;);
++
++	// Get frame address using builtin GCC function.
++	STACK_FRAME* stackFrame = (STACK_FRAME*)__builtin_frame_address(0);
++
++    for (int retAddrCount = 0; (retAddrCount &lt; maxAddrCount) &amp;&amp; !IsBadReadPtr(stackFrame, sizeof(STACK_FRAME)) &amp;&amp; !IsBadCodePtr(FARPROC(stackFrame-&gt;retAddr)); retAddrCount++, stackFrame = stackFrame-&gt;ebp)
++    {
++		printf(&quot;Frame %2d: &quot;, retAddrCount);
++		dumpFrame(processId, stackFrame-&gt;retAddr);
++		fflush(stdout);
+     }
+ 
+-	SymCleanup(currentProcessId);
++	printf(&quot;*********** BACKTRACE **************\n\n&quot;);
+ }
+ 
+ void ADM_backTrack(int lineno, const char *file)
+@@ -130,13 +199,41 @@
+ 
+ 	GUI_Error_HIG(_(&quot;Fatal Error&quot;),_(&quot;A fatal error has occurred.\n\nClick OK to generate debug information. This may take a few minutes to complete.&quot;));
+ 
+-	printf(&quot;\n*********** BACKTRACE **************\n&quot;);	
+-	dumpBackTrace();
+-	printf(&quot;*********** BACKTRACE **************\n&quot;);
++	void* currentProcessId = GetCurrentProcess();
++
++	SymInitialize(currentProcessId, NULL, TRUE);
++	dumpBackTrace(currentProcessId);
++	SymCleanup(currentProcessId);
++
+ 	printf(&quot;Assert failed at file %s, line %d\n\n&quot;,file,lineno);
+ 
+ 	exit(1);
+ }
++
++EXCEPTION_DISPOSITION exceptionHandler(struct _EXCEPTION_RECORD* pExceptionRec, void* pEstablisherFrame, struct _CONTEXT* pContextRecord, void* pDispatcherContext)
++{
++	static int running=0;
++
++	if(running)
++		exit(1);
++
++	running=1;
++
++	saveCrashProject();
++
++	GUI_Error_HIG(_(&quot;Fatal Error&quot;),_(&quot;A fatal error has occurred.\n\nClick OK to generate debug information. This may take a few minutes to complete.&quot;));
++
++	void* currentProcessId = GetCurrentProcess();
++
++	SymInitialize(currentProcessId, NULL, TRUE);
++
++	dumpExceptionInfo(currentProcessId, pExceptionRec, pContextRecord);
++	dumpBackTrace(currentProcessId);
++
++	SymCleanup(currentProcessId);
++
++	exit(1);
++}
+ #else
+ #include &lt;signal.h&gt;
+ #include &lt;execinfo.h&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000586.html">[Avidemux-svn-commit] r3308 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv
+</A></li>
+	<LI>Next message: <A HREF="000588.html">[Avidemux-svn-commit] r3310 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_amv
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#587">[ date ]</a>
+              <a href="thread.html#587">[ thread ]</a>
+              <a href="subject.html#587">[ subject ]</a>
+              <a href="author.html#587">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

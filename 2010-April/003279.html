@@ -1,0 +1,281 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6075 -	branches/avidemux_2.6_branch_mean/avidemux/common
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6075%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common&In-Reply-To=%3C201004061510.o36FAUWQ023935%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003278.html">
+   <LINK REL="Next"  HREF="003280.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6075 -	branches/avidemux_2.6_branch_mean/avidemux/common</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6075%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common&In-Reply-To=%3C201004061510.o36FAUWQ023935%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6075 -	branches/avidemux_2.6_branch_mean/avidemux/common">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Apr  6 17:10:30 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003278.html">[Avidemux-svn-commit] r6074 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src
+</A></li>
+        <LI>Next message: <A HREF="003280.html">[Avidemux-svn-commit] r6076 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3279">[ date ]</a>
+              <a href="thread.html#3279">[ thread ]</a>
+              <a href="subject.html#3279">[ subject ]</a>
+              <a href="author.html#3279">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-04-06 17:10:29 +0200 (Tue, 06 Apr 2010)
+New Revision: 6075
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/gui_play.cpp
+Log:
+[playback] Use filter chain so that we can switch from input to output
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.cpp	2010-04-06 15:10:28 UTC (rev 6074)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.cpp	2010-04-06 15:10:29 UTC (rev 6075)
+@@ -284,41 +284,6 @@
+       renderUnlock();
+ }
+ /**
+-      \fn admPreview::updateFilters
+-      \brief Signal from filter that the filter chain has been updated
+-      @param w : width
+-      @param h : height
+-*/
+-
+-void admPreview::updateFilters(AVDMGenericVideoStream *first,AVDMGenericVideoStream *last)
+-{
+-   switch(previewMode)
+-            {
+-              case  ADM_PREVIEW_SEPARATE:
+-                  preview=last;
+-                  break;
+-              case  ADM_PREVIEW_NONE:
+-                  break;
+-              case  ADM_PREVIEW_OUTPUT:
+-                preview=last;
+-                break;
+-              case  ADM_PREVIEW_SIDE:
+-              {
+-                  
+-                  preview=last;
+-                  break;
+-              }
+-              case  ADM_PREVIEW_TOP:
+-              {
+-                  
+-                  preview=last;
+-                  break;
+-              }
+-              default: ADM_assert(0);
+-            }
+-  
+-}
+-/**
+     \fn getCurrentPts
+     \brief returns the PTS in us of the last displayed frame
+ */
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.h	2010-04-06 15:10:28 UTC (rev 6074)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.h	2010-04-06 15:10:29 UTC (rev 6075)
+@@ -30,7 +30,6 @@
+       static void start(void);
+       static void stop(void);
+       static void setMainDimension(uint32_t, uint32_t );
+-      static void updateFilters(AVDMGenericVideoStream *first,AVDMGenericVideoStream *last);
+       static void deferDisplay(uint32_t onoff,uint32_t startat);
+       static void displayNow(void);
+       static void cleanUp(void);  
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gui_play.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gui_play.cpp	2010-04-06 15:10:28 UTC (rev 6074)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gui_play.cpp	2010-04-06 15:10:29 UTC (rev 6075)
+@@ -27,6 +27,7 @@
+ #include &quot;ADM_preview.h&quot;
+ #include &quot;audiofilter.h&quot;
+ #include &quot;GUI_ui.h&quot;
++#include &quot;ADM_filterChain.h&quot;
+ //___________________________________
+ // In 10 ms chunks
+ #define AUDIO_PRELOAD 100
+@@ -55,6 +56,8 @@
+         uint64_t        firstPts,lastPts;
+         uint64_t        vuMeterPts;
+         uint64_t        audioLatency;
++        ADM_coreVideoFilter  *videoFilter;
++        ADM_videoFilterChain *videoChain;
+ 
+ private :
+         bool initialized;
+@@ -77,6 +80,8 @@
+ {
+     playbackAudio=NULL;
+     wavbuf=NULL;
++    videoFilter=NULL;
++    videoChain=NULL;
+ }
+ /**
+     \fn ~GUIPlayback
+@@ -114,15 +119,6 @@
+ 	prefs-&gt;get(PRIORITY_PLAYBACK,&amp;priorityLevel);
+ 	setpriority(PRIO_PROCESS, 0, ADM_getNiceValue(priorityLevel));
+ 
+-    if(getPreviewMode()==ADM_PREVIEW_OUTPUT)
+-    {
+-//            filter=getLastVideoFilter();
+-    }
+-    else
+-    {
+-  //          filter=getFirstVideoFilter( );
+-    }
+-
+     stop_req = 0;
+     playing = 1;
+ 
+@@ -134,16 +130,18 @@
+     playLoop-&gt;run();
+ 
+     delete playLoop;
+-   playing = 0;
++    playing = 0;
+ 
+ //   getFirstVideoFilter( );
+ 
+    admPreview::deferDisplay(0,0);
+-
+-
++   // Resize the output window to original size...
++   ADM_info(&quot;Restoring display.\n&quot;);
++   aviInfo info;
++   video_body-&gt;getVideoInfo(&amp;info);
++   admPreview::setMainDimension(info.width,info.height);
+    UI_purge();
+-#warning FIXME
+-//   admPreview::seekToFrame(oldTimeFrame);
++   
+    admPreview::samePicture();
+    GUI_setCurrentFrameAndTime();
+    UI_purge();
+@@ -167,7 +165,6 @@
+             playbackAudio=NULL;
+        }
+        return true;
+-
+ }
+ /**
+     \fn cleanupAudio
+@@ -175,10 +172,16 @@
+ bool GUIPlayback::cleanup(void)
+ {
+         cleanupAudio();
++        if(videoChain)
++        {
++            ADM_info(&quot;Destroying video playback chain\n&quot;);
++            destroyVideoFilterChain(videoChain);
++            videoChain=NULL;
++        }
++        videoFilter=NULL; // it has been destroyed by the chain
+        // done.
+ 	   setpriority(PRIO_PROCESS, 0, originalPriority);
+        return true;
+-
+ }
+ 
+ /**
+@@ -187,6 +190,23 @@
+ bool GUIPlayback::initialize(void)
+ {
+     firstPts=admPreview::getCurrentPts();
++    if(getPreviewMode()==ADM_PREVIEW_NONE) // copy
++    {
++        videoChain=createEmptyVideoFilterChain(firstPts,1000*1000*1000*1000LL); 
++    }else
++    {
++        videoChain=createVideoFilterChain(firstPts,1000*1000*1000*1000LL); 
++    }
++    if(!videoChain)
++    {
++        ADM_warning(&quot;Cannot create video chain\n&quot;);
++        return false;
++    }
++    int nb=videoChain-&gt;size();
++    videoFilter=(*videoChain)[nb-1];
++    FilterInfo *info=videoFilter-&gt;getInfo();
++    admPreview::setMainDimension(info-&gt;width,info-&gt;height);
++
+     initializeAudio();
+     return true;
+ }
+@@ -199,15 +219,17 @@
+ 
+     uint32_t movieTime;
+     uint32_t systemTime;
++    uint32_t fn;
+     int refreshCounter=0;
+     ticktock.reset();
+     vuMeterPts=0;
++    ADMImage *previewBuffer=admPreview::getBuffer();
+     do
+     {
+ 
+         admPreview::displayNow();;
+         GUI_setCurrentFrameAndTime();
+-        if(false==admPreview::nextPicture())
++        if(false==videoFilter-&gt;getNextFrame(&amp;fn,previewBuffer))
+         {
+             printf(&quot;[Play] Cancelling playback, nextPicture failed\n&quot;);
+             break;
+@@ -215,7 +237,7 @@
+         audioPump(false);
+         lastPts=admPreview::getCurrentPts();
+         systemTime = ticktock.getElapsedMS();
+-        movieTime=(uint32_t)((lastPts-firstPts)/1000);
++        movieTime=(uint32_t)((lastPts-firstPts*0)/1000);
+         movieTime+=audioLatency;
+        // printf(&quot;[Playback] systemTime: %lu movieTime : %lu  \r&quot;,systemTime,movieTime);
+         if(systemTime&gt;movieTime) // We are late, the current PTS is after current closk
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003278.html">[Avidemux-svn-commit] r6074 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src
+</A></li>
+	<LI>Next message: <A HREF="003280.html">[Avidemux-svn-commit] r6076 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3279">[ date ]</a>
+              <a href="thread.html#3279">[ thread ]</a>
+              <a href="subject.html#3279">[ subject ]</a>
+              <a href="author.html#3279">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

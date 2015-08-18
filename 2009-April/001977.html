@@ -1,0 +1,201 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4749 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4749%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904211804.n3LI4GIR031304%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001976.html">
+   <LINK REL="Next"  HREF="001979.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4749 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4749%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904211804.n3LI4GIR031304%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4749 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Apr 21 20:04:16 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001976.html">[Avidemux-svn-commit] r4748 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="001979.html">[Avidemux-svn-commit] r4750 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1977">[ date ]</a>
+              <a href="thread.html#1977">[ thread ]</a>
+              <a href="subject.html#1977">[ subject ]</a>
+              <a href="author.html#1977">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-04-21 20:04:16 +0200 (Tue, 21 Apr 2009)
+New Revision: 4749
+
+Modified:
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+Log:
+[TsDemuxer] Skeleton to index audio also
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-21 18:04:14 UTC (rev 4748)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-21 18:04:16 UTC (rev 4749)
+@@ -88,8 +88,8 @@
+ {
+ protected:
+         FILE *index;
+-        tsPacketLinear       *pkt;
+-        listOfTsAudioTracks  *audioTracks;
++        tsPacketLinearTracker  *pkt;
++        listOfTsAudioTracks    *audioTracks;
+         DIA_workingBase  *ui;
+ public:
+                 TsIndexer(void);
+@@ -182,7 +182,7 @@
+         return false;
+     }
+     writeSystem(file,true);
+-    pkt=new tsPacketLinear(Tracks[0].trackPid);
++    pkt=new tsPacketLinearTracker(nbTracks, Tracks);
+ 
+     FP_TYPE append=FP_APPEND;
+     pkt-&gt;open(file,append);
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-21 18:04:14 UTC (rev 4748)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-21 18:04:16 UTC (rev 4749)
+@@ -686,5 +686,47 @@
+     return true;
+ }
+ /* ********************************************************* */
++/**
++    \fn tsPacketLinearTracker
++*/
++tsPacketLinearTracker::tsPacketLinearTracker(uint32_t nb,ADM_TS_TRACK *tracks) : tsPacketLinear(tracks[0].trackPid)
++{
++    otherPes=new TS_PESpacket(0);
++    ADM_assert(nb);
++    totalTracks=nb;
++    if(!nb)    
++    {
++        this-&gt;stats=NULL;
++        return;
++    }
+ 
++    // Convert ADM_TS_TRACKS to ststa
++    stats=new packetTSStats[nb];    
++    memset(stats,0,sizeof(packetTSStats)*nb);
++    for(int i=0;i&lt;nb;i++)
++    {
++        stats[i].pid=tracks[i].trackPid;
++        stats[i].startDts=ADM_NO_PTS;
++    }
++}
++/**
++    \fn ~tsPacketLinearTracker
++*/
++tsPacketLinearTracker::~tsPacketLinearTracker()
++{
++    if(otherPes) delete otherPes;
++    otherPes=NULL;
++    if(stats) delete [] stats;
++    stats=NULL;
++}
++/**
++    \fn tsPacketLinearTracker
++*/
++bool    tsPacketLinearTracker::getStats(uint32_t *nb,packetTSStats *stats)
++{
++    *nb=totalTracks;
++    stats=this-&gt;stats;
++    return true;
++}
++
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-21 18:04:14 UTC (rev 4748)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-21 18:04:16 UTC (rev 4749)
+@@ -9,6 +9,7 @@
+ #define DMXtsPacket_H
+ 
+ #include &quot;dmxPacket.h&quot;
++#include &quot;ADM_tsPatPmt.h&quot;
+ #include &quot;ADM_Video.h&quot;
+ 
+ #define TS_MARKER       0x47
+@@ -147,10 +148,11 @@
+ };
+ 
+ /**
+-    \class tsPacketLinearTracker
++    \class packetTSStats
+ */
+ typedef struct
+ {
++    uint32_t pid;
+     uint32_t count;
+     uint32_t size;
+     
+@@ -158,7 +160,22 @@
+     uint32_t startCount;
+     uint32_t startSize;
+     uint64_t startDts;
+-}packetStats;
++}packetTSStats;
+ 
+-
++/**
++        \class tsPacketLinearTracker
++        \brieg similar to tsPacketLinear, but also keeps stat of others tracks. Needed to index audio
++*/
++class tsPacketLinearTracker : public tsPacketLinear
++{
++protected:
++        TS_PESpacket *pesPacket;
++        TS_PESpacket *otherPes;
++        packetTSStats *stats;
++        uint32_t      totalTracks;
++public:
++                tsPacketLinearTracker(uint32_t nb,ADM_TS_TRACK *tracks);
++                ~tsPacketLinearTracker();
++        bool    getStats(uint32_t *nb,packetTSStats *stats);
++};
+ #endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001976.html">[Avidemux-svn-commit] r4748 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="001979.html">[Avidemux-svn-commit] r4750 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1977">[ date ]</a>
+              <a href="thread.html#1977">[ thread ]</a>
+              <a href="subject.html#1977">[ subject ]</a>
+              <a href="author.html#1977">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

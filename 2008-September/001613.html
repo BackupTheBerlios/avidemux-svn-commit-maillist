@@ -1,0 +1,267 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4373 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_dummy
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4373%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_dummy&In-Reply-To=%3C200809191718.m8JHIp8Z000473%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001612.html">
+   <LINK REL="Next"  HREF="001614.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4373 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_dummy</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4373%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_dummy&In-Reply-To=%3C200809191718.m8JHIp8Z000473%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4373 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_dummy">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Fri Sep 19 19:18:51 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001612.html">[Avidemux-svn-commit] r4372 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+</A></li>
+        <LI>Next message: <A HREF="001614.html">[Avidemux-svn-commit] r4374 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_flv
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1613">[ date ]</a>
+              <a href="thread.html#1613">[ thread ]</a>
+              <a href="subject.html#1613">[ subject ]</a>
+              <a href="author.html#1613">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-09-19 19:18:45 +0200 (Fri, 19 Sep 2008)
+New Revision: 4373
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_dummy/oplug_dummy.cpp
+Log:
+[dummy] remove prefilling and support delayed frames for dummy container
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_dummy/oplug_dummy.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_dummy/oplug_dummy.cpp	2008-09-19 16:39:50 UTC (rev 4372)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_dummy/oplug_dummy.cpp	2008-09-19 17:18:45 UTC (rev 4373)
+@@ -16,6 +16,8 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
++#define __STDC_LIMIT_MACROS
++
+ #include &quot;config.h&quot;
+ #include &lt;stdio.h&gt;
+ #include &lt;stdlib.h&gt;
+@@ -33,7 +35,7 @@
+ #include &quot;ADM_editor/ADM_Video.h&quot;
+ #include &quot;ADM_colorspace/colorspace.h&quot;
+ #include &quot;ADM_toolkit/toolkit.hxx&quot;
+-#include &lt;ADM_assert.h&gt;
++#include &quot;ADM_assert.h&quot;
+ #include &quot;ADM_video/ADM_genvideo.hxx&quot;
+ #include &quot;ADM_filter/video_filters.h&quot;
+ 
+@@ -88,8 +90,6 @@
+ uint32_t alen;//,flags;
+ uint32_t size;
+ 
+-uint8_t   ret=0;
+-
+ uint32_t  sample_got=0,sample;
+ uint32_t  extraDataSize=0;
+ uint8_t   *extraData=NULL;
+@@ -106,10 +106,10 @@
+ ADMBitstream    bitstream(0);
+ uint32_t        frameWrite=0;
+ uint8_t r=0;
+-uint32_t skipping=1;
++int frameDelay = 0;
++bool receivedFrame = false;
+ 
+ uint32_t    totalAudioSize=0;
+-uint32_t sent=0;
+ 
+         // Setup video
+         
+@@ -161,7 +161,7 @@
+                 _encode-&gt;hasExtraHeaderData( &amp;videoExtraDataSize,&amp;dummy);
+                 if(videoExtraDataSize)
+                 {
+-                        printf(&quot;[FLV]We have extradata for video in copy mode (%d)\n&quot;,videoExtraDataSize);
++                        printf(&quot;We have extradata for video in copy mode (%d)\n&quot;,videoExtraDataSize);
+                         videoExtraData=new uint8_t[videoExtraDataSize];
+                         memcpy(videoExtraData,dummy,videoExtraDataSize);
+                 }
+@@ -170,76 +170,78 @@
+              
+              ADM_assert(_encode);
+              bitstream.data=videoBuffer;
+-             
+-preFilling:
+-             bitstream.cleanup(0);
+-             if(!(err=_encode-&gt;encode ( prefill, &amp;bitstream)))// FIXME: We should never execute it more than once
+-             {
+-                        printf(&quot;[FLV]:First frame error\n&quot;);
+-                        GUI_Error_HIG (QT_TR_NOOP(&quot;Error while encoding&quot;), NULL);
+-                        goto  stopit;
+-              }
+-              sent++;
+-              if(!bitstream.len)
+-              {
+-                prefill++;
+-                goto preFilling;
+-              }
+-              if(!bitstream.flags &amp; AVI_KEY_FRAME)
+-              {
+-                GUI_Error_HIG (QT_TR_NOOP(&quot;KeyFrame error&quot;),QT_TR_NOOP( &quot;The beginning frame is not a key frame.\nPlease move the A marker.&quot;));
+-                  goto  stopit; 
+-              }
+-         
+-          if(!videoProcessMode())
+-                encoding_gui-&gt;setCodec(QT_TR_NOOP(&quot;Copy&quot;));
+-          else
+-                encoding_gui-&gt;setCodec(_encode-&gt;getDisplayName());
+-           //
+-          UI_purge();
+-          if(bitstream.len)
+-          {
+-            frameWrite++;
+-          }
+-           for(int frame=1;frame&lt;total;frame++)
+-           {
+-               
+-               ADM_assert(_encode);
+-               bitstream.cleanup(frameWrite);
+-              
+-               r=_encode-&gt;encode ( prefill+frame, &amp;bitstream);
+-              
+-               if(!r &amp;&amp; frame&lt;total-2)
+-               {
+-                        printf(&quot;[FLV]:Frame %u error\n&quot;,frame);
+-                        GUI_Error_HIG (&quot;FLV&quot;,QT_TR_NOOP(&quot;Error while encoding&quot;));
+-                        goto  stopit;
+-                }
+-                if(!bitstream.len &amp;&amp; skipping)
+-                {
+-                    printf(&quot;[FLV]Frame skipped (xvid ?)\n&quot;);
+-                    continue;
+-                }
+-                sent++;
+-                skipping=0;
+-                frameWrite++;
+-                encoding_gui-&gt;setFrame(frame,bitstream.len,bitstream.out_quantizer,total);
+-               if(!encoding_gui-&gt;isAlive())
+-                {
+-                    
+-                    goto stopit;
+-                }
+-               
+-           }
+-           ret=1;
+-           
++
++			 if(!videoProcessMode())
++				 encoding_gui-&gt;setCodec(QT_TR_NOOP(&quot;Copy&quot;));
++			 else
++				 encoding_gui-&gt;setCodec(_encode-&gt;getDisplayName());
++
++			 UI_purge();
++
++			 for (uint32_t frame = 0; frame &lt; total; frame++)
++			 {
++				 if (!encoding_gui-&gt;isAlive())
++				 {
++					 r = 0;
++					 break;
++				 }
++
++				 for (;;)
++				 {
++					 bitstream.cleanup(frame);
++
++					 if (frame + frameDelay &gt;= total)
++					 {
++						 if (_encode-&gt;getRequirements() &amp; ADM_ENC_REQ_NULL_FLUSH)
++							 r = _encode-&gt;encode(UINT32_MAX, &amp;bitstream);
++						 else
++							 r = 0;
++					 }
++					 else
++						 r = _encode-&gt;encode(frame + frameDelay, &amp;bitstream);
++
++					 if (!r)
++					 {
++						 printf(&quot;Encoding of frame %lu failed!\n&quot;, frame);
++						 GUI_Error_HIG (QT_TR_NOOP(&quot;Error while encoding&quot;), NULL);
++						 break;
++					 }
++					 else if (!receivedFrame &amp;&amp; bitstream.len &gt; 0)
++					 {
++						 if (!(bitstream.flags &amp; AVI_KEY_FRAME))
++						 {
++							 GUI_Error_HIG (QT_TR_NOOP(&quot;KeyFrame error&quot;), QT_TR_NOOP(&quot;The beginning frame is not a key frame.\nPlease move the A marker.&quot;));
++							 r = 0;
++							 break;
++						 }
++						 else
++							 receivedFrame = true;
++					 }
++
++					 if (bitstream.len == 0 &amp;&amp; (_encode-&gt;getRequirements() &amp; ADM_ENC_REQ_NULL_FLUSH))
++					 {
++						 printf(&quot;skipping frame: %u size: %i\n&quot;, frame + frameDelay, bitstream.len);
++						 frameDelay++;
++					 }
++					 else
++						 break;
++				 }
++
++				 if (!r)
++					 break;
++
++				 encoding_gui-&gt;setFrame(frame, bitstream.len, bitstream.out_quantizer, total);
++			 }
++
++			 encoding_gui-&gt;reset();
++
+ stopit:
+     
+            if(encoding_gui) delete encoding_gui;
+            if(videoBuffer) delete [] videoBuffer;
+            if(_encode) delete _encode;	
+            if(videoExtraData) delete [] videoExtraData;
+-           return ret;
++           return r;
+ }
+ 
+ 	
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001612.html">[Avidemux-svn-commit] r4372 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+</A></li>
+	<LI>Next message: <A HREF="001614.html">[Avidemux-svn-commit] r4374 -	branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_flv
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1613">[ date ]</a>
+              <a href="thread.html#1613">[ thread ]</a>
+              <a href="subject.html#1613">[ subject ]</a>
+              <a href="author.html#1613">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,366 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5323 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5323%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS&In-Reply-To=%3C200909051440.n85EerJG009559%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002535.html">
+   <LINK REL="Next"  HREF="002537.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5323 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5323%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS&In-Reply-To=%3C200909051440.n85EerJG009559%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5323 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Sep  5 16:40:53 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002535.html">[Avidemux-svn-commit] r5322 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers
+</A></li>
+        <LI>Next message: <A HREF="002537.html">[Avidemux-svn-commit] r5324 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2536">[ date ]</a>
+              <a href="thread.html#2536">[ thread ]</a>
+              <a href="subject.html#2536">[ subject ]</a>
+              <a href="author.html#2536">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-09-05 16:40:52 +0200 (Sat, 05 Sep 2009)
+New Revision: 5323
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.h
+Log:
+[ff PS Muxer] Simplify
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.cpp	2009-09-05 08:19:16 UTC (rev 5322)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.cpp	2009-09-05 14:40:52 UTC (rev 5323)
+@@ -28,6 +28,21 @@
+ #define aprintf printf
+ #endif
+ 
++typedef struct
++{
++    const char *fmt;
++    uint32_t   bufferSizekBytes;
++    uint32_t   muxRatekBits;
++    uint32_t   videoRatekBits;
++}mpegPsStruct;
++
++const mpegPsStruct psDescriptor[3]=
++{
++    { &quot;vcd&quot;,  40,1400,1152},  // Verify, not sure!
++    { &quot;svcd&quot;,112,2800,2400},
++    { &quot;dvd&quot;, 224,11000,9800},
++};
++
+ psMuxerConfig_s psMuxerConfig=
+ {
+     MUXER_DVD,false
+@@ -53,97 +68,18 @@
+     \fn open
+     \brief Check that the streams are ok, initialize context...
+ */
+-
+ bool muxerffPS::open(const char *file, ADM_videoStream *s,uint32_t nbAudioTrack,ADM_audioStream **a)
+ {
+-    uint32_t fcc=s-&gt;getFCC();
+-    uint32_t w,h;
+-     w=s-&gt;getWidth();
+-     h=s-&gt;getHeight();
+-        
+-     if(!isMpeg12Compatible(fcc))
+-     {
+-            printf(&quot;[ffPs] video not compatible\n&quot;);
+-            return false;
+-     }
+-    if(!psMuxerConfig.acceptNonCompliant)
++const char *er;
++
++    if(verifyCompatibility(psMuxerConfig.acceptNonCompliant,psMuxerConfig.muxingType,s,nbAudioTrack,a,&amp;er)==false)
+     {
+-        switch(psMuxerConfig.muxingType)
+-        {
+-            case MUXER_VCD:
+-                    if(w!=352 || (h!=240 &amp;&amp; h!=288))
+-                    {
+-                            printf(&quot;[ffPs] Bad width/height for VCD\n&quot;);
+-                            return false;
+-                    }
+-                    break;
+-            case MUXER_SVCD:
+-                    if((w!=352 &amp;&amp; w!=480)|| (h!=576 &amp;&amp; h!=480))
+-                    {
+-                            printf(&quot;[ffPs] Bad width/height for SVCD\n&quot;);
+-                            return false;
+-                    }
+-                    break;
+-            case MUXER_DVD:
+-                    if((w!=720 &amp;&amp; w!=704)|| (h!=576 &amp;&amp; h!=480))
+-                    {
+-                            printf(&quot;[ffPs] Bad width/height for DVD\n&quot;);
+-                            return false;
+-                    }
+-                    break;
+-            default:
+-                    ADM_assert(0);
+-        }
++        GUI_Error_HIG(&quot;[Mismatch]&quot;,&quot;%s&quot;,er);
++        return false;
+     }
+-    if(!nbAudioTrack) 
+-        {
+-            printf(&quot;[ffPS] One audio track needed\n&quot;);
+-            return false;
+-        }
+-    for(int i=0;i&lt;nbAudioTrack;i++)
+-    {
+-        WAVHeader *head=a[i]-&gt;getInfo();
+-        switch(psMuxerConfig.muxingType)
+-        {
+-            case MUXER_VCD:
+-            case MUXER_SVCD:
+-                    if(head-&gt;encoding!=WAV_MP2) 
+-                    {
+-                        printf(&quot;[ffPS] VCD : only MP2 audio accepted\n&quot;);
+-                        return false;
+-                    }
+-                    if(head-&gt;frequency!=44100) 
+-                    {
+-                        printf(&quot;[ffPS] VCD : only 44.1 khz audio accepted\n&quot;);
+-                        return false;
+-                    }
+-                    break;
+-            case MUXER_DVD:
+-                    if(head-&gt;encoding!=WAV_MP2 &amp;&amp; head-&gt;encoding!=WAV_AC3 &amp;&amp; head-&gt;encoding!=WAV_DTS) 
+-                    {
+-                        printf(&quot;[ffPS] DVD : only MP2/AC3/DTS audio accepted\n&quot;);
+-                        return false;
+-                    }
+-                    if(head-&gt;frequency!=48000) 
+-                    {
+-                        printf(&quot;[ffPS] DVD : only 48 khz audio accepted\n&quot;);
+-                        return false;
+-                    }
+-                    break;
+-            default:
+-                    ADM_assert(0);
+-        }
+-    }
+ 
+-    /* All seems fine, open stuff */
+-    const char *fmt;
+-     switch(psMuxerConfig.muxingType)
+-        {
+-            case MUXER_VCD: fmt=&quot;vcd&quot;;break;
+-            case MUXER_SVCD:fmt=&quot;svcd&quot;;break;
+-            case MUXER_DVD: fmt=&quot;dvd&quot;;break;
+-        }
+-    if(false==setupMuxer(fmt,file))
++    mpegPsStruct myself=psDescriptor[psMuxerConfig.muxingType];
++    if(false==setupMuxer(myself.fmt,file))
+     {
+         printf(&quot;[ffPS] Failed to open muxer\n&quot;);
+         return false;
+@@ -158,32 +94,26 @@
+     
+         AVCodecContext *c;
+         c = video_st-&gt;codec;
++
++        // Override codec settings
+         rescaleFps(s-&gt;getAvgFps1000(),&amp;(c-&gt;time_base));
+-        // Override codec settings
+-#define MKX(a,bsize,maxb) case a: c-&gt;bit_rate=maxb*1000;c-&gt;rc_buffer_size=bsize*8*1000;break;
+-        switch(psMuxerConfig.muxingType)
+-        {
+-            MKX(MUXER_VCD,  40,1152)
+-            MKX(MUXER_SVCD,112,2400)
+-            MKX(MUXER_DVD, 224,9800)
+-        }
++        c-&gt;bit_rate=myself.videoRatekBits*1000;
++        c-&gt;rc_buffer_size=myself.bufferSizekBytes*8*1024;
++        c-&gt;rc_buffer_size_header=myself.bufferSizekBytes*8*1024;
++        c-&gt;gop_size=15;
+ 
+-        c-&gt;gop_size=15;
+-        
++        // Audio
+         if(initAudio(nbAudioTrack,a)==false)
+         {
+             printf(&quot;[ffPS] Failed to init audio\n&quot;);
+             return false;
+         }
+-        
++        audio_st-&gt;codec-&gt;bit_rate=a[0]-&gt;getInfo()-&gt;byterate*8;        
+         // /audio
+-        switch(psMuxerConfig.muxingType)
+-        {
+-            case MUXER_VCD:  oc-&gt;mux_rate=10080*1000;;break;
+-            case MUXER_SVCD: oc-&gt;mux_rate=2500*1000;;break;
+-            case MUXER_DVD:  oc-&gt;mux_rate=1152*1000;;break;
+-        }
+-       
++        oc-&gt;mux_rate=myself.muxRatekBits*1024;
++        // Also copy audio &amp; video bitrate
++
++
+         oc-&gt;preload=0; // 100 ms preloading
+         oc-&gt;max_delay=2000; // 500 ms
+         if (av_set_parameters(oc, NULL) &lt; 0)
+@@ -236,6 +166,89 @@
+     return closeMuxer();
+ }
+ 
++/**
++    \fn verifyCompatibility
++    \return true if the streams are ok to be muxed by selected muxer
++
++*/
++#define FAIL(x) {*er=x;return false;}
++bool muxerffPS::verifyCompatibility(bool nonCompliantOk, psMuxingType muxingType,
++                                    ADM_videoStream *s,uint32_t nbAudioTrack,ADM_audioStream **a, 
++                                    const char **er)
++{
++    uint32_t fcc=s-&gt;getFCC();
++    uint32_t w,h;
++     w=s-&gt;getWidth();
++     h=s-&gt;getHeight();
++     *er=&quot;??&quot;;
++
++     if(!isMpeg12Compatible(fcc))
++     {
++            FAIL(&quot; video not compatible\n&quot;);
++     }
++    if(!nonCompliantOk)
++    {
++        switch(muxingType)
++        {
++            case MUXER_VCD:
++                    if(w!=352 || (h!=240 &amp;&amp; h!=288))
++                    {
++                            FAIL(&quot; Bad width/height for VCD\n&quot;);
++                    }
++                    break;
++            case MUXER_SVCD:
++                    if((w!=352 &amp;&amp; w!=480)|| (h!=576 &amp;&amp; h!=480))
++                    {
++                            FAIL(&quot; Bad width/height for SVCD\n&quot;);
++                    }
++                    break;
++            case MUXER_DVD:
++                    if((w!=720 &amp;&amp; w!=704)|| (h!=576 &amp;&amp; h!=480))
++                    {
++                            FAIL(&quot; Bad width/height for DVD\n&quot;);
++                    }
++                    break;
++            default:
++                    ADM_assert(0);
++        }
++    }
++    if(!nbAudioTrack) 
++        {
++            FAIL(&quot; One audio track needed\n&quot;);
++            
++        }
++    for(int i=0;i&lt;nbAudioTrack;i++)
++    {
++        WAVHeader *head=a[i]-&gt;getInfo();
++        switch(muxingType)
++        {
++            case MUXER_VCD:
++            case MUXER_SVCD:
++                    if(head-&gt;encoding!=WAV_MP2) 
++                    {
++                        FAIL(&quot; VCD : only MP2 audio accepted\n&quot;);
++                    }
++                    if(head-&gt;frequency!=44100) 
++                    {
++                        FAIL(&quot; VCD : only 44.1 khz audio accepted\n&quot;);
++                    }
++                    break;
++            case MUXER_DVD:
++                    if(head-&gt;encoding!=WAV_MP2 &amp;&amp; head-&gt;encoding!=WAV_AC3 &amp;&amp; head-&gt;encoding!=WAV_DTS) 
++                    {
++                        FAIL(&quot;[ffPS] DVD : only MP2/AC3/DTS audio accepted\n&quot;);
++                    }
++                    if(head-&gt;frequency!=48000) 
++                    {
++                        FAIL(&quot; DVD : only 48 khz audio accepted\n&quot;);
++                    }
++                    break;
++            default:
++                    ADM_assert(0);
++        }
++    }
++    return true;
++}
+ //EOF
+ 
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.h	2009-09-05 08:19:16 UTC (rev 5322)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS/muxerffPS.h	2009-09-05 14:40:52 UTC (rev 5323)
+@@ -22,9 +22,9 @@
+ 
+ typedef enum
+ {
+-    MUXER_VCD,
+-    MUXER_SVCD,
+-    MUXER_DVD
++    MUXER_VCD=0,
++    MUXER_SVCD=1,
++    MUXER_DVD=2
+ }psMuxingType;
+ 
+ typedef struct
+@@ -43,6 +43,9 @@
+ protected:
+         
+         bool muxerRescaleVideoTimeDts(uint64_t *time,uint64_t computedDts);
++        bool verifyCompatibility(bool nonCompliantOk, psMuxingType muxingType,
++                                    ADM_videoStream *s,uint32_t nbAudioTrack,ADM_audioStream **a, 
++                                    const char **er);
+ 
+ public:
+                 muxerffPS();
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002535.html">[Avidemux-svn-commit] r5322 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers
+</A></li>
+	<LI>Next message: <A HREF="002537.html">[Avidemux-svn-commit] r5324 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2536">[ date ]</a>
+              <a href="thread.html#2536">[ thread ]</a>
+              <a href="subject.html#2536">[ subject ]</a>
+              <a href="author.html#2536">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

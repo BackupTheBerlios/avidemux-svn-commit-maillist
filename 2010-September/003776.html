@@ -1,0 +1,261 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6590 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/ass
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6590%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/ass&In-Reply-To=%3C20100906102323.0D108481051%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003775.html">
+   <LINK REL="Next"  HREF="003777.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6590 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/ass</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6590%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/ass&In-Reply-To=%3C20100906102323.0D108481051%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6590 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/ass">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Sep  6 12:23:22 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003775.html">[Avidemux-svn-commit] r6589 - in	branches/avidemux_2.6_branch_mean/avidemux: common	common/ADM_toolkit qt4/ADM_userInterfaces/ADM_gui
+</A></li>
+        <LI>Next message: <A HREF="003777.html">[Avidemux-svn-commit] r6591 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3776">[ date ]</a>
+              <a href="thread.html#3776">[ thread ]</a>
+              <a href="subject.html#3776">[ subject ]</a>
+              <a href="author.html#3776">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-09-06 12:23:22 +0200 (Mon, 06 Sep 2010)
+New Revision: 6590
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/ass/ADM_vidASS.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/ass/CMakeLists.txt
+Log:
+[Ass] Update
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/ass/ADM_vidASS.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/ass/ADM_vidASS.cpp	2010-09-06 10:23:21 UTC (rev 6589)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/ass/ADM_vidASS.cpp	2010-09-06 10:23:22 UTC (rev 6590)
+@@ -33,10 +33,11 @@
+ {
+ protected:
+         ass_ssa         param;
+-        ass_library_t   *_ass_lib;
+-        ass_renderer_t  *_ass_rend;
+-        ass_track_t     *_ass_track;
+-        bool            init(void);
++        ASS_Library     *_ass_lib;
++        ASS_Renderer    *_ass_rend;
++        ASS_Track       *_ass_track;
++        bool            setup(void);
++        bool            cleanup(void);
+         ADMImage        *src;
+ public:
+                     subAss(ADM_coreVideoFilter *previous,CONFcouple *conf);
+@@ -112,13 +113,13 @@
+         src=new ADMImageDefault(in-&gt;getInfo()-&gt;width,in-&gt;getInfo()-&gt;height);
+ 
+         /* ASS initialization */
+-        _ass_lib = ass_library_init();
++        _ass_lib = NULL;
+         _ass_track = NULL;
+         _ass_rend = NULL;
+-        ADM_assert(_ass_lib);
++        
+         if(param.subtitleFile)
+         {
+-              if(!init())
++              if(!this-&gt;setup())
+               {
+                 GUI_Error_HIG(&quot;Format ?&quot;,&quot;Are you sure this is an ass file ?&quot;); 
+               }
+@@ -136,27 +137,8 @@
+         
+         DELETE(param.subtitleFile);
+         DELETE(param.fontDirectory);
+-
+-#if ASS_HAS_GLOBAL
+-        if(_ass_rend) 
+-        {
+-              ass_renderer_done(_ass_rend);
+-              _ass_rend = NULL;
+-         }
+-
+-        if(_ass_track) 
+-        {
+-              ass_free_track(_ass_track);
+-              _ass_track = NULL;
+-        }
+-        if(_ass_lib) 
+-        {
+-              ass_library_done(_ass_lib);
+-              _ass_lib = NULL;
+-        }
+-#endif
++        cleanup();
+ }
+-
+ /**
+     \fn getCoupledConf
+     \brief Return our current configuration as couple name=value
+@@ -193,32 +175,54 @@
+ #define MKME(x,y) param.y=(float)x
+     MKME(scale,font_scale);
+     MKME(spacing,line_spacing);
+-
++     cleanup();
++     setup();
+      return true;
+    }
+    return false;
+ }
+ 
+ /**
+-    \fn init
++    \fn cleanup
+ */
+-bool subAss::init(void)
++bool subAss::cleanup(void)
+ {
++        if(_ass_rend) 
++        {
++              ass_renderer_done(_ass_rend);
++              _ass_rend = NULL;
++         }
++
++        if(_ass_track) 
++        {
++              ass_free_track(_ass_track);
++              _ass_track = NULL;
++        }
++        if(_ass_lib) 
++        {
++              ass_library_done(_ass_lib);
++              _ass_lib = NULL;
++        }
++        return true;
++}
++/**
++    \fn setup
++*/
++bool subAss::setup(void)
++{
+ bool use_margins = ( param.topMargin | param.bottomMargin ) != 0;
+ 
++        // update outpur image size
+         memcpy(&amp;info,previousFilter-&gt;getInfo(),sizeof(info));
+         info.height += param.topMargin + param.bottomMargin;
++        
++        
++        _ass_lib=ass_library_init();
++        ADM_assert(_ass_lib);
+ 
+-        ass_set_fonts_dir(_ass_lib, (const char*)param.fontDirectory);
+-        ass_set_extract_fonts(_ass_lib, param.extractEmbeddedFonts);
++/*        ass_set_fonts_dir(_ass_lib, (const char*)param.fontDirectory);*/
++/*        ass_set_extract_fonts(_ass_lib, param.extractEmbeddedFonts);*/
+         ass_set_style_overrides(_ass_lib, NULL);
+-#if ASS_HAS_GLOBAL
+-         if(_ass_rend) 
+-        {
+-              ass_renderer_done(_ass_rend);
+-              _ass_rend = NULL;
+-         }
+-#endif
+         _ass_rend = ass_renderer_init(_ass_lib);
+ 
+         ADM_assert(_ass_rend);
+@@ -227,18 +231,14 @@
+         ass_set_margins(_ass_rend, param.topMargin, param.bottomMargin, 0, 0);
+         ass_set_use_margins(_ass_rend, use_margins);
+         ass_set_font_scale(_ass_rend, param.font_scale);
+-        ass_set_fonts(_ass_rend, NULL, &quot;Sans&quot;);
++//ASS_Renderer *priv, const char *default_font, const char *default_family, int fc, const char *config,                   int update);
++        int fc=0;
++#ifdef USE_FONTCONFIG
++        fc=1;
++#endif
++        ass_set_fonts(_ass_rend, NULL, &quot;Sans&quot;,fc,NULL,true);
+         //~ ass_set_aspect_ratio(_ass_rend, ((double)_info.width) / ((double)_info.height));
+-#if ASS_HAS_GLOBAL
+-        if(_ass_track) 
+-        {
+-              ass_free_track(_ass_track);
+-              _ass_track = NULL;
+-        }
+-#endif
+        _ass_track = ass_read_file(_ass_lib, (char*)param.subtitleFile, NULL);
+-
+-//        ADM_assert(_ass_track);
+         if(!_ass_track)
+           GUI_Error_HIG(&quot;SSA Error&quot;,&quot;Cannot read_file for *%s*&quot;,(char*)param.subtitleFile);
+         return 1;
+@@ -310,7 +310,7 @@
+ 
+         image-&gt;copyInfo(src); // pts etc..
+         // Do we have something to render ?
+-        if(!_ass_rend || !_ass_track)
++        if(!_ass_rend || !_ass_track || !_ass_lib)
+         {
+           printf(&quot;[Ass] No sub to render\n&quot;);
+           return true; 
+@@ -319,7 +319,7 @@
+         int changed=0;
+         int64_t now=previousFilter-&gt;getAbsoluteStartTime()+src-&gt;Pts;
+         now/=1000; // Ass works in ms
+-        ass_image_t *img = ass_render_frame(_ass_rend, _ass_track, now,&amp;changed);
++        ASS_Image *img = ass_render_frame(_ass_rend, _ass_track, now,&amp;changed);
+         //printf(&quot;Time is now %d ms\n&quot;,now);
+ 
+         while(img) {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/ass/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/ass/CMakeLists.txt	2010-09-06 10:23:21 UTC (rev 6589)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/ass/CMakeLists.txt	2010-09-06 10:23:22 UTC (rev 6590)
+@@ -12,6 +12,7 @@
+          TARGET_LINK_LIBRARIES(ADM_vf_ssa ADM_libass )
+ 	 ADD_TARGET_LDFLAGS(ADM_vf_ssa &quot;${FREETYPE2_LDFLAGS}&quot;)
+ 	 IF (FONTCONFIG_FOUND)
++                ADD_DEFINITIONS(&quot;-DUSE_FONTCONFIG&quot;)
+ 		ADD_TARGET_LDFLAGS(ADM_vf_ssa &quot;${FONTCONFIG_LDFLAGS}&quot;)
+ 	 ENDIF (FONTCONFIG_FOUND)
+         ENDIF(DO_COMMON)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003775.html">[Avidemux-svn-commit] r6589 - in	branches/avidemux_2.6_branch_mean/avidemux: common	common/ADM_toolkit qt4/ADM_userInterfaces/ADM_gui
+</A></li>
+	<LI>Next message: <A HREF="003777.html">[Avidemux-svn-commit] r6591 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3776">[ date ]</a>
+              <a href="thread.html#3776">[ thread ]</a>
+              <a href="subject.html#3776">[ subject ]</a>
+              <a href="author.html#3776">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,378 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5260 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5260%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv&In-Reply-To=%3C200908211533.n7LFX5K5027648%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002472.html">
+   <LINK REL="Next"  HREF="002474.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5260 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5260%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv&In-Reply-To=%3C200908211533.n7LFX5K5027648%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5260 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Aug 21 17:33:05 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002472.html">[Avidemux-svn-commit] r5259 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+        <LI>Next message: <A HREF="002474.html">[Avidemux-svn-commit] r5261 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2473">[ date ]</a>
+              <a href="thread.html#2473">[ thread ]</a>
+              <a href="subject.html#2473">[ subject ]</a>
+              <a href="author.html#2473">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-08-21 17:33:04 +0200 (Fri, 21 Aug 2009)
+New Revision: 5260
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flv.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flv.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flvAudio.cpp
+Log:
+[flv/demuxer] Partial support for h264 &amp; AAC in flv
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flv.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flv.cpp	2009-08-21 15:32:56 UTC (rev 5259)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flv.cpp	2009-08-21 15:33:04 UTC (rev 5260)
+@@ -153,7 +153,7 @@
+                                             hi=read32();lo=read32();
+                                             hi=(hi&lt;&lt;32)+lo;
+                                             val=(float)av_int2dbl(hi);
+-                                            printf(&quot;-&gt;%f\n&quot;,val);
++                                            printf(&quot;-&gt;%f&quot;,val);
+                                             setProperties(s,val);
+                                         }
+                                         ;break;
+@@ -188,16 +188,51 @@
+     }
+     return delta;
+ }
+-
+ /**
++    \fn extraHeader
++    \brief if returns true means we must skip the remainder
++*/
++bool flvHeader::extraHeader(flvTrak *trk,uint32_t *remain,bool have_cts,uint64_t *cts)
++{
++    int type=read8();
++    int r=*remain;
++    r--;
++    if(have_cts)
++    {
++        *cts=read24();
++        //printf(&quot;Type :%d\n&quot;,type);
++        r-=3;
++    }
++    if(!type)
++    {  // Grab extra data
++        if(trk-&gt;extraData) 
++        {
++            Skip(*remain);
++            r=0;
++        }
++        else    
++        {
++            printf(&quot;[FLV] found some extradata %&quot;LU&quot;\n&quot;,*remain);
++            trk-&gt;extraData=new uint8_t[*remain];
++            trk-&gt;extraDataLen=*remain;
++            read(*remain,trk-&gt;extraData);
++            r=0;            
++        }
++        *remain=r;
++        return true;
++    }
++    *remain=r;
++    return false;
++}
++/**
+       \fn open
+       \brief open the flv file, gather infos and build index(es).
+ */
+ 
+ uint8_t flvHeader::open(const char *name)
+ {
+-  uint32_t prevLen, type, size, pts,pos=0;
+-
++  uint32_t prevLen, type, size, dts,pos=0;
++  bool firstVideo=true;
+   _isvideopresent=0;
+   _isaudiopresent=0;
+   audioTrack=NULL;
+@@ -260,14 +295,15 @@
+   // Loop
+   while(pos&lt;fileSize-14)
+   {
++    uint64_t cts;
+     pos=ftello(_fd);
+     prevLen=read32();
+     type=read8();
+     size=read24();
+-    pts=read24();
++    dts=read24();
+     read32(); // ???
+     uint32_t remaining=size;
+-    //printf(&quot;[FLV] At %08x found type %x size %u pts%u\n&quot;,pos,type,size,pts);
++    //printf(&quot;[FLV] At %08x found type %x size %u pts%u\n&quot;,pos,type,size,dts);
+     switch(type)
+     {
+       case FLV_TAG_TYPE_AUDIO:
+@@ -288,7 +324,12 @@
+             {
+                setAudioHeader(format,fq,bps,channel);
+             }
+-            insertAudio(pos+of,remaining,pts);
++            if(format==10)
++            {
++                if(extraHeader(audioTrack,&amp;remaining,false,&amp;cts)) continue;
++            }
++            if(remaining)
++                insertAudio(pos+of,remaining,dts);
+           }
+           break;
+       case FLV_TAG_TYPE_META:
+@@ -298,6 +339,7 @@
+       case FLV_TAG_TYPE_VIDEO:
+           {
+             int of=1+4+3+3+1+4;
++            
+             uint8_t flags=read8();
+             remaining--;
+             int frameType=flags&gt;&gt;4;
+@@ -310,14 +352,19 @@
+               remaining--;
+               of++;
+             }
+-            int first=0;
+-            if(!videoTrack-&gt;_nbIndex) first=1;
+-            insertVideo(pos+of,remaining,frameType,pts);
+-            if(first) // first frame..
++            
++            if(firstVideo==true) // first frame..
+             {
+                 if(!setVideoHeader(codec,&amp;remaining)) return 0;
++                firstVideo=false;
+             }
++            if(codec==FLV_CODECID_H264)
++            {
++                if(true==extraHeader(videoTrack,&amp;remaining,true,&amp;cts)) continue;
+ 
++            }
++            if(remaining)
++                insertVideo(pos+of,remaining,frameType,dts);
+           }
+            break;
+       default: printf(&quot;[FLV]At 0x%x, unhandled type %u\n&quot;,pos,type);
+@@ -393,40 +440,33 @@
+ uint8_t flvHeader::setVideoHeader(uint8_t codec,uint32_t *remaining)
+ {
+     printf(&quot;[FLV] Video Codec:%u\n&quot;,codec);
+-     _video_bih.biWidth=_mainaviheader.dwWidth=320;
++     
++    _video_bih.biWidth=_mainaviheader.dwWidth=320;
+     _video_bih.biHeight=_mainaviheader.dwHeight=240;
++#define MKFLV(x,t) case FLV_CODECID_##x :  _videostream.fccHandler=_video_bih.biCompression=\
++                            fourCC::get((uint8_t *)#t);break;
+     switch(codec)
+     {
+-      case FLV_CODECID_H263:            _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;FLV1&quot;);break;
+-      case FLV_CODECID_VP6:
+-                        _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;VP6F&quot;);break;
+-      case FLV_CODECID_VP6A:
+-                        _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;VP6A&quot;);break;
+-    //???   case FLV_CODECID_SCREEN:          _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;VP6F&quot;);break;
+-      default :                         _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;XXX&quot;);break;
+-
++        MKFLV(H264,H264);
++        MKFLV(H263,FLV1);
++        MKFLV(VP6,VP6F);
++        MKFLV(VP6A,VP6A);
++        default : _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)&quot;XXX&quot;);break;
+     }
+-    if(codec==FLV_CODECID_VP6A &amp;&amp; metaWidth &amp;&amp; metaHeight )
+-    {
+-         _video_bih.biHeight=_mainaviheader.dwHeight=metaHeight ;
+-         _video_bih.biWidth=_mainaviheader.dwWidth=metaWidth;
+-    }
+-    if(codec==FLV_CODECID_VP6 )
+-    {
+-        read8();
+-        read8();
+-        *remaining-=2;
+-
+-         _video_bih.biHeight=_mainaviheader.dwHeight=read8()*16;
+-         _video_bih.biWidth=_mainaviheader.dwWidth=read8()*16;
+-        *remaining-=2;
+-    }
++    if( metaWidth &amp;&amp; metaHeight )
++        if( codec==FLV_CODECID_VP6A  || codec==FLV_CODECID_H264 || codec==FLV_CODECID_VP6) 
++        {
++                _video_bih.biHeight=_mainaviheader.dwHeight=metaHeight ;
++                _video_bih.biWidth=_mainaviheader.dwWidth=metaWidth;
++        }
+     if(codec==FLV_CODECID_H263)
+     {
++  
++      uint32_t pos=ftello(_fd);
+       uint32_t len=*remaining,width,height;
+       uint8_t buffer[len];
+       read(len,buffer);
+-      *remaining=0;
++      fseeko(_fd,pos,SEEK_SET);
+        /* Decode header, from h263dec.c / lavcodec*/
+       if(extractH263FLVInfo(buffer,len,&amp;width,&amp;height))
+       {
+@@ -461,6 +501,7 @@
+     case 3: wavHeader.encoding=WAV_PCM;break;
+     case 0: wavHeader.encoding=WAV_LPCM;break;
+     case 1: wavHeader.encoding=WAV_MSADPCM;break;
++    case 10:wavHeader.encoding=WAV_AAC;break;
+     default:
+           printf(&quot;[FLV]Unsupported audio codec:%u\n&quot;,format);
+   }
+@@ -485,13 +526,13 @@
+       \fn insertVideo
+       \brief add a frame to the index, grow the index if needed
+ */
+-uint8_t flvHeader::insertVideo(uint32_t pos,uint32_t size,uint32_t frameType,uint32_t pts)
++uint8_t flvHeader::insertVideo(uint32_t pos,uint32_t size,uint32_t frameType,uint32_t dts)
+ {
+     videoTrack-&gt;grow();
+     flvIndex *x=&amp;(videoTrack-&gt;_index[videoTrack-&gt;_nbIndex]);
+     x-&gt;size=size;
+     x-&gt;pos=pos;
+-    x-&gt;timeCodeUs=pts*1000LL;
++    x-&gt;timeCodeUs=dts*1000LL;
+     if(frameType==1)
+     {
+         x-&gt;flags=AVI_KEY_FRAME;
+@@ -575,11 +616,21 @@
+ uint8_t flvHeader::close(void)
+ {
+   if(_filename) ADM_dealloc(_filename);
+-  if(videoTrack) delete videoTrack;
+-  if(audioTrack) delete audioTrack;
++  if(videoTrack) 
++  {
++        if(videoTrack-&gt;extraData) delete [] videoTrack-&gt;extraData;
++        delete videoTrack;
++  }
++  if(audioTrack) 
++  {
++     if(audioTrack-&gt;extraData) delete [] audioTrack-&gt;extraData;
++    delete audioTrack;
++  }
+   if(_fd) fclose(_fd);
+   if(_audioStream) delete _audioStream;
+   if(access) delete access;
++  
++  
+   _fd=NULL;
+   _filename=NULL;
+   videoTrack=NULL;
+@@ -683,9 +734,15 @@
+ */
+ uint8_t  flvHeader::getExtraHeaderData(uint32_t *len, uint8_t **data)
+ {
+-                *len=0; //_tracks[0].extraDataLen;
+-                *data=NULL; //_tracks[0].extraData;
++        if(videoTrack)
++        {
++                *len=videoTrack-&gt;extraDataLen;
++                *data=videoTrack-&gt;extraData;
+                 return 1;
++        }
++        *len=0;
++        *data=NULL;
++        return 1;
+ }
+ 
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flv.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flv.h	2009-08-21 15:32:56 UTC (rev 5259)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flv.h	2009-08-21 15:33:04 UTC (rev 5260)
+@@ -81,7 +81,7 @@
+                 virtual bool      goToTime(uint64_t timeUs);
+                 virtual bool      getPacket(uint8_t *buffer, uint32_t *size, uint32_t maxSize,uint64_t *dts);
+ 
+-
++                bool              getExtraData(uint32_t *l, uint8_t **d);
+ };
+ 
+ 
+@@ -114,8 +114,8 @@
+     uint8_t     insertAudio(uint32_t pos,uint32_t size,uint32_t pts);
+     uint8_t     setAudioHeader(uint32_t format,uint32_t fq,uint32_t bps,uint32_t channels);
+     uint8_t     setVideoHeader(uint8_t codec,uint32_t *remaining);
++    bool        extraHeader(flvTrak *trk,uint32_t *remain,bool haveCts,uint64_t *cts);
+     
+-    
+     uint8_t     getFrameSize (uint32_t frame, uint32_t * size);
+     char        *readFlvString(void);
+     uint8_t     parseMetaData(uint32_t remaining);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flvAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flvAudio.cpp	2009-08-21 15:32:56 UTC (rev 5259)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv/ADM_flvAudio.cpp	2009-08-21 15:33:04 UTC (rev 5260)
+@@ -20,9 +20,16 @@
+ 
+ #include &quot;ADM_flv.h&quot;
+ 
++/**
++    \fn getExtraData
++*/
++bool      ADM_flvAccess::getExtraData(uint32_t *l, uint8_t **d)
++{
++    *l=_track-&gt;extraDataLen;
++    *d=_track-&gt;extraData;
++    return true;
++}   
+ 
+-
+-
+ /**
+     \fn ADM_audioAccess
+     \brief Constructor
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002472.html">[Avidemux-svn-commit] r5259 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+	<LI>Next message: <A HREF="002474.html">[Avidemux-svn-commit] r5261 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2473">[ date ]</a>
+              <a href="thread.html#2473">[ thread ]</a>
+              <a href="subject.html#2473">[ subject ]</a>
+              <a href="author.html#2473">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

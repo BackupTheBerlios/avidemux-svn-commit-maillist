@@ -1,0 +1,157 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6675 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6675%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS&In-Reply-To=%3C20100928051616.CC386480EAB%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003858.html">
+   <LINK REL="Next"  HREF="003860.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6675 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6675%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS&In-Reply-To=%3C20100928051616.CC386480EAB%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6675 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Sep 28 07:16:16 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003858.html">[Avidemux-svn-commit] r6674 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264:	. qt4
+</A></li>
+        <LI>Next message: <A HREF="003860.html">[Avidemux-svn-commit] r6676 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3859">[ date ]</a>
+              <a href="thread.html#3859">[ thread ]</a>
+              <a href="subject.html#3859">[ subject ]</a>
+              <a href="author.html#3859">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-09-28 07:16:16 +0200 (Tue, 28 Sep 2010)
+New Revision: 6675
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTS.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTSConfig.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.conf
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer_desc.cpp
+Log:
+[TS/muxer] Add muxrate parameter to Ts muxer
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTS.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTS.cpp	2010-09-27 21:46:39 UTC (rev 6674)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTS.cpp	2010-09-28 05:16:16 UTC (rev 6675)
+@@ -31,7 +31,8 @@
+ 
+ ts_muxer tsMuxerConfig=
+ {
+-    false
++    false,
++    10
+ };
+ 
+ /**
+@@ -104,7 +105,7 @@
+         }
+         
+         // /audio
+-        oc-&gt;mux_rate=30080*1000;
++        oc-&gt;mux_rate=tsMuxerConfig.muxRateInMBits*1000000LL;
+         audio_st-&gt;codec-&gt;bit_rate=a[0]-&gt;getInfo()-&gt;byterate*8;        
+        
+         oc-&gt;preload=3000; // 30 ms preloading
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTSConfig.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTSConfig.cpp	2010-09-27 21:46:39 UTC (rev 6674)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/muxerffTSConfig.cpp	2010-09-28 05:16:16 UTC (rev 6675)
+@@ -19,9 +19,20 @@
+ #define ADM_MINIMAL_UI_INTERFACE
+ #include &quot;DIA_factory.h&quot;
+ #include &quot;fourcc.h&quot;
++extern ts_muxer tsMuxerConfig;
+ bool ffTSConfigure(void)
+ {
++        uint32_t muxRate=(uint32_t)tsMuxerConfig.muxRateInMBits;
++
++        diaElemUInteger mux(&amp;muxRate,&quot;Mux rate (MBits/s)&quot;,3,60);
++
++        diaElem *tabs[]={&amp;mux};
++        if( diaFactoryRun((&quot;TS Muxer&quot;),1,tabs))
++        {            
++            tsMuxerConfig.muxRateInMBits=muxRate;
+             return true;
++        }
++        return false;
+ }
+ // EOF
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.conf
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.conf	2010-09-27 21:46:39 UTC (rev 6674)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.conf	2010-09-28 05:16:16 UTC (rev 6675)
+@@ -1 +1,2 @@
+ bool:acceptNonCompliant
++uint32_t:muxRateInMBits
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.h	2010-09-27 21:46:39 UTC (rev 6674)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer.h	2010-09-28 05:16:16 UTC (rev 6675)
+@@ -3,6 +3,7 @@
+ #define ADM_ts_muxer_CONF_H
+ typedef struct {
+    bool acceptNonCompliant;
++   uint32_t muxRateInMBits;
+ }ts_muxer;
+ #endif //ts_muxer
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer_desc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer_desc.cpp	2010-09-27 21:46:39 UTC (rev 6674)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS/ts_muxer_desc.cpp	2010-09-28 05:16:16 UTC (rev 6675)
+@@ -1,5 +1,6 @@
+ // Automatically generated, do not edit!
+ const ADM_paramList ts_muxer_param[]={
+  {&quot;acceptNonCompliant&quot;,offsetof( ts_muxer,acceptNonCompliant),&quot;bool&quot;,ADM_param_bool},
++ {&quot;muxRateInMBits&quot;,offsetof( ts_muxer,muxRateInMBits),&quot;uint32_t&quot;,ADM_param_uint32_t},
+ {NULL,0,NULL}
+ };
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003858.html">[Avidemux-svn-commit] r6674 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264:	. qt4
+</A></li>
+	<LI>Next message: <A HREF="003860.html">[Avidemux-svn-commit] r6676 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3859">[ date ]</a>
+              <a href="thread.html#3859">[ thread ]</a>
+              <a href="subject.html#3859">[ subject ]</a>
+              <a href="author.html#3859">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,367 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7260 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/src	avidemux/common/ADM_videoFilter2/include	avidemux/common/ADM_videoFilter2/src	avidemux_core/ADM_coreVideoFilter/include	avidemux_core/ADM_coreVideoFilter/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7260%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_videoCodec/src%0A%09avidemux/common/ADM_videoFilter2/include%0A%09avidemux/common/ADM_videoFilter2/src%0A%09avidemux_core/ADM_coreVideoFilter/include%0A%09avidemux_core/ADM_coreVideoFilter/src&In-Reply-To=%3C20110609180414.C32A64812F0%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004413.html">
+   <LINK REL="Next"  HREF="004415.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7260 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/src	avidemux/common/ADM_videoFilter2/include	avidemux/common/ADM_videoFilter2/src	avidemux_core/ADM_coreVideoFilter/include	avidemux_core/ADM_coreVideoFilter/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7260%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_videoCodec/src%0A%09avidemux/common/ADM_videoFilter2/include%0A%09avidemux/common/ADM_videoFilter2/src%0A%09avidemux_core/ADM_coreVideoFilter/include%0A%09avidemux_core/ADM_coreVideoFilter/src&In-Reply-To=%3C20110609180414.C32A64812F0%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7260 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/src	avidemux/common/ADM_videoFilter2/include	avidemux/common/ADM_videoFilter2/src	avidemux_core/ADM_coreVideoFilter/include	avidemux_core/ADM_coreVideoFilter/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jun  9 20:04:14 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004413.html">[Avidemux-svn-commit] r7259 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_editor avidemux/common/ADM_render	avidemux/common/ADM_videoCodec/src	avidemux_core/ADM_coreImage/include avidemux_core/ADM_coreImage/src
+</A></li>
+        <LI>Next message: <A HREF="004415.html">[Avidemux-svn-commit] r7261 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4414">[ date ]</a>
+              <a href="thread.html#4414">[ thread ]</a>
+              <a href="subject.html#4414">[ subject ]</a>
+              <a href="author.html#4414">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-06-09 20:04:14 +0200 (Thu, 09 Jun 2011)
+New Revision: 7260
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_videoFilterBridge.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilterBridge.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/include/ADM_coreVideoFilter.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/src/ADM_coreVideoFilter.cpp
+Log:
+[core/editor] Add getNextFrameAs to request (if possible) a hw surface (vdpau)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2011-06-09 18:04:12 UTC (rev 7259)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2011-06-09 18:04:14 UTC (rev 7260)
+@@ -38,12 +38,12 @@
+ #include &quot;prefs.h&quot;
+ #include &quot;ADM_coreVdpau/include/ADM_coreVdpau.h&quot;
+ #include &quot;ADM_codecVdpau.h&quot;
++#include &quot;ADM_threads.h&quot;
+ 
+ 
++static bool         vdpauWorking=false;
++static admMutex     surfaceMutex;
+ 
+-static bool vdpauWorking=false;
+-
+-
+ #define aprintf(...) {}
+ 
+ typedef enum 
+@@ -74,11 +74,54 @@
+     vdpau_render_state *render=(vdpau_render_state *)cookie;
+     render-&gt;refCount--;
+     if(!render-&gt;refCount)
++    {
++        surfaceMutex.lock();
+         vd-&gt;freeQueue.push_back(render);
++        surfaceMutex.unlock();
++    }
+     return true;
+ }
++/**
++    \fn vdpauRefDownload
++    \brief Convert a VDPAU image to a regular image
++*/
+ 
++static bool vdpauRefDownload(ADMImage *image, void *instance, void *cookie)
++{
++    vdpauContext *vd=(vdpauContext*)instance;
++    vdpau_render_state *render=(vdpau_render_state *)cookie;
++    ADM_assert(render-&gt;refCount);
++    ADM_assert(image-&gt;refType==ADM_HW_VDPAU);
++    
++    // other part will be done in goOn
++    VdpVideoSurface  surface;
+ 
++    surface=render-&gt;surface;
++    uint8_t *planes[3];
++    uint32_t stride[3];
++
++     image-&gt;GetWritePlanes(planes);
++     image-&gt;GetPitches(stride);
++
++    //ADM_info(&quot;Getting surface %d\n&quot;,(int)surface);
++    // Copy back the decoded image to our output ADM_image
++    aprintf(&quot;[VDPAU] Getting datas from surface %d\n&quot;,surface);
++ 
++    VdpStatus status=admVdpau::getDataSurface(surface,planes, stride );
++    if(VDP_STATUS_OK!=status)
++    {
++        ADM_error(&quot;[VDPAU] Cannot get data from surface &lt;%s&gt;\n&quot;,admVdpau::getErrorString(status));
++    }
++    image-&gt;refType=ADM_HW_NONE;
++    bool r=vdpauMarkSurfaceUnused(instance,cookie);
++    if(r==false || status!=VDP_STATUS_OK) 
++    {
++        ADM_warning(&quot;Cannot get VDPAU content from surface %d\n&quot;,(int)surface);
++        return false;
++    }
++    return true;
++}
++
+ /**
+     \fn vdpauUsable
+     \brief Return true if  vdpau can be used...
+@@ -140,9 +183,11 @@
+         return -1;
+     }
+     // Get an image   
++    surfaceMutex.lock();
+     render=VDPAU-&gt;freeQueue.front();
+     render-&gt;refCount=0;
+     VDPAU-&gt;freeQueue.erase(VDPAU-&gt;freeQueue.begin());
++    surfaceMutex.unlock();
+     vdpauMarkSurfaceUsed(VDPAU,(void *)render);
+     render-&gt;state=0;
+     pic-&gt;data[0]=(uint8_t *)render;
+@@ -349,42 +394,23 @@
+     if(decode_status!=true)
+     {
+         printf(&quot;[VDPAU] error in renderDecode\n&quot;);
+-        return 0;
++        return false;
+     }
+-    // other part will be done in goOn
+-   struct vdpau_render_state *rndr = (struct vdpau_render_state *)scratch-&gt;GetReadPtr(PLANAR_Y);
+-   VdpVideoSurface  surface;
+-
+-    surface=rndr-&gt;surface;
+-    uint8_t *planes[3];
+-    uint32_t stride[3];
+-             vdpau_copy-&gt;GetWritePlanes(planes);
+-             vdpau_copy-&gt;GetPitches(stride);
+-
+-    
+-   // Copy back the decoded image to our output ADM_image
+-    aprintf(&quot;[VDPAU] Getting datas from surface %d\n&quot;,surface);
+- 
+-    status=admVdpau::getDataSurface(surface,planes, stride );
+-    if(VDP_STATUS_OK!=status)
+-    {
+-        
+-        printf(&quot;[VDPAU] Cannot get data from surface &lt;%s&gt;\n&quot;,admVdpau::getErrorString(status));
+-        decode_status=false;
+-        return 0 ;
+-    }
++    ADM_info(&quot;Surface used %d\n&quot;,VDPAU-&gt;freeQueue.size());
+     if(decode_status)
+     {
++        struct vdpau_render_state *rndr = (struct vdpau_render_state *)scratch-&gt;GetReadPtr(PLANAR_Y);
+         out-&gt;refType=ADM_HW_VDPAU;
+         out-&gt;refDescriptor.refCookie=(void *)rndr;
+         out-&gt;refDescriptor.refInstance=VDPAU;
+         out-&gt;refDescriptor.refMarkUsed=vdpauMarkSurfaceUsed;
+         out-&gt;refDescriptor.refMarkUnused=vdpauMarkSurfaceUnused;
++        out-&gt;refDescriptor.refDownload=vdpauRefDownload;
+         vdpauMarkSurfaceUsed(VDPAU,(void *)rndr);
+     }
+     out-&gt;Pts=scratch-&gt;Pts;
+     out-&gt;flags=scratch-&gt;flags;
+-    return (uint8_t)decode_status;
++    return (bool)decode_status;
+ }
+ /**
+     \fn goOn
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_videoFilterBridge.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_videoFilterBridge.h	2011-06-09 18:04:12 UTC (rev 7259)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_videoFilterBridge.h	2011-06-09 18:04:14 UTC (rev 7260)
+@@ -31,11 +31,13 @@
+         FilterInfo          bridgeInfo;
+         bool                firstImage;
+         uint32_t            lastSentImage;
++        bool                getNextFrameBase(uint32_t *frameNumber,ADMImage *image);      
+ public:
+                             ADM_videoFilterBridge(uint64_t startTime, uint64_t endTime);
+                             ~ADM_videoFilterBridge();
+        virtual bool         goToTime(uint64_t usSeek);  
+        virtual bool         getNextFrame(uint32_t *frameNumber,ADMImage *image);      
++               bool         getNextFrameAs(ADM_HW_IMAGE type,uint32_t *frameNumber,ADMImage *image);
+        virtual FilterInfo  *getInfo(void);                                      /// Return picture parameters after this filter
+        virtual bool         getCoupledConf(CONFcouple **couples) {*couples=NULL;return true;} ; /// Return the current filter configuration
+        virtual uint64_t     getAbsoluteStartTime(void)  
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilterBridge.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilterBridge.cpp	2011-06-09 18:04:12 UTC (rev 7259)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/src/ADM_videoFilterBridge.cpp	2011-06-09 18:04:14 UTC (rev 7260)
+@@ -46,27 +46,10 @@
+     rewind();
+ }
+ /**
+-    \fn rewind
+-    \brief go or return to the original position...
+-*/
+-bool ADM_videoFilterBridge::rewind(void)
+-{
+-    return goToTime(0);
+-}
+-
+-/**
+-    \fn ADM_videoFilterBridge
+-
+-*/
+-ADM_videoFilterBridge::~ADM_videoFilterBridge()
+-{
+-
+-}
+-/**
+-    \fn getNextFrame
++    \fn     getNextFrameBase
+     \brief
+ */
+-bool         ADM_videoFilterBridge::getNextFrame(uint32_t *frameNumber,ADMImage *image)
++bool         ADM_videoFilterBridge::getNextFrameBase(uint32_t *frameNumber,ADMImage *image)
+ {
+ again:
+     bool r=false;
+@@ -88,22 +71,67 @@
+     int64_t pts=image-&gt;Pts;
+     if(pts&gt;endTime)
+     {
+-        printf(&quot;[VideoBridge] This frame is too late (%&quot;LLD&quot; vs %&quot;LLU&quot;)\n&quot;,pts,endTime);
++        ADM_warning(&quot;[VideoBridge] This frame is too late (%&quot;LLD&quot; vs %&quot;LLU&quot;)\n&quot;,pts,endTime);
+         return false;
+     }
+     if(pts&lt;startTime) 
+     {
+-            printf(&quot;[VideoBridge] This frame is too early (%&quot;LLD&quot; vs %&quot;LLU&quot;)\n&quot;,pts,startTime);
++            ADM_warning(&quot;[VideoBridge] This frame is too early (%&quot;LLD&quot; vs %&quot;LLU&quot;)\n&quot;,pts,startTime);
+             goto again;
+     }
+     // Rescale time
+     image-&gt;Pts-=startTime;
+     return true;
+ }
++
+ /**
++    \fn rewind
++    \brief go or return to the original position...
++*/
++bool ADM_videoFilterBridge::rewind(void)
++{
++    return goToTime(0);
++}
++
++/**
+     \fn ADM_videoFilterBridge
+ 
+ */
++ADM_videoFilterBridge::~ADM_videoFilterBridge()
++{
++
++}
++/**
++    \fn getNextFrame
++    \brief
++*/
++bool         ADM_videoFilterBridge::getNextFrame(uint32_t *frameNumber,ADMImage *image)
++{
++    return getNextFrameAs(ADM_HW_NONE,frameNumber,image);
++}
++/**
++    \fn getNextFrameAs
++    \brief
++*/
++bool         ADM_videoFilterBridge::getNextFrameAs(ADM_HW_IMAGE type,uint32_t *frameNumber,ADMImage *image)
++{
++    if(false==getNextFrameBase(frameNumber,image)) 
++    {
++        ADM_warning(&quot;[Bridge] Base did not get an image\n&quot;);
++        return false;
++    }
++    // Check if image is 
++    if(type!=image-&gt;refType)
++    {        
++        return image-&gt;hwDownloadFromRef(); // nope, revert to base type
++    }
++    return true; 
++}
++
++/**
++    \fn ADM_videoFilterBridge
++
++*/
+ FilterInfo  *ADM_videoFilterBridge::getInfo(void)
+ {
+     return &bridgeInfo;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/include/ADM_coreVideoFilter.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/include/ADM_coreVideoFilter.h	2011-06-09 18:04:12 UTC (rev 7259)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/include/ADM_coreVideoFilter.h	2011-06-09 18:04:14 UTC (rev 7260)
+@@ -49,6 +49,7 @@
+        virtual const char   *getConfiguration(void);                   /// Return  current configuration as a human readable string
+        virtual bool         goToTime(uint64_t usSeek);                 /// Overide this if you have cleanup to do after a jump      
+        virtual bool         getNextFrame(uint32_t *frameNumber,ADMImage *image)=0;              /// Dont mix getFrame &amp; getNextFrame !
++       virtual bool         getNextFrameAs(ADM_HW_IMAGE type,uint32_t *frameNumber,ADMImage *image);              /// Request frame as type (hw accel)
+        virtual FilterInfo  *getInfo(void);                             /// Return picture parameters after this filter
+        virtual bool         getCoupledConf(CONFcouple **couples)=0 ;   /// Return the current filter configuration
+        virtual bool         configure(void) {return true;}             /// Start graphical user interface
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/src/ADM_coreVideoFilter.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/src/ADM_coreVideoFilter.cpp	2011-06-09 18:04:12 UTC (rev 7259)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter/src/ADM_coreVideoFilter.cpp	2011-06-09 18:04:14 UTC (rev 7260)
+@@ -58,6 +58,14 @@
+     return &quot;base&quot;;
+ }  
+ /**
++    \fn getNextFrameAs
++*/
++
++bool         ADM_coreVideoFilter::getNextFrameAs(ADM_HW_IMAGE type,uint32_t *frameNumber,ADMImage *image)
++{
++    return getNextFrame(frameNumber,image);
++}
++/**
+     \fn getInfo
+     \brief default behaviour, we return the Info as is from the previous filter in the chain
+ */
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004413.html">[Avidemux-svn-commit] r7259 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_editor avidemux/common/ADM_render	avidemux/common/ADM_videoCodec/src	avidemux_core/ADM_coreImage/include avidemux_core/ADM_coreImage/src
+</A></li>
+	<LI>Next message: <A HREF="004415.html">[Avidemux-svn-commit] r7261 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4414">[ date ]</a>
+              <a href="thread.html#4414">[ thread ]</a>
+              <a href="subject.html#4414">[ subject ]</a>
+              <a href="author.html#4414">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

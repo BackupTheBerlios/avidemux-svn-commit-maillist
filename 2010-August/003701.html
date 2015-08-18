@@ -1,0 +1,236 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6514 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resampleFps
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6514%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resampleFps&In-Reply-To=%3C20100811054156.4F266480E8C%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003700.html">
+   <LINK REL="Next"  HREF="003702.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6514 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resampleFps</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6514%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resampleFps&In-Reply-To=%3C20100811054156.4F266480E8C%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6514 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resampleFps">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Aug 11 07:41:56 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003700.html">[Avidemux-svn-commit] r6513 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+        <LI>Next message: <A HREF="003702.html">[Avidemux-svn-commit] r6515 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resampleFps
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3701">[ date ]</a>
+              <a href="thread.html#3701">[ thread ]</a>
+              <a href="subject.html#3701">[ subject ]</a>
+              <a href="author.html#3701">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-08-11 07:41:56 +0200 (Wed, 11 Aug 2010)
+New Revision: 6514
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resampleFps/ADM_vidResampleFPS.cpp
+Log:
+[VideoFilter:ResampleFps] Preliminary resample fps filter
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resampleFps/ADM_vidResampleFPS.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resampleFps/ADM_vidResampleFPS.cpp	2010-08-11 05:41:54 UTC (rev 6513)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resampleFps/ADM_vidResampleFPS.cpp	2010-08-11 05:41:56 UTC (rev 6514)
+@@ -23,6 +23,12 @@
+ 
+ #include &quot;confResampleFps.h&quot;
+ #include &quot;confResampleFps_desc.cpp&quot;
++
++#if 1
++    #define aprintf(...) {}
++#else
++    #define aprintf ADM_info
++#endif
+ /**
+     \class resampleFps
+ 
+@@ -32,10 +38,14 @@
+ protected:
+         confResampleFps     configuration;
+         bool                updateIncrement(void);
++        uint64_t            baseTime;
++        ADMImage            *frames[2];
++        bool                refill(void);
++        bool                prefill;
+ public:
+                             resampleFps(ADM_coreVideoFilter *previous,CONFcouple *conf);
+                             ~resampleFps();
+-
++        bool                goToTime(uint64_t usSeek);
+         virtual const char   *getConfiguration(void);                   /// Return  current configuration as a human readable string
+         virtual bool         getNextFrame(uint32_t *fn,ADMImage *image);    /// Return the next image
+         virtual bool         getCoupledConf(CONFcouple **couples) ;   /// Return the current filter configuration
+@@ -68,6 +78,7 @@
+     {
+         f*=1000;
+       configuration.newFps=(uint32_t)floor(f+0.4);
++      prefill=0;
+       updateIncrement();
+       return 1;
+     }
+@@ -79,7 +90,9 @@
+ */
+ bool resampleFps::updateIncrement(void)
+ {
+-
++    info.frameIncrement=ADM_UsecFromFps1000(configuration.newFps);
++  
++    return true;
+ }
+ /**
+     \fn getConfiguration
+@@ -95,12 +108,16 @@
+ */
+ resampleFps::resampleFps(  ADM_coreVideoFilter *previous,CONFcouple *setup) : ADM_coreVideoFilter(previous,setup)
+ {
++    baseTime=0;
++    prefill=false;
++    frames[0]=frames[1]=NULL;
+     if(!setup || !ADM_paramLoad(setup,confResampleFps_param,&amp;configuration))
+     {
+         // Default value
+-#warning todo get fps from increment
+-        configuration.newFps=25000;
++        configuration.newFps=ADM_Fps1000FromUs(previous-&gt;getInfo()-&gt;frameIncrement);
+     }
++    if(!frames[0]) frames[0]=new ADMImageDefault(info.width,info.height);
++    if(!frames[1]) frames[1]=new ADMImageDefault(info.width,info.height);
+     updateIncrement();
+ }
+ /**
+@@ -109,9 +126,33 @@
+ */
+ resampleFps::~resampleFps()
+ {
+-  
++    if(frames[0]) delete frames[0];
++    if(frames[1]) delete frames[1];
++    frames[0]=frames[1]=NULL;
+ }
+ /**
++     \fn refill
++*/
++bool resampleFps::refill(void)
++{
++    ADMImage *nw=frames[0];
++    uint32_t img=0;
++    frames[0]=frames[1];
++    frames[1]=nw;
++    return previousFilter-&gt;getNextFrame(&amp;img,nw);
++}
++/**
++    \fn goToTime
++    \brief called when seeking. Need to cleanup our stuff.
++*/
++bool         resampleFps::goToTime(uint64_t usSeek)
++{
++    if(false==ADM_coreVideoFilter::goToTime(usSeek)) return false;
++    prefill=false;
++    return true;
++}
++
++/**
+     \fn getCoupledConf
+ */ 
+ bool         resampleFps::getCoupledConf(CONFcouple **couples)
+@@ -123,7 +164,47 @@
+ */
+  bool         resampleFps::getNextFrame(uint32_t *fn,ADMImage *image)
+ {
+-    return false;
++
++    if(!prefill)
++    {
++          if(false==refill()) return false;
++          if(false==refill()) return false;
++          prefill=1;
++    }
++
++    uint64_t thisTime=baseTime+(nextFrame*info.frameIncrement);
++
++again:
++    
++    uint64_t frame1Dts=frames[0]-&gt;Pts;
++    uint64_t frame2Dts=frames[1]-&gt;Pts;
++    aprintf(&quot;Frame : %d, timeIncrement %d ms, Wanted : %&quot;LLU&quot;, available %&quot;LLU&quot; and %&quot;LLU&quot;\n&quot;,
++                    nextFrame,info.frameIncrement/1000,thisTime,frame1Dts,frame2Dts);
++    if(thisTime&gt;frame1Dts &amp;&amp; thisTime&gt;frame2Dts)
++    {
++        if(false==refill()) return false;
++        goto again;
++    }
++    if(thisTime&lt;frame1Dts &amp;&amp; thisTime&lt;frame2Dts)
++    {
++        image-&gt;duplicate(frames[0]);
++        image-&gt;Pts=thisTime;
++        *fn=nextFrame++;
++        return true;
++    }
++    // In between, take closer
++    double diff1=(double)thisTime-double(frame1Dts);
++    double diff2=(double)thisTime-double(frame2Dts);
++    if(diff1&lt;0) diff1=-diff1;
++    if(diff2&lt;0) diff2=-diff2;
++    int index=1;
++    if(diff1&lt;diff2) index=0;
++
++    image-&gt;duplicate(frames[index]);
++    image-&gt;Pts=thisTime;
++    *fn=nextFrame++;
++    return true;
++}
+ #if 0
+   ADMImage *mysrc1=NULL;
+   ADMImage *mysrc2=NULL;
+@@ -235,7 +316,8 @@
+       vidCache-&gt;unlockAll();
+     }
+   return 1;
++}
+ #endif 
+-}
+ 
++
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003700.html">[Avidemux-svn-commit] r6513 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+	<LI>Next message: <A HREF="003702.html">[Avidemux-svn-commit] r6515 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resampleFps
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3701">[ date ]</a>
+              <a href="thread.html#3701">[ thread ]</a>
+              <a href="subject.html#3701">[ subject ]</a>
+              <a href="author.html#3701">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

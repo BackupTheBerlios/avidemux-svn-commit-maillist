@@ -1,0 +1,321 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4691 -	branches/avidemux_2.6_branch_mean/avidemux/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4691%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/ADM_editor&In-Reply-To=%3C200903150957.n2F9vVOm029643%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001920.html">
+   <LINK REL="Next"  HREF="001922.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4691 -	branches/avidemux_2.6_branch_mean/avidemux/ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4691%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/ADM_editor&In-Reply-To=%3C200903150957.n2F9vVOm029643%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4691 -	branches/avidemux_2.6_branch_mean/avidemux/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Mar 15 10:57:31 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001920.html">[Avidemux-svn-commit] r4690 - in	branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter:	include src
+</A></li>
+        <LI>Next message: <A HREF="001922.html">[Avidemux-svn-commit] r4692 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/ADM_coreDemuxer/include	avidemux/ADM_coreDemuxer/src cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1921">[ date ]</a>
+              <a href="thread.html#1921">[ thread ]</a>
+              <a href="subject.html#1921">[ subject ]</a>
+              <a href="author.html#1921">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-03-15 10:57:30 +0100 (Sun, 15 Mar 2009)
+New Revision: 4691
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edPtsDts.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edPtsDts.h
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/CMakeLists.txt
+Log:
+[Demuxers] Add set/get api
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edPtsDts.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edPtsDts.cpp	2009-03-15 09:57:24 UTC (rev 4690)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edPtsDts.cpp	2009-03-15 09:57:30 UTC (rev 4691)
+@@ -0,0 +1,73 @@
++/***************************************************************************
++
++    \file ADM_edPtsDts.h
++    \brief Try to guess Pts from Dts
++
++    copyright            : (C) 2002/2009 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;ADM_default.h&quot;
++#include &quot;math.h&quot;
++
++#include &quot;ADM_edPtsDts.h&quot;
++
++/**
++    \fn setPtsEqualDts
++*/
++bool setPtsEqualDts(vidHeader *hdr,uint64_t timeIncrementUs)
++{
++    aviInfo info;
++    hdr-&gt;getVideoInfo(&amp;info);
++    uint64_t first=ADM_NO_PTS;
++    for(int i=0;i&lt;info.nb_frames;i++)
++    {
++        uint64_t pts,dts;
++        if(true!=hdr-&gt;getPtsDts(i,&amp;pts,&amp;dts))
++        {
++            printf(&quot;[Editor] GetPtsDts failed for frame %&quot;LU&quot;\n&quot;,i);
++            return false;
++        }
++        if(pts==ADM_NO_PTS &amp;&amp; dts==ADM_NO_PTS)
++        {
++            if(first!=ADM_NO_PTS)
++            {
++                first+=timeIncrementUs;
++            }
++            continue;
++        }else
++        if(dts!=ADM_NO_PTS &amp;&amp; pts!=ADM_NO_PTS)
++        {
++            if(pts!=dts)
++            {
++                    printf(&quot;[Editor] Pts!=Dts for frame %&quot;LU&quot;\n&quot;,i);
++                    first=pts;
++                    continue;
++            }
++        }else
++            if(pts!=ADM_NO_PTS) first=dts=pts;
++            else
++                first=pts=dts;
++        if(true!=hdr-&gt;setPtsDts(i,pts,dts))
++        {
++            printf(&quot;[Editor] SetPtsDts failed for frame %&quot;LU&quot;\n&quot;,i);
++            return false;
++        }
++    }
++    return true;
++}
++/**
++    \fn setMpeg4PtsFromDts
++*/
++bool setMpeg4PtsFromDts(vidHeader *hdr,uint64_t timeIncrementUs)
++{
++    return true;
++}
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edPtsDts.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edPtsDts.h	2009-03-15 09:57:24 UTC (rev 4690)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edPtsDts.h	2009-03-15 09:57:30 UTC (rev 4691)
+@@ -0,0 +1,25 @@
++/***************************************************************************
++
++    \file ADM_edPtsDts.h
++    \brief Try to guess Pts from Dts
++
++    copyright            : (C) 2002/2009 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#ifndef ADM_EDPTSDTS_H
++#define ADM_EDPTSDTS_H
++#include &quot;ADM_Video.h&quot;
++
++bool setPtsEqualDts(vidHeader *hdr,uint64_t timeIncrementUs);
++bool setMpeg4PtsFromDts(vidHeader *hdr,uint64_t timeIncrementUs);
++
++#endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edRender.cpp	2009-03-15 09:57:24 UTC (rev 4690)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edRender.cpp	2009-03-15 09:57:30 UTC (rev 4691)
+@@ -127,7 +127,7 @@
+     uint32_t nbFrames=vid-&gt;_nb_video_frames;
+     //cache-&gt;flush();
+     // The PTS associated with our frame is the one we are looking for
+-    uint64_t wantedPts=vid-&gt;_aviheader-&gt;getTime(frame);
++    uint64_t wantedPts=vid-&gt;_aviheader-&gt;estimatePts(frame);
+     uint32_t tries=8;
+ 
+     while(found==false &amp;&amp; tries--)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp	2009-03-15 09:57:24 UTC (rev 4690)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp	2009-03-15 09:57:30 UTC (rev 4691)
+@@ -46,11 +46,6 @@
+ #include &quot;DIA_coreToolkit.h&quot;
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+ #include &quot;ADM_videoFilter.h&quot;
+-//#include &quot;ADM_dialog/DIA_working.h&quot;
+-
+-//#include &quot;ADM_inputs/ADM_mpegdemuxer/dmx_video.h&quot;
+-//#include &quot;ADM_inputs/ADM_mpegdemuxer/dmx_identify.h&quot;
+-//#include &quot;ADM_inputs/ADM_mpegdemuxer/dmx_probe.h&quot;
+ #include &quot;prefs.h&quot;
+ 
+ #include &quot;ADM_osSupport/ADM_debugID.h&quot;
+@@ -59,7 +54,7 @@
+ 
+ #//include &quot;ADM_inputs/ADM_mpegdemuxer/dmx_indexer.h&quot;
+ #include &quot;ADM_outputfmt.h&quot;
+-//#include &quot;ADM_gui2/GUI_ui.h&quot;
++#include &quot;ADM_edPtsDts.h&quot;
+ 
+ vidHeader *ADM_demuxerSpawn(uint32_t magic,const char *name);
+ 
+@@ -323,7 +318,7 @@
+     _videos[_nb_video]._aviheader-&gt;getExtraHeaderData(&amp;l,&amp;d);
+     if(l &amp;&amp; d)
+     {
+-        printf(&quot;The video codec has some extradata (%d bytes)\n&quot;,l);
++        printf(&quot;[Editor]The video codec has some extradata (%d bytes)\n&quot;,l);
+         mixDump(d,l);
+         printf(&quot;\n&quot;);
+     }
+@@ -363,7 +358,7 @@
+ 
+   if (!nbAStream)
+     {
+-      printf (&quot;\n *** NO AUDIO ***\n&quot;);
++      printf (&quot;[Editor] *** NO AUDIO ***\n&quot;);
+       _videos[_nb_video].audioTracks = NULL;
+       _videos[_nb_video].nbAudioStream=0;
+       _videos[_nb_video].currentAudioStream=0;
+@@ -414,12 +409,12 @@
+ //      printf(&quot;[Editor] Duration in seconds: %&quot;LLU&quot;, in samples: %&quot;LLU&quot;\n&quot;,_videos[_nb_video]._audio_duration/_wavinfo-&gt;frequency,_videos[_nb_video]._audio_duration);
+     }
+ 
+-  printf (&quot;\n Decoder FCC: &quot;);
++  printf (&quot;[Editor] Decoder FCC: &quot;);
+   fourCC::print (info.fcc);
+   // ugly hack
+   if (info.fps1000 &gt; 2000 * 1000)
+     {
+-      printf (&quot; FPS too high, switching to 25 fps hardcoded\n&quot;);
++      printf (&quot;[Editor] FPS too high, switching to 25 fps hardcoded\n&quot;);
+       info.fps1000 = 25 * 1000;
+       updateVideoInfo (&amp;info);
+     }
+@@ -490,22 +485,36 @@
+ 
+ 		vid= &amp;(_videos[_nb_video-1]);
+ 		vid-&gt;_reorderReady=0;
+-                vid-&gt;_unpackReady=0;
++        vid-&gt;_unpackReady=0;
+ 		// we only try if we got everything needed...
+ 		if(!vid-&gt;decoder)
+ 		{
+-			printf(&quot;\n no decoder to check for B- frame\n&quot;);
+-			return 1;
+-		}
+-		if(!vid-&gt;decoder-&gt;bFramePossible())
+-		{
+-			printf(&quot;\n no  B- frame with that codec \n&quot;);
+-			return 1;
+-		}
+-
++			printf(&quot;[Editor] no decoder to check for B- frame\n&quot;);
++		}else
++        {
++            decoders *decoder=vid-&gt;decoder;
++            if(vid-&gt;_aviheader-&gt;providePts()==false) // Else we rely on demuxer PTS
++            {
++                printf(&quot;[Editor] This container does not provide PTS \n&quot;);
++                if(decoder-&gt;bFramePossible())
++                {
++                    printf(&quot;[Editor] B- frame possible with that codec \n&quot;);
++                    if(isMpeg4Compatible(info.fcc))
++                    {
++                        printf(&quot;[Editor] It is mpeg4-SP/ASP, try to guess all PTS\n&quot;);                        
++                        setMpeg4PtsFromDts(vid-&gt;_aviheader,vid-&gt;timeIncrementInUs);
++                    }
++                }
++                else   
++                {
++                        printf(&quot;[Editor] No B frame with that codec\n&quot;);
++                        setPtsEqualDts(vid-&gt;_aviheader,vid-&gt;timeIncrementInUs);
++                }
++            }
++        }
+ 		GoToIntra(0);
+         durationInUs=vid-&gt;_aviheader-&gt;getVideoDuration();
+-		printf(&quot; End of B-frame check\n&quot;);
++		printf(&quot;[Editor] End of B-frame check\n&quot;);
+ 
+   return 1;
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/CMakeLists.txt	2009-03-15 09:57:24 UTC (rev 4690)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/CMakeLists.txt	2009-03-15 09:57:30 UTC (rev 4691)
+@@ -9,6 +9,8 @@
+ ADM_edit.cpp 
+ ADM_edRender.cpp 
+ ADM_edMarker.cpp
+-ADM_edStub.cpp)
++ADM_edStub.cpp
++ADM_edPtsDts.cpp
++)
+ 
+ ADD_ADM_LIB_ALL_TARGETS(ADM_editor ${ADM_editor_SRCS})
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001920.html">[Avidemux-svn-commit] r4690 - in	branches/avidemux_2.6_branch_mean/avidemux/ADM_audioFilter:	include src
+</A></li>
+	<LI>Next message: <A HREF="001922.html">[Avidemux-svn-commit] r4692 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/ADM_coreDemuxer/include	avidemux/ADM_coreDemuxer/src cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1921">[ date ]</a>
+              <a href="thread.html#1921">[ thread ]</a>
+              <a href="subject.html#1921">[ subject ]</a>
+              <a href="author.html#1921">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

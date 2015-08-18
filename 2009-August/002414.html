@@ -1,0 +1,550 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5200 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_outputs/oplug_mpegFF	plugins/ADM_videoEncoder/ADM_vidEnc_avcodec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5200%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09avidemux/ADM_outputs/oplug_mpegFF%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_avcodec&In-Reply-To=%3C200908031634.n73GY6R7030347%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002413.html">
+   <LINK REL="Next"  HREF="002415.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5200 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_outputs/oplug_mpegFF	plugins/ADM_videoEncoder/ADM_vidEnc_avcodec</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5200%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09avidemux/ADM_outputs/oplug_mpegFF%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_avcodec&In-Reply-To=%3C200908031634.n73GY6R7030347%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5200 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_outputs/oplug_mpegFF	plugins/ADM_videoEncoder/ADM_vidEnc_avcodec">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Mon Aug  3 18:34:06 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002413.html">[Avidemux-svn-commit] r5199 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder:	ADM_vidEnc_avcodec ADM_vidEnc_x264 ADM_vidEnc_x264/gtk	ADM_vidEnc_x264/qt4 ADM_vidEnc_x264/xml ADM_vidEnc_xvid	ADM_vidEnc_xvid/gtk ADM_vidEnc_xvid/qt4 common
+</A></li>
+        <LI>Next message: <A HREF="002415.html">[Avidemux-svn-commit] r5201 - in branches/avidemux_2.6_branch_mean:	. avidemux avidemux/gtk avidemux/qt4 avidemux_core	avidemux_core/ADM_coreAudioParser/src	avidemux_core/ADM_ffmpeg/libavcodec cmake foreignBuilds
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2414">[ date ]</a>
+              <a href="thread.html#2414">[ thread ]</a>
+              <a href="subject.html#2414">[ subject ]</a>
+              <a href="author.html#2414">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-08-03 18:33:52 +0200 (Mon, 03 Aug 2009)
+New Revision: 5200
+
+Added:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpegMatrix.h
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.h
+Log:
+[mpeg1] replicate encoding logic for mpeg-1 plugin (only CQ currently done)
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp	2009-08-03 16:24:09 UTC (rev 5199)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp	2009-08-03 16:33:52 UTC (rev 5200)
+@@ -87,7 +87,8 @@
+ }
+ CodecFamilty videoCodecGetFamily(void)
+ {
+-	if (currentCodecType == CodecXVCD || currentCodecType == CodecXSVCD || currentCodecType == CodecXDVD)
++	if (currentCodecType == CodecXVCD || currentCodecType == CodecXSVCD || currentCodecType == CodecXDVD ||
++		(currentCodecType == CodecExternal &amp;&amp; strcmp(videoCodecPluginGetGuid(), &quot;85FC9CAC-CE6C-4aa6-9D5F-352D6349BA3E&quot;) == 0))
+ 		return CodecFamilyXVCD;
+ 	if (currentCodecType == CodecVCD || currentCodecType == CodecSVCD || currentCodecType == CodecDVD || currentCodecType == CodecRequant)
+ 		return CodecFamilyMpeg;
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp	2009-08-03 16:24:09 UTC (rev 5199)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp	2009-08-03 16:33:52 UTC (rev 5200)
+@@ -133,7 +133,9 @@
+                 // Check
+                 WAVHeader *hdr=audio-&gt;getInfo();	
+                 audio_encoding=hdr-&gt;encoding;
+-                if (videoCodecGetType() == CodecXVCD || videoCodecGetType() == CodecVCD)
++
++                if (videoCodecGetType() == CodecXVCD || videoCodecGetType() == CodecVCD ||
++					(videoCodecGetType() == CodecExternal &amp;&amp; strcmp(videoCodecPluginGetGuid(), &quot;85FC9CAC-CE6C-4aa6-9D5F-352D6349BA3E&quot;) == 0))	// MPEG-1 plugin
+                 {
+                         if(hdr-&gt;frequency!=44100 ||  hdr-&gt;encoding != WAV_MP2)
+                         {
+@@ -215,7 +217,9 @@
+           case CodecRequant:
+             encoding-&gt;setCodec(QT_TR_NOOP(&quot;MPEG Requantizer&quot;));
+             break;
+-          
++          case CodecExternal:
++            encoding-&gt;setCodec(encoder-&gt;getDisplayName());
++            break;
+           default:
+             ADM_assert(0);
+ 	}
+@@ -498,4 +502,4 @@
+   return audio;
+ }
+ #endif	
+-// EOF
++// EOF
+\ No newline at end of file
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp	2009-08-03 16:24:09 UTC (rev 5199)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp	2009-08-03 16:33:52 UTC (rev 5200)
+@@ -261,6 +261,12 @@
+ 	if (!_context)
+ 		return ADM_VIDENC_ERR_FAILED;
+ 
++	memset(&amp;_frame, 0, sizeof(_frame));
++	_frame.pts = AV_NOPTS_VALUE;
++
++	properties-&gt;supportedCspsCount = 1;
++	properties-&gt;supportedCsps = &amp;_supportedCsps[0];
++
+ 	initContext(properties);
+ 
+ 	AVCodec *codec = getAvCodec();
+@@ -275,12 +281,6 @@
+ 		return ADM_VIDENC_ERR_FAILED;
+ 	}
+ 
+-	memset(&amp;_frame, 0, sizeof(_frame));
+-	_frame.pts = AV_NOPTS_VALUE;
+-
+-	properties-&gt;supportedCspsCount = 1;
+-	properties-&gt;supportedCsps = &amp;_supportedCsps[0];
+-
+ 	return ADM_VIDENC_ERR_SUCCESS;
+ }
+ 
+@@ -315,6 +315,8 @@
+ 	passParameters-&gt;extraData = _context-&gt;extradata;
+ 	passParameters-&gt;extraDataSize = _context-&gt;extradata_size;
+ 
++	//this-&gt;printContext();
++
+ 	return ADM_VIDENC_ERR_SUCCESS;
+ }
+ 
+@@ -388,3 +390,182 @@
+ 
+ 	return ADM_VIDENC_ERR_SUCCESS;
+ }
++
++void AvcodecEncoder::printContext(void)
++{
++	printf(&quot;bit_rate: %d\n&quot;, _context-&gt;bit_rate);
++	printf(&quot;bit_rate_tolerance: %d\n&quot;, _context-&gt;bit_rate_tolerance);
++	printf(&quot;flags: %d\n&quot;, _context-&gt;flags);
++	printf(&quot;sub_id: %d\n&quot;, _context-&gt;sub_id);
++	printf(&quot;me_method: %d\n&quot;, _context-&gt;me_method);
++	printf(&quot;extradata_size: %d\n&quot;, _context-&gt;extradata_size);
++	printf(&quot;time_base %d, %d\n&quot;, _context-&gt;time_base.num, _context-&gt;time_base.den);
++	printf(&quot;width: %d\n&quot;, _context-&gt;width);
++	printf(&quot;height: %d\n&quot;, _context-&gt;height);
++	printf(&quot;gop_size: %d\n&quot;, _context-&gt;gop_size);
++	printf(&quot;pix_fmt: %d\n&quot;, _context-&gt;pix_fmt);
++	printf(&quot;rate_emu: %d\n&quot;, _context-&gt;rate_emu);
++	printf(&quot;frame_size: %d\n&quot;, _context-&gt;frame_size);
++	printf(&quot;frame_number: %d\n&quot;, _context-&gt;frame_number);
++	printf(&quot;delay: %d\n&quot;, _context-&gt;delay);
++	printf(&quot;qcompress: %f\n&quot;, _context-&gt;qcompress);
++	printf(&quot;qblur: %f\n&quot;, _context-&gt;qblur);
++	printf(&quot;qmin: %d\n&quot;, _context-&gt;qmin);
++	printf(&quot;qmax: %d\n&quot;, _context-&gt;qmax);
++	printf(&quot;max_qdiff: %d\n&quot;, _context-&gt;max_qdiff);
++	printf(&quot;max_b_frames: %d\n&quot;, _context-&gt;max_b_frames);
++	printf(&quot;b_quant_factor: %f\n&quot;, _context-&gt;b_quant_factor);
++	printf(&quot;rc_strategy: %d\n&quot;, _context-&gt;rc_strategy);
++	printf(&quot;b_frame_strategy: %d\n&quot;, _context-&gt;b_frame_strategy);
++	printf(&quot;hurry_up: %d\n&quot;, _context-&gt;hurry_up);
++	printf(&quot;rtp_payload_size: %d\n&quot;, _context-&gt;rtp_payload_size);
++	printf(&quot;mv_bits: %d\n&quot;, _context-&gt;mv_bits);
++	printf(&quot;header_bits: %d\n&quot;, _context-&gt;header_bits);
++	printf(&quot;i_tex_bits: %d\n&quot;, _context-&gt;i_tex_bits);
++	printf(&quot;p_tex_bits: %d\n&quot;, _context-&gt;p_tex_bits);
++	printf(&quot;i_count: %d\n&quot;, _context-&gt;i_count);
++	printf(&quot;p_count: %d\n&quot;, _context-&gt;p_count);
++	printf(&quot;skip_count: %d\n&quot;, _context-&gt;skip_count);
++	printf(&quot;misc_bits: %d\n&quot;, _context-&gt;misc_bits);
++	printf(&quot;frame_bits: %d\n&quot;, _context-&gt;frame_bits);
++	printf(&quot;codec_name: %s\n&quot;, _context-&gt;codec_name);
++	printf(&quot;codec_type: %d\n&quot;, _context-&gt;codec_type);
++	printf(&quot;codec_id: %d\n&quot;, _context-&gt;codec_id);
++	printf(&quot;codec_tag: %d\n&quot;, _context-&gt;codec_tag);
++	printf(&quot;workaround_bugs: %d\n&quot;, _context-&gt;workaround_bugs);
++	printf(&quot;luma_elim_threshold: %d\n&quot;, _context-&gt;luma_elim_threshold);
++	printf(&quot;chroma_elim_threshold: %d\n&quot;, _context-&gt;chroma_elim_threshold);
++	printf(&quot;strict_std_compliance: %d\n&quot;, _context-&gt;strict_std_compliance);
++	printf(&quot;b_quant_offset: %f\n&quot;, _context-&gt;b_quant_offset);
++	printf(&quot;error_recognition: %d\n&quot;, _context-&gt;error_recognition);
++	printf(&quot;has_b_frames: %d\n&quot;, _context-&gt;has_b_frames);
++	printf(&quot;block_align: %d\n&quot;, _context-&gt;block_align);
++	printf(&quot;parse_only: %d\n&quot;, _context-&gt;parse_only);
++	printf(&quot;mpeg_quant: %d\n&quot;, _context-&gt;mpeg_quant);
++	printf(&quot;rc_qsquish: %f\n&quot;, _context-&gt;rc_qsquish);
++	printf(&quot;rc_qmod_amp: %f\n&quot;, _context-&gt;rc_qmod_amp);
++	printf(&quot;rc_qmod_freq: %d\n&quot;, _context-&gt;rc_qmod_freq);
++	printf(&quot;rc_override_count: %d\n&quot;, _context-&gt;rc_override_count);
++	printf(&quot;rc_eq: %s\n&quot;, _context-&gt;rc_eq);
++	printf(&quot;rc_max_rate: %d\n&quot;, _context-&gt;rc_max_rate);
++	printf(&quot;rc_min_rate: %d\n&quot;, _context-&gt;rc_min_rate);
++	printf(&quot;rc_max_rate_header: %d\n&quot;, _context-&gt;rc_max_rate_header);
++	printf(&quot;rc_buffer_size: %d\n&quot;, _context-&gt;rc_buffer_size);
++	printf(&quot;rc_buffer_size_header: %d\n&quot;, _context-&gt;rc_buffer_size_header);
++	printf(&quot;rc_buffer_aggressivity: %f\n&quot;, _context-&gt;rc_buffer_aggressivity);
++	printf(&quot;i_quant_factor: %f\n&quot;, _context-&gt;i_quant_factor);
++	printf(&quot;i_quant_offset: %f\n&quot;, _context-&gt;i_quant_offset);
++	printf(&quot;rc_initial_cplx: %f\n&quot;, _context-&gt;rc_initial_cplx);
++	printf(&quot;dct_algo: %d\n&quot;, _context-&gt;dct_algo);
++	printf(&quot;lumi_masking: %f\n&quot;, _context-&gt;lumi_masking);
++	printf(&quot;temporal_cplx_masking: %f\n&quot;, _context-&gt;temporal_cplx_masking);
++	printf(&quot;spatial_cplx_masking: %f\n&quot;, _context-&gt;spatial_cplx_masking);
++	printf(&quot;p_masking: %f\n&quot;, _context-&gt;p_masking);
++	printf(&quot;dark_masking: %f\n&quot;, _context-&gt;dark_masking);
++	printf(&quot;idct_algo: %d\n&quot;, _context-&gt;idct_algo);
++	printf(&quot;slice_count: %d\n&quot;, _context-&gt;slice_count);
++	printf(&quot;*slice_offset: %d\n&quot;, _context-&gt;slice_offset);
++	printf(&quot;error_concealment: %d\n&quot;, _context-&gt;error_concealment);
++	printf(&quot;dsp_mask: %d\n&quot;, _context-&gt;dsp_mask);
++	printf(&quot;bits_per_coded_sample: %d\n&quot;, _context-&gt;bits_per_coded_sample);
++	printf(&quot;prediction_method: %d\n&quot;, _context-&gt;prediction_method);
++	printf(&quot;sample_aspect_ratio: %d, %d\n&quot;, _context-&gt;sample_aspect_ratio.num, _context-&gt;sample_aspect_ratio.den);
++	printf(&quot;debug: %d\n&quot;, _context-&gt;debug);
++	printf(&quot;debug_mv: %d\n&quot;, _context-&gt;debug_mv);
++	printf(&quot;mb_qmin: %d\n&quot;, _context-&gt;mb_qmin);
++	printf(&quot;mb_qmax: %d\n&quot;, _context-&gt;mb_qmax);
++	printf(&quot;me_cmp: %d\n&quot;, _context-&gt;me_cmp);
++	printf(&quot;me_sub_cmp: %d\n&quot;, _context-&gt;me_sub_cmp);
++	printf(&quot;mb_cmp: %d\n&quot;, _context-&gt;mb_cmp);
++	printf(&quot;ildct_cmp: %d\n&quot;, _context-&gt;ildct_cmp);
++	printf(&quot;dia_size: %d\n&quot;, _context-&gt;dia_size);
++	printf(&quot;last_predictor_count: %d\n&quot;, _context-&gt;last_predictor_count);
++	printf(&quot;pre_me: %d\n&quot;, _context-&gt;pre_me);
++	printf(&quot;me_pre_cmp: %d\n&quot;, _context-&gt;me_pre_cmp);
++	printf(&quot;pre_dia_size: %d\n&quot;, _context-&gt;pre_dia_size);
++	printf(&quot;me_subpel_quality: %d\n&quot;, _context-&gt;me_subpel_quality);
++	printf(&quot;dtg_active_format: %d\n&quot;, _context-&gt;dtg_active_format);
++	printf(&quot;me_range: %d\n&quot;, _context-&gt;me_range);
++	printf(&quot;intra_quant_bias: %d\n&quot;, _context-&gt;intra_quant_bias);
++	printf(&quot;inter_quant_bias: %d\n&quot;, _context-&gt;inter_quant_bias);
++	printf(&quot;color_table_id: %d\n&quot;, _context-&gt;color_table_id);
++	printf(&quot;internal_buffer_count: %d\n&quot;, _context-&gt;internal_buffer_count);
++	printf(&quot;global_quality: %d\n&quot;, _context-&gt;global_quality);
++	printf(&quot;coder_type: %d\n&quot;, _context-&gt;coder_type);
++	printf(&quot;context_model: %d\n&quot;, _context-&gt;context_model);
++	printf(&quot;slice_flags: %d\n&quot;, _context-&gt;slice_flags);
++	printf(&quot;xvmc_acceleration: %d\n&quot;, _context-&gt;xvmc_acceleration);
++	printf(&quot;mb_decision: %d\n&quot;, _context-&gt;mb_decision);
++	printf(&quot;stream_codec_tag: %d\n&quot;, _context-&gt;stream_codec_tag);
++	printf(&quot;scenechange_threshold: %d\n&quot;, _context-&gt;scenechange_threshold);
++	printf(&quot;lmin: %d\n&quot;, _context-&gt;lmin);
++	printf(&quot;lmax: %d\n&quot;, _context-&gt;lmax);
++	printf(&quot;noise_reduction: %d\n&quot;, _context-&gt;noise_reduction);
++	printf(&quot;rc_initial_buffer_occupancy: %d\n&quot;, _context-&gt;rc_initial_buffer_occupancy);
++	printf(&quot;inter_threshold: %d\n&quot;, _context-&gt;inter_threshold);
++	printf(&quot;flags2: %d\n&quot;, _context-&gt;flags2);
++	printf(&quot;error_rate: %d\n&quot;, _context-&gt;error_rate);
++	printf(&quot;antialias_algo: %d\n&quot;, _context-&gt;antialias_algo);
++	printf(&quot;quantizer_noise_shaping: %d\n&quot;, _context-&gt;quantizer_noise_shaping);
++	printf(&quot;thread_count: %d\n&quot;, _context-&gt;thread_count);
++	printf(&quot;me_threshold: %d\n&quot;, _context-&gt;me_threshold);
++	printf(&quot;mb_threshold: %d\n&quot;, _context-&gt;mb_threshold);
++	printf(&quot;intra_dc_precision: %d\n&quot;, _context-&gt;intra_dc_precision);
++	printf(&quot;nsse_weight: %d\n&quot;, _context-&gt;nsse_weight);
++	printf(&quot;skip_top: %d\n&quot;, _context-&gt;skip_top);
++	printf(&quot;skip_bottom: %d\n&quot;, _context-&gt;skip_bottom);
++	printf(&quot;profile: %d\n&quot;, _context-&gt;profile);
++	printf(&quot;level: %d\n&quot;, _context-&gt;level);
++	printf(&quot;lowres: %d\n&quot;, _context-&gt;lowres);
++	printf(&quot;coded_width: %d\n&quot;, _context-&gt;coded_width);
++	printf(&quot;coded_height: %d\n&quot;, _context-&gt;coded_height);
++	printf(&quot;frame_skip_threshold: %d\n&quot;, _context-&gt;frame_skip_threshold);
++	printf(&quot;frame_skip_factor: %d\n&quot;, _context-&gt;frame_skip_factor);
++	printf(&quot;frame_skip_exp: %d\n&quot;, _context-&gt;frame_skip_exp);
++	printf(&quot;frame_skip_cmp: %d\n&quot;, _context-&gt;frame_skip_cmp);
++	printf(&quot;border_masking: %f\n&quot;, _context-&gt;border_masking);
++	printf(&quot;mb_lmin: %d\n&quot;, _context-&gt;mb_lmin);
++	printf(&quot;mb_lmax: %d\n&quot;, _context-&gt;mb_lmax);
++	printf(&quot;me_penalty_compensation: %d\n&quot;, _context-&gt;me_penalty_compensation);
++	printf(&quot;skip_loop_filter: %d\n&quot;, _context-&gt;skip_loop_filter);
++	printf(&quot;skip_idct: %d\n&quot;, _context-&gt;skip_idct);
++	printf(&quot;skip_frame: %d\n&quot;, _context-&gt;skip_frame);
++	printf(&quot;bidir_refine: %d\n&quot;, _context-&gt;bidir_refine);
++	printf(&quot;brd_scale: %d\n&quot;, _context-&gt;brd_scale);
++	printf(&quot;crf: %f\n&quot;, _context-&gt;crf);
++	printf(&quot;cqp: %d\n&quot;, _context-&gt;cqp);
++	printf(&quot;keyint_min: %d\n&quot;, _context-&gt;keyint_min);
++	printf(&quot;refs: %d\n&quot;, _context-&gt;refs);
++	printf(&quot;chromaoffset: %d\n&quot;, _context-&gt;chromaoffset);
++	printf(&quot;bframebias: %d\n&quot;, _context-&gt;bframebias);
++	printf(&quot;trellis: %d\n&quot;, _context-&gt;trellis);
++	printf(&quot;complexityblur: %f\n&quot;, _context-&gt;complexityblur);
++	printf(&quot;deblockalpha: %d\n&quot;, _context-&gt;deblockalpha);
++	printf(&quot;deblockbeta: %d\n&quot;, _context-&gt;deblockbeta);
++	printf(&quot;partitions: %d\n&quot;, _context-&gt;partitions);
++	printf(&quot;directpred: %d\n&quot;, _context-&gt;directpred);
++	printf(&quot;cutoff: %d\n&quot;, _context-&gt;cutoff);
++	printf(&quot;scenechange_factor: %d\n&quot;, _context-&gt;scenechange_factor);
++	printf(&quot;mv0_threshold: %d\n&quot;, _context-&gt;mv0_threshold);
++	printf(&quot;b_sensitivity: %d\n&quot;, _context-&gt;b_sensitivity);
++	printf(&quot;compression_level: %d\n&quot;, _context-&gt;compression_level);
++	printf(&quot;use_lpc: %d\n&quot;, _context-&gt;use_lpc);
++	printf(&quot;lpc_coeff_precision: %d\n&quot;, _context-&gt;lpc_coeff_precision);
++	printf(&quot;min_prediction_order: %d\n&quot;, _context-&gt;min_prediction_order);
++	printf(&quot;max_prediction_order: %d\n&quot;, _context-&gt;max_prediction_order);
++	printf(&quot;prediction_order_method: %d\n&quot;, _context-&gt;prediction_order_method);
++	printf(&quot;min_partition_order: %d\n&quot;, _context-&gt;min_partition_order);
++	printf(&quot;max_partition_order: %d\n&quot;, _context-&gt;max_partition_order);
++	printf(&quot;timecode_frame_start: %&quot;LLU&quot;\n&quot;, _context-&gt;timecode_frame_start);
++	printf(&quot;drc_scale: %f\n&quot;, _context-&gt;drc_scale);
++	printf(&quot;reordered_opaque: %&quot;LLU&quot;\n&quot;, _context-&gt;reordered_opaque);
++	printf(&quot;bits_per_raw_sample: %d\n&quot;, _context-&gt;bits_per_raw_sample);
++	printf(&quot;rc_max_available_vbv_use: %f\n&quot;, _context-&gt;rc_max_available_vbv_use);
++	printf(&quot;rc_min_vbv_overflow_use: %f\n&quot;, _context-&gt;rc_min_vbv_overflow_use);
++	printf(&quot;ticks_per_frame: %d\n&quot;, _context-&gt;ticks_per_frame);
++	printf(&quot;color_primaries: %d\n&quot;, _context-&gt;color_primaries);
++	printf(&quot;color_trc: %d\n&quot;, _context-&gt;color_trc);
++	printf(&quot;colorspace: %d\n&quot;, _context-&gt;colorspace);
++	printf(&quot;color_range: %d\n&quot;, _context-&gt;color_range);
++	printf(&quot;chroma_sample_location: %d\n&quot;, _context-&gt;chroma_sample_location);
++}
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.h	2009-08-03 16:24:09 UTC (rev 5199)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.h	2009-08-03 16:33:52 UTC (rev 5200)
+@@ -30,6 +30,9 @@
+ 
+ class AvcodecEncoder
+ {
++	private:
++		void printContext(void);
++
+ 	protected:
+ 		enum CodecID _codecId;
+ 		int _supportedCsps[1];
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.cpp	2009-08-03 16:24:09 UTC (rev 5199)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.cpp	2009-08-03 16:33:52 UTC (rev 5200)
+@@ -16,6 +16,7 @@
+ #include &lt;libxml/tree.h&gt;
+ #include &quot;ADM_inttype.h&quot;
+ #include &quot;mpeg1Encoder.h&quot;
++#include &quot;mpegMatrix.h&quot;
+ 
+ extern int _uiType;
+ static bool changedConfig(const char* fileName, ConfigMenuType configType);
+@@ -54,6 +55,49 @@
+ 		_context-&gt;sample_aspect_ratio.num = 4;
+ 		_context-&gt;sample_aspect_ratio.den = 3;
+ 	}
++
++	switch (_options.getMatrix())
++	{
++		case MATRIX_TMPGENC:
++			printf(&quot;using custom matrix: Tmpg\n&quot;);
++			_context-&gt;intra_matrix = tmpgenc_intra;
++			_context-&gt;inter_matrix = tmpgenc_inter;
++			break;
++		case MATRIX_ANIME:
++			printf(&quot;using custom matrix: anim\n&quot;);
++			_context-&gt;intra_matrix = anime_intra;
++			_context-&gt;inter_matrix = anime_inter;
++
++			break;
++		case MATRIX_KVCD:
++			printf(&quot;using custom matrix: kvcd\n&quot;);
++			_context-&gt;intra_matrix = kvcd_intra;
++			_context-&gt;inter_matrix = kvcd_inter;
++			break;
++	}
++
++	switch (_options.getInterlaced())
++	{
++		case INTERLACED_TFF:
++			_frame.top_field_first = true;
++		case INTERLACED_BFF:
++			_frame.interlaced_frame = true;
++			break;
++	}
++
++	_context-&gt;max_b_frames = 2;
++	_context-&gt;luma_elim_threshold = -2;
++	_context-&gt;chroma_elim_threshold = -5;
++	_context-&gt;me_range = 255;
++	_context-&gt;mb_decision = FF_MB_DECISION_RD;
++	_context-&gt;scenechange_threshold = 0xfffffff;
++	_context-&gt;rc_max_rate_header = _options.getMaxBitrate() * 1000;
++	_context-&gt;rc_buffer_size_header = _options.getBufferSize() * 8 * 1024;
++	_context-&gt;rc_max_rate = _context-&gt;rc_max_rate_header;
++	_context-&gt;rc_buffer_size = _context-&gt;rc_buffer_size_header;
++
++	if (_encodeOptions.encodeMode == ADM_VIDENC_MODE_CQP)
++		_context-&gt;flags |= CODEC_FLAG_QSCALE;
+ }
+ 
+ const char* Mpeg1Encoder::getEncoderType(void)
+@@ -288,19 +332,12 @@
+ 		return ADM_VIDENC_ERR_FAILED;
+ }
+ 
+-int Mpeg1Encoder::beginPass(vidEncPassParameters *passParameters)
+-{
+-	return AvcodecEncoder::beginPass(passParameters);
+-}
+-
+ int Mpeg1Encoder::encodeFrame(vidEncEncodeParameters *encodeParams)
+ {
+-	int ret = AvcodecEncoder::encodeFrame(encodeParams);
+-
+ 	if (_encodeOptions.encodeMode == ADM_VIDENC_MODE_CQP)
+-		encodeParams-&gt;quantiser = _encodeOptions.encodeModeParameter;
++		_frame.quality = (int)floor(FF_QP2LAMBDA * _encodeOptions.encodeModeParameter + 0.5);
+ 
+-	return ret;
++	return AvcodecEncoder::encodeFrame(encodeParams);
+ }
+ 
+ void Mpeg1Encoder::updateEncodeProperties(vidEncOptions *encodeOptions, vidEncVideoProperties *properties)
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.h	2009-08-03 16:24:09 UTC (rev 5199)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpeg1Encoder.h	2009-08-03 16:33:52 UTC (rev 5200)
+@@ -56,7 +56,6 @@
+ 		void saveSettings(vidEncOptions *encodeOptions, Mpeg1EncoderOptions *options);
+ 		int getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize);
+ 		int setOptions(vidEncOptions *encodeOptions, char *pluginOptions);
+-		int beginPass(vidEncPassParameters *passParameters);
+ 		int encodeFrame(vidEncEncodeParameters *encodeParams);
+ };
+ #endif	// __cplusplus
+
+Added: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpegMatrix.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpegMatrix.h	2009-08-03 16:24:09 UTC (rev 5199)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/mpegMatrix.h	2009-08-03 16:33:52 UTC (rev 5200)
+@@ -0,0 +1,82 @@
++/***************************************************************************
++                        mpegMatrix.h  -  description
++                        ----------------------------
++
++	Defined mpeg1/2 custom matrices
++
++    begin                : Tue Sep 1 2003
++    copyright            : (C) 2002 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++static uint16_t tmpgenc_intra[64] = {
++  8, 16, 19, 22, 26, 27, 29, 34,
++  16, 16, 22, 24, 27, 29, 34, 37,
++  19, 22, 26, 27, 29, 34, 34, 38,
++  22, 22, 26, 27, 29, 34, 37, 40,
++  22, 26, 27, 29, 32, 35, 40, 48,
++  26, 27, 29, 32, 35, 40, 48, 58,
++  26, 27, 29, 34, 38, 46, 56, 69,
++  27, 29, 35, 38, 46, 56, 69, 83
++};
++static uint16_t tmpgenc_inter[64] = {
++  16, 17, 18, 19, 20, 21, 22, 23,	//0
++  17, 18, 19, 20, 21, 22, 23, 24,
++  18, 19, 20, 21, 22, 23, 24, 25,
++  19, 20, 21, 22, 23, 24, 26, 27,
++  20, 21, 22, 23, 25, 26, 27, 28,	//4
++  21, 22, 23, 24, 26, 27, 28, 30,
++  22, 23, 24, 26, 27, 28, 30, 31,
++  23, 24, 25, 27, 28, 30, 31, 33
++};
++static uint16_t anime_intra[64] = {
++  8, 32, 32, 32, 32, 32, 32, 32,	//0
++  32, 32, 32, 32, 32, 32, 32, 32,
++  32, 32, 32, 32, 32, 32, 32, 32,
++  32, 32, 32, 32, 32, 32, 32, 32,
++  32, 32, 32, 32, 32, 32, 32, 32,	//4
++  32, 32, 32, 32, 32, 32, 32, 32,
++  32, 32, 32, 32, 32, 32, 32, 32,
++  32, 32, 32, 32, 32, 32, 32, 32
++};
++static uint16_t anime_inter[64] = {
++  16, 16, 16, 16, 16, 16, 16, 16,	//0
++  16, 16, 16, 16, 16, 16, 16, 16,
++  16, 16, 16, 16, 16, 16, 16, 16,
++  16, 16, 16, 16, 16, 16, 16, 16,
++  16, 16, 16, 16, 16, 16, 16, 16,	//4
++  16, 16, 16, 16, 16, 16, 16, 16,
++  16, 16, 16, 16, 16, 16, 16, 16,
++  16, 16, 16, 16, 16, 16, 16, 16,
++};
++//----------------------------------------------
++static uint16_t kvcd_intra[64] = {
++  8, 9, 12, 22, 26, 27, 29, 34,	//0
++  9, 10, 14, 26, 27, 29, 37, 37,
++  12, 14, 18, 27, 29, 34, 37, 38,
++  22, 26, 27, 31, 36, 37, 38, 40,
++
++  26, 27, 29, 36, 39, 38, 40, 48,	//4
++  27, 29, 34, 37, 38, 40, 48, 58,
++  29, 34, 37, 38, 40, 48, 58, 69,
++  34, 37, 38, 40, 48, 58, 69, 79
++};
++static uint16_t kvcd_inter[64] = {
++  16, 18, 20, 22, 24, 26, 28, 30,	//0
++  18, 20, 22, 24, 26, 28, 30, 32,	//0
++  20, 22, 24, 26, 28, 30, 32, 34,	//0
++  22, 24, 26, 28, 30, 32, 34, 36,	//0
++
++  24, 26, 28, 30, 32, 34, 36, 38,	//0
++  26, 28, 30, 32, 34, 36, 38, 40,	//0
++  28, 30, 32, 34, 36, 38, 40, 42,	//0
++  30, 32, 34, 36, 38, 40, 42, 44	//0
++};
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002413.html">[Avidemux-svn-commit] r5199 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder:	ADM_vidEnc_avcodec ADM_vidEnc_x264 ADM_vidEnc_x264/gtk	ADM_vidEnc_x264/qt4 ADM_vidEnc_x264/xml ADM_vidEnc_xvid	ADM_vidEnc_xvid/gtk ADM_vidEnc_xvid/qt4 common
+</A></li>
+	<LI>Next message: <A HREF="002415.html">[Avidemux-svn-commit] r5201 - in branches/avidemux_2.6_branch_mean:	. avidemux avidemux/gtk avidemux/qt4 avidemux_core	avidemux_core/ADM_coreAudioParser/src	avidemux_core/ADM_ffmpeg/libavcodec cmake foreignBuilds
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2414">[ date ]</a>
+              <a href="thread.html#2414">[ thread ]</a>
+              <a href="subject.html#2414">[ subject ]</a>
+              <a href="author.html#2414">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,271 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6507 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6507%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C20100808081626.43136480F13%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003693.html">
+   <LINK REL="Next"  HREF="003695.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6507 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6507%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C20100808081626.43136480F13%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6507 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Aug  8 10:16:26 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003693.html">[Avidemux-svn-commit] r6506 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+        <LI>Next message: <A HREF="003695.html">[Avidemux-svn-commit] r6508 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3694">[ date ]</a>
+              <a href="thread.html#3694">[ thread ]</a>
+              <a href="subject.html#3694">[ subject ]</a>
+              <a href="author.html#3694">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-08-08 10:16:26 +0200 (Sun, 08 Aug 2010)
+New Revision: 6507
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp
+Log:
+[Ps/Demux] Handle scr reset for audio, we have still a gop off
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.cpp	2010-08-08 08:16:24 UTC (rev 6506)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.cpp	2010-08-08 08:16:26 UTC (rev 6507)
+@@ -111,6 +111,9 @@
+             if(frame-&gt;pts!=ADM_NO_PTS) frame-&gt;pts+=timeOffset;
+         }
+         ADM_info(&quot;Adjusted %d scr reset out of %d\n&quot;,(int)index,(int)nbPoints);
++        ADM_info(&quot;Updating audio with list of SCR\n&quot;);
++        for(int i=0;i&lt;listOfAudioTracks.size();i++)
++                  listOfAudioTracks[i]-&gt;access-&gt;setScrGapList(&amp;listOfScrGap) ;
+     }
+     updatePtsDts();
+     _videostream.dwLength= _mainaviheader.dwTotalFrames=ListOfFrames.size();
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.h	2010-08-08 08:16:24 UTC (rev 6506)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_ps.h	2010-08-08 08:16:26 UTC (rev 6507)
+@@ -30,6 +30,17 @@
+ using std::vector;
+ 
+ /**
++    \struct scrGap
++    \brief Map gap/reset in the scr flow to put everything back to linear / monotonic
++*/
++typedef struct
++{
++    uint64_t position;
++    uint64_t timeOffset;
++}scrGap;
++typedef vector &lt;scrGap&gt; ListOfScr;
++
++/**
+     \fn ADM_psAccess
+ */
+ class ADM_psAccess : public ADM_audioAccess
+@@ -39,6 +50,7 @@
+                 psPacket        demuxer;
+                 uint8_t         pid;
+                 uint64_t        dtsOffset;
++                const  ListOfScr *listOfScr;
+                 
+ public:
+                 bool            setTimeOffset(uint64_t of) {dtsOffset=of;return true;}
+@@ -63,9 +75,13 @@
+                         bool      push(uint64_t at, uint64_t dts,uint32_t size);
+                                     /// Convert raw timestamp to scaled timestamp in us
+                 uint64_t          timeConvert(uint64_t x);
++                                    /// Convert raw timestamp to unscaled timestamp in us
++                uint64_t          timeConvertRaw(uint64_t x);
+ 
+                 virtual uint32_t  getLength(void);
+ 
++                bool    setScrGapList(const ListOfScr *list) ;/// Give audio a list of scr reset
++
+ };
+ /**
+     \class ADM_psTrackDescriptor
+@@ -92,17 +108,7 @@
+ 
+ };
+ /**
+-    \struct scrGap
+-    \brief Map gap/reset in the scr flow to put everything back to linear / monotonic
+-*/
+-typedef struct
+-{
+-    uint64_t position;
+-    uint64_t timeOffset;
+-}scrGap;
+-
+-/**
+-    \Class psHeader
++    \class psHeader
+     \brief mpeg ps demuxer
+ 
+ */
+@@ -126,7 +132,7 @@
+     uint64_t        timeConvert(uint64_t x);
+     bool            updatePtsDts(void);
+ protected:
+-    vector &lt;scrGap&gt; listOfScrGap;
++    ListOfScr                       listOfScrGap;
+     vector &lt;ADM_psTrackDescriptor *&gt;listOfAudioTracks;
+   public:
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp	2010-08-08 08:16:24 UTC (rev 6506)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp	2010-08-08 08:16:26 UTC (rev 6507)
+@@ -21,7 +21,7 @@
+ #include &lt;math.h&gt;
+ 
+ #include &quot;ADM_ps.h&quot;
+-
++#include &quot;ADM_vidMisc.h&quot;
+ #if 0
+     #define aprintf printf
+ #else
+@@ -37,6 +37,7 @@
+         if(append) fp=FP_APPEND;
+         this-&gt;pid=pid;
+         if(!demuxer.open(name,fp)) ADM_assert(0);
++        listOfScr=NULL;
+ }
+ 
+ /**
+@@ -118,6 +119,19 @@
+ 
+ }
+ /**
++    \fn timeConvertRaw
++    \brief Convert time in ticks raw from the stream (90 kHz tick) to avidemux time (us)
++*/
++uint64_t ADM_psAccess::timeConvertRaw(uint64_t x)
++{
++    if(x==ADM_NO_PTS) return ADM_NO_PTS;
++    x=x*1000;
++    x/=90;
++    return x;
++
++}
++
++/**
+     \fn getPacket
+ */
+ bool      ADM_psAccess::getPacket(uint8_t *buffer, uint32_t *size, uint32_t maxSize,uint64_t *dts)
+@@ -126,6 +140,24 @@
+     if(false==demuxer.getPacketOfType(pid,maxSize,size,&amp;p,&amp;d,buffer,&amp;start)) return false;
+     if(d==ADM_NO_PTS) *dts=p;
+             else *dts=d;
++
++    // Update dts if needed due to scr reset
++    if(listOfScr &amp;&amp; *dts!=ADM_NO_PTS)
++    {
++        uint64_t timeOffset=0;
++        for(int i=0;i&lt;listOfScr-&gt;size();i++)
++        {
++            if(start&gt;(*listOfScr)[i].position) 
++            {
++                
++                timeOffset=(*listOfScr)[i].timeOffset;
++               // printf(&quot;New timeOffset :%d %d ms\n&quot;,i,(int)(timeOffset/1000));
++                
++            }
++        }
++        *dts+=timeOffset;
++    }
++
+     *dts=timeConvert(*dts);
+     if(*dts!=ADM_NO_PTS) 
+     {
+@@ -134,6 +166,41 @@
+ 
+     return true;
+ }
+-
+-
++/**
++    \fn setScrGapList
++*/
++bool    ADM_psAccess::setScrGapList(const ListOfScr *list) 
++{
++        ADM_assert(list);
++        listOfScr=list;
++        //Update seek points
++        int n=seekPoints.size();
++        uint64_t pivot=(*list)[0].position;
++        uint64_t timeOffset=0;
++        int index=0;
++        for(int i=0;i&lt;n;i++)
++        {
++            ADM_mpgAudioSeekPoint *point=&amp;(seekPoints[i]);
++           
++            if(point-&gt;dts!=ADM_NO_PTS) 
++            {
++                point-&gt;dts+=timeOffset;
++#if 0
++                printf(&quot;%d:%d Offset : %s &quot;,i,n,ADM_us2plain(timeConvertRaw(timeOffset)));
++                printf(&quot; dts : %s\n&quot;,ADM_us2plain(timeConvertRaw(point-&gt;dts)));
++#endif
++            }
++            // since audio seek point are done at the END, 
++            // we will increase timeOffset for the next
++#warning fixme  do something smarter
++            if(point-&gt;position&gt;pivot)
++            {
++                timeOffset=((*list)[index].timeOffset);
++                index++;
++                if(index&gt;(*list).size()) pivot=0x8000000000000LL;
++                        else pivot=(*list)[index].position;
++            }
++        }
++        return true;
++}
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003693.html">[Avidemux-svn-commit] r6506 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+	<LI>Next message: <A HREF="003695.html">[Avidemux-svn-commit] r6508 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3694">[ date ]</a>
+              <a href="thread.html#3694">[ thread ]</a>
+              <a href="subject.html#3694">[ subject ]</a>
+              <a href="author.html#3694">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

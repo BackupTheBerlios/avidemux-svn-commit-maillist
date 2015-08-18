@@ -1,0 +1,523 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7296 - in	branches/avidemux_2.5_branch_gruntster/avidemux: . ADM_core/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7296%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%20.%20ADM_core/src&In-Reply-To=%3C20110619201828.480474813CC%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004449.html">
+   <LINK REL="Next"  HREF="004451.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7296 - in	branches/avidemux_2.5_branch_gruntster/avidemux: . ADM_core/src</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7296%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%20.%20ADM_core/src&In-Reply-To=%3C20110619201828.480474813CC%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7296 - in	branches/avidemux_2.5_branch_gruntster/avidemux: . ADM_core/src">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sun Jun 19 22:18:28 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004449.html">[Avidemux-svn-commit] r7295 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src
+</A></li>
+        <LI>Next message: <A HREF="004451.html">[Avidemux-svn-commit] r7297 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4450">[ date ]</a>
+              <a href="thread.html#4450">[ thread ]</a>
+              <a href="subject.html#4450">[ subject ]</a>
+              <a href="author.html#4450">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2011-06-19 22:18:28 +0200 (Sun, 19 Jun 2011)
+New Revision: 7296
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_mswin.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/CMakeLists.txt
+   branches/avidemux_2.5_branch_gruntster/avidemux/main.cpp
+Log:
+[mswin] fix 32-bit backtrace to work with recent compilers and add 64-bit backtrace support (requires latest mingw-w64 runtime to work properly).  64-bit backtrace is far more comprehensive than 32-bit.  Also C++ ABI is now demangled.
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_mswin.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_mswin.cpp	2011-06-17 13:02:41 UTC (rev 7295)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_crashdump_mswin.cpp	2011-06-19 20:18:28 UTC (rev 7296)
+@@ -14,81 +14,103 @@
+  *                                                                         *
+  ***************************************************************************/
+ 
++#include &lt;stdio.h&gt;
+ #include &lt;windows.h&gt;
+ #include &lt;imagehlp.h&gt;
++#include &lt;cxxabi.h&gt;
+ 
+-#include &quot;ADM_default.h&quot;
++extern &quot;C&quot;
++{
++typedef void ADM_saveFunction(void);
++typedef void ADM_fatalFunction(const char *title, const char *info);
++void ADM_setCrashHook(ADM_saveFunction *save, ADM_fatalFunction *fatal);
++void ADM_backTrack(const char *info, int lineno, const char *file);
++}
+ 
+-// Our callback to give UI formatted informations....
+-static ADM_saveFunction *mysaveFunction=NULL;
+-static ADM_fatalFunction *myFatalFunction=NULL;
+-/**
+-        \fn ADM_setCrashHook
+-        \brief install crash handlers (save + display)
+-*/
++static ADM_saveFunction *mysaveFunction = NULL;
++static ADM_fatalFunction *myFatalFunction = NULL;
++
+ void ADM_setCrashHook(ADM_saveFunction *save, ADM_fatalFunction *fatal)
+ {
+-        mysaveFunction=save;
+-        myFatalFunction=fatal;
++	mysaveFunction = save;
++	myFatalFunction = fatal;
+ }
+ 
+-typedef struct STACK_FRAME
++static void PrintFunction(const char *moduleName, const char *functionName, DWORD_PTR frameAddress, DWORD_PTR frameOffset)
+ {
+-    STACK_FRAME* ebp;	// address of the calling function frame
+-    uint8_t* retAddr;	// return address
+-    uint32_t param[0];	// parameter list (could be empty)
+-} STACK_FRAME;
++	if (functionName)
++	{
++		char *cxaFunction = (char*)malloc(strlen(functionName) + 2);
+ 
+-static void dumpFrame(void* processId, void* frameAddr)
+-{
+-#ifdef ADM_CPU_X86_64
+-#define ARCH_DWORD DWORD64
+-#else
+-#define ARCH_DWORD DWORD
+-#endif
++		cxaFunction[0] = '_';
++		strcpy(cxaFunction + 1, functionName);
+ 
+-	MEMORY_BASIC_INFORMATION mbi;
+-	char moduleName[MAX_PATH];
+-	HMODULE moduleAddr;
+-	ARCH_DWORD symDisplacement;
+-	IMAGEHLP_SYMBOL* pSymbol;
++		int status;
++		char *demangledName = __cxxabiv1::__cxa_demangle(cxaFunction, NULL, NULL, &amp;status);
+ 
+-	if (VirtualQuery(frameAddr, &amp;mbi, sizeof(mbi)))
+-	{
+-		moduleName[0] = 0;
+-		moduleAddr = (HMODULE)mbi.AllocationBase;
+-		
+-		GetModuleFileName(moduleAddr, moduleName, MAX_PATH);
++		free(cxaFunction);
+ 
+-		printf(&quot;%s(&quot;, moduleName);
+-
+-		if (SymGetSymFromAddr(processId, (ARCH_DWORD)frameAddr, &amp;symDisplacement, pSymbol))
+-			printf(&quot;%s&quot;, pSymbol-&gt;Name);
++		if (status == 0)
++			printf(demangledName);
+ 		else
+-			printf(&quot;&lt;unknown&gt;&quot;);
++			printf(functionName);
+ 
+-		printf(&quot;+0x%X) [0x%08X]\n&quot;, (ARCH_DWORD)frameAddr - (ARCH_DWORD)moduleAddr, frameAddr);
++		if (demangledName)
++			free(demangledName);
++	}
++	else
++		printf(&quot;unknown function&quot;);
+ 
+-		fflush(stdout);
+-	}
++	if (frameOffset)
++		printf(&quot; &lt;+0x%X&gt;&quot;, frameOffset);
++
++	if (moduleName)
++		printf(&quot;  [%s]\n&quot;, moduleName);
++	else
++		printf(&quot;  [unknown module]\n&quot;);
++
++	fflush(stdout);
+ }
+-	
+-static void dumpExceptionInfo(void* processId, struct _EXCEPTION_RECORD* pExceptionRec, struct _CONTEXT* pContextRecord)
++
++static bool DumpFrame(void *process, DWORD_PTR frameAddress)
+ {
++	const int functionLength = 255;
++	IMAGEHLP_SYMBOL *symbol = (IMAGEHLP_SYMBOL*)malloc(sizeof(IMAGEHLP_SYMBOL) + functionLength);
++	DWORD_PTR moduleBase = SymGetModuleBase(process, frameAddress);
++	const char *moduleName = NULL, *functionName = NULL;
++	DWORD_PTR displacement;
++	char moduleFilename[MAX_PATH];
++
++	symbol-&gt;SizeOfStruct = (sizeof(*symbol)) + functionLength;
++	symbol-&gt;MaxNameLength = functionLength - 1;
++
++	if (moduleBase &amp;&amp; GetModuleFileName((HINSTANCE)moduleBase, moduleFilename, MAX_PATH))
++		moduleName = moduleFilename;
++
++	if (SymGetSymFromAddr(process, frameAddress, &amp;displacement, symbol))
++		functionName = symbol-&gt;Name;
++
++	PrintFunction(moduleName, functionName, frameAddress, displacement);
++
++	free(symbol);
++}
++
++static void DumpExceptionInfo(void *processId, struct _EXCEPTION_RECORD *exceptionRec, struct _CONTEXT *contextRecord)
++{
+ 	printf(&quot;\n*********** EXCEPTION **************\n&quot;);
+ 	printf(&quot;Registers:\n&quot;);
+-#ifdef ADM_CPU_X86_64
+-	printf(&quot;RAX: %08X  RBX: %08X  RCX: %08X  RDX: %08X  RSI: %08X  RDI: %08X  RSP: %08X  RBP: %08X\n&quot;, pContextRecord-&gt;Rax, pContextRecord-&gt;Rbx, pContextRecord-&gt;Rcx, pContextRecord-&gt;Rdx, pContextRecord-&gt;Rsi, pContextRecord-&gt;Rdi, pContextRecord-&gt;Rsp, pContextRecord-&gt;Rbp);
+-	printf(&quot;R8: %08X  R9: %08X  R10: %08X  R11: %08X  R12: %08X  R13: %08X  R14: %08X  R15: %08X\n&quot;, pContextRecord-&gt;R8, pContextRecord-&gt;R9, pContextRecord-&gt;R10, pContextRecord-&gt;R11, pContextRecord-&gt;R12, pContextRecord-&gt;R13, pContextRecord-&gt;R14, pContextRecord-&gt;R15);
+-	printf(&quot;RIP: %08X  EFlags: %08X\n\n&quot;, pContextRecord-&gt;Rip, pContextRecord-&gt;EFlags);
++#ifdef _WIN64
++	printf(&quot;RAX: %08X  RBX: %08X  RCX: %08X  RDX: %08X  RSI: %08X  RDI: %08X  RSP: %08X  RBP: %08X\n&quot;, contextRecord-&gt;Rax, contextRecord-&gt;Rbx, contextRecord-&gt;Rcx, contextRecord-&gt;Rdx, contextRecord-&gt;Rsi, contextRecord-&gt;Rdi, contextRecord-&gt;Rsp, contextRecord-&gt;Rbp);
++	printf(&quot;R8: %08X  R9: %08X  R10: %08X  R11: %08X  R12: %08X  R13: %08X  R14: %08X  R15: %08X\n&quot;, contextRecord-&gt;R8, contextRecord-&gt;R9, contextRecord-&gt;R10, contextRecord-&gt;R11, contextRecord-&gt;R12, contextRecord-&gt;R13, contextRecord-&gt;R14, contextRecord-&gt;R15);
++	printf(&quot;RIP: %08X  EFlags: %08X\n\n&quot;, contextRecord-&gt;Rip, contextRecord-&gt;EFlags);
+ #else
+-	printf(&quot;EAX: %08X  EBX: %08X  ECX: %08X  EDX: %08X  ESI: %08X\n&quot;, pContextRecord-&gt;Eax, pContextRecord-&gt;Ebx, pContextRecord-&gt;Ecx, pContextRecord-&gt;Edx, pContextRecord-&gt;Esi);
+-	printf(&quot;EDI: %08X  ESP: %08X  EBP: %08X  EIP: %08X  EFlags: %08X\n\n&quot;, pContextRecord-&gt;Edi, pContextRecord-&gt;Esp, pContextRecord-&gt;Ebp, pContextRecord-&gt;Eip, pContextRecord-&gt;EFlags);
++	printf(&quot;EAX: %08X  EBX: %08X  ECX: %08X  EDX: %08X  ESI: %08X\n&quot;, contextRecord-&gt;Eax, contextRecord-&gt;Ebx, contextRecord-&gt;Ecx, contextRecord-&gt;Edx, contextRecord-&gt;Esi);
++	printf(&quot;EDI: %08X  ESP: %08X  EBP: %08X  EIP: %08X  EFlags: %08X\n\n&quot;, contextRecord-&gt;Edi, contextRecord-&gt;Esp, contextRecord-&gt;Ebp, contextRecord-&gt;Eip, contextRecord-&gt;EFlags);
+ #endif
+ 
+ 	printf(&quot;Exception Code: &quot;);
+ 
+-	switch (pExceptionRec-&gt;ExceptionCode)
++	switch (exceptionRec-&gt;ExceptionCode)
+ 	{
+ 		case EXCEPTION_ACCESS_VIOLATION:
+ 			printf(&quot;EXCEPTION_ACCESS_VIOLATION&quot;);
+@@ -154,78 +176,82 @@
+ 			printf(&quot;UNKNOWN&quot;);
+ 	}
+ 	
+-	printf(&quot; (%08X)\n&quot;, pExceptionRec-&gt;ExceptionCode);
+-	printf(&quot;Exception Flags: %08X\n&quot;, pExceptionRec-&gt;ExceptionFlags);
++	printf(&quot; (%08X)\n&quot;, exceptionRec-&gt;ExceptionCode);
++	printf(&quot;Exception Flags: %08X\n&quot;, exceptionRec-&gt;ExceptionFlags);
+ 
+ 	printf(&quot;\nOrigin:\n&quot;);
+ 
+-#ifdef ADM_CPU_X86_64
+-	dumpFrame(processId, (void*)pContextRecord-&gt;Rip);
++#ifdef _WIN64
++	DumpFrame(processId, contextRecord-&gt;Rip);
+ #else
+-	dumpFrame(processId, (void*)pContextRecord-&gt;Eip);
++	DumpFrame(processId, contextRecord-&gt;Eip);
+ #endif
+ 
+ 	printf(&quot;*********** EXCEPTION **************\n&quot;);
+ 	fflush(stdout);
+ }
+ 
+-extern &quot;C&quot;
++void DumpBackTrace(void *processId)
+ {
+-void dumpBackTrace(void* processId)
+-{
+-	if (!processId)
+-		processId = GetCurrentProcess();
++	printf(&quot;\n*********** BACKTRACE **************\n&quot;);
+ 
+-	const int maxAddrCount = 32;
++	typedef VOID NTAPI RtlCaptureContext_(PCONTEXT ContextRecord);
+ 
+-	printf(&quot;\n*********** BACKTRACE **************\n&quot;);
++	HANDLE process = GetCurrentProcess();
++	HANDLE thread = GetCurrentThread();
++	HINSTANCE hinstLib = LoadLibrary(&quot;kernel32.dll&quot;);
++	RtlCaptureContext_* contextFunc = (RtlCaptureContext_*)GetProcAddress(hinstLib, &quot;RtlCaptureContext&quot;);
++	STACKFRAME frame;
++	CONTEXT context;
++	int limit = 50;
++	DWORD machineType;
+ 
+-	// Get frame address using builtin GCC function.
+-	STACK_FRAME* stackFrame = (STACK_FRAME*)__builtin_frame_address(0);
++	memset(&amp;frame, 0, sizeof(STACKFRAME));
++	memset(&amp;context, 0, sizeof(CONTEXT));
+ 
+-    for (int retAddrCount = 0; (retAddrCount &lt; maxAddrCount) &amp;&amp; !IsBadReadPtr(stackFrame, sizeof(STACK_FRAME)) &amp;&amp; !IsBadCodePtr(FARPROC(stackFrame-&gt;retAddr)); retAddrCount++, stackFrame = stackFrame-&gt;ebp)
+-    {
+-		printf(&quot;Frame %2d: &quot;, retAddrCount);
+-		dumpFrame(processId, stackFrame-&gt;retAddr);
+-		fflush(stdout);
+-    }
++	context.ContextFlags = CONTEXT_FULL;
++	contextFunc(&amp;context);
+ 
+-	printf(&quot;*********** BACKTRACE **************\n\n&quot;);
+-}
+-}
++#if _WIN64
++	machineType = IMAGE_FILE_MACHINE_AMD64;
+ 
+-void ADM_backTrack(const char *info,int lineno,const char *file)
+-{	
+-	fflush(stderr);
+-	fflush(stdout);
++    frame.AddrPC.Offset = context.Rip;
++	frame.AddrStack.Offset = context.Rsp;
++	frame.AddrFrame.Offset = context.Rbp;
++#else
++	machineType = IMAGE_FILE_MACHINE_I386;
+ 
+-	if (mysaveFunction)
+-		mysaveFunction();
++	frame.AddrPC.Offset = context.Eip;
++	frame.AddrStack.Offset = context.Esp;
++	frame.AddrFrame.Offset = context.Ebp;
++#endif
+ 
+-	if (myFatalFunction)
+-		myFatalFunction(&quot;Crash&quot;, &quot;Press OK to build crash info&quot;);
++    frame.AddrPC.Mode = AddrModeFlat;
++    frame.AddrStack.Mode = AddrModeFlat;
++    frame.AddrFrame.Mode = AddrModeFlat;
+ 
+-	void* currentProcessId = GetCurrentProcess();
++	while (StackWalk(machineType, process, thread, &amp;frame, &amp;context, 0, SymFunctionTableAccess, SymGetModuleBase, 0))
++	{
++        if (limit-- == 0)
++			break;
+ 
+-	SymInitialize(currentProcessId, NULL, TRUE);
+-	dumpBackTrace(currentProcessId);
+-	SymCleanup(currentProcessId);
++		DumpFrame(process, frame.AddrPC.Offset);
++	}
+ 
+-	printf(&quot;Assert failed at file %s, line %d\n\n&quot;,file,lineno);
+-
+-	exit(-1);
++	printf(&quot;*********** BACKTRACE **************\n\n&quot;);
+ }
+ 
+-EXCEPTION_DISPOSITION exceptionHandler(struct _EXCEPTION_RECORD* pExceptionRec, void* pEstablisherFrame, struct _CONTEXT* pContextRecord, void* pDispatcherContext)
++void HandleException(struct _EXCEPTION_RECORD *exceptionRecord, struct _CONTEXT *contextRecord)
+ {
+ 	fflush(stderr);
+-	fflush(stdout);
+-	static int running=0;
++	fflush(stdout);	
+ 
+-	if(running)
++	static int running = 0;
++
++	if (running)
+ 		exit(1);
+ 
+-	running=1;
++	running = 1;
+ 
+ 	if (mysaveFunction)
+ 		mysaveFunction();
+@@ -233,15 +259,32 @@
+ 	if (myFatalFunction)
+ 		myFatalFunction(&quot;Crash&quot;, &quot;Press OK to build crash info&quot;);
+ 
+-	void* currentProcessId = GetCurrentProcess();
++	void *process = GetCurrentProcess();
+ 
+-	SymInitialize(currentProcessId, NULL, TRUE);
++	SymInitialize(process, NULL, TRUE);
+ 
+-	dumpExceptionInfo(currentProcessId, pExceptionRec, pContextRecord);
+-	fflush(stdout);
+-	dumpBackTrace(currentProcessId);
++	if (exceptionRecord != NULL &amp;&amp; contextRecord != NULL)
++	{
++		DumpExceptionInfo(process, exceptionRecord, contextRecord);
++	}
+ 
+-	SymCleanup(currentProcessId);
++	DumpBackTrace(process);
++	SymCleanup(process);
+ 
+ 	exit(1);
+ }
++
++EXCEPTION_DISPOSITION ExceptionHandler(struct _EXCEPTION_RECORD *exceptionRecord, void *establisherFrame, struct _CONTEXT *contextRecord, void *dispatcherContext)
++{
++	HandleException(exceptionRecord, contextRecord);
++}
++
++LONG WINAPI ExceptionFilter(struct _EXCEPTION_POINTERS *exceptionInfo)
++{
++	HandleException(exceptionInfo-&gt;ExceptionRecord, exceptionInfo-&gt;ContextRecord);
++}
++
++void ADM_backTrack(const char *info, int lineno, const char *file)
++{	
++	HandleException(NULL, NULL);
++}
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/CMakeLists.txt	2011-06-17 13:02:41 UTC (rev 7295)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/CMakeLists.txt	2011-06-19 20:18:28 UTC (rev 7296)
+@@ -428,7 +428,7 @@
+ ###########################################
+ IF (WIN32)
+ 	ADD_ADMLIB_ALL_TARGETS(ADM_osSupport)
+-	ADD_LIB_ALL_TARGETS(winmm)
++	ADD_LIB_ALL_TARGETS(winmm -Wl,--export-all-symbols)
+ 
+ 	ADD_TARGET_LDFLAGS(avidemux2_cli &quot;-Wl,-subsystem,console&quot;)
+ 
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/main.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/main.cpp	2011-06-17 13:02:41 UTC (rev 7295)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/main.cpp	2011-06-19 20:18:28 UTC (rev 7296)
+@@ -17,11 +17,6 @@
+  *                                                                         *
+  ***************************************************************************/
+ 
+-#ifdef __MINGW32__
+-#include &lt;windows.h&gt;
+-#include &lt;excpt.h&gt;
+-#endif
+-
+ #include &quot;config.h&quot;
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_threads.h&quot;
+@@ -47,9 +42,7 @@
+ #include &quot;ADM_userInterfaces/ADM_render/GUI_sdlRender.h&quot;
+ #endif
+ 
+-
+ void onexit( void );
+-//extern void automation(int argc, char **argv);
+ 
+ extern void registerVideoFilters( void );
+ extern void filterCleanUp( void );
+@@ -69,13 +62,16 @@
+ extern void loadPlugins(void);
+ extern void InitFactory(void);
+ extern void InitCoreToolkit(void);
+-#ifdef __MINGW32__
+-extern EXCEPTION_DISPOSITION exceptionHandler(struct _EXCEPTION_RECORD* pExceptionRec, void* pEstablisherFrame, struct _CONTEXT* pContextRecord, void* pDispatcherContext);
++
++#if defined(_WIN64)
++extern LONG WINAPI ExceptionFilter(struct _EXCEPTION_POINTERS *exceptionInfo);
++#elif defined(_WIN32)
++extern EXCEPTION_DISPOSITION ExceptionHandler(struct _EXCEPTION_RECORD *exceptionRecord, void *establisherFrame, struct _CONTEXT *contextRecord, void *dispatcherContext);
+ #else
+ extern void installSigHandler(void);
+ #endif
+ 
+-#ifdef __WIN32
++#ifdef _WIN32
+ extern bool getWindowsVersion(char* version);
+ extern void redirectStdoutToFile(void);
+ #endif
+@@ -103,7 +99,7 @@
+ 	char uiDesc[15];
+ 	getUIDescription(uiDesc);
+ 
+-#if defined(__WIN32)
++#if defined(_WIN32)
+ 	if (strcmp(uiDesc, &quot;CLI&quot;) != 0)
+ 		redirectStdoutToFile();
+ #endif
+@@ -112,7 +108,7 @@
+ 	new_progname = argv[0];
+ #endif
+ 
+-#ifndef __MINGW32__
++#ifndef _WIN32
+ 	// thx smurf uk :)
+     installSigHandler();
+ #endif
+@@ -141,7 +137,7 @@
+ 
+ 	printf(&quot;Build Target: &quot;);
+ 
+-#if defined(__WIN32)
++#if defined(_WIN32)
+ 	printf(&quot;Microsoft Windows&quot;);
+ #elif defined(__APPLE__)
+ 	printf(&quot;Apple&quot;);
+@@ -159,7 +155,7 @@
+ 
+ 	printf(&quot;\nUser Interface: %s\n&quot;, uiDesc);
+ 
+-#ifdef __WIN32
++#ifdef _WIN32
+ 	char version[250];
+ 
+ 	if (getWindowsVersion(version))
+@@ -188,7 +184,7 @@
+ 
+ 	atexit(onexit);
+ 
+-#ifdef __MINGW32__
++#ifdef _WIN32
+     win32_netInit();
+ #endif
+ 
+@@ -270,14 +266,16 @@
+     else
+ 		ADM_assert(0); 
+ 
+-#ifdef __MINGW32__
+-	__try1(exceptionHandler);
++#if defined(_WIN64)
++	SetUnhandledExceptionFilter(ExceptionFilter);
++#elif defined(_WIN32)
++	__try1(ExceptionHandler);
+ #endif
+ 
+     UI_RunApp();
+ 
+-#ifdef __MINGW32__
+-	__except1(exceptionHandler);
++#if defined(_WIN32) &amp;&amp; defined(_X86_)
++	__except1;
+ #endif
+ 
+     printf(&quot;Normal exit\n&quot;);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004449.html">[Avidemux-svn-commit] r7295 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src
+</A></li>
+	<LI>Next message: <A HREF="004451.html">[Avidemux-svn-commit] r7297 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4450">[ date ]</a>
+              <a href="thread.html#4450">[ thread ]</a>
+              <a href="subject.html#4450">[ subject ]</a>
+              <a href="author.html#4450">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

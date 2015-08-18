@@ -1,0 +1,130 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3060 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3060%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200705101504.l4AF4END014628%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000362.html">
+   <LINK REL="Next"  HREF="000364.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3060 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3060%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200705101504.l4AF4END014628%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3060 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu May 10 17:04:14 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000362.html">[Avidemux-svn-commit] r3059 - in	branches/avidemux_2.4_branch/avidemux: ADM_osSupport	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_QT4/ADM_gui
+</A></li>
+        <LI>Next message: <A HREF="000364.html">[Avidemux-svn-commit] r3061 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#363">[ date ]</a>
+              <a href="thread.html#363">[ thread ]</a>
+              <a href="subject.html#363">[ subject ]</a>
+              <a href="author.html#363">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-05-10 17:04:14 +0200 (Thu, 10 May 2007)
+New Revision: 3060
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+Log:
+simple block handling for matroska
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2007-05-09 16:36:52 UTC (rev 3059)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2007-05-10 15:04:14 UTC (rev 3060)
+@@ -84,6 +84,7 @@
+     printf(&quot;[MKV] Cluster indexing failed\n&quot;);
+     return 0;
+   }
++  printf(&quot;[MKV]Found %u clusters\n&quot;,_nbClusters);
+   printf(&quot;[MKV] Indexing video\n&quot;);
+     if(!videoIndexer(&amp;ebml))
+     {
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-05-09 16:36:52 UTC (rev 3059)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-05-10 15:04:14 UTC (rev 3060)
+@@ -77,7 +77,11 @@
+                   //printf(&quot;Skipping %s\n&quot;,ss);
+                   cluster.skip(len);
+                   break;
+-                
++                case MKV_SIMPLE_BLOCK:
++                    {
++                      indexBlock(parser,len,_clusters[clusters].timeCode);
++                    }
++                    break;
+                 case MKV_BLOCK_GROUP:
+                 {
+                         //printf(&quot;Block Group\n&quot;);
+@@ -97,10 +101,11 @@
+                                 {
+                                   default: blockGroup.skip(len);
+                                   case MKV_BLOCK : 
++                                  case MKV_SIMPLE_BLOCK:
+                                   {
+                                     indexBlock(&amp;blockGroup,len,_clusters[clusters].timeCode);
+-                                    
+-                                  }         
++                                  }
++                                  break;
+                                 }
+                           }
+                           thiscluster++;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2007-05-09 16:36:52 UTC (rev 3059)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2007-05-10 15:04:14 UTC (rev 3060)
+@@ -128,6 +128,7 @@
+               default:
+               case MKV_TIMECODE:     _clusterParser-&gt;skip(len);  break;
+               case MKV_BLOCK_GROUP:    break;
++              case MKV_SIMPLE_BLOCK: 
+               case MKV_BLOCK: 
+               {
+                   uint32_t tid=_clusterParser-&gt;readEBMCode();
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000362.html">[Avidemux-svn-commit] r3059 - in	branches/avidemux_2.4_branch/avidemux: ADM_osSupport	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_QT4/ADM_gui
+</A></li>
+	<LI>Next message: <A HREF="000364.html">[Avidemux-svn-commit] r3061 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#363">[ date ]</a>
+              <a href="thread.html#363">[ thread ]</a>
+              <a href="subject.html#363">[ subject ]</a>
+              <a href="author.html#363">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,243 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4547 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_codecs avidemux/ADM_editor plugins/ADM_demuxers/MpegPS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4547%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/ADM_codecs%20avidemux/ADM_editor%20plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C200901260644.n0Q6iVpD027484%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001778.html">
+   <LINK REL="Next"  HREF="001780.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4547 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_codecs avidemux/ADM_editor plugins/ADM_demuxers/MpegPS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4547%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/ADM_codecs%20avidemux/ADM_editor%20plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C200901260644.n0Q6iVpD027484%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4547 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_codecs avidemux/ADM_editor plugins/ADM_demuxers/MpegPS">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Jan 26 07:44:31 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001778.html">[Avidemux-svn-commit] r4546 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS
+</A></li>
+        <LI>Next message: <A HREF="001780.html">[Avidemux-svn-commit] r4548 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_userInterfaces/ADM_GTK	avidemux/ADM_userInterfaces/ADM_GTK/glade cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1779">[ date ]</a>
+              <a href="thread.html#1779">[ thread ]</a>
+              <a href="subject.html#1779">[ subject ]</a>
+              <a href="author.html#1779">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-01-26 07:44:28 +0100 (Mon, 26 Jan 2009)
+New Revision: 4547
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADMedAVIAUD.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_ps.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_ps.h
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_psReadIndex.cpp
+Log:
+[PsDemux] Workish audio (incomplete)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp	2009-01-26 06:44:18 UTC (rev 4546)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_codecs/ADM_ffmp43.cpp	2009-01-26 06:44:28 UTC (rev 4547)
+@@ -106,7 +106,7 @@
+       out-&gt;_qSize = out-&gt;_qStride = 0;
+       out-&gt;quant = NULL;
+     }
+-    printf(&quot;[LAVC] Old pts :%&quot;LLD&quot; new pts :%&quot;LLD&quot;\n&quot;,out-&gt;Pts, (uint64_t)(src-&gt;opaque));
++//    printf(&quot;[LAVC] Old pts :%&quot;LLD&quot; new pts :%&quot;LLD&quot;\n&quot;,out-&gt;Pts, (uint64_t)(src-&gt;opaque));
+     out-&gt;Pts= (uint64_t)(src-&gt;opaque);
+     return 1;
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADMedAVIAUD.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADMedAVIAUD.cpp	2009-01-26 06:44:18 UTC (rev 4546)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADMedAVIAUD.cpp	2009-01-26 06:44:28 UTC (rev 4547)
+@@ -132,10 +132,12 @@
+     uint32_t decodedSample=nbOut;
+     decodedSample/=trk-&gt;wavheader.channels;
+     if(!decodedSample &amp;&amp; !fillerSample) goto again;
+-    if(nbSamples!=decodedSample)
++#define ADM_MAX_JITTER 5000  // in samples
++    if(abs(nbSamples-decodedSample)&gt;ADM_MAX_JITTER)
++    {
+         printf(&quot;[Composer::getPCMPacket] Demuxer was wrong %d vs %d samples!\n&quot;,nbSamples,decodedSample);
++    }
+     
+-    
+     // This packet has been dropped, try the next one
+     if(drop==true &amp;&amp; !fillerSample) goto again;
+     // Update infos
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_ps.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_ps.cpp	2009-01-26 06:44:18 UTC (rev 4546)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_ps.cpp	2009-01-26 06:44:28 UTC (rev 4547)
+@@ -91,8 +91,18 @@
+         goto abt;
+     }
+     r=true;
+-  
+-
++    for(int i=0;i&lt;listOfAudioTracks.size();i++)
++    {
++        ADM_psTrackDescriptor *desc=listOfAudioTracks[i];
++        ADM_audioStream *audioStream=ADM_audioCreateStream(&amp;desc-&gt;header,desc-&gt;access);
++        if(!audioStream)
++        {
++            
++        }else       
++        {
++                desc-&gt;stream=audioStream;
++        }
++    }
+ abt:
+     index.close();
+     printf(&quot;[psDemuxer] Loaded %d\n&quot;,r);
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_ps.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_ps.h	2009-01-26 06:44:18 UTC (rev 4546)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_ps.h	2009-01-26 06:44:28 UTC (rev 4547)
+@@ -84,6 +84,9 @@
+                         bool      push(uint64_t at, uint64_t dts,uint32_t size);
+                                     /// Convert raw timestamp to scaled timestamp in us
+                 uint64_t          timeConvert(uint64_t x);
++
++                virtual uint32_t  getLength(void);
++
+ };
+ /**
+     \class ADM_psTrackDescriptor
+@@ -93,6 +96,7 @@
+ public:
+         ADM_audioStream *stream;
+         ADM_psAccess    *access;
++        WAVHeader       header;
+         ADM_psTrackDescriptor()
+             {
+                 stream=NULL;
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp	2009-01-26 06:44:18 UTC (rev 4546)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp	2009-01-26 06:44:28 UTC (rev 4547)
+@@ -52,20 +52,41 @@
+             seekPoints.push_back(s);
+             return true;
+ }
++/**
++    \fn getLength
++*/
++uint32_t  ADM_psAccess::getLength(void)
++{
++  return (seekPoints[seekPoints.size()-1].size);
+ 
++}
+ /**
+     \fn getDurationInUs
+ */
+ uint64_t  ADM_psAccess::getDurationInUs(void)
+ {
+     // Take last seek point; should be accurate enough
+-    return seekPoints[seekPoints.size()-1].dts;
++    return timeConvert(seekPoints[seekPoints.size()-1].dts);
+ }
+ /**
+     \fn goToTime
+ */                              
+ bool      ADM_psAccess::goToTime(uint64_t timeUs)
+ {
++    // Convert time in us to scaled 90 kHz tick
++    double f=timeUs;
++    f*=90;
++    f/=1000;
++    f+=dtsOffset;
++    uint64_t n=(uint64_t)f;
++    for(int i=0;i&lt;seekPoints.size()-1;i++)
++    {
++        if(seekPoints[i].dts &gt;=n &amp;&amp; seekPoints[i+1].dts&gt;n)
++        {
++            demuxer.setPos(seekPoints[i].position);
++            return true;
++        }
++    }
+     return false;
+ }
+ uint64_t ADM_psAccess::timeConvert(uint64_t x)
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_psReadIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_psReadIndex.cpp	2009-01-26 06:44:18 UTC (rev 4546)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_psReadIndex.cpp	2009-01-26 06:44:28 UTC (rev 4547)
+@@ -45,7 +45,8 @@
+             }
+             if(!strncmp(buffer,&quot;Audio &quot;,6))
+             {
+-                if(firstAudio) firstAudio=false;
++                if(firstAudio) 
++                    firstAudio=false; // Ignore first line
+                 else
+                     processAudioIndex(buffer+6);
+             }
+@@ -300,18 +301,13 @@
+             hdr.channels=chan;
+             hdr.encoding=codec;
+         ADM_psAccess *access=new ADM_psAccess(name,pid,true);
+-        ADM_audioStream *audioStream=ADM_audioCreateStream(&amp;hdr,access);
+-        if(!audioStream)
+-        {
+-            delete access;
+-        }else       
+-        {
+             ADM_psTrackDescriptor *desc=new ADM_psTrackDescriptor;
+-            desc-&gt;stream=audioStream;
++            desc-&gt;stream=NULL;
+             desc-&gt;access=access;
++            memcpy(&amp;(desc-&gt;header),&amp;hdr,sizeof(hdr));
+             listOfAudioTracks.push_back(desc);
+-        }
+ 
++
+     }
+     return true;
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001778.html">[Avidemux-svn-commit] r4546 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS
+</A></li>
+	<LI>Next message: <A HREF="001780.html">[Avidemux-svn-commit] r4548 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_userInterfaces/ADM_GTK	avidemux/ADM_userInterfaces/ADM_GTK/glade cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1779">[ date ]</a>
+              <a href="thread.html#1779">[ thread ]</a>
+              <a href="subject.html#1779">[ subject ]</a>
+              <a href="author.html#1779">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

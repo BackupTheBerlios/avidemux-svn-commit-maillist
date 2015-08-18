@@ -1,0 +1,237 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3026 - in	branches/avidemux_2.4_branch/avidemux/ADM_inputs: . ADM_mpegdemuxer
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3026%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs%3A%20.%20ADM_mpegdemuxer&In-Reply-To=%3C200705060934.l469YI1X025774%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000332.html">
+   <LINK REL="Next"  HREF="000334.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3026 - in	branches/avidemux_2.4_branch/avidemux/ADM_inputs: . ADM_mpegdemuxer</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3026%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs%3A%20.%20ADM_mpegdemuxer&In-Reply-To=%3C200705060934.l469YI1X025774%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3026 - in	branches/avidemux_2.4_branch/avidemux/ADM_inputs: . ADM_mpegdemuxer">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun May  6 11:34:18 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000332.html">[Avidemux-svn-commit] r3025 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+        <LI>Next message: <A HREF="000334.html">[Avidemux-svn-commit] r3027 -	branches/avidemux_2.4_branch/avidemux/ADM_osSupport
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#333">[ date ]</a>
+              <a href="thread.html#333">[ thread ]</a>
+              <a href="subject.html#333">[ subject ]</a>
+              <a href="author.html#333">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-05-06 11:34:17 +0200 (Sun, 06 May 2007)
+New Revision: 3026
+
+Removed:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_audio.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/Makefile.am
+Log:
+switch to new mp4/mov demuxer, try to read AAC from TS file (not working)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_audio.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_audio.cpp	2007-05-06 09:26:21 UTC (rev 3025)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_audio.cpp	2007-05-06 09:34:17 UTC (rev 3026)
+@@ -41,8 +41,9 @@
+ #include &quot;ADM_audio/ADM_mp3info.h&quot;
+ #include &quot;ADM_audio/ADM_a52info.h&quot;
+ #include &quot;ADM_audio/ADM_dcainfo.h&quot;
++#include &quot;ADM_audio/ADM_aacinfo.h&quot;
+ #define MAX_LINE 4096
+-#define PROBE_SIZE (4096*2)
++#define PROBE_SIZE (4096*4)
+ 
+ //___________________________________________________
+ //___________________________________________________
+@@ -470,6 +471,35 @@
+                 hdr-&gt;channels=2;
+                 continue;
+         }
++         //AAC, can happen in TS file with H264
++        if(myPes&gt;=0xB0 &amp;&amp; myPes&lt;0xB9)
++        {
++          AacAudioInfo info;
++          if(!getAACFrameInfo(buffer,blocksize, &amp;info,NULL,&amp;offset))
++          {
++            printf(&quot;\n Cannot get AAC sync info (not ADTS ?)\n&quot;);
++                hdr-&gt;byterate=(128000)&gt;&gt;3;
++                hdr-&gt;frequency=44100;
++                hdr-&gt;encoding=WAV_AAC;
++                hdr-&gt;channels=2;
++                continue;
++          }
++          /*
++          uint32_t layer;		// 0 mpeg4, 1 mpeg2 
++	uint32_t profile;	// 0 Main/1 LC
++	uint32_t samplerate;	// i.e. Frequency
++	uint32_t channels;	// # channels
++	uint32_t nbBlock;	// Packet size including header
++	uint32_t size;		// size of complete frame
++	uint32_t samples;	// # of sample in this packet
++          */
++              
++                hdr-&gt;byterate=(128000)&gt;&gt;3;
++                hdr-&gt;frequency=info.samplerate;                                
++                hdr-&gt;encoding=WAV_AAC;
++                hdr-&gt;channels=info.channels;
++                continue;
++        }
+   }
+   return 1;
+ }
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer.h	2007-05-06 09:26:21 UTC (rev 3025)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer.h	2007-05-06 09:34:17 UTC (rev 3026)
+@@ -26,7 +26,8 @@
+   ADM_STREAM_AC3,
+   ADM_STREAM_DTS,
+   ADM_STREAM_H264,
+-  ADM_STREAM_MPEG4
++  ADM_STREAM_MPEG4,
++  ADM_STREAM_AAC
+ };
+ 
+ typedef struct MPEG_TRACK
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp	2007-05-06 09:26:21 UTC (rev 3025)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp	2007-05-06 09:34:17 UTC (rev 3026)
+@@ -66,10 +66,10 @@
+ static uint8_t dmx_probePat(dmx_demuxerTS *demuxer, uint32_t *nbPmt,MPEG_PMT *pmts,uint32_t maxPmt);
+ static uint8_t dmx_probePMT(dmx_demuxerTS *demuxer, uint32_t pmtId,MPEG_TRACK *pmts,uint32_t *cur, uint32_t max);
+ 
+-
++static const char *dmx_streamTypeAsString(ADM_STREAM_TYPE st);
+  
+ extern uint32_t mpegTsCRC(uint8_t *data, uint32_t len);
+-
++//*********************************************************
+ uint8_t runProbe(const char *file)
+ {
+   uint32_t nb;
+@@ -306,7 +306,8 @@
+       printf(&quot;***********************\n&quot;);
+       for(int i=0;i&lt;cur;i++)
+       {
+-        printf(&quot;Tid : %04x Type :%d %s\n&quot;, xtracks[i].pid,xtracks[i].streamType,&quot;?&quot;);
++        printf(&quot;Tid : %04x Type :%d %s\n&quot;, xtracks[i].pid,xtracks[i].streamType,
++               dmx_streamTypeAsString(xtracks[i].streamType));
+       }
+       printf(&quot;******************************\n&quot;);
+       printf(&quot;******************************\n&quot;);
+@@ -341,11 +342,15 @@
+       {
+          MPEG_TRACK *t=&amp;(xtracks[j]);
+          ADM_STREAM_TYPE type=t-&gt;streamType;
+-          if(type!=ADM_STREAM_MPEG_AUDIO &amp;&amp; type!=ADM_STREAM_AC3) continue; // Only mpega &amp; AC3 for now
++          if(type!=ADM_STREAM_MPEG_AUDIO &amp;&amp; type!=ADM_STREAM_AC3
++            &amp;&amp;type!=ADM_STREAM_AAC) continue; // Only mpega &amp; AC3 for now
+           switch(type)
+           {
++            case ADM_STREAM_AAC:
++                  t-&gt;pes=0xb0;
+             case ADM_STREAM_MPEG_AUDIO:
+             case ADM_STREAM_AC3:
++            
+               memcpy(&amp;((*tracks)[*nbTracks]),t,sizeof(MPEG_TRACK));
+               ADM_assert(*nbTracks&lt;cur);
+               (*nbTracks)++;
+@@ -513,6 +518,8 @@
+  {
+    case 1:case 2: *streamType=ADM_STREAM_MPEG_VIDEO;return &quot;Mpeg Video&quot;;
+    case 3:case 4: *streamType=ADM_STREAM_MPEG_AUDIO;return &quot;Mpeg Audio&quot;;
++   case 0x11: case 0xF:        *streamType=ADM_STREAM_AAC;return &quot;AAC  Audio&quot;;
++   case 0x10:        *streamType=ADM_STREAM_MPEG4;return &quot;MP4 Video&quot;;
+    case 0x1B: *streamType=ADM_STREAM_H264;return &quot;H264&quot;;
+    case 0x81: *streamType=ADM_STREAM_AC3;return &quot;Private (AC3?)&quot;;
+  }
+@@ -587,5 +594,26 @@
+       }
+       return 0;
+ }
+-
++/**
++      \fn dmx_streamTypeAsSTring
++      \brief returns stream type as a printable string
++*/
++static const char *dmx_streamTypeAsString(ADM_STREAM_TYPE st)
++{
++#define MST(x,y) case x: return #y;
++  switch(st)
++  {
++  MST(ADM_STREAM_UNKNOWN,UNKNOWN)
++  MST(ADM_STREAM_MPEG_VIDEO,MPEG12VIDEO)
++  MST(ADM_STREAM_MPEG_AUDIO,MPEG12AUDIO)
++  MST(ADM_STREAM_AC3,AC3)
++  MST(ADM_STREAM_DTS,DTS)
++  MST(ADM_STREAM_H264,H264)
++  MST(ADM_STREAM_MPEG4,MPEG4)
++  MST(ADM_STREAM_AAC,AAC)
++    
++  }
++  return &quot;???&quot;;
++  
++}
+ /****EOF**/
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/Makefile.am
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/Makefile.am	2007-05-06 09:26:21 UTC (rev 3025)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/Makefile.am	2007-05-06 09:34:17 UTC (rev 3026)
+@@ -1,4 +1,5 @@
+-SUBDIRS=ADM_3gp  ADM_avsproxy  ADM_inpics    ADM_mpegdemuxer  ADM_ogm     \
+-	ADM_asf  ADM_h263      ADM_matroska  ADM_nuv          ADM_openDML
++SUBDIRS=ADM_avsproxy  ADM_inpics    ADM_mpegdemuxer  ADM_ogm     \
++	ADM_asf  ADM_h263      ADM_matroska  ADM_nuv          ADM_openDML \
++	ADM_mp4
+ INCLUDES = $(all_includes) 
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000332.html">[Avidemux-svn-commit] r3025 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4
+</A></li>
+	<LI>Next message: <A HREF="000334.html">[Avidemux-svn-commit] r3027 -	branches/avidemux_2.4_branch/avidemux/ADM_osSupport
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#333">[ date ]</a>
+              <a href="thread.html#333">[ thread ]</a>
+              <a href="subject.html#333">[ subject ]</a>
+              <a href="author.html#333">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

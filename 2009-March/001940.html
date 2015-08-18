@@ -1,0 +1,162 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4711 -	branches/avidemux_2.6_branch_mean/avidemux/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4711%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/ADM_editor&In-Reply-To=%3C200903270644.n2R6iSXe020740%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001939.html">
+   <LINK REL="Next"  HREF="001941.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4711 -	branches/avidemux_2.6_branch_mean/avidemux/ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4711%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/ADM_editor&In-Reply-To=%3C200903270644.n2R6iSXe020740%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4711 -	branches/avidemux_2.6_branch_mean/avidemux/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Mar 27 07:44:28 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001939.html">[Avidemux-svn-commit] r4710 - in	branches/avidemux_2.6_branch_mean/avidemux: .	ADM_coreUtils/include ADM_coreUtils/src ADM_editor ADM_script
+</A></li>
+        <LI>Next message: <A HREF="001941.html">[Avidemux-svn-commit] r4712 -	branches/avidemux_2.6_branch_mean/avidemux/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1940">[ date ]</a>
+              <a href="thread.html#1940">[ thread ]</a>
+              <a href="subject.html#1940">[ subject ]</a>
+              <a href="author.html#1940">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-03-27 07:44:27 +0100 (Fri, 27 Mar 2009)
+New Revision: 4711
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edFrameType.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp
+Log:
+[Editor] Update frametype
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edFrameType.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edFrameType.cpp	2009-03-26 18:57:31 UTC (rev 4710)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edFrameType.cpp	2009-03-27 06:44:27 UTC (rev 4711)
+@@ -1,6 +1,7 @@
+ /***************************************************************************
+            \file               ADM_edFrameType.cpp  -  description
+-           \brief              Rederive Frame type if needed
++           \brief              Rederive Frame type if needed. Works only with a few
++                                                    codecs (mpeg1/2/4)
+ 
+     
+     copyright            : (C) 2002/2009 by mean
+@@ -18,12 +19,10 @@
+ #include &quot;ADM_default.h&quot;
+ 
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+-#include &quot;ADM_codecs/ADM_codec.h&quot;
+-#include &quot;ADM_videoFilter.h&quot;
+-#include &quot;DIA_working.h&quot;
+ #include &quot;DIA_coreToolkit.h&quot;
+ #include &quot;avidemutils.h&quot;
+ #include &quot;ADM_frameType.h&quot;
++#include &quot;DIA_working.h&quot;
+  
+ /**
+     \fn rederiveFrameType
+@@ -66,6 +65,15 @@
+     printf(&quot;[Editor] Muxer has %d frames right, %d frames wrong\n&quot;,nbOk,nbKo);
+     if(!nbKo)     return true;
+     // Demuxer is wrong, rederive all frames...
++    DIA_workingBase *work=createWorking(&quot;Updating frametype&quot;);
++    for(int i=0;i&lt;info.nb_frames;i++)
++    {
++        work-&gt;update(i,info.nb_frames);
++        demuxer-&gt;getFrame(i,&amp;img);
++        flagsDecoded=id(img.dataLength,img.data);
++        demuxer-&gt;setFlag(i,flagsDecoded);
++    }
++    delete work;
+     return false;
+ }
+ // EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp	2009-03-26 18:57:31 UTC (rev 4710)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp	2009-03-27 06:44:27 UTC (rev 4711)
+@@ -471,7 +471,7 @@
+             }
+         }
+ #endif
+-        // B Frames check....
++        // Update frametype if needed...
+         _VIDEOS 	*vid;
+         vid=&amp;(_videos[_nb_video]);
+         decoders *decoder=vid-&gt;decoder;
+@@ -481,17 +481,8 @@
+         //
+         _nb_video++;
+         _nb_segment++;
+-#if 0
+-//______________________________________
+-// 1-  check for B _ frame  existence
+-// 2- check  for consistency with reported flags
+-//______________________________________
+-	uint8_t count=0;
+-TryAgain:
+ 
+-	uint32_t err=0;
+-
+-		vid= &amp;(_videos[_nb_video-1]);
++        //Update time stamps if needed....
+ 		vid-&gt;_reorderReady=0;
+         vid-&gt;_unpackReady=0;
+ 		// we only try if we got everything needed...
+@@ -515,12 +506,11 @@
+                 }
+                 else   
+                 {
+-                        printf(&quot;[Editor] No B frame with that codec\n&quot;);
++                        printf(&quot;[Editor] No B frame with that codec, PTS=DTS\n&quot;);
+                         setPtsEqualDts(vid-&gt;_aviheader,vid-&gt;timeIncrementInUs);
+                 }
+             }
+         }
+-#endif
+ 		GoToIntra(0);
+         durationInUs=vid-&gt;_aviheader-&gt;getVideoDuration();
+ 		printf(&quot;[Editor] End of B-frame check\n&quot;);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001939.html">[Avidemux-svn-commit] r4710 - in	branches/avidemux_2.6_branch_mean/avidemux: .	ADM_coreUtils/include ADM_coreUtils/src ADM_editor ADM_script
+</A></li>
+	<LI>Next message: <A HREF="001941.html">[Avidemux-svn-commit] r4712 -	branches/avidemux_2.6_branch_mean/avidemux/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1940">[ date ]</a>
+              <a href="thread.html#1940">[ thread ]</a>
+              <a href="subject.html#1940">[ subject ]</a>
+              <a href="author.html#1940">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

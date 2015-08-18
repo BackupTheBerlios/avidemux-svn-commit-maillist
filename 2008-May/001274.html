@@ -1,0 +1,336 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4015 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4015%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog&In-Reply-To=%3C200805030155.m431tj0w021657%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001273.html">
+   <LINK REL="Next"  HREF="001275.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4015 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4015%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog&In-Reply-To=%3C200805030155.m431tj0w021657%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4015 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sat May  3 03:55:45 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001273.html">[Avidemux-svn-commit] r4014 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_commonUI
+</A></li>
+        <LI>Next message: <A HREF="001275.html">[Avidemux-svn-commit] r4016 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1274">[ date ]</a>
+              <a href="thread.html#1274">[ thread ]</a>
+              <a href="subject.html#1274">[ subject ]</a>
+              <a href="author.html#1274">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-05-03 03:55:44 +0200 (Sat, 03 May 2008)
+New Revision: 4015
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog/Q_jobs.cpp
+Log:
+[Jobs] Qt4 Joblist window fixes: allow deletion of first row, skip deleted jobs with Run All, immediately delete js file
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog/Q_jobs.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog/Q_jobs.cpp	2008-05-03 01:33:10 UTC (rev 4014)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog/Q_jobs.cpp	2008-05-03 01:55:44 UTC (rev 4015)
+@@ -70,22 +70,17 @@
+         uint32_t        _nbJobs;
+         char            **_jobsName;
+         ADM_Job_Descriptor  *desc;
+-        uint8_t             updateRows(void);
++        void             updateRows(void);
+  public:
+                     jobsWindow(uint32_t n,char **j);
+                     ~jobsWindow();
+      Ui_Jobs        ui;
+  public slots:
+       //void gather(void);
+-      int RunOne(bool b);
+-      int RunAll(bool b);
+-      int DeleteOne(bool b);
+-      int DeleteAll(bool b);
+- private slots:
+-   
+-
+- private:
+-     
++      void RunOne(bool b);
++      void RunAll(bool b);
++      void DeleteOne(bool b);
++      void DeleteAll(bool b);
+  };
+  /**
+           \fn jobsWindow
+@@ -97,15 +92,14 @@
+      _jobsName=j;
+      desc=new ADM_Job_Descriptor[n];
+      // Setup display
+-#define WIDGET(x) ui.x
+-     WIDGET(tableWidget)-&gt;setRowCount(_nbJobs);
+-     WIDGET(tableWidget)-&gt;setColumnCount(4);
++	 ui.tableWidget-&gt;setRowCount(_nbJobs);
++     ui.tableWidget-&gt;setColumnCount(4);
+ 
+      // Set headers
+       QStringList headers;
+      headers &lt;&lt; QT_TR_NOOP(&quot;Job Name&quot;) &lt;&lt; QT_TR_NOOP(&quot;Status&quot;) &lt;&lt; QT_TR_NOOP(&quot;Start Time&quot;) &lt;&lt; QT_TR_NOOP(&quot;End Time&quot;); 
+      
+-     WIDGET(tableWidget)-&gt;setVerticalHeaderLabels(headers);
++     ui.tableWidget-&gt;setVerticalHeaderLabels(headers);
+      updateRows();
+     
+ #define CNX(x) connect( ui.pushButton##x,SIGNAL(clicked(bool)),this,SLOT(x(bool)))
+@@ -118,22 +112,10 @@
+  /**
+     \fn ~jobsWindow
+  */
+- jobsWindow::~jobsWindow()
+- {
+-   
+-        // Now delete the &quot;deleted&quot; jobs
+-        for(int i=0;i&lt;_nbJobs;i++)
+-        {
+-                if(desc[i].status==STATUS_DELETED)
+-                {
+-                        unlink(_jobsName[i]);
+-                }
+-
+-        }
+-        delete [] desc;
+-        desc=NULL;
+-
+- }
++jobsWindow::~jobsWindow()
++{
++	delete [] desc;
++}
+  /*
+     There is maybe a huge mem leak here
+  */
+@@ -148,26 +130,23 @@
+       \fn updateRaw
+       \brief update display for raw x
+  */
+-uint8_t jobsWindow::updateRows(void)
++void jobsWindow::updateRows(void)
+ {
+-   WIDGET(tableWidget)-&gt;clear();
++   ui.tableWidget-&gt;clear();
+    ADM_Job_Descriptor *j;
+    char str[20];
+    for(int i=0;i&lt;_nbJobs;i++)
+    {
+       j=&amp;(desc[i]);
+-      ADM_setText(GetFileName(_jobsName[i]),0,i,WIDGET(tableWidget));
+-      ADM_setText(StringStatus[j-&gt;status],1,i,WIDGET(tableWidget));
++      ADM_setText(GetFileName(_jobsName[i]),0,i,ui.tableWidget);
++      ADM_setText(StringStatus[j-&gt;status],1,i,ui.tableWidget);
+       
+       sprintf(str,&quot;%02u:%02u:%02u&quot;,j-&gt;startDate.hours,j-&gt;startDate.minutes,j-&gt;startDate.seconds);
+-      ADM_setText(str,2,i,WIDGET(tableWidget));
++      ADM_setText(str,2,i,ui.tableWidget);
+       
+       sprintf(str,&quot;%02u:%02u:%02u&quot;,j-&gt;endDate.hours,j-&gt;endDate.minutes,j-&gt;endDate.seconds);
+-      ADM_setText(str,3,i,WIDGET(tableWidget));
+-
++      ADM_setText(str,3,i,ui.tableWidget);
+    }
+-   
+-      return 1;
+ }
+ 
+                                                                  
+@@ -176,84 +155,94 @@
+       \fn deleteOne
+       \brief delete one job
+ */
+-int jobsWindow::DeleteOne(bool b)
++void jobsWindow::DeleteOne(bool b)
+ {
+-  int sel=WIDGET(tableWidget)-&gt;currentRow();
+-        if(sel&lt;=0 || sel&gt;=_nbJobs) return 0;
+-        if(GUI_Confirmation_HIG(QT_TR_NOOP(&quot;Sure!&quot;),QT_TR_NOOP(&quot;Delete job&quot;),QT_TR_NOOP(&quot;Are you sure you want to delete %s job ?&quot;),GetFileName(_jobsName[sel])))
+-        {
+-                desc[sel].status=STATUS_DELETED;
+-        }
+-        updateRows();
+-        return 0;
+-}         
++	int sel = ui.tableWidget-&gt;currentRow();
++
++	if (sel &gt;= 0 &amp;&amp; sel &lt; _nbJobs)
++	{
++		if (GUI_Confirmation_HIG(QT_TR_NOOP(&quot;Sure!&quot;), QT_TR_NOOP(&quot;Delete job&quot;), QT_TR_NOOP(&quot;Are you sure you want to delete %s job?&quot;), GetFileName(_jobsName[sel])))
++		{
++			desc[sel].status = STATUS_DELETED;
++			unlink(_jobsName[sel]);
++			updateRows();
++		}
++	}
++}
+ /**
+       \fn deleteAll
+       \brief delete all job
+ */
+-int jobsWindow::DeleteAll(bool b)
++void jobsWindow::DeleteAll(bool b)
+ {
+-  if(!GUI_Confirmation_HIG(QT_TR_NOOP(&quot;Sure!&quot;),QT_TR_NOOP(&quot;Delete *all* job&quot;),QT_TR_NOOP(&quot;Are you sure you want to delete ALL jobs ?&quot;)))
+-  {
+-          return 0;
+-  }
+-  for(int sel=0;sel&lt;_nbJobs;sel++)
+-  {
+-        desc[sel].status=STATUS_DELETED;
+-   
+-  }
+-  updateRows();
+-  return 0;
+-}                                                                 
++	if (GUI_Confirmation_HIG(QT_TR_NOOP(&quot;Sure!&quot;), QT_TR_NOOP(&quot;Delete *all* job&quot;), QT_TR_NOOP(&quot;Are you sure you want to delete ALL jobs?&quot;)))
++	{
++		for(int sel = 0; sel &lt; _nbJobs; sel++)
++		{
++			desc[sel].status = STATUS_DELETED;
++			unlink(_jobsName[sel]);
++		}
++
++		updateRows();
++	}
++}
+                                                         
+ /**
+       \fn runOne
+       \brief Run one job
+ */
+-int jobsWindow::RunOne(bool b)
++void jobsWindow::RunOne(bool b)
+ {
+-  int sel=WIDGET(tableWidget)-&gt;currentRow();
+-  printf(&quot;Selected %d\n&quot;,sel);
+-  if(sel&lt;0) return 0;
+-  if(sel&gt;=_nbJobs) return 0;
+-  
+-  if(desc[sel].status==STATUS_SUCCEED) 
+-  {
+-    GUI_Info_HIG(ADM_LOG_INFO,QT_TR_NOOP(&quot;Already done&quot;),QT_TR_NOOP(&quot;This script has already been successfully executed.&quot;));
+-    return 0;
+-  }
++	int sel = ui.tableWidget-&gt;currentRow();
++	printf(&quot;Selected %d\n&quot;, sel);
+ 
+-  desc[sel].status=STATUS_RUNNING;
+-  updateRows();
+-  GUI_Quiet();
+-  TLK_getDate(&amp;(desc[sel].startDate));
+-  if(parseECMAScript(_jobsName[sel])) desc[sel].status=STATUS_SUCCEED;
+-  else desc[sel].status=STATUS_FAILED;
+-  TLK_getDate(&amp;(desc[sel].endDate));
+-  updateRows();
+-  GUI_Verbose();
+-  return 0;
++	if(sel &gt;= 0 &amp;&amp; sel &lt; _nbJobs)
++	{
++		if(desc[sel].status == STATUS_SUCCEED)
++			GUI_Info_HIG(ADM_LOG_INFO,QT_TR_NOOP(&quot;Already done&quot;),QT_TR_NOOP(&quot;This script has already been successfully executed.&quot;));
++		else
++		{
++			desc[sel].status=STATUS_RUNNING;
++			updateRows();
++			GUI_Quiet();
++			TLK_getDate(&amp;(desc[sel].startDate));
++
++			if(parseECMAScript(_jobsName[sel]))
++				desc[sel].status=STATUS_SUCCEED;
++			else
++				desc[sel].status=STATUS_FAILED;
++
++			TLK_getDate(&amp;(desc[sel].endDate));
++			updateRows();
++			GUI_Verbose();
++		}
++	}
+ }
+ /**
+       \fn RunAll
+       \brief Run all jobs
+ */
+-int jobsWindow::RunAll(bool b)
++void jobsWindow::RunAll(bool b)
+ {
+-  for(int sel=0;sel&lt;_nbJobs;sel++)
+-  {
+-    if(desc[sel].status==STATUS_SUCCEED) continue;
+-    desc[sel].status=STATUS_RUNNING;
+-    updateRows();
+-    GUI_Quiet();
+-    TLK_getDate(&amp;(desc[sel].startDate));
+-    if(parseECMAScript(_jobsName[sel])) desc[sel].status=STATUS_SUCCEED;
+-    else desc[sel].status=STATUS_FAILED;
+-    TLK_getDate(&amp;(desc[sel].endDate));
+-    updateRows();
+-    GUI_Verbose();
+-  }
+-  return 0;
++	for(int sel=0;sel&lt;_nbJobs;sel++)
++	{
++		if(desc[sel].status == STATUS_SUCCEED || desc[sel].status == STATUS_DELETED)
++			continue;
++
++		desc[sel].status=STATUS_RUNNING;
++		updateRows();
++		GUI_Quiet();
++		TLK_getDate(&amp;(desc[sel].startDate));
++
++		if(parseECMAScript(_jobsName[sel]))
++			desc[sel].status=STATUS_SUCCEED;
++		else
++			desc[sel].status=STATUS_FAILED;
++
++		TLK_getDate(&amp;(desc[sel].endDate));
++		updateRows();
++		GUI_Verbose();
++	}
+ }
+ 
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001273.html">[Avidemux-svn-commit] r4014 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_NONE/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_commonUI
+</A></li>
+	<LI>Next message: <A HREF="001275.html">[Avidemux-svn-commit] r4016 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1274">[ date ]</a>
+              <a href="thread.html#1274">[ thread ]</a>
+              <a href="subject.html#1274">[ subject ]</a>
+              <a href="author.html#1274">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,132 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7332 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7332%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C20110723155713.052AE480EC9%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004485.html">
+   <LINK REL="Next"  HREF="004487.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7332 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7332%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C20110723155713.052AE480EC9%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7332 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jul 23 17:57:12 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004485.html">[Avidemux-svn-commit] r7331 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate
+</A></li>
+        <LI>Next message: <A HREF="004487.html">[Avidemux-svn-commit] r7333 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4486">[ date ]</a>
+              <a href="thread.html#4486">[ thread ]</a>
+              <a href="subject.html#4486">[ subject ]</a>
+              <a href="author.html#4486">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-07-23 17:57:12 +0200 (Sat, 23 Jul 2011)
+New Revision: 7332
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp
+Log:
+[video copy] Dont drop bframe if they are h264 due to pyramid
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp	2011-07-23 15:57:11 UTC (rev 7331)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edVideoCopy.cpp	2011-07-23 15:57:12 UTC (rev 7332)
+@@ -90,8 +90,15 @@
+     if(fail) return false;
+     return true;
+ }
+-
+ /**
++     \fn bFrameDroppable
++*/
++static bool bFrameDroppable(uint32_t fcc)
++{
++    if(isH264Compatible(fcc)) return false;
++    return true;
++}
++/**
+         \fn getCompressedPicture
+         \brief bypass decoder and directly get the source image
+ 
+@@ -128,21 +135,27 @@
+ 
+     vid-&gt;lastSentFrame++;
+     //
+-    if(img-&gt;flags &amp; AVI_B_FRAME)
++    aviInfo    info;
++    vid-&gt;_aviheader-&gt;getVideoInfo (&amp;info);
++    //
++    if(bFrameDroppable(info.fcc))
+     {
+-        if(seg-&gt;_dropBframes==2) 
++        if(img-&gt;flags &amp; AVI_B_FRAME)
+         {
+-            ADM_warning(&quot;%&quot;LU&quot; Dropping bframes\n&quot;,fn);
+-            goto againGet;
++            if(seg-&gt;_dropBframes==2) 
++            {
++                ADM_warning(&quot;%&quot;LU&quot; Dropping bframes\n&quot;,fn);
++                goto againGet;
++            }
++        }else
++        { // not a bframe
++            switch(seg-&gt;_dropBframes)
++            {
++                case 2: seg-&gt;_dropBframes=0;break;
++                case 1: seg-&gt;_dropBframes=2;break;
++                default: break;
++            }
+         }
+-    }else
+-    { // not a bframe
+-        switch(seg-&gt;_dropBframes)
+-        {
+-            case 2: seg-&gt;_dropBframes=0;break;
+-            case 1: seg-&gt;_dropBframes=2;break;
+-            default: break;
+-        }
+     }
+     // after a segment switch, we may have some frames from &quot;the past&quot;
+     // if the cut point is not a keyframe, drop them
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004485.html">[Avidemux-svn-commit] r7331 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate
+</A></li>
+	<LI>Next message: <A HREF="004487.html">[Avidemux-svn-commit] r7333 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4486">[ date ]</a>
+              <a href="thread.html#4486">[ thread ]</a>
+              <a href="subject.html#4486">[ subject ]</a>
+              <a href="author.html#4486">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

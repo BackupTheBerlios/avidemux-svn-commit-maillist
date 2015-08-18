@@ -1,0 +1,220 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4752 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4752%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904211804.n3LI4NYs031343%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001978.html">
+   <LINK REL="Next"  HREF="001981.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4752 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4752%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904211804.n3LI4NYs031343%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4752 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Apr 21 20:04:23 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001978.html">[Avidemux-svn-commit] r4751 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="001981.html">[Avidemux-svn-commit] r4753 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1980">[ date ]</a>
+              <a href="thread.html#1980">[ thread ]</a>
+              <a href="subject.html#1980">[ subject ]</a>
+              <a href="author.html#1980">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-04-21 20:04:23 +0200 (Tue, 21 Apr 2009)
+New Revision: 4752
+
+Modified:
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+Log:
+[Ts Demuxer] skeleton to parse audio
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-21 18:04:21 UTC (rev 4751)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-21 18:04:23 UTC (rev 4752)
+@@ -166,7 +166,11 @@
+     count++;
+     if(count&gt;MAX_SKIPPED_PACKET) return false;
+ 
+-    if(id!=pid) goto nextPack;
++    if(id!=pid) 
++    {
++        updateStats(scratch);
++        goto nextPack;
++    }
+     pkt-&gt;pid=pid;
+ #ifdef TS_DEBUG2
+     printf(&quot;[**************&gt; Found matching pid 0x%x\n&quot;,pid);
+@@ -217,8 +221,15 @@
+     pkt-&gt;startAt=pos-extraCrap-TS_PACKET_LEN;
+     return true;
+ }
+-
+ /**
++        \fn updateStats
++        \brief Hook for tracker
++*/
++bool        tsPacket::updateStats(uint8_t *data)
++{
++    return true;
++}
++/**
+     \fn getNextPsiPacket
+     \brief Take a raw packet of type pid &amp; remove the header (PSI)
+ */
+@@ -378,7 +389,7 @@
+     uint8_t  *start=pes-&gt;payload+6;
+     uint8_t  *end=pes-&gt;payload+pes-&gt;payloadSize;
+     uint8_t  stream=pes-&gt;payload[3];
+-    uint32_t packLen=(pes-&gt;payload[4])&lt;&lt;8+(pes-&gt;payload[5]);
++    uint32_t packLen=(pes-&gt;payload[4]&lt;&lt;8)+(pes-&gt;payload[5]);
+     int      align=0,c;
+ 
+ 
+@@ -451,19 +462,22 @@
+                                 break; // no pts nor dts
+                                                                 
+         }  
+-        int maxLen=(int)(end-start);
++       
++        int sizeCheck=pes-&gt;payloadSize-6;
++        int tail=0;
+         pes-&gt;offset=start-pes-&gt;payload;
+         if(packLen)
+         {
+             //printf(&quot;***Zimbla***\n&quot;);
+-            if(packLen&lt;maxLen) 
++            if(packLen&lt;sizeCheck) 
+             {
+-                maxLen=packLen;
++                tail=sizeCheck-packLen;
++                pes-&gt;payloadSize-=tail;
+             }
+             else
+-                if(packLen&gt;maxLen)
++                if(packLen&gt;sizeCheck)
+                 {
+-                    printf(&quot;[TS Packet] PackLen=%d, avalailble=%d\n&quot;,packLen,maxLen);
++                    printf(&quot;[TS Packet] PackLen=%d, avalailble=%d\n&quot;,packLen,sizeCheck);
+                     fail(&quot;Pes too long&quot;);
+                 }   
+         }
+@@ -730,5 +744,51 @@
+     stats=this-&gt;stats;
+     return true;
+ }
++bool tsPacketLinearTracker::updateStats(uint8_t *scratch)
++{
++    uint32_t id=scratch[1]+((scratch[0]&amp;0x1F)&lt;&lt;8);
++    int payloadUnitStart=scratch[0]&amp;0x40;
++    int fieldControl=(scratch[2]&gt;&gt;4)&amp;3;
++    int continuity=(scratch[2]&amp;0xf);
++    int len=TS_PACKET_LEN-4; // useful datas
+ 
+-//EOF
++    if(!payloadUnitStart) return false; // no PES start in here...
++    // Adaptation field
++    // 11 Adapt+payload
++    // 10 Adapt only
++    // 01 Payload only
++    // 00 forbidden
++    if(!(fieldControl &amp; 1)) 
++    {
++        // No payload, continue
++#ifdef TS_DEBUG2
++        printf(&quot;[Demuxer] No payload\n&quot;);
++#endif        
++        return true;
++    }
++    uint8_t *start,*end;
++    start=scratch+3;
++    end=scratch+TS_PACKET_LEN-1;
++
++    if((fieldControl &amp; 2)) // Adaptation layer
++    {
++        int payloadSize=*start++;
++        start+=payloadSize;
++    }
++    int size=(int)(end-start);
++    if(size&lt;=0)  
++    {
++#ifdef TS_DEBUG2
++        printf(&quot;[Demuxer] size=%d\n&quot;,size);
++#endif        
++
++        return true;
++    }
++    // Look into pes packet starting at &quot;start&quot;
++    otherPes-&gt;payloadSize=size;
++    uint64_t pos;
++    _file-&gt;getpos(&amp;pos);
++    otherPes-&gt;startAt=pos-extraCrap-TS_PACKET_LEN;
++    return true;
++}
++// EOF
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-21 18:04:21 UTC (rev 4751)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-21 18:04:23 UTC (rev 4752)
+@@ -109,8 +109,9 @@
+     
+     bool                getSinglePacket(uint8_t *buffer);
+     bool                decodePesHeader(TS_PESpacket *pes);
++    virtual bool        updateStats(uint8_t *data);
+ public:
+-    bool                getNextPacket_NoHeader(uint32_t pid,TSpacketInfo *pkt,bool psi);
++    virtual bool                getNextPacket_NoHeader(uint32_t pid,TSpacketInfo *pkt,bool psi);
+ 
+     bool                getNextPSI(uint32_t pid,TS_PSIpacketInfo *psi);
+     bool                getNextPES(TS_PESpacket *pes);
+@@ -179,5 +180,6 @@
+                 tsPacketLinearTracker(uint32_t videoPid,listOfTsAudioTracks *audioTracks);
+                 ~tsPacketLinearTracker();
+         bool    getStats(uint32_t *nb,packetTSStats *stats);
++virtual bool    updateStats(uint8_t *data);
+ };
+ #endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001978.html">[Avidemux-svn-commit] r4751 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="001981.html">[Avidemux-svn-commit] r4753 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1980">[ date ]</a>
+              <a href="thread.html#1980">[ thread ]</a>
+              <a href="subject.html#1980">[ subject ]</a>
+              <a href="author.html#1980">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

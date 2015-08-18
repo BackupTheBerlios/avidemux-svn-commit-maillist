@@ -1,0 +1,418 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3643 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_colorspace
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3643%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_colorspace&In-Reply-To=%3C200710131709.l9DH93vv032301%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000913.html">
+   <LINK REL="Next"  HREF="000915.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3643 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_colorspace</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3643%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_colorspace&In-Reply-To=%3C200710131709.l9DH93vv032301%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3643 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_colorspace">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Oct 13 19:09:03 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000913.html">[Avidemux-svn-commit] r3642 - in	branches/avidemux_2.4_branch/avidemux: ADM_filter	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory ADM_videoFilter
+</A></li>
+        <LI>Next message: <A HREF="000915.html">[Avidemux-svn-commit] r3644 -	branches/avidemux_2.4_branch/avidemux/ADM_colorspace
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#914">[ date ]</a>
+              <a href="thread.html#914">[ thread ]</a>
+              <a href="subject.html#914">[ subject ]</a>
+              <a href="author.html#914">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-10-13 19:09:02 +0200 (Sat, 13 Oct 2007)
+New Revision: 3643
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_colorspace.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_colorspace.h
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.h
+   branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.h
+   branches/avidemux_2.4_branch/avidemux/ADM_colorspace/CMakeLists.txt
+Log:
+[Color] Make a proper color conversion class
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2007-10-13 15:51:32 UTC (rev 3642)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2007-10-13 17:09:02 UTC (rev 3643)
+@@ -35,7 +35,6 @@
+ #include &quot;ADM_toolkit/toolkit.hxx&quot;
+ #include &quot;ADM_assert.h&quot;
+ #include &quot;ADM_codecs/ADM_ffmpeg.h&quot;
+-#include &quot;ADM_libraries/ADM_libswscale/swscale.h&quot;
+ #include &quot;ADM_osSupport/ADM_cpuCap.h&quot;
+ #include &quot;prefs.h&quot;
+ 
+@@ -826,29 +825,8 @@
+ {
+   // Allocate our resampler &amp; intermediate
+   yuy2=new uint8_t[width*height*2];
+-  // And resizer
+-  int flags;
+-  flags=SWS_BICUBIC;
+-  #if (defined( ARCH_X86)  || defined(ARCH_X86_64))
+-		
+-		#define ADD(x,y) if( CpuCaps::has##x()) flags|=SWS_CPU_CAPS_##y;
+-		ADD(MMX,MMX);		
+-		ADD(3DNOW,3DNOW);
+-		ADD(MMXEXT,MMX2);
+-#endif	
+-#ifdef USE_ALTIVEC
+-		flags|=SWS_CPU_CAPS_ALTIVEC;
+-#endif
+-
+-        _contextSWs=sws_getContext(
+-                        width,height,
+-                        PIX_FMT_YUV420P,
+-                        width,height,
+-                        PIX_FMT_YUV422P,
+-                        flags, NULL, NULL,NULL);
+-
+-        ADM_assert(_context);
+-                
++  // And Color converted
++    convert=new ADMColorspace(width,height, ADM_COLOR_YV12,ADM_COLOR_YUV422P);
+ }
+ /**
+ 
+@@ -861,10 +839,10 @@
+     delete [] yuy2;
+     yuy2=NULL;  
+   }
+-  if(_contextSWs)
++  if(convert)
+   {
+-    sws_freeContext( (SwsContext *)_contextSWs);
+-    _contextSWs=NULL; 
++   delete convert;
++    convert=NULL; 
+   }
+   stopEncoder ();
+ }
+@@ -877,30 +855,8 @@
+     ADM_assert(out-&gt;bufferSize);
+     encodePreamble(yuy2);
+     /* Convert */
+-    uint8_t *src[3];
+-    uint8_t *dst[3];
+-    int ssrc[3];
+-    int ddst[3];
+-
+-    uint32_t page;
+-
+-    page=_w*_h;
+-    src[0]=YPLANE(in);
+-    src[1]=UPLANE(in);
+-    src[2]=VPLANE(in);
+-
+-    ssrc[0]=_w;
+-    ssrc[1]=ssrc[2]=_w&gt;&gt;1;
+-
++   convert-&gt;convert(in-&gt;data,yuy2);
+     
+-    dst[0]=yuy2;
+-    dst[1]=yuy2+page;
+-    dst[2]=yuy2+((page*3)&gt;&gt;1);
+-    ddst[0]=_w;
+-    ddst[1]=ddst[2]=_w&gt;&gt;1;
+-
+-    sws_scale((SwsContext *)_contextSWs,src,ssrc,0,_h,dst,ddst);
+-    
+     /***/
+     if ((sz = avcodec_encode_video (_context, out-&gt;data, out-&gt;bufferSize, &amp;_frame)) &lt; 0)
+         return 0;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.h	2007-10-13 15:51:32 UTC (rev 3642)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.h	2007-10-13 17:09:02 UTC (rev 3643)
+@@ -21,6 +21,7 @@
+ 
+ #ifndef __FFMPEG_ENC__
+ #define   __FFMPEG_ENC__
++#include &quot;ADM_colorspace/ADM_colorspace.h&quot;
+ typedef enum
+ {
+   FF_MSMP4V3 = 1,
+@@ -160,7 +161,7 @@
+ {
+ protected: 
+             uint8_t *yuy2;
+-            void *_contextSWs;
++            ADMColorspace *convert;
+ 
+ public:
+                 ffmpegEncoderHuff (uint32_t width, uint32_t height,FF_CODEC_ID id);
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_colorspace.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_colorspace.cpp	2007-10-13 15:51:32 UTC (rev 3642)
++++ branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_colorspace.cpp	2007-10-13 17:09:02 UTC (rev 3643)
+@@ -0,0 +1,160 @@
++/***************************************************************************
++    copyright            : (C) 2007 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++    
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;config.h&quot;
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++
++#include &lt;string.h&gt;
++
++#include &quot;ADM_utilities/default.h&quot;
++#include &lt;ADM_assert.h&gt;
++
++#include &quot;colorspace.h&quot;
++
++#include &quot;ADM_osSupport/ADM_cpuCap.h&quot;
++#if (defined( ARCH_X86)  || defined(ARCH_X86_64))
++extern &quot;C&quot; {
++#include &quot;ADM_lavcodec/avcodec.h&quot;
++}
++#endif
++
++#include &quot;../ADM_lavutil/avutil.h&quot;
++#include &quot;../ADM_libswscale/swscale.h&quot;
++#include &quot;ADM_rgb.h&quot; 
++#include &quot;ADM_colorspace.h&quot;
++
++#if (defined( ARCH_X86)  || defined(ARCH_X86_64))		
++		#define ADD(x,y) if( CpuCaps::has##x()) flags|=SWS_CPU_CAPS_##y;
++#define FLAGS()		ADD(MMX,MMX);				ADD(3DNOW,3DNOW);		ADD(MMXEXT,MMX2);
++#else
++#ifdef USE_ALTIVEC
++#define FLAGS() flags|=SWS_CPU_CAPS_ALTIVEC;
++#else
++#define FLAGS()
++#endif
++#endif
++
++#define CONTEXT (SwsContext *)context
++
++/**
++    \fn ADMColor2LAVColor
++    \brief Convert ADM colorspace type swscale/lavcodec colorspace name
++
++*/
++static PixelFormat ADMColor2LAVColor(ADM_colorspace fromColor)
++{
++  switch(fromColor)
++  {
++    case ADM_COLOR_YV12: return PIX_FMT_YUV420P;
++    case ADM_COLOR_YUV422P: return PIX_FMT_YUV422P;
++    default : ADM_assert(0); 
++  }
++  return PIX_FMT_YUV420P;
++}
++/**
++      \fn getStrideAndPointers
++      \brief Fill in strides etc.. needed by libswscale
++*/
++uint8_t ADMColorspace::getStrideAndPointers(uint8_t  *from,ADM_colorspace fromColor,uint8_t **srcData,int *srcStride)
++{
++  switch(fromColor)
++  {
++    case  ADM_COLOR_YV12:
++            srcData[0]=from;
++            srcData[1]=from+width*height;
++            srcData[2]=from+((5*width*height)&gt;&gt;2);
++            srcStride[0]=width;
++            srcStride[1]=width&gt;&gt;1;
++            srcStride[2]=width&gt;&gt;1;
++            break;
++    case  ADM_COLOR_YUV422P:
++            srcData[0]=from;
++            srcData[1]=from+width*height;
++            srcData[2]=from+((3*width*height)&gt;&gt;1);
++            srcStride[0]=width;
++            srcStride[1]=width&gt;&gt;1;
++            srcStride[2]=width&gt;&gt;1;
++            break;
++
++    default:
++        ADM_assert(0);
++  }
++  return 1;
++}
++/**
++    \fn  convert
++    \brief Do the color conversion
++  @param from Source image
++  @param to Target image
++*/
++
++uint8_t ADMColorspace::convert(uint8_t  *from, uint8_t *to)
++{
++  uint8_t *srcData[3];
++  uint8_t *dstData[3];
++  int srcStride[3];
++  int dstStride[3];
++  
++  getStrideAndPointers(from,fromColor,srcData,srcStride);
++  getStrideAndPointers(to,toColor,dstData,dstStride);
++  sws_scale(CONTEXT,srcData,srcStride,0,height,dstData,dstStride);
++  return 1;
++  
++}
++
++/**
++    \fn  ADMColorspace
++    \brief Constructor
++  @param w width
++  @param h height
++  @param from colorspace to convert from
++  @param to colorspace to concert to
++*/
++
++ADMColorspace::ADMColorspace(uint32_t w, uint32_t h, ADM_colorspace from,ADM_colorspace to)
++{
++  int flags=SWS_BICUBLIN;
++  FLAGS();
++  
++    width=w;
++    height=h;
++    fromColor=from;
++    toColor=to;
++    PixelFormat lavFrom=ADMColor2LAVColor(fromColor);
++    PixelFormat lavTo=ADMColor2LAVColor(toColor);
++    
++    context=(void *)sws_getContext(
++                      width,height,
++                      lavFrom ,
++                      width,height,
++                      lavTo,
++                      flags, NULL, NULL,NULL);
++
++}
++/**
++    \fn  ~ADMColorspace
++    \brief Destructor
++*/
++ADMColorspace::~ADMColorspace()
++{
++  if(context)
++  {
++     sws_freeContext(CONTEXT);
++     context=NULL;
++  }
++}
++ 
++//EOF
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_colorspace.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_colorspace.h	2007-10-13 15:51:32 UTC (rev 3642)
++++ branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_colorspace.h	2007-10-13 17:09:02 UTC (rev 3643)
+@@ -0,0 +1,34 @@
++/***************************************************************************
++                       
++    copyright            : (C) 2007 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++ #ifndef ADM_COLORSPACE_H
++ #define ADM_COLORSPACE_H
++#include &quot;ADM_rgb.h&quot; // To have colors
++class ADMColorspace
++{
++  protected:
++    void  *context;
++    uint32_t width,height;
++    ADM_colorspace fromColor,toColor;
++    uint8_t getStrideAndPointers(uint8_t  *from,ADM_colorspace fromColor,uint8_t **srcData,int *srcStride);
++  public :
++    
++    ADMColorspace(uint32_t w, uint32_t h, ADM_colorspace from,ADM_colorspace to);
++    uint8_t convert(uint8_t  *from, uint8_t *to);
++    ~ADMColorspace();
++};
++ 
++#endif
++//EOF
++
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.h	2007-10-13 15:51:32 UTC (rev 3642)
++++ branches/avidemux_2.4_branch/avidemux/ADM_colorspace/ADM_rgb.h	2007-10-13 17:09:02 UTC (rev 3643)
+@@ -31,6 +31,7 @@
+     ADM_COLOR_BGR555,
+     ADM_COLOR_YV12 = ADM_COLOR_IS_YUV,
+     ADM_COLOR_YUV422,
++    ADM_COLOR_YUV422P,
+     ADM_COLOR_YUV411
+  } ADM_colorspace;
+ #define ADM_COLOR_BACKWARD 0x8000
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_colorspace/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_colorspace/CMakeLists.txt	2007-10-13 15:51:32 UTC (rev 3642)
++++ branches/avidemux_2.4_branch/avidemux/ADM_colorspace/CMakeLists.txt	2007-10-13 17:09:02 UTC (rev 3643)
+@@ -1,3 +1,3 @@
+ 
+-SET(ADM_colorspace_SRCS ADM_rgb.cpp  rgb2yuv.cpp  yuv.cpp)
++SET(ADM_colorspace_SRCS ADM_rgb.cpp  rgb2yuv.cpp  yuv.cpp ADM_colorspace.cpp)
+ ADD_LIBRARY(ADM_colorspace STATIC ${ADM_colorspace_SRCS})
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000913.html">[Avidemux-svn-commit] r3642 - in	branches/avidemux_2.4_branch/avidemux: ADM_filter	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory ADM_videoFilter
+</A></li>
+	<LI>Next message: <A HREF="000915.html">[Avidemux-svn-commit] r3644 -	branches/avidemux_2.4_branch/avidemux/ADM_colorspace
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#914">[ date ]</a>
+              <a href="thread.html#914">[ thread ]</a>
+              <a href="subject.html#914">[ subject ]</a>
+              <a href="author.html#914">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,504 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7610 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7610%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111017053413.7F4344815AB%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004755.html">
+   <LINK REL="Next"  HREF="004757.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7610 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7610%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111017053413.7F4344815AB%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7610 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Oct 17 07:34:13 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004755.html">[Avidemux-svn-commit] r7609 - in	branches/avidemux_2.5_branch_gruntster:	avidemux/ADM_libraries cmake cmake/patches
+</A></li>
+        <LI>Next message: <A HREF="004757.html">[Avidemux-svn-commit] r7611 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4756">[ date ]</a>
+              <a href="thread.html#4756">[ thread ]</a>
+              <a href="subject.html#4756">[ subject ]</a>
+              <a href="author.html#4756">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-10-17 07:34:12 +0200 (Mon, 17 Oct 2011)
+New Revision: 7610
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfChunk.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+Log:
+[ASF/Demux] Better support for streamable wmv file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp	2011-10-12 19:15:32 UTC (rev 7609)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.cpp	2011-10-17 05:34:12 UTC (rev 7610)
+@@ -159,6 +159,10 @@
+   {
+     return 0; 
+   }
++  ADM_info(&quot;Stream Video: index=%d, sid=%d\n&quot;,(int)_videoIndex,(int)_videoStreamId);
++  for(int i=0;i&lt;_nbAudioTrack;i++)
++    ADM_info(&quot;Stream Audio: index=%d, sid=%d\n&quot;,
++                (int)_allAudioTracks[i].streamIndex,(int)_allAudioTracks[i].streamIndex);
+   buildIndex();
+   fseeko(_fd,_dataStartOffset,SEEK_SET);
+   _packet=new asfPacket(_fd,_nbPackets,_packetSize,&amp;readQueue,_dataStartOffset);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h	2011-10-12 19:15:32 UTC (rev 7609)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asf.h	2011-10-17 05:34:12 UTC (rev 7610)
+@@ -53,7 +53,10 @@
+   ADM_CHUNK_CLOCK_TYPE_EX,
+   ADM_CHUNK_LANGUAGE_LIST_EX,
+   ADM_CHUNK_EXTENDED_STREAM_PROP,
+-  ADM_CHUNK_UNKNOWN_CHUNK
++  ADM_CHUNK_CONTENT_DESC,
++  ADM_CHUNK_EXT_CONTENT_DESC,
++  ADM_CHUNK_UNKNOWN_CHUNK,
++  
+ }ADM_KNOWN_CHUNK;
+ 
+ typedef struct 
+@@ -63,7 +66,9 @@
+   uint8_t val[16];
+   ADM_KNOWN_CHUNK id; 
+ }chunky;
+-
++/**
++    \class asfChunk
++*/
+ class asfChunk
+ {
+   protected:
+@@ -85,6 +90,7 @@
+   uint32_t  read32(void);
+   uint32_t  read16(void);
+   uint8_t   read8(void);
++  uint64_t  endPos(void) {return _chunkStart+chunkLen;}
+   uint8_t   read(uint8_t *where, uint32_t how);
+   const chunky    *chunkId(void);
+   uint8_t   skip(uint32_t skip);
+@@ -151,7 +157,8 @@
+     uint8_t                 buildIndex(void);
+     uint8_t                 loadVideo(asfChunk *s);
+     bool                    loadAudio(asfChunk *s,uint32_t sid);
+-    
++    bool                    decodeExtHeader(asfChunk *s);
++    bool                    decodeStreamHeader(asfChunk *s);
+     ADM_queue               readQueue;
+     uint32_t                curSeq;
+     asfPacket               *_packet;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfChunk.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfChunk.cpp	2011-10-12 19:15:32 UTC (rev 7609)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfChunk.cpp	2011-10-17 05:34:12 UTC (rev 7610)
+@@ -50,7 +50,10 @@
+   {0xcb,0xa5,0xe6,0x14,0x72,0xc6,0x32,0x43,0x83,0x99,0xa9,0x69,0x52,0x06,0x5b,0x5a},ADM_CHUNK_EXTENDED_STREAM_PROP},
+   {&quot;MetaData Object&quot;,0,
+   {0xea,0xcb,0xf8,0xc5,0xaf,0x5b,0x77,0x48,0x84,0x67,0xaa,0x8c,0x44,0xfa,0x4c,0xca},ADM_CHUNK_UNKNOWN_CHUNK},
+-  
++  {&quot;Content Desc&quot;,0,
++  {0x33,0x26,0xb2,0x75,0x8e,0x66,0xcf,0x11,0xa6,0xd9,0x00,0xaa,0x00,0x62,0xce,0x6c},ADM_CHUNK_CONTENT_DESC},
++  {&quot;Extended Content Desc&quot;,0,
++  {0x40,0xa4,0xd0,0xd2,0x07,0xe3,0xd2,0x11,0x97,0xf0,0x00,0xa0,0xc9,0x5e,0xa8,0x50},ADM_CHUNK_EXT_CONTENT_DESC},
+   {&quot;zz&quot;,0,{0x30,0x26,0xb2,0x75,0x8e,0x66,0xcf,0x11,0xa6,0xd9,0x00,0xaa,0x00,0x62,0xce,0x6c},ADM_CHUNK_HEADER_CHUNK}
+   
+ };
+@@ -181,6 +184,7 @@
+   printf(&quot;Chunk type  : &lt;&lt;&lt;&lt;%s&gt;&gt;&gt;&gt;\n&quot;,id-&gt;name);
+   printf(&quot;Chunk Start : %&quot;LX&quot;\n&quot;,_chunkStart);
+   printf(&quot;Chunk Len   : %&quot;LU&quot;\n&quot;,(uint32_t)chunkLen);
++  printf(&quot;%02x%02x%02x%02x-%02x%02x-xxxx&quot;,guId[3],guId[2],guId[1],guId[0],guId[5],guId[4]);
+   for(int i=0;i&lt;16;i++) printf(&quot;%02x &quot;,guId[i]);
+   printf(&quot;\n&quot;);
+   return 1;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-12 19:15:32 UTC (rev 7609)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-17 05:34:12 UTC (rev 7610)
+@@ -32,6 +32,114 @@
+ static const uint8_t asf_audio[16]={0x40,0x9e,0x69,0xf8,0x4d,0x5b,0xcf,0x11,0xa8,0xfd,0x00,0x80,0x5f,0x5c,0x44,0x2b};
+ static const uint8_t asf_video[16]={0xc0,0xef,0x19,0xbc,0x4d,0x5b,0xcf,0x11,0xa8,0xfd,0x00,0x80,0x5f,0x5c,0x44,0x2b};
+ 
++/**
++    \fn decodeStreamHeader
++*/
++bool asfHeader::decodeStreamHeader(asfChunk *s)
++{
++uint8_t gid[16];
++    // Client GID
++        uint32_t audiovideo=0; // video=1, audio=2, 0=unknown
++        uint32_t sid;
++        s-&gt;read(gid,16);
++        printf(&quot;Type            :&quot;);
++        for(int z=0;z&lt;16;z++) printf(&quot;0x%02x,&quot;,gid[z]);
++        if(!memcmp(gid,asf_video,16))
++        {
++          printf(&quot;(video)&quot;);
++          audiovideo=1;
++        } else
++        {
++          if(!memcmp(gid,asf_audio,16))
++          {
++            printf(&quot;(audio)&quot;); 
++            audiovideo=2;
++          } else printf(&quot;(? ? ? ?)&quot;); 
++        }
++        printf(&quot;\nConceal       :&quot;);
++        for(int z=0;z&lt;16;z++) printf(&quot;:%02x&quot;,s-&gt;read8());
++        printf(&quot;\n&quot;);
++        printf(&quot;Reserved    : %08&quot;LLX&quot;\n&quot;,s-&gt;read64());
++        printf(&quot;Total Size  : %04&quot;LX&quot;\n&quot;,s-&gt;read32());
++        printf(&quot;Size        : %04&quot;LX&quot;\n&quot;,s-&gt;read32());
++        sid=s-&gt;read16();
++        printf(&quot;Stream nb   : %04d\n&quot;,sid);
++        printf(&quot;Reserved    : %04&quot;LX&quot;\n&quot;,s-&gt;read32());
++        switch(audiovideo)
++        {
++          case 1: // Video
++             {
++                if(_videoIndex==-1) // take the 1st video track
++                {
++                    _videoIndex=sid;
++                    _videoStreamId= sid;
++                    if(!loadVideo(s))
++                    {
++                      return 0; 
++                    }
++                }else printf(&quot;Already have a video track, skipping\n&quot;);
++              } 
++              break;
++          case 2: // audio
++            loadAudio(s,sid);
++            break;
++          default: 
++            break;
++        }
++        return true;
++}
++/**
++    \fn decodeExtHeader
++    \brief we must decode it as it may contain a video stream (e.g. france2 wmv files)
++*/ 
++bool asfHeader::decodeExtHeader(asfChunk *s)
++{
++            s-&gt;read32();s-&gt;read32(); // start time
++            s-&gt;read32();s-&gt;read32(); // end time
++            s-&gt;read32(); // bitrate
++            s-&gt;read32(); // buffer size
++            s-&gt;read32(); //Initial buffer fullness
++            s-&gt;read32(); // alt bitrate
++            s-&gt;read32(); // alt buffer size
++            s-&gt;read32(); // alt Initial buffer fullness
++            s-&gt;read32(); // max object size
++            s-&gt;read32(); // flags
++            s-&gt;read16(); // Stream #
++            s-&gt;read16(); // stream lang index
++            s-&gt;read32();;s-&gt;read32(); // avg time / frame
++            int streamNameCount=s-&gt;read16(); // stream name count
++            int payloadExtCount=s-&gt;read16(); // payload ext system count
++            printf(&quot;\tName       count : %d\n&quot;,streamNameCount);
++            printf(&quot;\tPayloadExt count : %d\n&quot;,payloadExtCount);
++            // stream names
++            for(int i=0;i&lt;streamNameCount;i++)
++            {
++                    printf(&quot;\t lang %d\n&quot;,s-&gt;read16());
++                    int size=s-&gt;read16();
++                    s-&gt;skip(size);
++            }
++            // payload system count
++            for(int i=0;i&lt;payloadExtCount;i++)
++            {
++                // GUID
++                s-&gt;read32();s-&gt;read32();s-&gt;read32();s-&gt;read32();
++                printf(&quot;\tExt data size %d\n&quot;,s-&gt;read16());
++                int sz=s-&gt;read32();
++                s-&gt;skip(sz);
++            }
++            // stream properties object
++            if(ftello(_fd)+16+4&lt;s-&gt;endPos())
++            {       uint8_t gid[16];
++                    asfChunk *x=new asfChunk(_fd);
++                    x-&gt;nextChunk();
++                    x-&gt;dump();
++                    if(x-&gt;chunkId()-&gt;id==ADM_CHUNK_STREAM_HEADER_CHUNK)
++                        decodeStreamHeader(x);
++                    x-&gt;skipChunk();
++                    delete x;
++            }
++            return true;
++}
+ /** *****************************************
+     \fn getHeaders
+     \brief Read Headers to collect information 
+@@ -40,7 +148,6 @@
+ {
+   uint32_t i=0,nbSubChunk,hi,lo;
+   const chunky *id;
+-  uint8_t gid[16];
+   uint32_t mn=0,mx=0;
+   asfChunk chunk(_fd);
+   // The first header is header chunk
+@@ -67,70 +174,29 @@
+     s-&gt;dump();
+     switch(id-&gt;id)
+     {
+-   
+       case ADM_CHUNK_HEADER_EXTENSION_CHUNK:
+       {
+         printf(&quot;Got header extension chunk\n&quot;);
+-        s-&gt;skipChunk();
++        // 128+16 reserved=
++        s-&gt;read32();s-&gt;read32();s-&gt;read32();s-&gt;read32();s-&gt;read16();
++        int x=s-&gt;read32();
++        printf(&quot;Dumping object ext : %d data bytes\n&quot;,x);
++        asfChunk *son=new asfChunk(_fd);
++        do
++        {
++            son-&gt;nextChunk();
++            son-&gt;dump();
++            if(son-&gt;chunkId()-&gt;id==ADM_CHUNK_EXTENDED_STREAM_PROP)
++            {
++                decodeExtHeader(s);
++            }
++            son-&gt;skipChunk();
++            
++        }while(son-&gt;endPos()+24&lt;s-&gt;endPos());
++        delete son;
+         break;
+         }
+-#if 0   
+-        s-&gt;skip(16); // Clock type extension ????
+-        printf(&quot;?? %d\n&quot;,s-&gt;read16());
+-        printf(&quot;?? %d\n&quot;,s-&gt;read32());
+-          
+-        uint32_t streamNameCount;
+-        uint32_t payloadCount;
+-          
+-          asfChunk *u=new asfChunk(_fd);
+-          for(int zzz=0;zzz&lt;8;zzz++)
+-          {
+-              u-&gt;nextChunk();
+-              u-&gt;dump();
+-              id=u-&gt;chunkId();
+-              if(id-&gt;id==ADM_CHUNK_EXTENDED_STREAM_PROP)
+-              {
+-                  s-&gt;skip(8); // start time 
+-                  s-&gt;skip(8); // end time
+-                  printf(&quot;Bitrate         %u :\n&quot;,u-&gt;read32());
+-                  printf(&quot;Buffer Size     %u :\n&quot;,u-&gt;read32());
+-                  printf(&quot;BFill           %u :\n&quot;,u-&gt;read32());
+-                  printf(&quot;Alt Bitrate     %u :\n&quot;,u-&gt;read32());
+-                  printf(&quot;Alt Bsize       %u :\n&quot;,u-&gt;read32());
+-                  printf(&quot;Alt Bfullness   %u :\n&quot;,u-&gt;read32());
+-                  printf(&quot;Max object Size %u :\n&quot;,u-&gt;read32());
+-                  printf(&quot;Flags           0x%x :\n&quot;,u-&gt;read32());
+-                  printf(&quot;Stream no       %u :\n&quot;,u-&gt;read16());
+-                  printf(&quot;Stream lang     %u :\n&quot;,u-&gt;read16());
+-                  printf(&quot;Stream time/fra %lu :\n&quot;,u-&gt;read64());
+-                  streamNameCount=u-&gt;read16();
+-                  payloadCount=u-&gt;read16();
+-                  printf(&quot;Stream Nm Count %u :\n&quot;,streamNameCount);
+-                  printf(&quot;Payload count   %u :\n&quot;,payloadCount);
+-                  for(int stream=0;stream&lt;streamNameCount;stream++)
+-                  {
+-                    u-&gt;read16();
+-                    skip=u-&gt;read16();
+-                    u-&gt;skip(skip);
+-                  }
+-                  uint32_t size;
+-                  for(int payload=0;payload&lt;payloadCount;payload++)
+-                  {
+-                    for(int pp=0;pp&lt;16;pp++) printf(&quot;0x%02x,&quot;,u-&gt;read8());
+-                    printf(&quot;\n&quot;);
+-                    skip=u-&gt;read16();
+-                    size=u-&gt;read32();
+-                    u-&gt;skip(size);
+-                    printf(&quot;Extra Data : %d, skipd %d\n&quot;,size,skip);
+-                  }
+-                  printf(&quot;We are at %x\n&quot;,ftello(_fd));
+-                }
+-                u-&gt;skipChunk();
+-          }
+-          delete u;
+-      }
+-      break;
+-#endif      
++
+       case ADM_CHUNK_FILE_HEADER_CHUNK:
+         {
+             // Client GID
+@@ -162,59 +228,10 @@
+           break;
+       case ADM_CHUNK_STREAM_HEADER_CHUNK:
+       {
+-         // Client GID
+-        uint32_t audiovideo=0; // video=1, audio=2, 0=unknown
+-        uint32_t sid;
+-        s-&gt;read(gid,16);
+-        printf(&quot;Type            :&quot;);
+-        for(int z=0;z&lt;16;z++) printf(&quot;0x%02x,&quot;,gid[z]);
+-        if(!memcmp(gid,asf_video,16))
+-        {
+-          printf(&quot;(video)&quot;);
+-          audiovideo=1;
+-        } else
+-        {
+-          if(!memcmp(gid,asf_audio,16))
+-          {
+-            printf(&quot;(audio)&quot;); 
+-            audiovideo=2;
+-          } else printf(&quot;(? ? ? ?)&quot;); 
+-        }
+-        printf(&quot;\nConceal       :&quot;);
+-        for(int z=0;z&lt;16;z++) printf(&quot;:%02x&quot;,s-&gt;read8());
+-        printf(&quot;\n&quot;);
+-        printf(&quot;Reserved    : %08&quot;LLX&quot;\n&quot;,s-&gt;read64());
+-        printf(&quot;Total Size  : %04&quot;LX&quot;\n&quot;,s-&gt;read32());
+-        printf(&quot;Size        : %04&quot;LX&quot;\n&quot;,s-&gt;read32());
+-        sid=s-&gt;read16();
+-        printf(&quot;Stream nb   : %04d\n&quot;,sid);
+-        printf(&quot;Reserved    : %04&quot;LX&quot;\n&quot;,s-&gt;read32());
+-        switch(audiovideo)
+-        {
+-          case 1: // Video
+-          {
+-                    _videoStreamId=sid;
+-                    if(!loadVideo(s))
+-                    {
+-                      delete s;
+-                      return 0; 
+-                    }
+-                    break;
+-          }
+-              break;
+-          case 2: // audio
+-          {
+-            loadAudio(s,sid);
+-          
+-            
+-          }
++          decodeStreamHeader(s);
+           break;
+-          default:break; 
+-          
+-        }
+       }
+-      break;
+-       default:
++      default:
+          break;
+     }
+     s-&gt;skipChunk();
+@@ -259,6 +276,7 @@
+ uint8_t asfHeader::loadVideo(asfChunk *s)
+ {
+   uint32_t w,h,x;
++            printf(&quot;--\n&quot;);
+             w=s-&gt;read32();
+             h=s-&gt;read32();
+             s-&gt;read8();
+@@ -309,6 +327,8 @@
+             {
+                 ADM_info(&quot;No extra data for video\n&quot;);
+             }
++            uint64_t l=ftello(_fd);
++            printf(&quot;Bytes left : %d\n&quot;,(int)(s-&gt;endPos()-l));
+             return 1;
+ }
+ /**
+@@ -485,7 +505,8 @@
+ 
+   _videostream.dwLength=_mainaviheader.dwTotalFrames=nbImage;
+   if(!nbImage) return 0;
+-  
++  _index[0].flags=AVI_KEY_FRAME;
++  if(_index[0].pts==ADM_NO_PTS) _index[0].pts=_index[0].dts;
+   // Update fps
+   // In fact it is an average fps
+   //
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2011-10-12 19:15:32 UTC (rev 7609)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2011-10-17 05:34:12 UTC (rev 7610)
+@@ -29,6 +29,7 @@
+ 
+ #if 0
+ #define aprintf printf
++#define ASF_VERBOSE
+ #else
+ #define aprintf(...) {}
+ #endif
+@@ -112,12 +113,11 @@
+    }
+ #endif
+    _offset=0;
+-   if(read8()!=0x82) 
++   int r82=read8();
++   if(r82!=0x82) 
+    {
+      printf(&quot;[ASF PACKET]At pos 0x%&quot;LLX&quot; \n&quot;,(uint64_t)ftello(_fd));
+-     printf(&quot;[ASF PACKET]not a 82 packet\n&quot;);
+-     printf(&quot;[ASF PACKET]not a 82 packet\n&quot;);
+-     printf(&quot;[ASF PACKET]not a 82 packet\n&quot;);
++     printf(&quot;[ASF PACKET]not a 82 packet but 0x%x\n&quot;,r82);
+      return 0;
+    }
+    
+@@ -258,6 +258,7 @@
+ #ifdef ASF_VERBOSE     
+ //    if(streamId==1)
+     {
++     printf(&quot;StreamId               %d\n&quot;,streamId);
+      printf(&quot;This segment %d bytes, %d /%d\n&quot;,packetLen,seg,nbSeg);
+      printf(&quot;Offset                 %d\n&quot;,offset);
+      printf(&quot;sequence               %d\n&quot;,sequence);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004755.html">[Avidemux-svn-commit] r7609 - in	branches/avidemux_2.5_branch_gruntster:	avidemux/ADM_libraries cmake cmake/patches
+</A></li>
+	<LI>Next message: <A HREF="004757.html">[Avidemux-svn-commit] r7611 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4756">[ date ]</a>
+              <a href="thread.html#4756">[ thread ]</a>
+              <a href="subject.html#4756">[ subject ]</a>
+              <a href="author.html#4756">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

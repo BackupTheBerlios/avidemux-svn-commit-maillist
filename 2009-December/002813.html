@@ -1,0 +1,198 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5604 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_core/src	ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5604%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%20ADM_core/src%0A%09ADM_editor&In-Reply-To=%3C200912012038.nB1KcnKq031813%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002812.html">
+   <LINK REL="Next"  HREF="002814.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5604 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_core/src	ADM_editor</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5604%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%20ADM_core/src%0A%09ADM_editor&In-Reply-To=%3C200912012038.nB1KcnKq031813%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5604 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_core/src	ADM_editor">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Dec  1 21:38:49 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002812.html">[Avidemux-svn-commit] r5603 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264
+</A></li>
+        <LI>Next message: <A HREF="002814.html">[Avidemux-svn-commit] r5605 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_libraries
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2813">[ date ]</a>
+              <a href="thread.html#2813">[ thread ]</a>
+              <a href="subject.html#2813">[ subject ]</a>
+              <a href="author.html#2813">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-12-01 21:38:45 +0100 (Tue, 01 Dec 2009)
+New Revision: 5604
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_fileio.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_editor/ADM_edit.cpp
+Log:
+[win32] use avidemux open function instead when checking if file system is writeable
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_fileio.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_fileio.cpp	2009-12-01 19:22:29 UTC (rev 5603)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_core/src/ADM_fileio.cpp	2009-12-01 20:38:45 UTC (rev 5604)
+@@ -135,61 +135,58 @@
+ #endif
+ }
+ 
+-#if __WIN32
+-extern &quot;C&quot;
++int ADM_open(const char *path, int oflag, int aflag)
+ {
+-	// libavformat uses open (in the file_open function) so we need to override that too.
+-	// Following the same rules as ADM_fopen.
+-	int ADM_open(const char *path, int oflag, ...)
+-	{
+-		int fileNameLength = utf8StringToWideChar(path, -1, NULL);
+-		wchar_t wcFile[fileNameLength];
+-		int creation = 0, access = 0;
+-		HANDLE hFile;
++#ifdef __WIN32
++	int fileNameLength = utf8StringToWideChar(path, -1, NULL);
++	wchar_t wcFile[fileNameLength];
++	int creation = 0, access = 0;
++	HANDLE hFile;
+ 
+-		utf8StringToWideChar(path, -1, wcFile);
++	utf8StringToWideChar(path, -1, wcFile);
+ 
+-		if (oflag &amp; O_WRONLY || oflag &amp; O_RDWR)
+-		{
+-			access = GENERIC_WRITE;
++	if (oflag &amp; O_WRONLY || oflag &amp; O_RDWR)
++	{
++		access = GENERIC_WRITE;
+ 
+-			if (oflag &amp; O_RDWR)
+-				access |= GENERIC_READ;
++		if (oflag &amp; O_RDWR)
++			access |= GENERIC_READ;
+ 
+-			if (oflag &amp; O_CREAT)
+-			{
+-				if (oflag &amp; O_EXCL)
+-					creation = CREATE_NEW;
+-				else if (oflag &amp; O_TRUNC)
+-					creation = CREATE_ALWAYS;
+-				else
+-					creation = OPEN_ALWAYS;
+-			}
+-			else if (oflag &amp; O_TRUNC)
+-				creation = TRUNCATE_EXISTING;
+-		}
+-		else if (oflag &amp; O_RDONLY)
+-			creation = OPEN_EXISTING;
+-
+-		if (creation &amp; GENERIC_WRITE)
++		if (oflag &amp; O_CREAT)
+ 		{
+-			hFile = CreateFileW(wcFile, access, 0, NULL, creation, 0, NULL);
+-
+-			if (hFile == INVALID_HANDLE_VALUE)
+-				return -1;
++			if (oflag &amp; O_EXCL)
++				creation = CREATE_NEW;
++			else if (oflag &amp; O_TRUNC)
++				creation = CREATE_ALWAYS;
+ 			else
+-				CloseHandle(hFile);
++				creation = OPEN_ALWAYS;
+ 		}
++		else if (oflag &amp; O_TRUNC)
++			creation = TRUNCATE_EXISTING;
++	}
++	else if (oflag &amp; O_RDONLY)
++		creation = OPEN_EXISTING;
+ 
+-		hFile = CreateFileW(wcFile, access, FILE_SHARE_READ, NULL, creation, 0, NULL);
++	if (creation &amp; GENERIC_WRITE)
++	{
++		hFile = CreateFileW(wcFile, access, 0, NULL, creation, 0, NULL);
+ 
+ 		if (hFile == INVALID_HANDLE_VALUE)
+ 			return -1;
+ 		else
+-			return _open_osfhandle((intptr_t)hFile, oflag);
++			CloseHandle(hFile);
+ 	}
+-}
++
++	hFile = CreateFileW(wcFile, access, FILE_SHARE_READ, NULL, creation, 0, NULL);
++
++	if (hFile == INVALID_HANDLE_VALUE)
++		return -1;
++	else
++		return _open_osfhandle((intptr_t)hFile, oflag);
++#else
++	return open(path, oflag, aflag);
+ #endif
++}
+ 
+ int ADM_fclose(FILE *file)
+ {
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_editor/ADM_edit.cpp	2009-12-01 19:22:29 UTC (rev 5603)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_editor/ADM_edit.cpp	2009-12-01 20:38:45 UTC (rev 5604)
+@@ -65,6 +65,8 @@
+ 
+ extern uint8_t loadVideoCodecConf( const char *name);
+ extern uint8_t parseScript(char *name);
++extern int ADM_open(const char *path, int oflag, int aflag);
++
+ uint8_t UI_SetCurrentFormat( ADM_OUT_FORMAT fmt );
+ const char *VBR_MSG = QT_TR_NOOP(&quot;Avidemux detected VBR MP3 audio in this file. For keeping audio/video in sync, time map is needed. Build it now?\n\nYou can do it later with \&quot;Audio -&gt; Build VBR Time Map\&quot;.&quot;);
+ //
+@@ -338,7 +340,7 @@
+         }
+ 	/* check for &quot;Read-only file system&quot; */
+ 	{
+-                int fd = open(tmpname,O_CREAT|O_EXCL|O_WRONLY,S_IRUSR|S_IWUSR);
++                int fd = ADM_open(tmpname,O_CREAT|O_EXCL|O_WRONLY,S_IRUSR|S_IWUSR);
+                 if( fd &gt;= 0 )
+                 {
+                     close(fd);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002812.html">[Avidemux-svn-commit] r5603 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264
+</A></li>
+	<LI>Next message: <A HREF="002814.html">[Avidemux-svn-commit] r5605 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_libraries
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2813">[ date ]</a>
+              <a href="thread.html#2813">[ thread ]</a>
+              <a href="subject.html#2813">[ subject ]</a>
+              <a href="author.html#2813">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

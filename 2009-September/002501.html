@@ -1,0 +1,323 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5288 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_demuxers/OpenDml
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5288%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreUtils/include%20avidemux_core/ADM_coreUtils/src%0A%09avidemux_plugins/ADM_demuxers/OpenDml&In-Reply-To=%3C200909010853.n818r98x012741%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002500.html">
+   <LINK REL="Next"  HREF="002502.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5288 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_demuxers/OpenDml</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5288%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreUtils/include%20avidemux_core/ADM_coreUtils/src%0A%09avidemux_plugins/ADM_demuxers/OpenDml&In-Reply-To=%3C200909010853.n818r98x012741%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5288 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_demuxers/OpenDml">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Sep  1 10:53:09 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002500.html">[Avidemux-svn-commit] r5287 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska
+</A></li>
+        <LI>Next message: <A HREF="002502.html">[Avidemux-svn-commit] r5289 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2501">[ date ]</a>
+              <a href="thread.html#2501">[ thread ]</a>
+              <a href="subject.html#2501">[ subject ]</a>
+              <a href="author.html#2501">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-09-01 10:53:08 +0200 (Tue, 01 Sep 2009)
+New Revision: 5288
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_videoInfoExtractor.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractor.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml/ADM_openDMLDepack.cpp
+Log:
+[Utils] Move search Vop to utils, can be handy for other use cases beside unpacking
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_videoInfoExtractor.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_videoInfoExtractor.h	2009-09-01 08:53:05 UTC (rev 5287)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_videoInfoExtractor.h	2009-09-01 08:53:08 UTC (rev 5288)
+@@ -22,5 +22,20 @@
+ uint8_t extractH264FrameType(uint32_t nalSize,uint8_t *buffer,uint32_t len,uint32_t *flags);
+ uint8_t extractH264FrameType_startCode(uint32_t nalSize,uint8_t *buffer,uint32_t len,uint32_t *flags);
+ 
++/**
++    \struct ADM_vopS
++    \brief describe a vop inside a bitstream (mpeg4 SP/ASP)
++*/
++typedef struct 
++{
++	uint32_t offset;
++	uint32_t type;
++    uint32_t vopCoded;
++    uint32_t modulo;
++    uint32_t timeInc;
++}ADM_vopS;
++
++
++uint32_t ADM_searchVop(uint8_t *begin, uint8_t *end,uint32_t *nb, ADM_vopS *vop,uint32_t *timeincbits);
+ #endif
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractor.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractor.cpp	2009-09-01 08:53:05 UTC (rev 5287)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractor.cpp	2009-09-01 08:53:08 UTC (rev 5288)
+@@ -21,9 +21,11 @@
+ 
+ #define aprintf(...) {}
+ #include &quot;ADM_getbits.h&quot;
++#include &quot;ADM_videoInfoExtractor.h&quot;
+ #include &quot;ADM_h264_tag.h&quot;
+ 
+ static void refineH264FrameType(uint8_t *head,uint8_t *tail,uint32_t *flags);
++bool ADM_findMpegStartCode(uint8_t *start, uint8_t *end,uint8_t *outstartcode,uint32_t *offset);
+ /*
+     Extract width &amp; height from vol header passed as arg
+ 
+@@ -593,4 +595,76 @@
+                 sliceType -= 5;
+             if(sliceType==3) *flags=AVI_B_FRAME;  
+ }
++/**
++    \fn ADM_searchVop
++    \brief search vop header in a bitstream 
++    Used for packed bitstream and also to identify the frametype
++
++*/
++uint32_t ADM_searchVop(uint8_t *begin, uint8_t *end,uint32_t *nb, ADM_vopS *vop,uint32_t *timeincbits)
++{
++
++	uint32_t off=0;
++	uint32_t globalOff=0;
++	uint32_t voptype;
++	uint8_t code;
++        uint32_t w,h,t;
++        uint32_t modulo,time_inc,vopcoded,vopType;
++	*nb=0;
++	while(begin&lt;end-3)
++	{
++    	if( ADM_findMpegStartCode(begin, end,&amp;code,&amp;off))
++    	{
++        	if(code==0xb6)
++			{
++				// Analyse a bit the vop header
++				uint8_t coding_type=begin[off];
++				coding_type&gt;&gt;=6;
++				aprintf(&quot;\t at %u %d Img type:%s\n&quot;,off,*nb,s_voptype[coding_type]);
++				switch(coding_type)
++				{
++					case 0: voptype=AVI_KEY_FRAME;break;
++					case 1: voptype=0;break;
++					case 2: voptype=AVI_B_FRAME;break;
++					case 3: printf(&quot;[Avi] Glouglou\n&quot;);voptype=0;break;
++
++				}
++        	                vop[*nb].offset=globalOff+off-4;
++				vop[*nb].type=voptype;
++
++
++
++                                /* Get more info */
++                                if( extractVopInfo(begin+off, end-begin-off, *timeincbits,&amp;vopType,&amp;modulo, &amp;time_inc,&amp;vopcoded))
++                                {
++                                    aprintf(&quot; frame found: vopType:%x modulo:%d time_inc:%d vopcoded:%d\n&quot;,vopType,modulo,time_inc,vopcoded);
++                                    vop[*nb].modulo=modulo;
++                                    vop[*nb].timeInc=time_inc;
++                                    vop[*nb].vopCoded=vopcoded;
++                                }
++                                *nb=(*nb)+1;
++                                begin+=off+1;
++				globalOff+=off+1;
++				continue;
++
++			}
++                else if(code==0x20 &amp;&amp; off&gt;=4	) // Vol start
++                {
++
++                   if(extractMpeg4Info(begin+off-4,end+4-off-begin,&amp;w,&amp;h,timeincbits))
++                   {
++                      aprintf(&quot;Found Vol header : w:%d h:%d timeincbits:%d\n&quot;,w,h,*timeincbits);
++                   }
++
++                }
++        	begin+=off;
++        	globalOff+=off;
++        	continue;
++    	}
++    	return 1;
++    }
++	return 1;
++}
++
++
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml/ADM_openDMLDepack.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml/ADM_openDMLDepack.cpp	2009-09-01 08:53:05 UTC (rev 5287)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml/ADM_openDMLDepack.cpp	2009-09-01 08:53:08 UTC (rev 5288)
+@@ -29,7 +29,7 @@
+ #include &quot;ADM_openDML.h&quot;
+ 
+ #include &quot;DIA_working.h&quot;
+-//#include &quot;ADM_libraries/ADM_utilities/avidemutils.h&quot;
++#include &quot;ADM_videoInfoExtractor.h&quot;
+ 
+ 
+ #define aprintf(...) {}
+@@ -39,14 +39,7 @@
+ #endif
+ #define DEPACK_VERBOSE
+ #define QT_TR_NOOP(x) x
+-typedef struct vopS
+-{
+-	uint32_t offset;
+-	uint32_t type;
+-        uint32_t vopCoded;
+-        uint32_t modulo;
+-        uint32_t timeInc;
+-}vopS;
++
+ #define MAX_VOP 10
+ 
+ /* Forward declaration */
+@@ -55,7 +48,7 @@
+ uint8_t extractMpeg4Info(uint8_t *data,uint32_t dataSize,uint32_t *w,uint32_t *h,uint32_t *time_inc);
+ 
+ /* Static ones */
+-static uint32_t searchVop(uint8_t *begin, uint8_t *end,uint32_t *nb, vopS *vop,uint32_t *timeincbits);
++
+ static const char *s_voptype[4]={&quot;I frame&quot;,&quot;P frame&quot;,&quot;B frame&quot;,&quot;D frame&quot;};
+ /**
+     \fn unpackPacked
+@@ -68,9 +61,9 @@
+ 	uint32_t firstType, secondType,thirdType;
+ 	uint32_t targetIndex=0,nbVop;
+ 	uint32_t nbDuped=0;
+-        uint32_t timcincbits=16;  /* Nb bits used to code time_inc 16 is a safe default */
++    uint32_t timcincbits=16;  /* Nb bits used to code time_inc 16 is a safe default */
+ 
+-	vopS	myVops[MAX_VOP]; // should be enough
++	ADM_vopS	myVops[MAX_VOP]; // should be enough
+ 	// here we got the vidHeader to get the file easily
+ 	// we only deal with avi now, so cast it to its proper type (i.e. avi)
+ 
+@@ -134,7 +127,7 @@
+                                 continue;
+                 }
+                 /* Cannot find vop, corrupted or WTF ...*/
+-                if(!searchVop(buffer,buffer+image.dataLength,&amp;nbVop,myVops,&amp;timcincbits))
++                if(!ADM_searchVop(buffer,buffer+image.dataLength,&amp;nbVop,myVops,&amp;timcincbits))
+                 {
+                     printf(&quot;[Avi] img :%u failed to find vop!\n&quot;,img);
+                     memcpy(&amp;newIndex[targetIndex],&amp;_idx[img],sizeof(_idx[0]));
+@@ -232,70 +225,3 @@
+ 
+ 	return ret;
+ }
+-// Search a start vop in it
+-// and return also the vop type
+-// needed to update the index
+-uint32_t searchVop(uint8_t *begin, uint8_t *end,uint32_t *nb, vopS *vop,uint32_t *timeincbits)
+-{
+-
+-	uint32_t off=0;
+-	uint32_t globalOff=0;
+-	uint32_t voptype;
+-	uint8_t code;
+-        uint32_t w,h,t;
+-        uint32_t modulo,time_inc,vopcoded,vopType;
+-	*nb=0;
+-	while(begin&lt;end-3)
+-	{
+-    	if( ADM_findMpegStartCode(begin, end,&amp;code,&amp;off))
+-    	{
+-        	if(code==0xb6)
+-			{
+-				// Analyse a bit the vop header
+-				uint8_t coding_type=begin[off];
+-				coding_type&gt;&gt;=6;
+-				aprintf(&quot;\t at %u %d Img type:%s\n&quot;,off,*nb,s_voptype[coding_type]);
+-				switch(coding_type)
+-				{
+-					case 0: voptype=AVI_KEY_FRAME;break;
+-					case 1: voptype=0;break;
+-					case 2: voptype=AVI_B_FRAME;break;
+-					case 3: printf(&quot;[Avi] Glouglou\n&quot;);voptype=0;break;
+-
+-				}
+-        	                vop[*nb].offset=globalOff+off-4;
+-				vop[*nb].type=voptype;
+-
+-
+-
+-                                /* Get more info */
+-                                if( extractVopInfo(begin+off, end-begin-off, *timeincbits,&amp;vopType,&amp;modulo, &amp;time_inc,&amp;vopcoded))
+-                                {
+-                                    aprintf(&quot; frame found: vopType:%x modulo:%d time_inc:%d vopcoded:%d\n&quot;,vopType,modulo,time_inc,vopcoded);
+-                                    vop[*nb].modulo=modulo;
+-                                    vop[*nb].timeInc=time_inc;
+-                                    vop[*nb].vopCoded=vopcoded;
+-                                }
+-                                *nb=(*nb)+1;
+-                                begin+=off+1;
+-				globalOff+=off+1;
+-				continue;
+-
+-			}
+-                else if(code==0x20 &amp;&amp; off&gt;=4	) // Vol start
+-                {
+-
+-                   if(extractMpeg4Info(begin+off-4,end+4-off-begin,&amp;w,&amp;h,timeincbits))
+-                   {
+-                      aprintf(&quot;Found Vol header : w:%d h:%d timeincbits:%d\n&quot;,w,h,*timeincbits);
+-                   }
+-
+-                }
+-        	begin+=off;
+-        	globalOff+=off;
+-        	continue;
+-    	}
+-    	return 1;
+-    }
+-	return 1;
+-}
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002500.html">[Avidemux-svn-commit] r5287 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska
+</A></li>
+	<LI>Next message: <A HREF="002502.html">[Avidemux-svn-commit] r5289 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2501">[ date ]</a>
+              <a href="thread.html#2501">[ thread ]</a>
+              <a href="subject.html#2501">[ subject ]</a>
+              <a href="author.html#2501">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

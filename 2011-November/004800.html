@@ -1,0 +1,122 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7656 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7656%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src&In-Reply-To=%3C20111106190222.C3DBF48133D%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004799.html">
+   <LINK REL="Next"  HREF="004801.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7656 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7656%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src&In-Reply-To=%3C20111106190222.C3DBF48133D%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7656 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Nov  6 20:02:22 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004799.html">[Avidemux-svn-commit] r7655 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_videoEncoder/x264
+</A></li>
+        <LI>Next message: <A HREF="004801.html">[Avidemux-svn-commit] r7657 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreImage/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4800">[ date ]</a>
+              <a href="thread.html#4800">[ thread ]</a>
+              <a href="subject.html#4800">[ subject ]</a>
+              <a href="author.html#4800">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-11-06 20:02:22 +0100 (Sun, 06 Nov 2011)
+New Revision: 7656
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp
+Log:
+[ffmpeg video encoders] Stats must be allocated by av_malloc as it will be free-ed by av_close_context
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp	2011-11-06 18:16:17 UTC (rev 7655)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp	2011-11-06 19:02:22 UTC (rev 7656)
+@@ -19,6 +19,11 @@
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_coreVideoEncoderFFmpeg.h&quot;
+ #include &quot;prefs.h&quot;
++extern &quot;C&quot;
++{
++char *av_strdup(const char *s);
++void *av_malloc(size_t size) ;
++}
+ //#define TIME_TENTH_MILLISEC
+ #if 1
+     #define aprintf(...) {}
+@@ -319,7 +324,7 @@
+   fseek (_statfile, 0, SEEK_END);
+   statSize = ftello (_statfile);
+   fseek (_statfile, 0, SEEK_SET);
+-  _context-&gt;stats_in = (char *) ADM_alloc (statSize + 1);
++  _context-&gt;stats_in = (char *) av_malloc(statSize+1);
+   _context-&gt;stats_in[statSize] = 0;
+   fread (_context-&gt;stats_in, statSize, 1, _statfile);
+   fclose(_statfile);
+@@ -460,7 +465,6 @@
+ 
+         }
+ #undef SETX
+-
+   _context-&gt;bit_rate_tolerance = 8000000;
+   _context-&gt;b_quant_factor = 1.25;
+   _context-&gt;rc_strategy = 2;
+@@ -473,7 +477,7 @@
+   _context-&gt;rc_qsquish = 1.0;
+   _context-&gt;rc_qmod_amp = 0;
+   _context-&gt;rc_qmod_freq = 0;
+-  _context-&gt;rc_eq = const_cast &lt; char *&gt;(&quot;tex^qComp&quot;);
++  _context-&gt;rc_eq = av_strdup(&quot;tex^qComp&quot;);
+   _context-&gt;rc_max_rate = 000;
+   _context-&gt;rc_min_rate = 000;
+   _context-&gt;rc_buffer_size = 000;
+@@ -521,7 +525,7 @@
+                     printf(&quot;[ffMpeg4] No source duration!\n&quot;);
+                     return false;
+                 }
+-                averageBitrate=(uint32_t)avg;
++                averageBitrate=(uint32_t)avg*1000; // convert from kb/s to b/s
+             }
+ 
+         printf(&quot;[ffmpeg4] Average bitrate =%&quot;LU&quot; kb/s\n&quot;,averageBitrate/1000);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004799.html">[Avidemux-svn-commit] r7655 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_videoEncoder/x264
+</A></li>
+	<LI>Next message: <A HREF="004801.html">[Avidemux-svn-commit] r7657 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreImage/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4800">[ date ]</a>
+              <a href="thread.html#4800">[ thread ]</a>
+              <a href="subject.html#4800">[ subject ]</a>
+              <a href="author.html#4800">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,144 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6933 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6933%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2&In-Reply-To=%3C20110116144820.61230481254%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004106.html">
+   <LINK REL="Next"  HREF="004108.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6933 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6933%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2&In-Reply-To=%3C20110116144820.61230481254%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6933 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jan 16 15:48:20 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004106.html">[Avidemux-svn-commit] r6932 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/include/mp4v2
+</A></li>
+        <LI>Next message: <A HREF="004108.html">[Avidemux-svn-commit] r6934 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4107">[ date ]</a>
+              <a href="thread.html#4107">[ thread ]</a>
+              <a href="subject.html#4107">[ subject ]</a>
+              <a href="author.html#4107">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-01-16 15:48:20 +0100 (Sun, 16 Jan 2011)
+New Revision: 6933
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp
+Log:
+[mp4v2Muxer] Add AC3 (incomplete)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp	2011-01-16 14:48:19 UTC (rev 6932)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp	2011-01-16 14:48:20 UTC (rev 6933)
+@@ -56,6 +56,68 @@
+         
+         switch(header-&gt;encoding)
+         {
++            case WAV_AC3:
++                {
++                    int fscod=0;
++                    switch(header-&gt;frequency)
++                    {
++                            case 48000: fscod=0;break;
++                            case 44100: fscod=1;break;
++                            case 32000: fscod=2;break;
++                            default: 
++                                {
++                                GUI_Error_HIG(&quot;&quot;, &quot;invalid frequency for AC3. Only 32, 44.1 &amp; 48 kHz&quot;);
++                                return false;
++                                }
++                    }
++                    int bitrate;
++                    static const uint16_t ac3_bitrate_tab[19] = { // From handbrake
++                                 32, 40, 48, 56, 64, 80, 96, 112, 128,
++                                 160, 192, 224, 256, 320, 384, 448, 512, 576, 640
++                             };
++                    int Ceil=sizeof(ac3_bitrate_tab)/sizeof(const uint16_t);
++                    bitrate=-1;
++                    for(int ix=0;ix&lt;Ceil;ix++)
++                            if(header-&gt;byterate==(ac3_bitrate_tab[ix]*1000)/8)
++                            {
++                                bitrate=ix;
++                                break;
++                            }
++                    if(-1==bitrate) 
++                    {
++                        GUI_Error_HIG(&quot;&quot;,&quot;Invalid bitrate for AC3&quot;);
++                        return false;
++                    }
++                    int acmod,lfe=0;
++                    switch(header-&gt;channels)
++                    {
++                            case 1: acmod=1;break;
++                            case 2: acmod=2;break;
++                            case 5: acmod=7;lfe=0;break; 
++#warning Check!
++                            case 6: acmod=7;lfe=1;break;
++                            default: 
++                                    {
++                                              GUI_Error_HIG(&quot;&quot;,&quot;Invalid number of channel for AC3&quot;);
++                                              return false;
++                                    }
++                    }
++                    audioTrackIds[i]=MP4AddAC3AudioTrack(handle,
++                                                          header-&gt;frequency,// samplingRate,
++                                                           fscod,           // fscod
++                                                           8,               // bsid,
++                                                           0,               // bsmod,
++                                                           acmod,           // acmod
++                                                           lfe,             // lfeon
++                                                           bitrate);        // bit_rate_code 
++                    if(MP4_INVALID_TRACK_ID==audioTrackIds[i])
++                    {
++                        ADM_error(&quot;Error adding audio track %i of type 0x%x\n&quot;,i,header-&gt;encoding);
++                        return false;
++                    }
++                    aprintf(&quot;Add Track %d fq %d (AC3)\n&quot;,audioTrackIds[i],header-&gt;frequency);
++                    }
++                    break;
+             case WAV_MP2:
+             case WAV_MP3:
+                     audioTrackIds[i]=MP4AddAudioTrack(handle,
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004106.html">[Avidemux-svn-commit] r6932 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/include/mp4v2
+</A></li>
+	<LI>Next message: <A HREF="004108.html">[Avidemux-svn-commit] r6934 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4107">[ date ]</a>
+              <a href="thread.html#4107">[ thread ]</a>
+              <a href="subject.html#4107">[ subject ]</a>
+              <a href="author.html#4107">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

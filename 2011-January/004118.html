@@ -1,0 +1,309 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6944 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6944%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2&In-Reply-To=%3C20110121072450.EAE1F481237%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004117.html">
+   <LINK REL="Next"  HREF="004119.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6944 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6944%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2&In-Reply-To=%3C20110121072450.EAE1F481237%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6944 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Jan 21 08:24:50 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004117.html">[Avidemux-svn-commit] r6943 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_muxerGate/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src
+</A></li>
+        <LI>Next message: <A HREF="004119.html">[Avidemux-svn-commit] r6945 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4118">[ date ]</a>
+              <a href="thread.html#4118">[ thread ]</a>
+              <a href="subject.html#4118">[ subject ]</a>
+              <a href="author.html#4118">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-01-21 08:24:50 +0100 (Fri, 21 Jan 2011)
+New Revision: 6944
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Video.cpp
+Log:
+[mp4v2] Support for h264 video (incomplete)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp	2011-01-21 07:24:49 UTC (rev 6943)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp	2011-01-21 07:24:50 UTC (rev 6944)
+@@ -143,7 +143,7 @@
+    
+ 
+     initUI(&quot;Saving MP4V2&quot;);
+-    encoding-&gt;setContainer(&quot;MP4&quot;);
++    encoding-&gt;setContainer(&quot;MP4 (libmp4v2)&quot;);
+     
+     
+     while(vStream-&gt;getPacket(&amp;(in[nextWrite]))) 
+@@ -151,18 +151,27 @@
+         bool kf=false;
+         int other=!nextWrite;
+         if(in[other].flags &amp; AVI_KEY_FRAME) kf=true;
+-        uint64_t newDts=in[nextWrite].dts-in[other].dts;
+-        uint64_t duration=timeScale(newDts);
+-        uint64_t delta=in[other].pts-in[other].dts;
+ 
++        ADM_assert(in[nextWrite].dts!=ADM_NO_PTS)
++        ADM_assert(in[other].pts!=ADM_NO_PTS)
++        ADM_assert(in[nextWrite].dts!=ADM_NO_PTS)
++        ADM_assert(in[other].pts!=ADM_NO_PTS)
++
++        uint64_t newDts=in[nextWrite].dts-in[other].dts;   // Delta between dts=duration of the frame (sort of)     
++        uint64_t delta=in[other].pts-in[other].dts; // composition time...
++        uint64_t duration=(newDts);
++
+         encoding-&gt;pushVideoFrame(in[other].len,in[other].out_quantizer,in[other].dts);
+         // Special case : First frame
+         if(!nbFrame)
+         {
+-            delta+=in[other].dts;
+-            ADM_info(&quot;Video does not start at 0, adding %d ms\n&quot;,(int)in[other].dts/1000);
++            uint64_t tzero=in[other].dts;
++            delta+=tzero; // Still in us
++            duration+=tzero;
++            ADM_info(&quot;Video does not start at 0, adding %d ms\n&quot;,(int)tzero/1000);
+         }
+         delta=timeScale(delta);
++        duration=timeScale(duration);
+         nbFrame++;
+         if(false==MP4WriteSample(handle,videoTrackId,in[other].data,in[other].len,
+                         duration, // duration
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h	2011-01-21 07:24:49 UTC (rev 6943)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h	2011-01-21 07:24:50 UTC (rev 6944)
+@@ -62,7 +62,8 @@
+         int             nextWrite;
+         uint64_t        audioDelay; // In fact videoDelay, but must be added to all audioTrack
+ protected:
+-        bool            setMpeg4Esds(void);
++        bool            initMpeg4(void);
++        bool            initH264(void);
+         bool            initVideo(void);
+         bool            initAudio(void);
+         bool            fillAudio(uint64_t targetDts);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp	2011-01-21 07:24:49 UTC (rev 6943)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp	2011-01-21 07:24:50 UTC (rev 6944)
+@@ -25,9 +25,11 @@
+ #include &quot;ADM_imageFlags.h&quot;
+ #if 1
+ #define aprintf(...) {}
++#define bprintf(...) {} // ADM_info
+ #define MP4_DEBUG 0
+ #else
+ #define aprintf ADM_info
++#define bprintf ADM_info
+ #define MP4_DEBUG MP4_DETAILS_ALL
+ #endif
+ 
+@@ -246,10 +248,14 @@
+                         // Get our currentDts
+                         uint64_t currentDts=clock-&gt;getTimeUs();                        
+                         uint64_t blockDts=currentBlock-&gt;dts;
++                        if(pkt-&gt;eos)            break;
+                         extraSamples=0;
+                         // Take either block Dts or our own if no DTS is provided
+                         if(currentBlock-&gt;dts!=ADM_NO_PTS)
+                         {
++                            bprintf(&quot;Current audio Dts=%&quot;LLD&quot;\n&quot;,currentDts);
++                            bprintf(&quot;Incoming block, dts=%&quot;LLD&quot;\n&quot;,currentBlock-&gt;dts);
++                            bprintf(&quot;Delta =%d ms\n&quot;,(int)(currentDts-currentBlock-&gt;dts));
+                             if( abs(currentBlock-&gt;dts-currentDts)&gt;MP4V2_MAX_JITTER)
+                             {
+                                 if(currentBlock-&gt;dts&lt;currentDts)
+@@ -278,10 +284,12 @@
+                             return false;
+                         }
+                         // load next
++
++                        clock-&gt;advanceBySample(currentBlock-&gt;nbSamples+extraSamples);
+ nextOne:
+-                        clock-&gt;advanceBySample(currentBlock-&gt;nbSamples+extraSamples);
+                         if(false==loadAndToggleAudioSlot(audioIndex))
+                         {
++                            ADM_warning(&quot;End of audio stream %d\n&quot;,audioIndex);
+                             #warning Purge other slot
+                             pkt-&gt;eos=true;
+                         }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Video.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Video.cpp	2011-01-21 07:24:49 UTC (rev 6943)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Video.cpp	2011-01-21 07:24:50 UTC (rev 6944)
+@@ -34,9 +34,16 @@
+     \fn setEsdsAtom
+     \brief extract esds atom from extradata or for first frame. In all cases read the first frame
+ */
+-bool muxerMp4v2::setMpeg4Esds(void)
++bool muxerMp4v2::initMpeg4(void)
+ {
+     bool removeVol=false;
++    videoTrackId=MP4AddVideoTrack(handle,90000,MP4_INVALID_DURATION,
++    vStream-&gt;getWidth(),vStream-&gt;getHeight(),MP4_MPEG4_VIDEO_TYPE);
++    if(MP4_INVALID_TRACK_ID==videoTrackId)
++        {
++            ADM_error(&quot;Cannot add mpeg4 video Track \n&quot;);
++            return false;
++        }
+     ADM_info(&quot;Setting mpeg4 (a)SP ESDS...\n&quot;);
+     if(0) //false==vStream-&gt;getPacket(&amp;in) )
+      {
+@@ -97,6 +104,59 @@
+         return true;
+ }
+ /**
++       \fn initH264
++       \brief format header for H264
++*/
++bool muxerMp4v2::initH264(void)
++{
++//
++            bool result=false;
++            uint32_t spsLen;
++            uint8_t  *spsData=NULL;
++            uint32_t ppsLen;
++            uint8_t  *ppsData=NULL;
++            // Extract sps &amp; pps            
++            uint8_t *extra=NULL;
++            uint32_t extraLen=0;
++            if(false==vStream-&gt;getExtraData(&amp;extraLen,&amp;extra))
++            {
++                ADM_error(&quot;Cannot get extradata\n&quot;);
++                return false;
++            }
++            if(extraLen)
++                mixDump(extra,extraLen);
++            ADM_info(&quot;\n&quot;);
++            if(false==ADM_getH264SpsPpsFromExtraData(extraLen,extra,&amp;spsLen,&amp;spsData,&amp;ppsLen,&amp;ppsData))
++            {
++                ADM_error(&quot;Wrong extra data for h264\n&quot;);
++                return false;
++            }
++          
++            videoTrackId=MP4AddH264VideoTrack(handle,90000,MP4_INVALID_DURATION,
++                    vStream-&gt;getWidth(),vStream-&gt;getHeight(),spsData[1],spsData[2],spsData[3],3);
++            if(MP4_INVALID_TRACK_ID==videoTrackId)
++            {
++                ADM_error(&quot;Cannot add h264 video Track \n&quot;);
++                return false;
++            }
++            ADM_info(&quot;SPS (%d) :&quot;,spsLen);
++            mixDump(spsData,spsLen);
++            ADM_info(&quot;PPS (%d) :&quot;,ppsLen);
++            mixDump(ppsData,ppsLen);
++            ADM_info(&quot;\n&quot;);
++
++            MP4AddH264SequenceParameterSet(handle,videoTrackId, spsData,spsLen );
++            MP4AddH264PictureParameterSet( handle,videoTrackId, ppsData,ppsLen);
++            // MP4AddIPodUUID
++            result=true;
++clnup:
++            if(spsData) delete [] spsData;
++            if(ppsData) delete [] ppsData;
++            spsData=NULL;
++            ppsData=NULL;
++            return result;
++}
++/**
+     \fn initVideo
+ */
+ bool muxerMp4v2::initVideo(void)
+@@ -112,39 +172,22 @@
+         ADM_info(&quot;Setting video..\n&quot;);
+         if(isMpeg4Compatible(fcc))
+         {
+-            videoTrackId=MP4AddVideoTrack(handle,90000,MP4_INVALID_DURATION,
+-                    vStream-&gt;getWidth(),vStream-&gt;getHeight(),MP4_MPEG4_VIDEO_TYPE);
+-            if(MP4_INVALID_TRACK_ID==videoTrackId)
++           
++            if(false==initMpeg4())
+             {
+-                ADM_error(&quot;Cannot add mpeg4 video Track \n&quot;);
+-                return false;
+-            }
+-            if(false==setMpeg4Esds())
+-            {
+                 ADM_error(&quot;Cannot set ESDS atom\n&quot;);
+                 return false;
+             }
+         }
+         if(isH264Compatible(fcc))
+         {
+-#if 0
+-            // Extract sps &amp; pps
+-            uint8_t *sps,*pps;
+-            //
+-            videoTrackId=MP4AddH264VideoTrack(handle,90000,MP4_INVALID_DURATION,
+-                    vStream-&gt;getWidth(),vStream-&gt;getHeight(),sps[0],sps[1],sps[2],3);
+-            if(MP4_INVALID_TRACK_ID==videoTrackId)
++            if(false==initH264())
+             {
+-                ADM_error(&quot;Cannot add h264 video Track \n&quot;);
+-                goto er;
+-            }
+-            if(false==MP4SetTrackESConfiguration(handle,videoTrackId,esdsData,esdsLen))
+-            {
+-                ADM_error(&quot;SetTracEsConfiguration failed\n&quot;);
++                ADM_error(&quot;Cannot add h264 track\n&quot;);
+                 return false;
+             }
+-#endif
+         }
++        ADM_info(&quot;[MP4V2] Video correctly initalized\n&quot;);
+         return true;
+ }
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004117.html">[Avidemux-svn-commit] r6943 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_muxerGate/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src
+</A></li>
+	<LI>Next message: <A HREF="004119.html">[Avidemux-svn-commit] r6945 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4118">[ date ]</a>
+              <a href="thread.html#4118">[ thread ]</a>
+              <a href="subject.html#4118">[ subject ]</a>
+              <a href="author.html#4118">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,219 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6149 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6149%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C201005021432.o42EWGn8015026%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003351.html">
+   <LINK REL="Next"  HREF="003353.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6149 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6149%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C201005021432.o42EWGn8015026%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6149 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun May  2 16:32:16 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003351.html">[Avidemux-svn-commit] r6148 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces
+</A></li>
+        <LI>Next message: <A HREF="003353.html">[Avidemux-svn-commit] r6150 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3352">[ date ]</a>
+              <a href="thread.html#3352">[ thread ]</a>
+              <a href="subject.html#3352">[ subject ]</a>
+              <a href="author.html#3352">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-05-02 16:32:15 +0200 (Sun, 02 May 2010)
+New Revision: 6149
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+Log:
+[TsIndexer] Slightly faster indexing by inlining
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2010-05-02 14:32:13 UTC (rev 6148)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2010-05-02 14:32:15 UTC (rev 6149)
+@@ -532,17 +532,37 @@
+     pkt-&gt;open(file,append);
+     data.pkt=pkt;
+     fullSize=pkt-&gt;getSize();
++    int startCode;
++#define likely(x) x
++#define unlikely(x) x
+       while(1)
+       {
+-        uint32_t code=0xffff+0xffff0000;
+-        while((code&amp;0x00ffffff)!=1 &amp;&amp; pkt-&gt;stillOk())
++        int last=0xffff,cur=0xffff;
++        
++        while(pkt-&gt;stillOk())
+         {
+-            code=(code&lt;&lt;8)+pkt-&gt;readi8();
++            last=cur;
++            cur=pkt-&gt;readi16();
++            if(likely(last&amp;0xff)) continue;
++            if(unlikely(!last)) // 00 00 , need 01 xx
++            {
++                if((cur&gt;&gt;8)==1) 
++                {
++                        startCode=cur&amp;0xff;
++                        break;
++                }
++            }
++            if(unlikely(!(last&amp;0xff))) // xx 00 need 00 01
++            {
++                if(cur==1)
++                {
++                        startCode=pkt-&gt;readi8();
++                        break;
++                }
++            }
+         }
+         if(!pkt-&gt;stillOk()) break;
+-        uint8_t startCode=pkt-&gt;readi8();
+ 
+-
+           switch(startCode)
+                   {
+                   case 0xB3: // sequence start
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2010-05-02 14:32:13 UTC (rev 6148)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2010-05-02 14:32:15 UTC (rev 6149)
+@@ -578,6 +578,7 @@
+         }
+         return true;
+ }
++#ifndef TS_PACKET_INLINE
+ /**
+     \fn readi8
+ */
+@@ -596,6 +597,7 @@
+     return pesPacket-&gt;payload[pesPacket-&gt;offset++];
+     
+ }
++
+ /**
+     \fn readi16
+ */
+@@ -612,6 +614,7 @@
+     }
+     return (readi8()&lt;&lt;8)+readi8();
+ }
++#endif
+ /**
+     \fn readi32
+ */
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2010-05-02 14:32:13 UTC (rev 6148)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2010-05-02 14:32:15 UTC (rev 6149)
+@@ -139,7 +139,7 @@
+     \class tsPacketLinear
+ */
+ #define ADM_PACKET_LINEAR 10*1024
+-
++#define TS_PACKET_INLINE
+ class tsPacketLinear : public tsPacket
+ {
+ protected:
+@@ -156,13 +156,54 @@
+                 tsPacketLinear(uint32_t pid);
+                 ~tsPacketLinear();
+         uint32_t getConsumed(void);
++        bool     stillOk(void) {return !eof;};
++#ifndef TS_PACKET_INLINE
+         uint8_t  readi8();
+         uint16_t readi16();
++
++#else
++/**
++    \fn readi8
++*/
++uint8_t readi8(void)
++{
++    consumed++;
++    if(pesPacket-&gt;offset&lt;pesPacket-&gt;payloadSize)
++    {
++        return pesPacket-&gt;payload[pesPacket-&gt;offset++];
++    }
++    if(false==refill()) 
++    {
++        eof=1;
++        return 0;
++    }
++    return pesPacket-&gt;payload[pesPacket-&gt;offset++];
++    
++}
++
++/**
++    \fn readi16
++*/
++uint16_t readi16(void)
++{
++    if(pesPacket-&gt;offset+1&lt;pesPacket-&gt;payloadSize)
++    {
++        uint8_t *r=pesPacket-&gt;payload+pesPacket-&gt;offset;
++        uint16_t v=(r[0]&lt;&lt;8)+r[1];;
++        
++        pesPacket-&gt;offset+=2;
++        consumed+=2;
++        return v;
++    }
++    return (readi8()&lt;&lt;8)+readi8();
++}
++#endif
++
+         uint32_t readi32();
+         bool     sync(uint8_t *pid);
+         bool    read(uint32_t len, uint8_t *buffer);
+         bool    forward(uint32_t v);
+-        bool    stillOk(void) {return !eof;};
++        
+         bool    getInfo(dmxPacketInfo *info);
+         bool    seek(uint64_t packetStart, uint32_t offset);
+         bool    changePid(uint32_t pid) ;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003351.html">[Avidemux-svn-commit] r6148 -	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces
+</A></li>
+	<LI>Next message: <A HREF="003353.html">[Avidemux-svn-commit] r6150 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3352">[ date ]</a>
+              <a href="thread.html#3352">[ thread ]</a>
+              <a href="subject.html#3352">[ subject ]</a>
+              <a href="author.html#3352">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

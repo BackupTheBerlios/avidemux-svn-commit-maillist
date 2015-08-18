@@ -1,0 +1,264 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5221 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5221%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%20ADM_editor&In-Reply-To=%3C200908070708.n7778qZj004534%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002433.html">
+   <LINK REL="Next"  HREF="002435.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5221 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5221%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%20ADM_editor&In-Reply-To=%3C200908070708.n7778qZj004534%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5221 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Aug  7 09:08:52 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002433.html">[Avidemux-svn-commit] r5220 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_lav
+</A></li>
+        <LI>Next message: <A HREF="002435.html">[Avidemux-svn-commit] r5222 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_codecs	ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2434">[ date ]</a>
+              <a href="thread.html#2434">[ thread ]</a>
+              <a href="subject.html#2434">[ subject ]</a>
+              <a href="author.html#2434">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-08-07 09:08:49 +0200 (Fri, 07 Aug 2009)
+New Revision: 5221
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/gui_action.names
+Log:
+[UI/audio] Menu to select audio track, fixes #18
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2009-08-06 18:25:27 UTC (rev 5220)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2009-08-07 07:08:49 UTC (rev 5221)
+@@ -758,10 +758,11 @@
+   return 1;
+ 
+ }
+-//******************************
+-// Select audio track
+-//
+-//******************************
++/**
++    \fn getAudioStreamsInfo
++    \brief Returns a copy of all audio trackes at frame frame
++    call delete [] infos when you dont need them anymore
++*/
+ uint8_t ADM_Composer::getAudioStreamsInfo(uint32_t frame,uint32_t *nbStreams, audioInfo **infos)
+ {
+ uint32_t seg,rel,reference;
+@@ -784,11 +785,12 @@
+         for(int i=0;i&lt;*nbStreams;i++)
+         {
+             WAVHeader *wav=&amp;(_videos[reference].audioTracks[i]-&gt;wavheader);
+-            (*infos)-&gt;bitrate=(wav-&gt;byterate*8)/1000;
+-            (*infos)-&gt;channels=wav-&gt;channels;
+-            (*infos)-&gt;encoding=wav-&gt;encoding;
+-            (*infos)-&gt;frequency=wav-&gt;frequency;
+-            (*infos)-&gt;av_sync=0;
++            audioInfo *t=(*infos)+i;
++            t-&gt;bitrate=(wav-&gt;byterate*8)/1000;
++            t-&gt;channels=wav-&gt;channels;
++            t-&gt;encoding=wav-&gt;encoding;
++            t-&gt;frequency=wav-&gt;frequency;
++            t-&gt;av_sync=0;
+          }
+         return 1;
+     return 0;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp	2009-08-06 18:25:27 UTC (rev 5220)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gtk_gui.cpp	2009-08-07 07:08:49 UTC (rev 5221)
+@@ -1001,114 +1001,46 @@
+       \brief Allow to select audio track
+ */
+ void A_audioTrack( void )
+-{
+-#if 0
+-        uint32_t nb;
++{        
+         audioInfo *infos=NULL;
++        uint32_t nbAudioTracks,currentAudioTrack;
++        uint32_t newTrack;
+ 
+-        uint32_t old,nw;
+-        uint8_t r=0;
+-        uint32_t oldtrack,newtrack;
+-        char *newtrackname=ADM_strdup(currentAudioName);
+-
+-        if(!video_body-&gt;getAudioStreamsInfo(0,&amp;nb, &amp;infos))
+-        {
+-          GUI_Error_HIG(QT_TR_NOOP(&quot;Could not get tracks info&quot;), NULL);
+-                return ;
+-        }
+-        newtrack=oldtrack=(uint32_t)video_body-&gt;getCurrentAudioStreamNumber(0);
+-        nw=old=currentAudioSource;
+-
+-        /* Build dialog factory widget */
+-        diaMenuEntry sourcesStream[]={
+-            {AudioAvi,QT_TR_NOOP(&quot;Video&quot;),QT_TR_NOOP(&quot;Take audio from video file&quot;)},
+-            {AudioNone,QT_TR_NOOP(&quot;None&quot;),QT_TR_NOOP(&quot;No audio&quot;)},
+-            {AudioAC3,QT_TR_NOOP(&quot;External AC3&quot;),QT_TR_NOOP(&quot;Take audio from external AC3 file&quot;)},
+-            {AudioMP3,QT_TR_NOOP(&quot;External MP3&quot;),QT_TR_NOOP(&quot;Take audio from external MP3 file&quot;)},
+-            {AudioWav,QT_TR_NOOP(&quot;External WAV&quot;),QT_TR_NOOP(&quot;Take audio from external WAV file&quot;)}
+-        };
+-
+-
+-        diaElemMenu   sourceMenu(&amp;nw,QT_TR_NOOP(&quot;_Audio source:&quot;),5,sourcesStream,NULL);
+-
+-
+-
+-        diaElemFile  sourceName(0,&amp;newtrackname,QT_TR_NOOP(&quot;_External file:&quot;), NULL, QT_TR_NOOP(&quot;Select file&quot;));
+-
++        if(!video_body-&gt;getAudioStreamsInfo(0,&amp;nbAudioTracks,&amp;infos)) return;
++        currentAudioTrack=video_body-&gt;getCurrentAudioStreamNumber(0);
++        newTrack=currentAudioTrack;
+         // Now build the list of embedded track
+ #define MAX_AUDIO_TRACK 10
+ #define MAX_AUDIO_TRACK_NAME 100
+         diaMenuEntryDynamic *sourceavitracks[MAX_AUDIO_TRACK];
+         char string[MAX_AUDIO_TRACK_NAME];
+-        for(int i=0;i&lt;nb;i++)
++        for(int i=0;i&lt;nbAudioTracks;i++)
+         {
+-          sprintf(string,&quot;Audio track %d (%s/%d channels/%d kbit per s/%d ms shift)&quot;,i,getStrFromAudioCodec(infos[i].encoding),
+-                        infos[i].channels,infos[i].bitrate,infos[i].av_sync);
++          sprintf(string,&quot;Audio track %d (%s, %d channels, %d kbit/s)&quot;,i,
++                        getStrFromAudioCodec(infos[i].encoding),
++                        infos[i].channels,infos[i].bitrate);
+            sourceavitracks[i]=new diaMenuEntryDynamic(i,string,NULL);
+         }
+          if(infos) delete [] infos;
+ 
+-         diaElemMenuDynamic   sourceFromVideo(&amp;newtrack,QT_TR_NOOP(&quot;_Track from video:&quot;),nb,sourceavitracks);
+-         diaElem *allWidgets[]={&amp;sourceMenu,&amp;sourceFromVideo,&amp;sourceName};
++         diaElemMenuDynamic   sourceFromVideo(&amp;newTrack,QT_TR_NOOP(&quot;_Track from video:&quot;),nbAudioTracks,sourceavitracks);
++         diaElem *allWidgets[]={&amp;sourceFromVideo};
+ 
+-         /* Link..*/
+-         sourceMenu.link(&amp;(sourcesStream[0]),1,&amp;sourceFromVideo);
+-         sourceMenu.link(&amp;(sourcesStream[2]),1,&amp;sourceName);
+-         sourceMenu.link(&amp;(sourcesStream[3]),1,&amp;sourceName);
+-         sourceMenu.link(&amp;(sourcesStream[4]),1,&amp;sourceName);
+-
+-
+-         if( diaFactoryRun(QT_TR_NOOP(&quot;Main Audio Track&quot;),3,allWidgets))
++         if( diaFactoryRun(QT_TR_NOOP(&quot;Main Audio Track&quot;),1,allWidgets))
+          {
+-           if(nw!=AudioNone &amp;&amp; nw!=AudioAvi)
+-           {
+-              if( !ADM_fileExist(newtrackname))
+-              {
+-                GUI_Info_HIG(ADM_LOG_INFO,QT_TR_NOOP(&quot;Cannot load&quot;),QT_TR_NOOP(&quot;The selected audio file does not exist.&quot;));
+-                goto roger_and_out;
+-              }
+-           }
+-            switch( nw)
++            if(newTrack!=currentAudioTrack)
+             {
+-                    case AudioMP3:
+-                            if( ADM_fileExist(newtrackname))
+-                              A_loadMP3(newtrackname);
+-                            break;
+-                    case AudioAC3:
+-                            if( ADM_fileExist(newtrackname))
+-                              A_loadAC3(newtrackname);
+-                            break;
+-                    case AudioWav:
+-                            if( ADM_fileExist(newtrackname))
+-                              A_loadWave(newtrackname);
+-                            break;
+-                    case AudioNone:
+-//                              A_changeAudioStream((AVDMGenericAudioStream *) NULL, AudioNone,NULL);
+-                            break;
+-                    case AudioAvi:
+-                            //printf(&quot;New :%d old:%d\n&quot;,newtrack,oldtrack);
+-                            if(oldtrack!=newtrack)
+-                            {
+-                                    video_body-&gt;changeAudioStream(0,newtrack);
+-                                    //
+-                                    if(aviaudiostream==currentaudiostream)
+-                                            currentaudiostream=NULL;
+-                                    delete aviaudiostream;
+-                                    aviaudiostream=NULL;
+-                                    video_body-&gt;getAudioStream(&amp;aviaudiostream);
+-                            }
+-                            A_changeAudioStream (aviaudiostream, AudioAvi,NULL);
+-                            break;
+-                    default:
+-                            ADM_assert(0);
++                    video_body-&gt;changeAudioStream(0,newTrack);
++                    video_body-&gt;getAudioStream(&amp;aviaudiostream);
++            }
+         }
+-         }
++      
+ roger_and_out:
+          /* Clean up */
+-         for(int i=0;i&lt;nb;i++)
++         for(int i=0;i&lt;nbAudioTracks;i++)
+             delete sourceavitracks[i];
+         return;
+-#endif
++
+ }
+ /**
+         \fn A_externalAudioTrack
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gui_action.names
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gui_action.names	2009-08-06 18:25:27 UTC (rev 5220)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gui_action.names	2009-08-07 07:08:49 UTC (rev 5221)
+@@ -15,7 +15,6 @@
+ ACT(SaveImg)
+ ACT(SaveJPG)
+ ACT(SaveBunchJPG)
+-ACT(SaveDVDPS)
+ ACT(SaveAvi)
+ ACT(SaveWave)
+ ACT(SaveRaw)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002433.html">[Avidemux-svn-commit] r5220 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_lav
+</A></li>
+	<LI>Next message: <A HREF="002435.html">[Avidemux-svn-commit] r5222 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_codecs	ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2434">[ date ]</a>
+              <a href="thread.html#2434">[ thread ]</a>
+              <a href="subject.html#2434">[ subject ]</a>
+              <a href="author.html#2434">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

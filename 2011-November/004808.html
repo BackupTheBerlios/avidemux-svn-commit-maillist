@@ -1,0 +1,175 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7664 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_outputs cmake/patches
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7664%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09avidemux/ADM_outputs%20cmake/patches&In-Reply-To=%3C20111116204549.305C4481446%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004807.html">
+   <LINK REL="Next"  HREF="004809.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7664 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_outputs cmake/patches</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7664%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09avidemux/ADM_outputs%20cmake/patches&In-Reply-To=%3C20111116204549.305C4481446%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7664 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_outputs cmake/patches">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Wed Nov 16 21:45:48 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004807.html">[Avidemux-svn-commit] r7663 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioDevices/AudioCore
+</A></li>
+        <LI>Next message: <A HREF="004809.html">[Avidemux-svn-commit] r7665 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/Yadif
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4808">[ date ]</a>
+              <a href="thread.html#4808">[ thread ]</a>
+              <a href="subject.html#4808">[ subject ]</a>
+              <a href="author.html#4808">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2011-11-16 21:45:48 +0100 (Wed, 16 Nov 2011)
+New Revision: 7664
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/ADM_lavformat.cpp
+   branches/avidemux_2.5_branch_gruntster/cmake/patches/libavcodec_h263dec.c.patch
+Log:
+[ffmpeg] don't reference deprecated API
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp	2011-11-14 06:49:28 UTC (rev 7663)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp	2011-11-16 20:45:48 UTC (rev 7664)
+@@ -23,6 +23,7 @@
+ extern &quot;C&quot;
+ {
+ #include &quot;libavcodec/avcodec.h&quot;
++#include &quot;libavutil/pixdesc.h&quot;
+ #include &quot;libswscale/swscale.h&quot;
+ }
+ 
+@@ -139,7 +140,7 @@
+ 			_resampleBuffer = new uint8_t[_resampleSize];
+ 		}
+ 
+-		printf(&quot;[externalEncoder] Target colourspace: %s\n&quot;, _pixFmt == PIX_FMT_YUV420P ? &quot;yv12&quot; : avcodec_get_pix_fmt_name(_pixFmt));
++		printf(&quot;[externalEncoder] Target colourspace: %s\n&quot;, _pixFmt == PIX_FMT_YUV420P ? &quot;yv12&quot; : av_get_pix_fmt_name(_pixFmt));
+ 
+ 		return (startPass() == ADM_VIDENC_ERR_SUCCESS);
+ 	}
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/ADM_lavformat.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/ADM_lavformat.cpp	2011-11-14 06:49:28 UTC (rev 7663)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/ADM_lavformat.cpp	2011-11-16 20:45:48 UTC (rev 7664)
+@@ -487,19 +487,14 @@
+ 	oc-&gt;preload=AV_TIME_BASE/10; // 100 ms preloading
+ 	oc-&gt;max_delay=200*1000; // 500 ms
+ 
+-	if (av_set_parameters(oc, NULL) &lt; 0)
++	if (avio_open(&amp;(oc-&gt;pb), filename, AVIO_FLAG_WRITE) &lt; 0)
+ 	{
+-		printf(&quot;Lav: set param failed \n&quot;);
++		printf(&quot;Lav: Failed to open file :%s\n&quot;,filename);
+ 		return 0;
+ 	}
+-	 if (url_fopen(&amp;(oc-&gt;pb), filename, URL_WRONLY) &lt; 0)
+-	 {
+-	 	printf(&quot;Lav: Failed to open file :%s\n&quot;,filename);
+-		return 0;
+-        }
+ 
+-	ADM_assert(av_write_header(oc)&gt;=0);
+-	dump_format(oc, 0, filename, 1);
++	ADM_assert(avformat_write_header(oc, NULL)&gt;=0);
++	av_dump_format(oc, 0, filename, 1);
+ 
+ 
+ 	printf(&quot;lavformat mpeg muxer initialized\n&quot;);
+@@ -672,7 +667,7 @@
+ 		// Flush
+ 		// Cause deadlock :
+ 		av_write_trailer(oc);
+-		url_fclose((oc-&gt;pb));
++		avio_close(oc-&gt;pb);
+ 
+ 	}
+ 	if(audio_st)
+
+Modified: branches/avidemux_2.5_branch_gruntster/cmake/patches/libavcodec_h263dec.c.patch
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/cmake/patches/libavcodec_h263dec.c.patch	2011-11-14 06:49:28 UTC (rev 7663)
++++ branches/avidemux_2.5_branch_gruntster/cmake/patches/libavcodec_h263dec.c.patch	2011-11-16 20:45:48 UTC (rev 7664)
+@@ -1,5 +1,5 @@
+---- ../ffmpeg-0.8.6/libavcodec/h263dec.c	2011-11-13 16:42:33 +0000
+-+++ libavcodec/h263dec.c	2011-11-13 16:42:33 +0000
++--- ../ffmpeg-0.8.6/libavcodec/h263dec.c	2011-11-16 20:43:49 +0000
+++++ libavcodec/h263dec.c	2011-11-16 20:43:49 +0000
+ @@ -115,6 +115,25 @@
+  
+      return 0;
+@@ -26,3 +26,29 @@
+  
+  av_cold int ff_h263_decode_end(AVCodecContext *avctx)
+  {
++@@ -431,6 +450,12 @@
++     } else {
++         ret = h263_decode_picture_header(s);
++     }
+++	//MEANX we need to do it here also for quicktime file / ctts atom 
+++        // we need the correct frame type, and qt file may contain 
+++        // vop not coded frame.
+++        pict-&gt;pict_type=s-&gt;current_picture.pict_type= s-&gt;pict_type;
+++        pict-&gt;key_frame=s-&gt;current_picture.key_frame= s-&gt;pict_type == FF_I_TYPE;
+++        //MEANX
++ 
++     if(ret==FRAME_SKIPPED) return get_consumed_bytes(s, buf_size);
++ 
++@@ -715,6 +740,12 @@
++ 
++ assert(s-&gt;current_picture.pict_type == s-&gt;current_picture_ptr-&gt;pict_type);
++ assert(s-&gt;current_picture.pict_type == s-&gt;pict_type);
+++
+++/* MEANX */
+++    if(s-&gt;current_picture_ptr)
+++        s-&gt;current_picture_ptr-&gt;opaque=pict-&gt;opaque;
+++/* MEANX */
+++
++     if (s-&gt;pict_type == AV_PICTURE_TYPE_B || s-&gt;low_delay) {
++         *pict= *(AVFrame*)s-&gt;current_picture_ptr;
++     } else if (s-&gt;last_picture_ptr != NULL) {
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004807.html">[Avidemux-svn-commit] r7663 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioDevices/AudioCore
+</A></li>
+	<LI>Next message: <A HREF="004809.html">[Avidemux-svn-commit] r7665 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoFilters/Yadif
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4808">[ date ]</a>
+              <a href="thread.html#4808">[ thread ]</a>
+              <a href="subject.html#4808">[ subject ]</a>
+              <a href="author.html#4808">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

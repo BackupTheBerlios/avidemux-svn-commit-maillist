@@ -1,0 +1,357 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7479 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7479%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20110907163427.1DB66481248%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004627.html">
+   <LINK REL="Next"  HREF="004629.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7479 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7479%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20110907163427.1DB66481248%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7479 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Sep  7 18:34:27 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004627.html">[Avidemux-svn-commit] r7478 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+        <LI>Next message: <A HREF="004629.html">[Avidemux-svn-commit] r7480 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4628">[ date ]</a>
+              <a href="thread.html#4628">[ thread ]</a>
+              <a href="subject.html#4628">[ subject ]</a>
+              <a href="author.html#4628">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-09-07 18:34:26 +0200 (Wed, 07 Sep 2011)
+New Revision: 7479
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+Log:
+[TS] Beging writing brute force stream indexing, in case there is not PAT/PMT (TRP files)
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp	2011-09-07 16:34:26 UTC (rev 7479)
+@@ -0,0 +1,153 @@
++/** *************************************************************************
++    \file ADM_tsPatPmt.cpp
++    \brief Analyze pat &amp; pmt
++    copyright            : (C) 2007 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++    
++      
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_ts.h&quot;
++#include &quot;ADM_demuxerInternal.h&quot;
++#include &quot;ADM_tsPatPmt.h&quot;
++
++#include &quot;ADM_a52info.h&quot;
++#include &quot;ADM_mp3info.h&quot;
++
++
++#define TS_MAX_PACKET_SCAN 500
++#define MAX_PID (1&lt;&lt;17)
++#define MAX_BUFFER_SIZE (10*1024)
++
++static bool idContent(int pid,tsPacket *ts);
++
++/**
++    \fn scanForPrograms
++    \brief Lookup PAT &amp; PMT to get tracks
++*/
++bool TS_guessContent(const char *file,uint32_t *nbTracks, ADM_TS_TRACK **outTracks)
++{
++    ADM_info(&quot;[TS demuxer] Brute force reading...\n&quot;);
++    bool result=false;
++    ADM_TS_TRACK *tracks=NULL;
++    *outTracks=NULL;
++    *nbTracks=0;
++    uint32_t nb=0;
++
++    tsPacket *ts=new tsPacket();
++    ts-&gt;open(file,FP_PROBE);
++
++    int packetRead=0;
++    int *map=new int[MAX_PID];
++    memset(map,0,MAX_PID*sizeof(int));
++    uint8_t *buffer=new uint8_t[MAX_BUFFER_SIZE];
++    int pid;
++    uint32_t packetSize;
++    uint64_t pts,dts,at;
++    while(packetRead++&lt;TS_MAX_PACKET_SCAN)
++    {
++            if(false==ts-&gt;getNextPid(&amp;pid))
++            {
++                    printf(&quot;Read %d packets\n&quot;,packetRead);
++                    break;
++            }
++            if(pid&lt;MAX_PID)
++            {
++                map[pid]++;
++            }
++    }
++    // Keep only seen packet with more than 5 packets and &gt;16
++    std::vector &lt;int&gt;listOfPid;    
++    for(int i=17;i&lt;MAX_PID;i++)
++    {
++        if(map[i]&gt;5) listOfPid.push_back(i);
++    }
++    delete [] map;
++    map=NULL;
++    
++    for(int i=0;i&lt;listOfPid.size();i++)
++    {
++        printf(&quot;Found stuff in pid=%d\n&quot;,listOfPid[i]);
++        //  Read PES
++        idContent(listOfPid[i],ts);
++        // Try to id the packet...
++        
++    }
++    ts-&gt;close();
++    delete ts;
++    ts=NULL;
++    delete [] buffer;
++    buffer=NULL;
++    return result;
++}
++/**
++    \fn idContent
++*/
++bool idContent(int pid,tsPacket *ts)
++{
++TS_PESpacket pes(pid);
++TS_PESpacket pes2(pid);
++        if(false==ts-&gt;getNextPES( &amp;pes)) 
++        {
++            ADM_warning(&quot;\tCannot get PES\n&quot;);
++            return false;
++        }
++        if(false==ts-&gt;getNextPES( &amp;pes2)) 
++        {
++            ADM_warning(&quot;\tCannot get PES2\n&quot;);
++            return false;
++        }
++
++        printf(&quot;\t Read %d bytes\n&quot;,(int)pes.payloadSize);
++        // 
++        uint32_t fq,br,chan,syncoff;
++        uint32_t fq2,br2,chan2,syncoff2;
++        uint8_t *ptr=pes.payload;
++        uint32_t len=pes.payloadSize;
++        uint8_t *ptr2=pes2.payload;
++        uint32_t len2=pes2.payloadSize;
++
++        // Is it AC3 ??
++        if( ADM_AC3GetInfo(ptr,len, &amp;fq, &amp;br, &amp;chan,&amp;syncoff))
++        {
++                ADM_info(&quot;Maybe AC3... \n&quot;);
++                // Try on 2nd packet...
++                if( ADM_AC3GetInfo(ptr2,len2, &amp;fq2, &amp;br2, &amp;chan2,&amp;syncoff2))
++                {
++                    if((fq==fq2) &amp;&amp; (br2==br) &amp;&amp; (chan==chan2))
++                    {
++                        ADM_warning(&quot;\tProbably AC3 : Fq=%d br=%d chan=%d\n&quot;,(int)fq,(int)br,(int)chan);
++                        return true;
++                    }
++                }
++
++        }
++        MpegAudioInfo minfo,minfo2;
++        if( getMpegFrameInfo(ptr,len,&amp;minfo,NULL,&amp;syncoff))
++        {
++                    ADM_info(&quot;Maybe MP2... \n&quot;);
++                    if( getMpegFrameInfo(ptr2,len2,&amp;minfo2,&amp;minfo,&amp;syncoff))
++                    {
++                        ADM_warning(&quot;\tProbably MP2 : Fq=%d br=%d chan=%d\n&quot;, (int)minfo.samplerate,
++                                                                    (int)minfo.bitrate,
++                                                                    (int)minfo.mode);
++                        return true;
++                    }
++        }
++        
++        
++    ADM_info(&quot;\t Unrecognized.\n&quot;);
++    return false;
++}
++        
++
++//EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2011-09-07 08:03:08 UTC (rev 7478)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2011-09-07 16:34:26 UTC (rev 7479)
+@@ -51,8 +51,12 @@
+ 
+     if(TS_scanForPrograms(file,&amp;nbTracks,&amp;tracks)==false) 
+     {
+-        printf(&quot;[Ts Indexer] Scan of pmt failed\n&quot;);
+-        return false;
++            printf(&quot;[Ts Indexer] Scan of pmt failed\n&quot;);
++            if(TS_guessContent(file,&amp;nbTracks,&amp;tracks)==false) 
++            {
++                printf(&quot;[Ts Indexer] Brute force scan failed\n&quot;);
++                return false;
++            }
+     }
+     ADM_assert(tracks);
+     ADM_assert(nbTracks);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.h	2011-09-07 08:03:08 UTC (rev 7478)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.h	2011-09-07 16:34:26 UTC (rev 7479)
+@@ -79,6 +79,15 @@
+ */
+ 
+ bool TS_scanForPrograms(const char *file,uint32_t *nbTracks, ADM_TS_TRACK **tracks);
++/**
++    \fn TS_guessContent
++    \brief Analyze a stream and returns tracks within, guess what tracks actually are..
++    @param in:file File to open
++    @param out:nbTracks Number of tracks found
++    @param out:tracks, to be freed by delete [] by the caller
++*/
+ 
++bool TS_guessContent(const char *file,uint32_t *nbTracks, ADM_TS_TRACK **tracks);
++
+ #endif
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/CMakeLists.txt	2011-09-07 08:03:08 UTC (rev 7478)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/CMakeLists.txt	2011-09-07 16:34:26 UTC (rev 7479)
+@@ -13,6 +13,7 @@
+         ADM_tsComputeTimeStamp.cpp
+         dmxTSPacket.cpp
+         ADM_tsPatPmt.cpp
++        ADM_tsBruteForce.cpp
+         ADM_tsGetBits.cpp
+ )
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2011-09-07 08:03:08 UTC (rev 7478)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2011-09-07 16:34:26 UTC (rev 7479)
+@@ -537,9 +537,47 @@
+ */      
+ bool        tsPacket::getPacket(uint32_t maxSize, uint8_t *pid, uint32_t *packetSize,uint64_t *opts,uint64_t *odts,uint8_t *buffer,uint64_t *startAt)
+ {
++    return true;
++}
++/** 
++    \fn getNextPid
++*/  
++bool        tsPacket::getNextPid(int *pid)
++{
++ uint8_t scratch[188+4];
++    int count=0;
++nextPackx:
+ 
+-        return false;
+-       
++    if(false==getSinglePacket(scratch)) return false;
++    uint32_t id=scratch[1]+((scratch[0]&amp;0x1F)&lt;&lt;8);
++    count++;
++    if(count&gt;MAX_SKIPPED_PACKET) return false;
++    *pid=id;
++    
++    int payloadUnitStart=scratch[0]&amp;0x40;
++    int fieldControl=(scratch[2]&gt;&gt;4)&amp;3;
++    int continuity=(scratch[2]&amp;0xf);
++    int len=TS_PACKET_LEN-4; // useful datas
++
++    if(!(fieldControl &amp; 1)) 
++    {
++        goto nextPackx;
++    }
++    uint8_t *start,*end;
++    start=scratch+3;
++    end=scratch+TS_PACKET_LEN-1;
++
++    if((fieldControl &amp; 2)) // Adaptation layer
++    {
++        int payloadSize=*start++;
++        start+=payloadSize;
++    }
++    int size=(int)(end-start);
++    if(size&lt;=0)  
++    {
++        goto nextPackx;
++    }
++    return true;
+ }
+ 
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2011-09-07 08:03:08 UTC (rev 7478)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2011-09-07 16:34:26 UTC (rev 7479)
+@@ -121,6 +121,7 @@
+     virtual bool        open(const char *filenames,FP_TYPE append);
+     virtual bool        close(void);
+     virtual bool        getPacket(uint32_t maxSize, uint8_t *pid, uint32_t *packetSize,uint64_t *pts,uint64_t *dts,uint8_t *buffer,uint64_t *startAt);
++            bool        getNextPid(int *pid);
+     virtual uint64_t    getPos(void);
+     virtual bool        setPos(uint64_t pos);
+ protected:
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004627.html">[Avidemux-svn-commit] r7478 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+	<LI>Next message: <A HREF="004629.html">[Avidemux-svn-commit] r7480 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4628">[ date ]</a>
+              <a href="thread.html#4628">[ thread ]</a>
+              <a href="subject.html#4628">[ subject ]</a>
+              <a href="author.html#4628">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,180 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7601 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7601%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20111011060330.C42C9481377%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004746.html">
+   <LINK REL="Next"  HREF="004748.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7601 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7601%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20111011060330.C42C9481377%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7601 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Oct 11 08:03:30 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004746.html">[Avidemux-svn-commit] r7600 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="004748.html">[Avidemux-svn-commit] r7602 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4747">[ date ]</a>
+              <a href="thread.html#4747">[ thread ]</a>
+              <a href="subject.html#4747">[ subject ]</a>
+              <a href="author.html#4747">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-10-11 08:03:30 +0200 (Tue, 11 Oct 2011)
+New Revision: 7601
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp
+Log:
+[TS/TRP] Retry 10 times to get sync on mp2, not really good still
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp	2011-10-10 06:19:15 UTC (rev 7600)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp	2011-10-11 06:03:30 UTC (rev 7601)
+@@ -210,6 +210,17 @@
+     ADM_warning(&quot;dont know what it is...\n&quot;);
+     return false;
+ }
++
++static bool mp2Match(const MpegAudioInfo *array,int a, int b)
++{
++    const MpegAudioInfo *x=array+a;
++    const MpegAudioInfo *y=array+b;
++    if(x-&gt;bitrate&lt;=32) return false;
++    if(x-&gt;bitrate!=y-&gt;bitrate) return false;
++    if(x-&gt;mode!=y-&gt;mode) return false;
++    if(x-&gt;samplerate!=y-&gt;samplerate) return false;
++    return true;
++}
+ /**
+     \fn idContent
+ */
+@@ -228,9 +239,6 @@
+         uint32_t len=pes.payloadSize;
+ 
+ 
+-        // 
+-       
+-
+         if(!ptr[0] &amp;&amp; !ptr[1] &amp;&amp; ptr[2]==1 &amp;&amp; ptr[3]==0xe0) // probably video
+         {
+           return idContentE0(pid,ts,trackType);
+@@ -250,7 +258,7 @@
+         uint32_t fq,br,chan,syncoff;
+         uint32_t fq2,br2,chan2,syncoff2;
+ 
+-        // Is it AC3 ??
++        // Is it AC3 ?? No false positive with A52/AC3..
+         if( ADM_AC3GetInfo(ptr,len, &amp;fq, &amp;br, &amp;chan,&amp;syncoff))
+         {
+                 ADM_info(&quot;Maybe AC3... \n&quot;);
+@@ -267,23 +275,54 @@
+ 
+         }
+         // We easily have false positive with mp2...
+-        MpegAudioInfo minfo,minfo2;
+-        if( getMpegFrameInfo(ptr,len,&amp;minfo,NULL,&amp;syncoff))
++        // Let's get 10 samples, and say it's ok if we have MP2_THRESHOLD that match
++#define MP2_NB_TRY    10
++#define MP2_THRESHOLD 3
++        MpegAudioInfo mp2info[MP2_NB_TRY];
++        for(int i=0;i&lt;MP2_NB_TRY;i++)
+         {
+-                    if(minfo.bitrate&gt;=128)
+-                    {
+-                        ADM_info(&quot;Maybe MP2... \n&quot;);
+-                        if( getMpegFrameInfo(ptr2,len2,&amp;minfo2,&amp;minfo,&amp;syncoff))
+-                        {
+-                            ADM_warning(&quot;\tProbably MP2 : Fq=%d br=%d chan=%d\n&quot;, (int)minfo.samplerate,
++              if(false==ts-&gt;getNextPES( &amp;pes2)) 
++            {
++                ADM_warning(&quot;\tCannot get PES2\n&quot;);
++                return false;
++            }
++            ptr2=pes2.payload;
++            len2=pes2.payloadSize;
++            if( !getMpegFrameInfo(ptr2,len2,mp2info+i,NULL,&amp;syncoff))
++            {
++                ADM_warning(&quot;Cannot find mp2 header (try %d)\n&quot;,i);
++                return false;
++            }
++            ADM_info(&quot;\t\t%d : fq=%d br=%d\n&quot;,i,mp2info[i].samplerate,mp2info[i].bitrate);
++        }
++        int match=0,maxMatch=0,mp2index=0;
++        for(int j=0;j&lt;MP2_NB_TRY;j++)
++        {
++            match=0;
++            for(int i=0;i&lt;MP2_NB_TRY;i++)
++            {
++                    if(mp2Match(mp2info,i,j)) match++;
++            }
++            if(match&gt;maxMatch) 
++            {
++                maxMatch=match;
++                mp2index=j;
++            }
++        }
++        if(maxMatch&gt;=MP2_THRESHOLD)
++        {
++                MpegAudioInfo minfo;
++                ADM_info(&quot;Found %d matches out of %d samples\n&quot;,maxMatch,MP2_NB_TRY);
++                minfo=mp2info[mp2index];
++                ADM_warning(&quot;\tProbably MP2 : Fq=%d br=%d chan=%d\n&quot;, (int)minfo.samplerate,
+                                                                         (int)minfo.bitrate,
+                                                                         (int)minfo.mode);
+-                            trackType=ADM_TS_MPEG_AUDIO;
+-                            return true;
+-                        }
+-                    }
++                trackType=ADM_TS_MPEG_AUDIO;
++                return true;
++
+         }
+-    return false;
++        ADM_info(&quot;MP2:Only %d matches out of %d tries, dont know what that track is\n&quot;,maxMatch,MP2_NB_TRY);
++        return false;
+ }
+         
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004746.html">[Avidemux-svn-commit] r7600 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="004748.html">[Avidemux-svn-commit] r7602 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4747">[ date ]</a>
+              <a href="thread.html#4747">[ thread ]</a>
+              <a href="subject.html#4747">[ subject ]</a>
+              <a href="author.html#4747">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

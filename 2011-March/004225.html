@@ -1,0 +1,182 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7059 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7059%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C20110311064559.706A548135B%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004224.html">
+   <LINK REL="Next"  HREF="004226.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7059 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7059%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C20110311064559.706A548135B%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7059 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Mar 11 07:45:59 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004224.html">[Avidemux-svn-commit] r7058 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxer/include
+</A></li>
+        <LI>Next message: <A HREF="004226.html">[Avidemux-svn-commit] r7060 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4225">[ date ]</a>
+              <a href="thread.html#4225">[ thread ]</a>
+              <a href="subject.html#4225">[ subject ]</a>
+              <a href="author.html#4225">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-03-11 07:45:59 +0100 (Fri, 11 Mar 2011)
+New Revision: 7059
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.h
+Log:
+[editor] Add a function that checks and try to correct out of bound dts (Spid2Cutter)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp	2011-03-11 06:45:57 UTC (rev 7058)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp	2011-03-11 06:45:59 UTC (rev 7059)
+@@ -30,6 +30,86 @@
+ static bool setPtsFromDts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay);
+ static bool updatePtsAndDts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay);
+ /**
++    \fn verifyDts
++    \brief detect &amp; fix out of order DTS
++*/
++bool ADM_verifyDts(vidHeader *hdr,uint64_t timeIncrementUs)
++{
++        int nbMissing=0;
++        aviInfo info;
++        hdr-&gt;getVideoInfo(&amp;info);
++        uint32_t nbFrames=0;
++        nbFrames=info.nb_frames;
++        //
++        ADM_info(&quot;Verifying DTS....\n&quot;);
++        uint64_t got_dts=0,startDts=0;
++        int start=0;
++        for(int i =0;i&lt;nbFrames-1;i++)
++        {
++            uint64_t pts3,dts3;
++            hdr-&gt;getPtsDts(i,&amp;pts3,&amp;dts3);
++            if(dts3!=ADM_NO_PTS)
++            {
++                got_dts=dts3;
++                start=i+1;
++                break;
++            }
++        }
++        ADM_info(&quot;Checking from %d to %d\n&quot;,start,nbFrames);
++        startDts=got_dts;
++        // Pass 1 : detect too high DTS i.e. 0 1 2 &lt;9&gt; 4 5 6
++        for(int i=start;i&lt;nbFrames-1;i++)
++        {
++            
++            uint64_t pts2,dts2;
++            uint64_t pts3,dts3;
++            hdr-&gt;getPtsDts(i,&amp;pts2,&amp;dts2);
++            hdr-&gt;getPtsDts(i+1,&amp;pts3,&amp;dts3);
++            if(dts2!=ADM_NO_PTS &amp;&amp; dts3!=ADM_NO_PTS)
++            {
++                if(dts3&gt;got_dts &amp;&amp;dts2&gt;got_dts &amp;&amp; dts2&gt;dts3)
++                {
++                    ADM_warning(&quot;Out of order dts at frame %d %&quot;LLU&quot;,%&quot;LLU&quot;,%&quot;LLU&quot;\n&quot;,i,got_dts,dts2,dts3);
++                    dts2=got_dts+timeIncrementUs;
++                    ADM_info(&quot;Setting to %&quot;LLU&quot;\n&quot;,dts2);
++                    hdr-&gt;setPtsDts(i,pts2,dts2);
++                }
++            }
++            if(dts2==ADM_NO_PTS)
++                got_dts+=timeIncrementUs;
++            else        
++                got_dts=dts2;
++        }
++        // Pass 2 : detect too low DTS i.e. 0 1 2 4 &lt;1&gt; 6 7
++        got_dts=startDts;
++        ADM_info(&quot;Pass 2..\n&quot;);
++        for(int i=start;i&lt;nbFrames-1;i++)
++        {
++            
++            uint64_t pts2,dts2;
++            uint64_t pts3,dts3;
++            hdr-&gt;getPtsDts(i,&amp;pts2,&amp;dts2);
++            hdr-&gt;getPtsDts(i+1,&amp;pts3,&amp;dts3);
++            if(dts2!=ADM_NO_PTS &amp;&amp; dts3!=ADM_NO_PTS)
++            {
++                //ADM_info(&quot;%d %&quot;LLU&quot; %&quot;LLU&quot; %&quot;LLU&quot;\n&quot;,i,got_dts,dts2,dts3);
++                if(dts3&gt;got_dts &amp;&amp;dts2&lt;got_dts )
++                {
++                    ADM_warning(&quot;Low dts : Out of order dts at frame %d %&quot;LLU&quot;,%&quot;LLU&quot;,%&quot;LLU&quot;\n&quot;,i,got_dts,dts2,dts3);
++                    dts2=got_dts+timeIncrementUs;
++                    ADM_info(&quot;Setting to %&quot;LLU&quot;\n&quot;,dts2);
++                    hdr-&gt;setPtsDts(i,pts2,dts2);
++                }
++            }
++            if(dts2==ADM_NO_PTS)
++                got_dts+=timeIncrementUs;
++            else        
++                got_dts=dts2;
++        }
++        ADM_info(&quot;DTS verified\n&quot;);
++        return true;
++}
++/**
+     \fn countMissingPts
+ */
+ int countMissingPts(vidHeader *hdr)
+@@ -577,3 +657,4 @@
+     return r;
+ }
+ //EOF
++
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.h	2011-03-11 06:45:57 UTC (rev 7058)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.h	2011-03-11 06:45:59 UTC (rev 7059)
+@@ -18,7 +18,7 @@
+ #ifndef ADM_EDPTSDTS_H
+ #define ADM_EDPTSDTS_H
+ #include &quot;ADM_Video.h&quot;
+-
++bool ADM_verifyDts(vidHeader *hdr,uint64_t timeIncrementUs);
+ bool setPtsEqualDts(vidHeader *hdr,uint64_t timeIncrementUs);
+ // Valid for mpeg1/2/4 SP type 
+ bool ADM_computeMP124MissingPtsDts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004224.html">[Avidemux-svn-commit] r7058 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxer/include
+</A></li>
+	<LI>Next message: <A HREF="004226.html">[Avidemux-svn-commit] r7060 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4225">[ date ]</a>
+              <a href="thread.html#4225">[ thread ]</a>
+              <a href="subject.html#4225">[ subject ]</a>
+              <a href="author.html#4225">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

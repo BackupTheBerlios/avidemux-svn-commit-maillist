@@ -1,0 +1,124 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7505 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7505%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render&In-Reply-To=%3C20110912092221.C0CC8481300%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004652.html">
+   <LINK REL="Next"  HREF="004654.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7505 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7505%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render&In-Reply-To=%3C20110912092221.C0CC8481300%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7505 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Sep 12 11:22:21 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004652.html">[Avidemux-svn-commit] r7504 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+        <LI>Next message: <A HREF="004654.html">[Avidemux-svn-commit] r7506 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4653">[ date ]</a>
+              <a href="thread.html#4653">[ thread ]</a>
+              <a href="subject.html#4653">[ subject ]</a>
+              <a href="author.html#4653">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-09-12 11:22:21 +0200 (Mon, 12 Sep 2011)
+New Revision: 7505
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp
+Log:
+[glRender] optimize
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp	2011-09-12 09:22:20 UTC (rev 7504)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_qtGlRender.cpp	2011-09-12 09:22:21 UTC (rev 7505)
+@@ -32,7 +32,14 @@
+ static const char *yuvToRgb =
+ 	&quot;#extension GL_ARB_texture_rectangle: enable\n&quot;
+ 	&quot;uniform sampler2DRect texY, texU, texV;\n&quot;
+-	&quot;uniform float height;\n&quot;
++	&quot;uniform float height;\n&quot;
++    &quot;const mat4 mytrix=mat4( 1,   0,         1.5958,   0,&quot;
++                            &quot;1,  -0.39173,  -0.81290,  0,&quot;
++                            &quot;1,   2.017,      0,       0,&quot;
++                            &quot;0,        0,     0,       1);\n&quot;
++                            
++    &quot;const vec4 offsetx=vec4(-0.07276875,-0.5,-0.5,0);\n&quot;
++    &quot;const vec4 factorx=vec4(1.1643,1,1,1);\n&quot;
+ 
+ 	&quot;void main(void) {\n&quot;
+ 	&quot;  float nx = gl_TexCoord[0].x;\n&quot;
+@@ -41,15 +48,10 @@
+ 	&quot;  float u = texture2DRect(texU, vec2(nx / 2.0, ny / 2.0)).r;\n&quot;
+ 	&quot;  float v = texture2DRect(texV, vec2(nx / 2.0, ny / 2.0)).r;\n&quot;
+ 
+-	&quot;  y = 1.1643 * (y - 0.0625);\n&quot;
+-	&quot;  u = u - 0.5;\n&quot;
+-	&quot;  v = v - 0.5;\n&quot;
+-
+-	&quot;  float r = y + 1.5958 * v;\n&quot;
+-	&quot;  float g = y - 0.39173 * u - 0.81290 * v;\n&quot;
+-	&quot;  float b = y + 2.017 * u;\n&quot;
+-
+-	&quot;  gl_FragColor = vec4(r, g, b, 1.0);\n&quot;
++    &quot;  vec4 inx=vec4(y,u,v,1.0);\n&quot;
++    &quot;  vec4 inx2=(factorx*inx)+offsetx;\n&quot;
++    &quot;  vec4 outx=inx2*mytrix;\n&quot;
++	&quot;  gl_FragColor = outx;\n&quot;
+ 	&quot;}\n&quot;;
+ 
+ /**
+@@ -321,10 +323,12 @@
+ bool QtGlRender::changeZoom(renderZoom newZoom)
+ {
+     ADM_info(&quot;changing zoom, qtGl render.\n&quot;);
++    glWidget-&gt;makeCurrent();
+     calcDisplayFromZoom(newZoom);
+     currentZoom=newZoom;
+     glWidget-&gt;setDisplaySize(displayWidth,displayHeight);
+     glWidget-&gt;repaint();
++    glWidget-&gt;doneCurrent();
+     return true;
+ }
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004652.html">[Avidemux-svn-commit] r7504 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+	<LI>Next message: <A HREF="004654.html">[Avidemux-svn-commit] r7506 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4653">[ date ]</a>
+              <a href="thread.html#4653">[ thread ]</a>
+              <a href="subject.html#4653">[ subject ]</a>
+              <a href="author.html#4653">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

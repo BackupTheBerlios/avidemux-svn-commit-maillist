@@ -1,0 +1,192 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3301 - in	branches/avidemux_2.4_branch/avidemux: ADM_infoExtractor	ADM_inputs/ADM_flv
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3301%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_infoExtractor%0A%09ADM_inputs/ADM_flv&In-Reply-To=%3C200706250616.l5P6GIV8003564%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000580.html">
+   <LINK REL="Next"  HREF="000582.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3301 - in	branches/avidemux_2.4_branch/avidemux: ADM_infoExtractor	ADM_inputs/ADM_flv</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3301%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_infoExtractor%0A%09ADM_inputs/ADM_flv&In-Reply-To=%3C200706250616.l5P6GIV8003564%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3301 - in	branches/avidemux_2.4_branch/avidemux: ADM_infoExtractor	ADM_inputs/ADM_flv">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Jun 25 08:16:18 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000580.html">[Avidemux-svn-commit] r3300 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+        <LI>Next message: <A HREF="000582.html">[Avidemux-svn-commit] r3302 -	branches/avidemux_2.4_branch/avidemux/ADM_audiofilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#581">[ date ]</a>
+              <a href="thread.html#581">[ thread ]</a>
+              <a href="subject.html#581">[ subject ]</a>
+              <a href="author.html#581">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-06-25 08:16:18 +0200 (Mon, 25 Jun 2007)
+New Revision: 3301
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_infoExtractor/ADM_infoextractor.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp
+Log:
+extract width/height from h263 header
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_infoExtractor/ADM_infoextractor.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_infoExtractor/ADM_infoextractor.cpp	2007-06-24 18:54:13 UTC (rev 3300)
++++ branches/avidemux_2.4_branch/avidemux/ADM_infoExtractor/ADM_infoextractor.cpp	2007-06-25 06:16:18 UTC (rev 3301)
+@@ -200,7 +200,62 @@
+            *time_inc=tinc;
+            return 1;
+ }
+-
++/**
++      \brief extractH263FLVInfo
++      \fn Extract width/height from FLV header
++*/
++uint8_t extractH263FLVInfo(uint8_t *buffer,uint32_t len,uint32_t *w,uint32_t *h)
++{
++        GetBitContext gb;
++        int format;
++        init_get_bits( &amp;gb,buffer, len*8);
++        if (get_bits_long(&amp;gb, 17) != 1) {
++            printf(&quot;[FLV]Wrong FLV1 header\n&quot;);
++            return 0;
++        }
++        format = get_bits(&amp;gb, 5);
++        if (format != 0 &amp;&amp; format != 1) {
++            printf(&quot;[FLV]Wrong FLV1 header format\n&quot;);
++            return 0;        }
++        
++        get_bits(&amp;gb, 8); /* picture timestamp */
++        format = get_bits(&amp;gb, 3);
++        switch (format) {
++        case 0:
++            *w = get_bits(&amp;gb, 8);
++            *h = get_bits(&amp;gb, 8);
++            break;
++        case 1:
++            *w = get_bits(&amp;gb, 16);
++            *h = get_bits(&amp;gb, 16);
++            break;
++        case 2:
++            *w = 352;
++            *h = 288;
++            break;
++        case 3:
++            *w = 176;
++            *h = 144;
++            break;
++        case 4:
++            *w = 128;
++            *h = 96;
++            break;
++        case 5:
++            *w = 320;
++            *h = 240;
++            break;
++        case 6:
++            *w = 160;
++            *h = 120;
++            break;
++        default:
++             printf(&quot;[FLV]Wrong width format\n&quot;);
++             return 0;
++            break;
++        }
++        return 1;
++}
+ /*
+         Extract H263 width &amp; height from header
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp	2007-06-24 18:54:13 UTC (rev 3300)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv/ADM_flv.cpp	2007-06-25 06:16:18 UTC (rev 3301)
+@@ -36,7 +36,7 @@
+ // Borrowed from lavformt/flv.h    
+ 
+ uint32_t ADM_UsecFromFps1000(uint32_t fps1000);
+-
++extern uint8_t extractH263FLVInfo(uint8_t *buffer,uint32_t len,uint32_t *w,uint32_t *h);
+ /**
+     \fn Skip
+     \brief Skip some bytes from the file
+@@ -196,11 +196,14 @@
+               remaining--;
+               of++;
+             }
+-            if(!videoTrack-&gt;_nbIndex) // first frame..
++            int first=0;
++            if(!videoTrack-&gt;_nbIndex) first=1;
++            insertVideo(pos+of,remaining,frameType,pts);
++            if(first) // first frame..
+             {
+-                setVideoHeader(codec,&amp;remaining);
++                if(!setVideoHeader(codec,&amp;remaining)) return 0;
+             }
+-            insertVideo(pos+of,remaining,frameType,pts);
++            
+           }
+            break;
+       default: printf(&quot;[FLV]At 0x%x, unhandled type %u\n&quot;,pos,type);
+@@ -263,6 +266,19 @@
+          _video_bih.biWidth=_mainaviheader.dwWidth=read8()*16;
+         *remaining-=2; 
+     }
++    if(codec==FLV_CODECID_H263)
++    {
++      uint32_t len=*remaining,width,height;
++      uint8_t buffer[len];
++      read(len,buffer);
++      *remaining=0;
++       /* Decode header, from h263dec.c / lavcodec*/
++      if(extractH263FLVInfo(buffer,len,&amp;width,&amp;height))
++      {
++         _video_bih.biHeight=_mainaviheader.dwHeight=height;
++         _video_bih.biWidth=_mainaviheader.dwWidth=width;
++      }  
++    }
+    return 1;
+ }
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000580.html">[Avidemux-svn-commit] r3300 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+	<LI>Next message: <A HREF="000582.html">[Avidemux-svn-commit] r3302 -	branches/avidemux_2.4_branch/avidemux/ADM_audiofilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#581">[ date ]</a>
+              <a href="thread.html#581">[ thread ]</a>
+              <a href="subject.html#581">[ subject ]</a>
+              <a href="author.html#581">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

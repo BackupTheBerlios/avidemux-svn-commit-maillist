@@ -1,0 +1,208 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7111 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264:	. qt4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7111%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264%3A%0A%09.%20qt4&In-Reply-To=%3C20110405054946.21E4E480CFD%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004270.html">
+   <LINK REL="Next"  HREF="004272.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7111 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264:	. qt4</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7111%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264%3A%0A%09.%20qt4&In-Reply-To=%3C20110405054946.21E4E480CFD%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7111 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264:	. qt4">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Apr  5 07:49:46 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004270.html">[Avidemux-svn-commit] r7110 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core:	include src
+</A></li>
+        <LI>Next message: <A HREF="004272.html">[Avidemux-svn-commit] r7112 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264:	. preset
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4271">[ date ]</a>
+              <a href="thread.html#4271">[ thread ]</a>
+              <a href="subject.html#4271">[ subject ]</a>
+              <a href="author.html#4271">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-04-05 07:49:45 +0200 (Tue, 05 Apr 2011)
+New Revision: 7111
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4/Q_x264.cpp
+Log:
+[x264] Begin to add preset + glue to link it to core plugin settings
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/CMakeLists.txt	2011-04-05 05:49:44 UTC (rev 7110)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/CMakeLists.txt	2011-04-05 05:49:45 UTC (rev 7111)
+@@ -35,3 +35,11 @@
+ ELSE(X264_FOUND)
+   MESSAGE(STATUS &quot;x264 disabled.&quot;)
+ ENDIF(X264_FOUND)
++
++if(DO_GTK or DO_CLI or DO_QT4)
++SET(PRESET_DIR &quot;${AVIDEMUX_LIB_DIR}/ADM_plugins6/pluginSettings/x264/1/&quot;)
++
++FILE(GLOB json_files ${CMAKE_CURRENT_SOURCE_DIR}/preset/*.json)
++install(FILES ${json_files} DESTINATION &quot;${PRESET_DIR}&quot;)
++endif(DO_GTK or DO_CLI or DO_QT4)
++
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4/Q_x264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4/Q_x264.cpp	2011-04-05 05:49:44 UTC (rev 7110)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4/Q_x264.cpp	2011-04-05 05:49:45 UTC (rev 7111)
+@@ -69,8 +69,10 @@
+ 
+ 
+         upload();
+-        ADM_pluginInstallSystem( std::string(&quot;x264&quot;),pluginVersion);
++        ADM_pluginInstallSystem( std::string(&quot;x264&quot;),std::string(&quot;.json&quot;),pluginVersion);
+         updatePresetList();
++        int n=ui.configurationComboBox-&gt;count();
++        ui.configurationComboBox-&gt;setCurrentIndex(n-1);
+ }
+ /**
+     \fn updatePresetList
+@@ -83,6 +85,7 @@
+     ADM_pluginGetPath(&quot;x264&quot;,pluginVersion,rootPath);
+     ADM_listFile(rootPath,&quot;.json&quot;,list);
+     int l=list.size();
++    combo-&gt;clear();
+     for( int i=0;i&lt;l;i++)
+     {
+         combo-&gt;addItem(list[i].c_str());
+@@ -324,11 +327,32 @@
+ #endif
+ 
+ /**
+-
++    \fn configurationComboBox_currentIndexChanged
+ */
+ 
+ void x264Dialog::configurationComboBox_currentIndexChanged(int index)
+ {
++    int n=ui.configurationComboBox-&gt;currentIndex();
++    int m=ui.configurationComboBox-&gt;count();
++    if(n==m-1) // custom
++    {
++        return;
++    }
++    // get text
++    std::string rootPath;
++    ADM_pluginGetPath(&quot;x264&quot;,pluginVersion,rootPath);
++    QString text=QString(&quot;/&quot;)+ui.configurationComboBox-&gt;itemText(n);
++    text=QString(rootPath.c_str())+text+QString(&quot;.json&quot;);
++    const char *t=text.toUtf8().constData();
++    ADM_info(&quot;Loading preset %s\n&quot;,t);
++    if(false==x264_encoder_jdeserialize(t,x264_encoder_param,&amp;myCopy))
++    {
++        GUI_Error_HIG(&quot;Error&quot;,&quot;Cannot load preset&quot;);
++        ADM_error(&quot;Cannot read from %s\n&quot;,t);
++    }else       
++    {
++        upload();
++    }
+ #if 0
+ 	bool origDisableGenericSlots = disableGenericSlots;
+ 
+@@ -371,10 +395,7 @@
+ 	}
+ 
+ 	disableGenericSlots = origDisableGenericSlots;
+-#else
+-    GUI_Error_HIG(&quot;No&quot;,&quot;This function is not implemented&quot;);
+ #endif
+-
+ }
+ /**
+ 
+@@ -410,10 +431,13 @@
+         return NULL;
+   }
+   QString fileName=text-&gt;toPlainText();
+-  fileName=fileName+QString(&quot;.json&quot;);
+   const char *out=fileName.toUtf8().constData();
+   return ADM_strdup(out);
+ }
++/**
++        \fn saveAsButton_pressed
++        \brief Save the current settings as preset
++*/
+ void x264Dialog::saveAsButton_pressed(void)
+ {
+   // 1-ask name
+@@ -421,14 +445,16 @@
+   if(!out) return;
+   ADM_info(&quot;Using %s\n&quot;,out);
+   download();
+-  std::string fullpath=std::string(&quot;/tmp/&quot;)+out+std::string(&quot;.json&quot;);
++  std::string rootPath;
++  ADM_pluginGetPath(&quot;x264&quot;,pluginVersion,rootPath);
++  std::string fullpath=rootPath+std::string(&quot;/&quot;)+out+std::string(&quot;.json&quot;);
+   ADM_dealloc(out);
+   if(false==x264_encoder_jserialize(fullpath.c_str(),&amp;myCopy))
+   {
+         GUI_Error_HIG(&quot;Error&quot;,&quot;Cannot save preset&quot;);
+         ADM_error(&quot;Cannot write to %s\n&quot;,out);
+   }
+-  
++  updatePresetList();
+ }
+ /**
+ 
+@@ -452,6 +478,7 @@
+ 		ui.configurationComboBox-&gt;setCurrentIndex(0);	// default
+ 	}
+ #else
++/*
+     const char *out=&quot;/tmp/foo.x264&quot;;
+      if(false==x264_encoder_jdeserialize(out,x264_encoder_param,&amp;myCopy))
+     {
+@@ -459,6 +486,7 @@
+         ADM_error(&quot;Cannot read from %s\n&quot;,out);
+     }else       
+         upload();
++*/
+ #endif
+ }
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004270.html">[Avidemux-svn-commit] r7110 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core:	include src
+</A></li>
+	<LI>Next message: <A HREF="004272.html">[Avidemux-svn-commit] r7112 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264:	. preset
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4271">[ date ]</a>
+              <a href="thread.html#4271">[ thread ]</a>
+              <a href="subject.html#4271">[ subject ]</a>
+              <a href="author.html#4271">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

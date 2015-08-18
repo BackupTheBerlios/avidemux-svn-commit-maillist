@@ -1,0 +1,232 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4319 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4319%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters&In-Reply-To=%3C200809090030.m890UHm5031026%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001559.html">
+   <LINK REL="Next"  HREF="001560.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4319 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4319%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters&In-Reply-To=%3C200809090030.m890UHm5031026%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4319 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Sep  9 02:30:17 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001559.html">[Avidemux-svn-commit] r4318 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters
+</A></li>
+        <LI>Next message: <A HREF="001560.html">[Avidemux-svn-commit] r4320 - in	branches/avidemux_2.4_branch/avidemux:	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory ADM_video
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1557">[ date ]</a>
+              <a href="thread.html#1557">[ thread ]</a>
+              <a href="subject.html#1557">[ subject ]</a>
+              <a href="author.html#1557">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-09-09 02:30:07 +0200 (Tue, 09 Sep 2008)
+New Revision: 4319
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/mainfilter.ui
+Log:
+[Qt] implement script buttons on filter manager window
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp	2008-09-08 23:37:03 UTC (rev 4318)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/Q_mainfilter.cpp	2008-09-09 00:30:07 UTC (rev 4319)
+@@ -173,6 +173,8 @@
+         void remove(bool b);
+         void configure(bool b);
+         void partial(bool b);
++		void loadScript(bool b);
++		void saveScript(bool b);
+         void activeDoubleClick( QListWidgetItem  *item);
+ 		void activeItemChanged(QListWidgetItem *current, QListWidgetItem *previous);
+         void allDoubleClick( QListWidgetItem  *item);
+@@ -611,6 +613,41 @@
+         }
+         else delete replace;
+ }
++
++void filtermainWindow::loadScript(bool)
++{
++	bool previewDialogOpen = (previewDialog != NULL);
++
++	closePreview();
++
++#ifdef USE_LIBXML2
++	GUI_FileSelRead (QT_TR_NOOP(&quot;Load set of filters&quot;), filterLoadXml);
++#else
++	GUI_FileSelRead (QT_TR_NOOP(&quot;Load set of filters&quot;), filterLoad);
++#endif
++
++	getFirstVideoFilter ();
++	buildActiveFilterList ();
++	setSelected(nb_active_filter - 1);
++
++	if (previewDialogOpen)
++		preview(true);
++}
++
++void filtermainWindow::saveScript(bool)
++{
++	if (nb_active_filter &lt; 2)
++	{
++		GUI_Error_HIG (QT_TR_NOOP(&quot;Nothing to save&quot;), NULL);
++	}
++	else
++#ifdef USE_LIBXML2
++		GUI_FileSelWrite(QT_TR_NOOP(&quot;Save set of filters&quot;), filterSaveXml);
++#else
++		GUI_FileSelWrite(QT_TR_NOOP(&quot;Save set of filters&quot;), filterSave);
++#endif
++}
++
+ /**
+         \fn setup
+         \brief Prepare 
+@@ -694,6 +731,9 @@
+     availableList=ui.listWidgetAvailable;
+     activeList=ui.listWidgetActive;
+ 
++	ui.buttonBox-&gt;button(QDialogButtonBox::Close)-&gt;setDefault(true);
++	ui.buttonBox-&gt;addButton(ui.pushButtonPreview, QDialogButtonBox::ActionRole);
++
+ 	connect(ui.listFilterCategory, SIGNAL(currentItemChanged(QListWidgetItem*, QListWidgetItem*)), this, SLOT(filterFamilyItemChanged(QListWidgetItem*, QListWidgetItem *)));
+ 
+     connect(activeList,SIGNAL(itemDoubleClicked(QListWidgetItem *)),this,SLOT(activeDoubleClick(QListWidgetItem *)));
+@@ -706,6 +746,10 @@
+     connect((ui.toolButtonUp),SIGNAL(clicked(bool)),this,SLOT(up(bool)));
+     connect((ui.toolButtonDown),SIGNAL(clicked(bool)),this,SLOT(down(bool)));
+     connect((ui.toolButtonPartial),SIGNAL(clicked(bool)),this,SLOT(partial(bool)));
++
++	connect(ui.toolButtonLoad, SIGNAL(clicked(bool)), this, SLOT(loadScript(bool)));
++	connect(ui.toolButtonSaveScript, SIGNAL(clicked(bool)), this, SLOT(saveScript(bool)));
++
+     connect(ui.pushButtonDVD, SIGNAL(clicked(bool)), this, SLOT(DVD(bool)));
+     connect(ui.pushButtonVCD, SIGNAL(clicked(bool)), this, SLOT(VCD(bool)));
+     connect(ui.pushButtonSVCD, SIGNAL(clicked(bool)), this, SLOT(SVCD(bool)));
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/mainfilter.ui
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/mainfilter.ui	2008-09-08 23:37:03 UTC (rev 4318)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters/mainfilter.ui	2008-09-09 00:30:07 UTC (rev 4319)
+@@ -365,6 +365,9 @@
+        &lt;/item&gt;
+        &lt;item&gt;
+         &lt;widget class=&quot;QToolButton&quot; name=&quot;toolButtonLoad&quot; &gt;
++         &lt;property name=&quot;toolTip&quot; &gt;
++          &lt;string&gt;Open Script&lt;/string&gt;
++         &lt;/property&gt;
+          &lt;property name=&quot;text&quot; &gt;
+           &lt;string&gt;Load&lt;/string&gt;
+          &lt;/property&gt;
+@@ -374,17 +377,10 @@
+         &lt;/widget&gt;
+        &lt;/item&gt;
+        &lt;item&gt;
+-        &lt;widget class=&quot;QToolButton&quot; name=&quot;toolButtonSave&quot; &gt;
+-         &lt;property name=&quot;text&quot; &gt;
+-          &lt;string&gt;Save&lt;/string&gt;
++        &lt;widget class=&quot;QToolButton&quot; name=&quot;toolButtonSaveScript&quot; &gt;
++         &lt;property name=&quot;toolTip&quot; &gt;
++          &lt;string&gt;Save Script As&lt;/string&gt;
+          &lt;/property&gt;
+-         &lt;property name=&quot;icon&quot; &gt;
+-          &lt;iconset resource=&quot;filter.qrc&quot; &gt;:/new/prefix1/icons/filesave.png&lt;/iconset&gt;
+-         &lt;/property&gt;
+-        &lt;/widget&gt;
+-       &lt;/item&gt;
+-       &lt;item&gt;
+-        &lt;widget class=&quot;QToolButton&quot; name=&quot;toolButtonSaveScript&quot; &gt;
+          &lt;property name=&quot;text&quot; &gt;
+           &lt;string&gt;Save Script&lt;/string&gt;
+          &lt;/property&gt;
+@@ -395,6 +391,9 @@
+        &lt;/item&gt;
+        &lt;item&gt;
+         &lt;widget class=&quot;QToolButton&quot; name=&quot;toolButtonDown&quot; &gt;
++         &lt;property name=&quot;toolTip&quot; &gt;
++          &lt;string&gt;Move Filter Down&lt;/string&gt;
++         &lt;/property&gt;
+          &lt;property name=&quot;text&quot; &gt;
+           &lt;string&gt;Down&lt;/string&gt;
+          &lt;/property&gt;
+@@ -405,6 +404,9 @@
+        &lt;/item&gt;
+        &lt;item&gt;
+         &lt;widget class=&quot;QToolButton&quot; name=&quot;toolButtonUp&quot; &gt;
++         &lt;property name=&quot;toolTip&quot; &gt;
++          &lt;string&gt;Move Filter Up&lt;/string&gt;
++         &lt;/property&gt;
+          &lt;property name=&quot;text&quot; &gt;
+           &lt;string&gt;Up&lt;/string&gt;
+          &lt;/property&gt;
+@@ -415,6 +417,9 @@
+        &lt;/item&gt;
+        &lt;item&gt;
+         &lt;widget class=&quot;QToolButton&quot; name=&quot;pushButtonRemove&quot; &gt;
++         &lt;property name=&quot;toolTip&quot; &gt;
++          &lt;string&gt;Remove Filter&lt;/string&gt;
++         &lt;/property&gt;
+          &lt;property name=&quot;text&quot; &gt;
+           &lt;string&gt;Remove&lt;/string&gt;
+          &lt;/property&gt;
+@@ -448,6 +453,9 @@
+        &lt;/item&gt;
+        &lt;item&gt;
+         &lt;widget class=&quot;QToolButton&quot; name=&quot;toolButtonAdd&quot; &gt;
++         &lt;property name=&quot;toolTip&quot; &gt;
++          &lt;string&gt;Add Filter&lt;/string&gt;
++         &lt;/property&gt;
+          &lt;property name=&quot;text&quot; &gt;
+           &lt;string&gt;Add&lt;/string&gt;
+          &lt;/property&gt;
+@@ -562,7 +570,6 @@
+   &lt;tabstop&gt;toolButtonConfigure&lt;/tabstop&gt;
+   &lt;tabstop&gt;toolButtonPartial&lt;/tabstop&gt;
+   &lt;tabstop&gt;toolButtonLoad&lt;/tabstop&gt;
+-  &lt;tabstop&gt;toolButtonSave&lt;/tabstop&gt;
+   &lt;tabstop&gt;toolButtonSaveScript&lt;/tabstop&gt;
+   &lt;tabstop&gt;toolButtonDown&lt;/tabstop&gt;
+   &lt;tabstop&gt;toolButtonUp&lt;/tabstop&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001559.html">[Avidemux-svn-commit] r4318 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ADM_filters
+</A></li>
+	<LI>Next message: <A HREF="001560.html">[Avidemux-svn-commit] r4320 - in	branches/avidemux_2.4_branch/avidemux:	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory ADM_video
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1557">[ date ]</a>
+              <a href="thread.html#1557">[ thread ]</a>
+              <a href="subject.html#1557">[ subject ]</a>
+              <a href="author.html#1557">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

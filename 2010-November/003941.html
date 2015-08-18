@@ -1,0 +1,378 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6762 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs: include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6762%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs%3A%20include%20src&In-Reply-To=%3C20101115062631.A99F8481185%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003940.html">
+   <LINK REL="Next"  HREF="003942.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6762 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs: include src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6762%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs%3A%20include%20src&In-Reply-To=%3C20101115062631.A99F8481185%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6762 - in	branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs: include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Nov 15 07:26:31 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003940.html">[Avidemux-svn-commit] r6761 -	branches/avidemux_2.6_branch_mean/addons
+</A></li>
+        <LI>Next message: <A HREF="003942.html">[Avidemux-svn-commit] r6763 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3941">[ date ]</a>
+              <a href="thread.html#3941">[ thread ]</a>
+              <a href="subject.html#3941">[ subject ]</a>
+              <a href="author.html#3941">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-11-15 07:26:31 +0100 (Mon, 15 Nov 2010)
+New Revision: 6762
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/include/T_jobs.h
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_jobControl.cpp
+Log:
+[Jobs] Slightly better ui
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/include/T_jobs.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/include/T_jobs.h	2010-11-14 08:38:22 UTC (rev 6761)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/include/T_jobs.h	2010-11-15 06:26:31 UTC (rev 6762)
+@@ -5,6 +5,16 @@
+ #include &quot;ui_uiJobs.h&quot;
+ #include &lt;vector&gt;
+ using std::vector;
++
++typedef enum
++{
++    JobAction_setReady,
++    JobAction_setOk,
++    JobAction_runNow,
++    JobAction_delete
++}JobAction;
++
++
+ class ADMJob;
+ /**
+     \class jobWindow
+@@ -16,11 +26,24 @@
+ public:
+                 jobWindow(void);
+ 	virtual     ~jobWindow();	    
+-	
+ protected:
++    int         getActiveIndex(void)	;
++    bool        runOneJob(ADMJob &amp;job)   ;
++
++protected:
+     Ui_jobs     ui;
+     void        refreshList(void);
+-    vector      &lt;ADMJob&gt; listOfJob;
+-//public slots:
++    vector      &lt;ADMJob&gt; listOfJob;
++    void        runAction(JobAction action);
++public slots:
++    // Actions
++    
++    void        del(void); 
++    void        setOk(void); 
++    void        setReady(void); 
++    void        runNow(void); 
++    void        quit(void);
++    void        runAllJob(void);
+ };
+ #endif	// Q_gui2_h
++
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_jobControl.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_jobControl.cpp	2010-11-14 08:38:22 UTC (rev 6761)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_jobControl.cpp	2010-11-15 06:26:31 UTC (rev 6762)
+@@ -16,13 +16,19 @@
+ #include &quot;ADM_coreJobs.h&quot;
+ 
+ 
+-static QTableWidgetItem *fromText(const string &amp;t)
++static QTableWidgetItem *fromText(const string &amp;t,int id)
+ {
+     QString s(QString::fromUtf8(t.c_str()));
+-    QTableWidgetItem *w=new QTableWidgetItem(s,0);
++    QTableWidgetItem *w=new QTableWidgetItem(s,id);
++    Qt::ItemFlags flags=w-&gt;flags();
++    flags&amp;=~Qt::ItemIsEditable;
++    w-&gt;setFlags(flags);
+     return w;
+ }
+-
++string date2String(uint64_t date)
++{
++    return string(&quot;12/12/2010 10:20:10&quot;);
++}
+ /**
+     \fn refreshList
+ */
+@@ -31,6 +37,23 @@
+       QTableWidget *list=ui.tableWidget;
+       list-&gt;clear();
+       listOfJob.clear();
++      
++      
++      
++      
++// set titles
++     QTableWidgetItem *jb=fromText(&quot;Job&quot;,255);
++     QTableWidgetItem *outputFile=fromText(&quot;Output&quot;,255);
++     QTableWidgetItem *status=fromText(&quot;Status&quot;,255);
++     QTableWidgetItem *start=fromText(&quot;Start Time&quot;,255);
++     QTableWidgetItem *end=fromText(&quot;End Time&quot;,255);
++     ui.tableWidget-&gt;setHorizontalHeaderItem(0,jb);
++     ui.tableWidget-&gt;setHorizontalHeaderItem(1,outputFile);
++     ui.tableWidget-&gt;setHorizontalHeaderItem(2,start);
++     ui.tableWidget-&gt;setHorizontalHeaderItem(3,end);
++     ui.tableWidget-&gt;setHorizontalHeaderItem(4,status);
++
++
+       if(false==ADM_jobGet(listOfJob)) return ;
+ 
+       int n=listOfJob.size();
+@@ -39,9 +62,11 @@
+       list-&gt;setRowCount(n);
+       for(int i=0;i&lt;n;i++)
+       {
+-           QTableWidgetItem *nm=fromText(listOfJob[i].jobName);
+-           QTableWidgetItem *out=fromText(listOfJob[i].outputFileName);
++           QTableWidgetItem *nm=fromText(listOfJob[i].jobName,i);
++           QTableWidgetItem *out=fromText(listOfJob[i].outputFileName,i);
+            string s;
++           string start=&quot;X&quot;;
++           string end=&quot;X&quot;;
+             switch(listOfJob[i].status)
+             {
+                 case ADM_JOB_IDLE:
+@@ -52,30 +77,61 @@
+                             break;
+                 case ADM_JOB_OK:
+                             s=string(&quot;Success&quot;);
++                            start=date2String(listOfJob[i].startTime);
++                            end=date2String(listOfJob[i].endTime);
+                             break;
+                 case ADM_JOB_KO:
+                             s=string(&quot;Failed&quot;);
++                            start=date2String(listOfJob[i].startTime);
++                            end=date2String(listOfJob[i].endTime);
+                             break;
+                 default:
+                             s=string(&quot;???&quot;);
+                             break;
+             }
+-        QTableWidgetItem *status=fromText (s);
++        QTableWidgetItem *status=fromText (s,i);
++        QTableWidgetItem *startItem=fromText (start,i);
++        QTableWidgetItem *endItem=fromText (end,i);
+         list-&gt;setItem(i,0,nm);
+         list-&gt;setItem(i,1,out);
+-        list-&gt;setItem(i,2,status);
++        list-&gt;setItem(i,2,startItem);
++        list-&gt;setItem(i,3,endItem);
++        list-&gt;setItem(i,4,status);
+       }
++      list-&gt;resizeColumnsToContents();
+ }
+ 
+ 
+ /**
+     \fn ctor
+-*/
++*/
++#define QT_NOOP(x) x
+ jobWindow::jobWindow(void) : QDialog()
+ {
+     ui.setupUi(this);
+-    ui.tableWidget-&gt;setColumnCount(3); // Job name, fileName, Status
+-    refreshList();
++    ui.tableWidget-&gt;setColumnCount(5); // Job name, fileName, Status
++
++    // Add some right click menu...
++    ui.tableWidget-&gt;setContextMenuPolicy(Qt::ActionsContextMenu);
++    // Add some right click menu...
++   QAction *del = new  QAction(QString(&quot;Delete&quot;),this);
++   QAction *runNow = new  QAction(QString(&quot;Run Now&quot;),this);
++   QAction *setOk = new  QAction(QString(&quot;Force Status to success&quot;),this);
++   QAction *setReady = new  QAction(QString(&quot;Force Status to ready&quot;),this);
++   ui.tableWidget-&gt;addAction(del);
++   ui.tableWidget-&gt;addAction(runNow);
++   ui.tableWidget-&gt;addAction(setOk);
++   ui.tableWidget-&gt;addAction(setReady);
++   connect(del,SIGNAL(activated()),this,    SLOT(del()));
++   connect(runNow,SIGNAL(activated()),this, SLOT(runNow()));
++   connect(setOk,SIGNAL(activated()),this,  SLOT(setOk()));
++   connect(setReady,SIGNAL(activated()),this,SLOT(setReady()));
++
++   connect(ui.pushButtonQuit,SIGNAL(pressed()),this,SLOT(quit()));
++   connect(ui.pushButtonRunAll,SIGNAL(pressed()),this,SLOT(runAllJob()));
++
++   refreshList();
++
+ }
+ /**
+     \fn dtor
+@@ -97,8 +153,116 @@
+     delete app;
+     return true;
+ }
++/**
++    \fn del
++    \brief delete the currently selected jobs
++*/
++int jobWindow::getActiveIndex(void)
++{
++        QTableWidgetItem *item=ui.tableWidget-&gt;currentItem();
++        if(!item) return -1;
++        int index=item-&gt;type(); 
++        return index;
++}
++/**
++    \fn runAction
++*/
++void jobWindow::runAction(JobAction action)
++{
++        int index=getActiveIndex();
++        ADM_info(&quot;%d command for index %d\n&quot;,action,index);
++        if(index==-1) return;
++        // get the job
++        if(index&gt;listOfJob.size())
++        {
++            ADM_error(&quot;index out of bound : %d/%d\n&quot;,index,listOfJob.size());
++            return ;
++        }
++        ADMJob *j=&amp;(listOfJob[index]);
++        switch(action)
++        {
++            case   JobAction_setReady:          
++                        j-&gt;status=ADM_JOB_IDLE;
++                        ADM_jobUpdate(*j);
++                        refreshList();
++                        break;
++            case   JobAction_setOk:
++                        j-&gt;status=ADM_JOB_OK;
++                        ADM_jobUpdate(*j);
++                        refreshList();
++                        break;
++            case   JobAction_runNow:
++                        {
++                            runOneJob(*j);
++                        }
++                        break;
++                        
++            default:
++                        ADM_warning(&quot;Command %d no handled\n&quot;,action);
++                        break;
++        }
++}
+ 
++void jobWindow::del(void)
++{
++    runAction(JobAction_delete);
++}
++void jobWindow::setOk(void)
++{
++    runAction(JobAction_setOk);
++}
++void jobWindow::setReady(void)
++{
++    runAction(JobAction_setReady);
++}
++void jobWindow::runNow(void)
++{
++    runAction(JobAction_runNow);
++}
++ 
++/**
++    \fn runOneJob
++*/
++bool jobWindow::runOneJob( ADMJob &amp;job)   
++{
++    bool r=false;
++    job.startTime=getTimeOfTheDay();
++    job.status=ADM_JOB_RUNNING;
++    ADM_jobUpdate(job);
++    
++    r=true; // &lt;&lt; exec
+ 
++    if(r) job.status=ADM_JOB_OK;
++        else job.status=ADM_JOB_KO;
++    job.endTime=getTimeOfTheDay();
++    ADM_jobUpdate(job);
++    refreshList();
++    ADM_info(&quot;Running job id = %d\n&quot;,job.id);
++    return r;
++}
++/**
++    \fn quit
++    \brief run selected jobs whatever its status
++*/
++
++void jobWindow::quit(void)
++{
++    done(1);
++}
++/**
++    \fn runAllJob
++*/
++void jobWindow::runAllJob(void)
++{
++    int n=listOfJob.size();
++    for(int i=0;i&lt;n;i++)
++    {
++            ADMJob *j=&amp;(listOfJob[i]);
++            if(j-&gt;status==ADM_JOB_IDLE)
++                runOneJob(*j);
++    }
++    return ;
++}
+ #if 0
+ bool jobRun(void)
+ {
+@@ -155,4 +319,4 @@
+         }
+         return true;
+ }
+-#endif
+\ No newline at end of file
++#endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003940.html">[Avidemux-svn-commit] r6761 -	branches/avidemux_2.6_branch_mean/addons
+</A></li>
+	<LI>Next message: <A HREF="003942.html">[Avidemux-svn-commit] r6763 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3941">[ date ]</a>
+              <a href="thread.html#3941">[ thread ]</a>
+              <a href="subject.html#3941">[ subject ]</a>
+              <a href="author.html#3941">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

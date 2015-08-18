@@ -1,0 +1,262 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7451 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7451%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io&In-Reply-To=%3C20110827171511.25C74481164%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004600.html">
+   <LINK REL="Next"  HREF="004602.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7451 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7451%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io&In-Reply-To=%3C20110827171511.25C74481164%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7451 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Aug 27 19:15:11 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004600.html">[Avidemux-svn-commit] r7450 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src
+</A></li>
+        <LI>Next message: <A HREF="004602.html">[Avidemux-svn-commit] r7452 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2:	. libmp4v2/src patches
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4601">[ date ]</a>
+              <a href="thread.html#4601">[ thread ]</a>
+              <a href="subject.html#4601">[ subject ]</a>
+              <a href="author.html#4601">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-08-27 19:15:10 +0200 (Sat, 27 Aug 2011)
+New Revision: 7451
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io/FileSystem_posix.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io/File_posix.cpp
+Log:
+[mp4v2] put back our changes for win32
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io/FileSystem_posix.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io/FileSystem_posix.cpp	2011-08-27 17:15:09 UTC (rev 7450)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io/FileSystem_posix.cpp	2011-08-27 17:15:10 UTC (rev 7451)
+@@ -1,6 +1,13 @@
++#include &quot;ADM_cpp.h&quot;
++
+ #include &quot;libplatform/impl.h&quot;
+ #include &lt;sys/stat.h&gt;
+ 
++#define ADM_LEGACY_PROGGY
++#include &quot;ADM_default.h&quot;
++
++// MEANX : Switch to our own wrappers
++
+ namespace mp4v2 { namespace platform { namespace io {
+ 
+ ///////////////////////////////////////////////////////////////////////////////
+@@ -8,8 +15,11 @@
+ bool
+ FileSystem::exists( string path_ )
+ {
++    return ADM_fileExist(path_.c_str());
++/*
+     struct stat buf;
+     return stat( path_.c_str(), &amp;buf ) == 0;
++*/
+ }
+ 
+ ///////////////////////////////////////////////////////////////////////////////
+@@ -39,12 +49,16 @@
+ bool
+ FileSystem::getFileSize( string path_, File::Size&amp; size_ )
+ {
++/*
+     size_ = 0;
+     struct stat buf;
+     if( stat( path_.c_str(), &amp;buf ))
+         return true;
+     size_ = buf.st_size;
+     return false;
++*/
++    size_=ADM_fileSize(path_.c_str());
++    return false;
+ }
+ 
+ ///////////////////////////////////////////////////////////////////////////////
+@@ -52,7 +66,12 @@
+ bool
+ FileSystem::rename( string from, string to )
+ {
+-    return ::rename( from.c_str(), to.c_str() ) != 0;
++    if(!ADM_renameFile(from.c_str(),to.c_str()))
++    {
++        ADM_error(&quot;Cannot rename %s to %s\n&quot;,from.c_str(),to.c_str());
++        return true;
++    }
++    return false;
+ }
+ 
+ ///////////////////////////////////////////////////////////////////////////////
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io/File_posix.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io/File_posix.cpp	2011-08-27 17:15:09 UTC (rev 7450)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io/File_posix.cpp	2011-08-27 17:15:10 UTC (rev 7451)
+@@ -1,5 +1,10 @@
++#include &quot;ADM_cpp.h&quot;
+ #include &quot;libplatform/impl.h&quot;
++#define ADM_LEGACY_PROGGY
++#include &quot;ADM_default.h&quot;
+ 
++// MEANX : Change fstream based io to FILE based io to be compatible with avidemux wrapper
++
+ namespace mp4v2 { namespace platform { namespace io {
+ 
+ ///////////////////////////////////////////////////////////////////////////////
+@@ -18,7 +23,7 @@
+ private:
+     bool         _seekg;
+     bool         _seekp;
+-    std::fstream _fstream;
++    FILE         *_file;
+ };
+ 
+ ///////////////////////////////////////////////////////////////////////////////
+@@ -27,73 +32,82 @@
+     : _seekg ( false )
+     , _seekp ( false )
+ {
++    _file=NULL;
+ }
+ 
+ bool
+ StandardFileProvider::open( std::string name, Mode mode )
+ {
+     ios::openmode om = ios::binary;
++    std::string fmode;
+     switch( mode ) {
+         case MODE_UNDEFINED:
+         case MODE_READ:
+         default:
+-            om |= ios::in;
++            fmode=std::string(&quot;r&quot;);
+             _seekg = true;
+             _seekp = false;
+             break;
+ 
+         case MODE_MODIFY:
+-            om |= ios::in | ios::out;
++            fmode=std::string(&quot;rw&quot;);
+             _seekg = true;
+             _seekp = true;
+             break;
+ 
+         case MODE_CREATE:
+-            om |= ios::in | ios::out | ios::trunc;
++            fmode=std::string(&quot;w&quot;);
+             _seekg = true;
+             _seekp = true;
+             break;
+     }
+-
+-    _fstream.open( name.c_str(), om );
+-    return _fstream.fail();
++    fmode+=std::string(&quot;b&quot;);
++    _file=fopen(name.c_str(),fmode.c_str());
++    if(!_file) 
++    {
++        ADM_error(&quot;Cannot create file %s mode %s\n&quot;,name.c_str(),fmode.c_str());
++        return true;
++    }
++    ADM_info(&quot;Created file %s mode %s\n&quot;,name.c_str(),fmode.c_str());
++    return false;
+ }
+ 
+ bool
+ StandardFileProvider::seek( Size pos )
+ {
+-    if( _seekg )
+-        _fstream.seekg( pos, ios::beg );
+-    if( _seekp )
+-        _fstream.seekp( pos, ios::beg );
+-    return _fstream.fail();
++int er=1;
++    er=fseeko(_file,pos,SEEK_SET);
++    if(er)
++    {
++        ADM_error(&quot;Seek to %d failed\n&quot;,(int)pos);
++        return true;
++    }
++    return false;
+ }
+ 
+ bool
+ StandardFileProvider::read( void* buffer, Size size, Size&amp; nin, Size maxChunkSize )
+ {
+-    _fstream.read( (char*)buffer, size );
+-    if( _fstream.fail() )
+-        return true;
+-    nin = _fstream.gcount();
++    nin=fread(buffer,1,size,_file);
++    if(nin&lt;=0) return true;
+     return false;
+ }
+ 
+ bool
+ StandardFileProvider::write( const void* buffer, Size size, Size&amp; nout, Size maxChunkSize )
+ {
+-    _fstream.write( (const char*)buffer, size );
+-    if( _fstream.fail() )
+-        return true;
+-    nout = size;
++    nout=fwrite(buffer,1,size,_file);
++    if(nout&lt;=0) return true;
+     return false;
+ }
+ 
+ bool
+ StandardFileProvider::close()
+ {
+-    _fstream.close();
+-    return _fstream.fail();
++    if(_file)
++        fclose(_file);
++    _file=NULL;
++    return true;
+ }
+ 
+ ///////////////////////////////////////////////////////////////////////////////
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004600.html">[Avidemux-svn-commit] r7450 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreTinyPy/src
+</A></li>
+	<LI>Next message: <A HREF="004602.html">[Avidemux-svn-commit] r7452 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2:	. libmp4v2/src patches
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4601">[ date ]</a>
+              <a href="thread.html#4601">[ thread ]</a>
+              <a href="subject.html#4601">[ subject ]</a>
+              <a href="author.html#4601">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

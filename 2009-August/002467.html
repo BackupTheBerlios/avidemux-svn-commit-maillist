@@ -1,0 +1,153 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5254 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5254%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C200908171750.n7HHoouw027130%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002466.html">
+   <LINK REL="Next"  HREF="002468.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5254 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5254%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C200908171750.n7HHoouw027130%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5254 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Aug 17 19:50:50 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002466.html">[Avidemux-svn-commit] r5253 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+        <LI>Next message: <A HREF="002468.html">[Avidemux-svn-commit] r5255 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_codecs	ADM_inputs/ADM_flv
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2467">[ date ]</a>
+              <a href="thread.html#2467">[ thread ]</a>
+              <a href="subject.html#2467">[ subject ]</a>
+              <a href="author.html#2467">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-08-17 19:50:48 +0200 (Mon, 17 Aug 2009)
+New Revision: 5254
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.h
+Log:
+[Asf] change readVCL to follow what ffmpeg does (since there is no doc...)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2009-08-17 17:50:46 UTC (rev 5253)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2009-08-17 17:50:48 UTC (rev 5254)
+@@ -129,18 +129,18 @@
+    
+ 
+    // Read packetLen
+-   packetLen=readVCL(flags&gt;&gt;5);
++   packetLen=readVCL(flags&gt;&gt;5,pakSize);
+    // Sequence len
+-   sequenceLen=readVCL(flags&gt;&gt;1);
++   sequenceLen=readVCL(flags&gt;&gt;1,0);
+    // Read padding size (padding):
+-   paddingLen=readVCL(flags&gt;&gt;3);
++   paddingLen=readVCL(flags&gt;&gt;3,0);
+    
+    aprintf(&quot;paddingLen :         %d\n&quot;,paddingLen);
+    
+ // Explicit (absolute) packet size	    
+    if(((flags&gt;&gt;5)&amp;3))
+    {
+-     printf(&quot;## Explicit packet size %d\n&quot;,packetLen);
++     //printf(&quot;## Explicit packet size %d\n&quot;,packetLen);
+      if(packetLen&gt;pakSize) printf(&quot;**************Len &gt; packet size!! (%d /%d)\n&quot;,packetLen,pakSize);
+    } 
+    if(!packetLen)
+@@ -200,9 +200,9 @@
+      {
+        aprintf(&quot;KeyFrame\n&quot;);
+      }
+-     sequence=readVCL(segmentId&gt;&gt;4);
+-     offset=readVCL(segmentId&gt;&gt;2);
+-     replica=readVCL(segmentId);
++     sequence=readVCL(segmentId&gt;&gt;4,0);
++     offset=readVCL(segmentId&gt;&gt;2,0);
++     replica=readVCL(segmentId,0);
+      aprintf(&quot;replica                %d\n&quot;,replica);
+      // Skip replica data_len
+      if(replica&gt;=8) // Grab timestamp
+@@ -232,7 +232,7 @@
+      payloadLen=0;
+      if(flags &amp;1)  // multi seg
+      {
+-       payloadLen=readVCL(segType);
++       payloadLen=readVCL(segType,0);
+        if(payloadLen)
+         aprintf(&quot;##len                    %d\n&quot;,payloadLen);
+        
+@@ -343,7 +343,7 @@
+    return 1;
+  }
+  
+- uint32_t asfPacket::readVCL(uint32_t bitwise)
++ uint32_t asfPacket::readVCL(uint32_t bitwise,uint32_t def)
+  {
+    uint32_t r;
+    switch(bitwise&amp;3)
+@@ -351,7 +351,7 @@
+      case 3: r=read32();break;  // dword
+      case 2: r=read16();break;  // word
+      case 1: r=read8();break;   // byte
+-     default: r=0;
++     default: r=def;
+    }
+    return r;
+  }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.h	2009-08-17 17:50:46 UTC (rev 5253)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.h	2009-08-17 17:50:48 UTC (rev 5254)
+@@ -35,7 +35,7 @@
+ class asfPacket
+ {
+   protected:
+-    uint32_t        readVCL(uint32_t bitwise);
++    uint32_t        readVCL(uint32_t bitwise,uint32_t defaultValue);
+     uint8_t         pushPacket(uint32_t flags,uint32_t packetnb,
+                                 uint32_t offset,uint32_t sequence,uint32_t payloadLen,uint32_t stream,
+                                 uint64_t dtsus);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002466.html">[Avidemux-svn-commit] r5253 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+	<LI>Next message: <A HREF="002468.html">[Avidemux-svn-commit] r5255 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_codecs	ADM_inputs/ADM_flv
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2467">[ date ]</a>
+              <a href="thread.html#2467">[ thread ]</a>
+              <a href="subject.html#2467">[ subject ]</a>
+              <a href="author.html#2467">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

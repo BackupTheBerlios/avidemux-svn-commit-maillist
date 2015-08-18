@@ -1,0 +1,208 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7192 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudioParser/src	avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7192%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreAudioParser/src%0A%09avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20110507180359.1EC2E481343%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004346.html">
+   <LINK REL="Next"  HREF="004348.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7192 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudioParser/src	avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7192%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreAudioParser/src%0A%09avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20110507180359.1EC2E481343%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7192 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudioParser/src	avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat May  7 20:03:59 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004346.html">[Avidemux-svn-commit] r7191 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src
+</A></li>
+        <LI>Next message: <A HREF="004348.html">[Avidemux-svn-commit] r7193 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4347">[ date ]</a>
+              <a href="thread.html#4347">[ thread ]</a>
+              <a href="subject.html#4347">[ subject ]</a>
+              <a href="author.html#4347">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-05-07 20:03:58 +0200 (Sat, 07 May 2011)
+New Revision: 7192
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacLatm.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp
+Log:
+[LATM] Fix packet queue management, working except SBR
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacLatm.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacLatm.cpp	2011-05-07 16:26:02 UTC (rev 7191)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacLatm.cpp	2011-05-07 18:03:58 UTC (rev 7192)
+@@ -23,7 +23,11 @@
+ #define COOKIE   ((AVBitStreamFilterContext *)cookie)
+ #define CONTEXT  ((AVCodecContext *)codec)
+ 
++#if 0
+ #define xdebug ADM_info
++#else
++#define xdebug(...) {}
++#endif
+ 
+ static const int aacChannels[16]=
+ {
+@@ -115,7 +119,7 @@
+     int channelConfiguration=bits.get(4);
+     channels=aacChannels[channelConfiguration];
+     bool sbrPresent=false;
+-    printf(&quot;ObjectType=%d\n&quot;,audioObjectType);
++    xdebug(&quot;ObjectType=%d\n&quot;,audioObjectType);
+     
+     
+     switch(audioObjectType)
+@@ -204,7 +208,7 @@
+ {
+     if(conf.allStreamsSameTimeFraming)
+     {
+-            ADM_info(&quot;Payload %d \n&quot;,size);
++            xdebug(&quot;Payload %d \n&quot;,size);
+             if(size&gt;LATM_MAX_BUFFER_SIZE)
+             {
+                     ADM_warning(&quot;Packet too big %d vs %d\n&quot;,size,LATM_MAX_BUFFER_SIZE);
+@@ -412,7 +416,7 @@
+             ADM_warning(&quot;Not enough data, need %d, got %d\n&quot;,len,(int)(end-start));
+             return true;
+         }
+-        ADM_info(&quot;Found LATM : size %d\n&quot;,len);
++        xdebug(&quot;Found LATM : size %d\n&quot;,len);
+         demuxLatm(dts,start,len);
+         dts=ADM_NO_PTS;
+         // LATM demux
+@@ -471,7 +475,7 @@
+ bool ADM_latm2aac::getData(uint64_t *time,uint32_t *len, uint8_t *data, uint32_t maxSize)
+ {
+     if(empty()) return false;
+-    printf(&quot;%d slogs in latm buffers\n&quot;,listOfUsedBuffers.size());
++    xdebug(&quot;%d slogs in latm buffers\n&quot;,listOfUsedBuffers.size());
+     latmBuffer *b=listOfUsedBuffers.front();
+     listOfUsedBuffers.pop_front();
+     listOfFreeBuffers.push_back(b);
+@@ -485,7 +489,7 @@
+     *len=b-&gt;bufferLen;
+     b-&gt;bufferLen=0;
+     *time=b-&gt;dts;
+-    printf(&quot;   read %d bytes\n&quot;,*len);
++    xdebug(&quot;   read %d bytes\n&quot;,*len);
+     return true;
+ }
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp	2011-05-07 16:26:02 UTC (rev 7191)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp	2011-05-07 18:03:58 UTC (rev 7192)
+@@ -147,13 +147,7 @@
+ */
+ bool      ADM_tsAccess::getPacket(uint8_t *buffer, uint32_t *size, uint32_t maxSize,uint64_t *dts)
+ {
+-int retries=10;
+-again:
+ uint64_t p,d,start;
+-    if(false==demuxer.getNextPES(packet)) return false;
+-    int avail=packet-&gt;payloadSize-packet-&gt;offset;
+-    if(avail&gt;maxSize) ADM_assert(0);
+-    *size=avail;
+     // If it is adts, ask ffmpeg to unwrap it...
+     switch(muxing)
+     {
+@@ -162,6 +156,10 @@
+                     bool r=false;
+                     int outsize=0;
+                     *size=0;
++                    if(false==demuxer.getNextPES(packet)) return false;
++                    int avail=packet-&gt;payloadSize-packet-&gt;offset;
++                    if(avail&gt;maxSize) ADM_assert(0);
++                    *size=avail;
+                     r=adts.convert(avail,packet-&gt;payload+packet-&gt;offset,&amp;outsize,buffer);
+                     if(false==r) return false;
+                     *size=outsize;
+@@ -170,6 +168,10 @@
+             }
+         case ADM_TS_MUX_NONE:
+             {
++                if(false==demuxer.getNextPES(packet)) return false;
++                int avail=packet-&gt;payloadSize-packet-&gt;offset;
++                if(avail&gt;maxSize) ADM_assert(0);
++                *size=avail;
+                 memcpy(buffer,packet-&gt;payload+packet-&gt;offset,avail);
+                 *dts=timeConvert(packet-&gt;pts);
+                 break;
+@@ -177,17 +179,23 @@
+         case ADM_TS_MUX_LATM:
+             {
+                 // Try to get one...
+-                
+-                if(!retries)
++                int retries=10;
++                again:
++                if(latm.empty()==true) // fetch next LOAS frame, it will contain several frames
+                 {
+-                    ADM_warning(&quot;No packet out of latm\n&quot;);
+-                    return false;   
+-                }
+-                if(latm.empty()==true)
+-                {
+-                        latm.pushData(avail,packet-&gt;payload+packet-&gt;offset,packet-&gt;pts);
+-                        retries--;
+-                        goto again;
++                    
++               
++                    if(!retries)
++                    {
++                        ADM_error(&quot;Cannot get AAC packet from LATM\n&quot;);
++                        return false;
++                    }
++                    if(false==demuxer.getNextPES(packet)) return false;
++                    int avail=packet-&gt;payloadSize-packet-&gt;offset;
++                    if(avail&gt;maxSize) ADM_assert(0);
++                    latm.pushData(avail,packet-&gt;payload+packet-&gt;offset,packet-&gt;pts);
++                    retries--;
++                    goto again;
+                  }
+                  uint64_t myPts;
+                  latm.getData(&amp;myPts,size,buffer,maxSize);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004346.html">[Avidemux-svn-commit] r7191 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src
+</A></li>
+	<LI>Next message: <A HREF="004348.html">[Avidemux-svn-commit] r7193 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4347">[ date ]</a>
+              <a href="thread.html#4347">[ thread ]</a>
+              <a href="subject.html#4347">[ subject ]</a>
+              <a href="author.html#4347">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

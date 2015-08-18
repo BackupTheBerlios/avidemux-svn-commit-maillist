@@ -1,0 +1,205 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5398 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5398%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200910220604.n9M64coI027548%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002608.html">
+   <LINK REL="Next"  HREF="002610.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5398 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5398%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200910220604.n9M64coI027548%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5398 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Oct 22 08:04:38 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002608.html">[Avidemux-svn-commit] r5397 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="002610.html">[Avidemux-svn-commit] r5399 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2609">[ date ]</a>
+              <a href="thread.html#2609">[ thread ]</a>
+              <a href="subject.html#2609">[ subject ]</a>
+              <a href="author.html#2609">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-10-22 08:04:37 +0200 (Thu, 22 Oct 2009)
+New Revision: 5398
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+Log:
+[editor] Implements seekToFrame, time based seek
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-10-22 06:04:35 UTC (rev 5397)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-10-22 06:04:37 UTC (rev 5398)
+@@ -93,6 +93,8 @@
+ */
+ bool  ADM_Composer::goToTimeVideo(uint64_t startTime)
+ {
++    // Search the previous keyframe...
++
+     return goToIntraTimeVideo(startTime);
+ 
+ }
+@@ -305,31 +307,13 @@
+                 from=pts;
+         }
+     }
+-    
+-    // Search the previous keyframe for segment....
+-    uint64_t seekTime;
+-    if(_segments.isKeyFrameByTime(seg-&gt;_reference,from))
++    if(false==seektoFrame(seg-&gt;_reference,from))
+     {
+-        seekTime=from;
+-        ADM_info(&quot;First frame of the new segment is a keyframe at %&quot;LU&quot;ms\n&quot;,seekTime/1000);
+-    }else   
+-    {
+-        if(false==searchPreviousKeyFrameInRef(seg-&gt;_reference,from,&amp;seekTime))
+-        {
+-            ADM_warning(&quot;Cannot identify the keyframe before %&quot;LLU&quot; ms\n&quot;,seekTime/1000);
++            ADM_warning(&quot;Cannot seek to beginning of segment %&quot;LU&quot; at  %&quot;LLU&quot; ms\n&quot;,s,from/1000);
+             return false;
+-        }
+     }
+-    // ok now seek...
+-    uint32_t frame=_segments.intraTimeToFrame(seg-&gt;_reference,seekTime);
+-    if(false==DecodePictureUpToIntra(seg-&gt;_reference,frame))
+-    {
+-        return false;
+-    }
+-    // Now forward to the frame we want...
+-#warning TODO do not seek only on intra
+-    _VIDEOS *ref=_segments.getRefVideo(seg-&gt;_reference);
+-    seg-&gt;_curFrame=ref-&gt;lastSentFrame;
++    _currentSegment=s;
++    ADM_info(&quot;Switched ok to segment %&quot;LU&quot;\n&quot;,s);
+     return true;
+ }
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2009-10-22 06:04:35 UTC (rev 5397)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2009-10-22 06:04:37 UTC (rev 5398)
+@@ -31,7 +31,64 @@
+ // This should be in a context somewhere
+ static uint8_t compBuffer[MAXIMUM_SIZE * MAXIMUM_SIZE * 3];
+ 
++/**
++    \fn seektoFrame
++    \brief Seek to frame with timestamp given as arg
+ 
++*/
++bool ADM_Composer::seektoFrame(uint32_t ref,uint64_t timeToSeek)
++{
++   _VIDEOS *vid=_segments.getRefVideo(ref);
++    vidHeader *demuxer=vid-&gt;_aviheader;
++	EditorCache   *cache =vid-&gt;_videoCache;
++	ADM_assert(cache);
++    bool found=false;
++   // Search the previous keyframe for segment....
++    uint64_t seekTime;
++    if(_segments.isKeyFrameByTime(ref,timeToSeek))
++    {
++        seekTime=timeToSeek;
++        ADM_info(&quot;First frame of the new segment is a keyframe at %&quot;LU&quot;ms\n&quot;,seekTime/1000);
++        found=true;
++    }else   
++    {
++        if(false==searchPreviousKeyFrameInRef(ref,timeToSeek,&amp;seekTime))
++        {
++            ADM_warning(&quot;Cannot identify the keyframe before %&quot;LLU&quot; ms\n&quot;,seekTime/1000);
++            return false;
++        }
++    }
++    // ok now seek...
++    uint32_t frame=_segments.intraTimeToFrame(ref,seekTime);
++    if(false==DecodePictureUpToIntra(ref,frame))
++    {
++        ADM_warning(&quot;Cannot decode up to intra %&quot;LLU&quot; at %&quot;LLU&quot; ms\n&quot;,frame,seekTime/1000);
++        return false;
++    }
++    if(found==true) return true;
++    // Now forward...
++    while(nextPictureInternal(ref,NULL)==true)
++    {
++        uint64_t pts=vid-&gt;lastDecodedPts;
++        if(pts==ADM_NO_PTS)     
++        {
++            ADM_warning(&quot;No PTS out of decoder\n&quot;);
++            continue;
++        }
++        if(pts==timeToSeek)
++        {
++            ADM_info(&quot;Image found, pts=%&quot;LLU&quot; ms\n&quot;,pts/1000);
++            return true;
++        }
++        if(pts&gt;timeToSeek)
++        {
++            ADM_info(&quot;Image not found,searching %&quot;LLU&quot; ms, got  pts=%&quot;LLU&quot; ms\n&quot;,timeToSeek/1000,pts/1000);
++            return false;
++        }
++    }
++    ADM_warning(&quot;seekToFrame failed for frame at PTS= %&quot;LLU&quot; ms, next image failed\n&quot;,timeToSeek/1000);
++    return false;
++}
+ /**
+     \fn samePictureInternal
+     \brief returns the last already decoded picture
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-10-22 06:04:35 UTC (rev 5397)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-10-22 06:04:37 UTC (rev 5398)
+@@ -71,6 +71,7 @@
+ 
+                     bool        nextPictureInternal(uint32_t ref,ADMImage *image);
+                     bool        samePictureInternal(uint32_t ref,ADMImage *image);
++                    bool        seektoFrame(uint32_t ref,uint64_t timeToSeek);
+ 
+ protected:
+                                 /// Decode frame and on until frame is popped out of decoders
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002608.html">[Avidemux-svn-commit] r5397 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="002610.html">[Avidemux-svn-commit] r5399 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2609">[ date ]</a>
+              <a href="thread.html#2609">[ thread ]</a>
+              <a href="subject.html#2609">[ subject ]</a>
+              <a href="author.html#2609">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,214 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3841 - in	branches/avidemux_2.5_branch_mean/avidemux: ADM_audiocodec	ADM_core/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3841%20-%20in%0A%09branches/avidemux_2.5_branch_mean/avidemux%3A%20ADM_audiocodec%0A%09ADM_core/src&In-Reply-To=%3C200803070654.m276sRkH020171%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001104.html">
+   <LINK REL="Next"  HREF="001106.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3841 - in	branches/avidemux_2.5_branch_mean/avidemux: ADM_audiocodec	ADM_core/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3841%20-%20in%0A%09branches/avidemux_2.5_branch_mean/avidemux%3A%20ADM_audiocodec%0A%09ADM_core/src&In-Reply-To=%3C200803070654.m276sRkH020171%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3841 - in	branches/avidemux_2.5_branch_mean/avidemux: ADM_audiocodec	ADM_core/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Mar  7 07:54:27 CET 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001104.html">[Avidemux-svn-commit] r3840 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_core/include ADM_core/src ADM_libraries/ADM_libmpeg2enc	ADM_outputs/oplug_avi
+</A></li>
+        <LI>Next message: <A HREF="001106.html">[Avidemux-svn-commit] r3842 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_libraries/ADM_mplex ADM_osSupport
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1105">[ date ]</a>
+              <a href="thread.html#1105">[ thread ]</a>
+              <a href="subject.html#1105">[ subject ]</a>
+              <a href="author.html#1105">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-03-07 07:54:27 +0100 (Fri, 07 Mar 2008)
+New Revision: 3841
+
+Modified:
+   branches/avidemux_2.5_branch_mean/avidemux/ADM_audiocodec/ADM_pluginLoad.cpp
+   branches/avidemux_2.5_branch_mean/avidemux/ADM_core/src/ADM_dynamicLoading.cpp
+Log:
+[AudioPlugin] Fix loading, silence dynLoad
+
+
+Modified: branches/avidemux_2.5_branch_mean/avidemux/ADM_audiocodec/ADM_pluginLoad.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_mean/avidemux/ADM_audiocodec/ADM_pluginLoad.cpp	2008-03-06 21:48:49 UTC (rev 3840)
++++ branches/avidemux_2.5_branch_mean/avidemux/ADM_audiocodec/ADM_pluginLoad.cpp	2008-03-07 06:54:27 UTC (rev 3841)
+@@ -39,13 +39,13 @@
+ {
+ 	ADM_ad_plugin blank;
+ 	printf(&quot;[ADM_ad_plugin] Scanning %s\n&quot;,ADM_GetFileName(file));
+-	ADM_LibWrapper wrapper;
+-	 if(true!=wrapper.loadLibrary(file))
++	ADM_LibWrapper *wrapper=new ADM_LibWrapper;
++	 if(true!=wrapper-&gt;loadLibrary(file))
+ 	 {
+ 		 printf(&quot;Load failed\n&quot;);
+-		 return 0;
++		 goto Err_ad;
+ 	 }
+-#define FUNCKY(a,b,c)	 blank.a=(b *)wrapper.getSymbol(#c); if(!blank.a) { printf(&quot;[ADM_ad_plugin]&quot;#c&quot; failed\n&quot;);return 0;}
++#define FUNCKY(a,b,c)	 blank.a=(b *)wrapper-&gt;getSymbol(#c); if(!blank.a) { printf(&quot;[ADM_ad_plugin]&quot;#c&quot; failed\n&quot;); goto Err_ad;;}
+ 	 FUNCKY(create,ADM_ad_CreateFunction,create);
+ 	 FUNCKY(destroy,ADM_ad_DeleteFunction,destroy);
+ 	 FUNCKY(supportedFormat,ADM_ad_SupportedFormat,supportedFormat);
+@@ -58,7 +58,7 @@
+ 	 {
+ 		 	printf(&quot;[ADM_ad_plugin] File %s has API version too old (%d vs %d)\n&quot;,
+ 		 			ADM_GetFileName(file),ADM_GetFileName(file),AD_API_VERSION);
+-		 	return 0;
++		 	 goto Err_ad;
+ 	 }
+ 	 // Get infos
+ 	 uint32_t major,minor,patch;
+@@ -67,12 +67,18 @@
+ 	 desc=blank.getInfo();
+ 	 // Print out stuff
+ 	 printf(&quot;[ADM_ad_plugin] Plugin loaded version %d.%d.%d, desc : %s\n&quot;,major,minor,patch,desc);
++	 
+ 	 //
+-	 ADM_ad_plugin *p=new ADM_ad_plugin;
+-	 *p=blank;
+-	 ADM_audioPlugins.push_back(p);
++	 {
++		 ADM_ad_plugin *p=new ADM_ad_plugin;
++		 *p=blank;
++		 ADM_audioPlugins.push_back(p);
++	 }
++	 return 1;
++Err_ad:
++	delete wrapper;
++	return 0;
+ 	
+-	
+ }
+ /**
+  * 	\fn ADM_ad_loadPlugins
+@@ -112,6 +118,7 @@
+ 		ADM_ad_plugin *a=ADM_audioPlugins[i];
+ 		ADM_assert(a);
+ 		ADM_assert(a-&gt;supportedFormat);
++		
+ 		if(a-&gt;supportedFormat(fourcc)==true)
+ 		{
+ 			ADM_assert(a-&gt;create);
+
+Modified: branches/avidemux_2.5_branch_mean/avidemux/ADM_core/src/ADM_dynamicLoading.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_mean/avidemux/ADM_core/src/ADM_dynamicLoading.cpp	2008-03-06 21:48:49 UTC (rev 3840)
++++ branches/avidemux_2.5_branch_mean/avidemux/ADM_core/src/ADM_dynamicLoading.cpp	2008-03-07 06:54:27 UTC (rev 3841)
+@@ -26,7 +26,12 @@
+ #endif
+ 
+ #include &quot;ADM_dynamicLoading.h&quot;
+-
++// By default the library is silent, being part of ADM_core cannot use the debug_id funcs
++#if 1
++#define aprintf(...) {}
++#else
++#define aprintf printf
++#endif
+ ADM_LibWrapper::ADM_LibWrapper()
+ {
+ 	initialised = false;
+@@ -37,7 +42,7 @@
+ {
+ 	if (hinstLib != NULL)
+ 	{
+-		printf(&quot;Unloading library 0x%08x\n&quot;, hinstLib);
++		aprintf(&quot;Unloading library 0x%08x\n&quot;, hinstLib);
+ 
+ 	#ifdef ADM_WIN32
+ 		FreeLibrary((HINSTANCE) hinstLib);
+@@ -72,14 +77,14 @@
+ 	{
+ 		char* lpMsg = formatMessage(GetLastError());
+ 
+-		printf(&quot;Unable to load [%s]: %s\n&quot;, path, lpMsg);
++		aprintf(&quot;Unable to load [%s]: %s\n&quot;, path, lpMsg);
+ 		LocalFree(lpMsg);
+ 
+ 		return false;
+ 	}
+ 	else
+ 	{
+-		printf(&quot;Loaded library %s, handle = 0x%08x\n&quot;, path, hinstLib);
++		aprintf(&quot;Loaded library %s, handle = 0x%08x\n&quot;, path, hinstLib);
+ 
+ 		return true;
+ 	}
+@@ -88,13 +93,13 @@
+ 	
+ 	if (hinstLib == NULL)
+ 	{
+-		printf(&quot;Unable to load [%s]: %s\n&quot;, path, dlerror());
++		aprintf(&quot;Unable to load [%s]: %s\n&quot;, path, dlerror());
+ 
+ 		return false;
+ 	}
+ 	else
+ 	{
+-		printf(&quot;Loaded library %s, handle = 0x%08x\n&quot;, path, hinstLib);
++		aprintf(&quot;Loaded library %s, handle = 0x%08x\n&quot;, path, hinstLib);
+ 
+ 		return true;
+ 	}
+@@ -110,7 +115,7 @@
+ 	{
+ 		char* lpMsg = formatMessage(GetLastError());
+ 
+-		printf(&quot;Unable to find symbol [%s]: %s\n&quot;, name, lpMsg);
++		aprintf(&quot;Unable to find symbol [%s]: %s\n&quot;, name, lpMsg);
+ 		LocalFree(lpMsg);
+ 	}
+ 
+@@ -120,7 +125,7 @@
+ 
+ 	if (procAddr == NULL)
+ 	{
+-		printf(&quot;Unable to find symbol [%s]: %s\n&quot;, name, dlerror());
++		aprintf(&quot;Unable to find symbol [%s]: %s\n&quot;, name, dlerror());
+ 	}
+ 
+ 	return procAddr;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001104.html">[Avidemux-svn-commit] r3840 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_core/include ADM_core/src ADM_libraries/ADM_libmpeg2enc	ADM_outputs/oplug_avi
+</A></li>
+	<LI>Next message: <A HREF="001106.html">[Avidemux-svn-commit] r3842 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_libraries/ADM_mplex ADM_osSupport
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1105">[ date ]</a>
+              <a href="thread.html#1105">[ thread ]</a>
+              <a href="subject.html#1105">[ subject ]</a>
+              <a href="author.html#1105">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,199 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7607 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7607%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20111012060625.C0B5B48135A%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004752.html">
+   <LINK REL="Next"  HREF="004754.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7607 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7607%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C20111012060625.C0B5B48135A%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7607 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Oct 12 08:06:25 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004752.html">[Avidemux-svn-commit] r7606 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_QT4/src
+</A></li>
+        <LI>Next message: <A HREF="004754.html">[Avidemux-svn-commit] r7608 - in	branches/avidemux_2.5_branch_gruntster/platforms/windows:	build_scripts build_scripts/avidemux build_scripts/faac	build_scripts/faad build_scripts/js build_scripts/lame	build_scripts/libvpx build_scripts/nspr installer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4753">[ date ]</a>
+              <a href="thread.html#4753">[ thread ]</a>
+              <a href="subject.html#4753">[ subject ]</a>
+              <a href="author.html#4753">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-10-12 08:06:25 +0200 (Wed, 12 Oct 2011)
+New Revision: 7607
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp
+Log:
+[trp/probe] More reliable way of probing mpeg2 audio tracks
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp	2011-10-11 22:05:50 UTC (rev 7606)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS/ADM_tsBruteForce.cpp	2011-10-12 06:06:25 UTC (rev 7607)
+@@ -31,7 +31,7 @@
+ #define MAX_BUFFER_SIZE (10*1024)
+ 
+ static bool idContent(int pid,tsPacket *ts,ADM_TS_TRACK_TYPE &amp; trackType);
+-
++static bool idMP2(int pid,tsPacket *ts);
+ /**
+     \fn scanForPrograms
+     \brief Lookup PAT &amp; PMT to get tracks
+@@ -274,54 +274,77 @@
+                 }
+ 
+         }
+-        // We easily have false positive with mp2...
+-        // Let's get 10 samples, and say it's ok if we have MP2_THRESHOLD that match
+-#define MP2_NB_TRY    10
+-#define MP2_THRESHOLD 3
+-        MpegAudioInfo mp2info[MP2_NB_TRY];
+-        for(int i=0;i&lt;MP2_NB_TRY;i++)
++        if(idMP2(pid,ts))
+         {
+-              if(false==ts-&gt;getNextPES( &amp;pes2)) 
++                ADM_info(&quot;\t probably MP2\n&quot;);
++                trackType=ADM_TS_MPEG_AUDIO;
++                return true;
++        }
++        ADM_info(&quot;Cannot identify track\n&quot;);
++        return false;
++}
++/**
++    \fn idMP2
++    \brief return true if the tracks is mp2
++*/
++bool idMP2(int pid,tsPacket *ts)
++{
++#define MP2_PROBE_SIZE (16*1024)
++uint8_t  mp2Buffer[MP2_PROBE_SIZE*2];
++
++        int limit=0;
++        TS_PESpacket pes(pid);
++        while(limit&lt;MP2_PROBE_SIZE)
++        {
++            if(!ts-&gt;getNextPES(&amp;pes))
+             {
+-                ADM_warning(&quot;\tCannot get PES2\n&quot;);
++                ADM_warning(&quot;Cannot get PES for pid=%d\n&quot;,pid);
+                 return false;
+             }
+-            ptr2=pes2.payload;
+-            len2=pes2.payloadSize;
+-            if( !getMpegFrameInfo(ptr2,len2,mp2info+i,NULL,&amp;syncoff))
+-            {
+-                ADM_warning(&quot;Cannot find mp2 header (try %d)\n&quot;,i);
+-                return false;
+-            }
+-            ADM_info(&quot;\t\t%d : fq=%d br=%d\n&quot;,i,mp2info[i].samplerate,mp2info[i].bitrate);
++            int left=pes.payloadSize-pes.offset;
++            memcpy(mp2Buffer+limit,pes.payload+pes.offset,left);
++            limit+=left;
+         }
+-        int match=0,maxMatch=0,mp2index=0;
+-        for(int j=0;j&lt;MP2_NB_TRY;j++)
++        ADM_info(&quot;\t read % bytes\n&quot;,limit);
++        // Now read buffer until we have 3 correctly decoded packet
++        int probeIndex=0;
++        while(probeIndex&lt;limit)
+         {
+-            match=0;
+-            for(int i=0;i&lt;MP2_NB_TRY;i++)
++
++            uint8_t *ptr=mp2Buffer+probeIndex;
++            int     len=limit-probeIndex;
++            if(len&lt;4)
+             {
+-                    if(mp2Match(mp2info,i,j)) match++;
++                    ADM_info(&quot;\t no sync(3)\n&quot;);
++                    return false;
+             }
+-            if(match&gt;maxMatch) 
++            uint32_t syncoff,syncoff2;
++            MpegAudioInfo mp2info,confirm;
++            if( !getMpegFrameInfo(ptr,len,&amp;mp2info,NULL,&amp;syncoff))
+             {
+-                maxMatch=match;
+-                mp2index=j;
++                    ADM_info(&quot;\t no sync\n&quot;);
++                    return false;
+             }
++          // Skip this packet
++            int next=probeIndex+syncoff+mp2info.size;
++            len=limit-next;
++            if(len&lt;4)
++            {
++                    ADM_info(&quot;\t no sync(2)\n&quot;);
++                    return false;
++            }
++            if(getMpegFrameInfo(mp2Buffer+next,len,&amp;confirm,&amp;mp2info,&amp;syncoff2))
++            {
++                    if(!syncoff2)
++                    {
++                            ADM_warning(&quot;\tProbably MP2 : Fq=%d br=%d chan=%d\n&quot;, (int)mp2info.samplerate,
++                                                                (int)mp2info.bitrate,
++                                                                (int)mp2info.mode);
++                            return true;
++                    }
++            }
++            probeIndex+=syncoff+1;
+         }
+-        if(maxMatch&gt;=MP2_THRESHOLD)
+-        {
+-                MpegAudioInfo minfo;
+-                ADM_info(&quot;Found %d matches out of %d samples\n&quot;,maxMatch,MP2_NB_TRY);
+-                minfo=mp2info[mp2index];
+-                ADM_warning(&quot;\tProbably MP2 : Fq=%d br=%d chan=%d\n&quot;, (int)minfo.samplerate,
+-                                                                        (int)minfo.bitrate,
+-                                                                        (int)minfo.mode);
+-                trackType=ADM_TS_MPEG_AUDIO;
+-                return true;
+-
+-        }
+-        ADM_info(&quot;MP2:Only %d matches out of %d tries, dont know what that track is\n&quot;,maxMatch,MP2_NB_TRY);
+         return false;
+ }
+         
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004752.html">[Avidemux-svn-commit] r7606 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_UIs/ADM_QT4/src
+</A></li>
+	<LI>Next message: <A HREF="004754.html">[Avidemux-svn-commit] r7608 - in	branches/avidemux_2.5_branch_gruntster/platforms/windows:	build_scripts build_scripts/avidemux build_scripts/faac	build_scripts/faad build_scripts/js build_scripts/lame	build_scripts/libvpx build_scripts/nspr installer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4753">[ date ]</a>
+              <a href="thread.html#4753">[ thread ]</a>
+              <a href="subject.html#4753">[ subject ]</a>
+              <a href="author.html#4753">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

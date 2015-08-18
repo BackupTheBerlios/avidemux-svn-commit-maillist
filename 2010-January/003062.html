@@ -1,0 +1,2043 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5857 -	branches/avidemux_2.6_branch_mean/addons/avisynthproxy
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5857%20-%0A%09branches/avidemux_2.6_branch_mean/addons/avisynthproxy&In-Reply-To=%3C201001171600.o0HG0DC4014478%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003060.html">
+   <LINK REL="Next"  HREF="003063.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5857 -	branches/avidemux_2.6_branch_mean/addons/avisynthproxy</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5857%20-%0A%09branches/avidemux_2.6_branch_mean/addons/avisynthproxy&In-Reply-To=%3C201001171600.o0HG0DC4014478%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5857 -	branches/avidemux_2.6_branch_mean/addons/avisynthproxy">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jan 17 17:00:13 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003060.html">[Avidemux-svn-commit] r5856 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy
+</A></li>
+        <LI>Next message: <A HREF="003063.html">[Avidemux-svn-commit] r5858 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_avsproxy
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3062">[ date ]</a>
+              <a href="thread.html#3062">[ thread ]</a>
+              <a href="subject.html#3062">[ subject ]</a>
+              <a href="author.html#3062">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-01-17 17:00:09 +0100 (Sun, 17 Jan 2010)
+New Revision: 5857
+
+Added:
+   branches/avidemux_2.6_branch_mean/addons/avisynthproxy/vc90.idb
+   branches/avidemux_2.6_branch_mean/addons/avisynthproxy/vc90.pdb
+Modified:
+   branches/avidemux_2.6_branch_mean/addons/avisynthproxy/avsHeader.h
+   branches/avidemux_2.6_branch_mean/addons/avisynthproxy/avsproxy.cpp
+   branches/avidemux_2.6_branch_mean/addons/avisynthproxy/avsproxy.vcproj
+   branches/avidemux_2.6_branch_mean/addons/avisynthproxy/sket.cpp
+   branches/avidemux_2.6_branch_mean/addons/avisynthproxy/sket.h
+Log:
+[avsproxy] new version with audio
+
+Modified: branches/avidemux_2.6_branch_mean/addons/avisynthproxy/avsHeader.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/addons/avisynthproxy/avsHeader.h	2010-01-17 15:52:27 UTC (rev 5856)
++++ branches/avidemux_2.6_branch_mean/addons/avisynthproxy/avsHeader.h	2010-01-17 16:00:09 UTC (rev 5857)
+@@ -1,25 +1,38 @@
+-/*
++/** 
++	\file avsHeader.h
++	\brief Content of exchanges between avidemux and avsproxy
+ 
+ 
+-
+ */
+ #ifndef AVS_HEADER_H
+ #define AVS_HEADER_H
++#define AVSHEADER_API_VERSION 2
+ typedef enum AvsEnum
+ {
+ 	AvsCmd_GetInfo=1,
+-	AvsCmd_SendInfo,
+-	AvsCmd_GetFrame,
+-	AvsCmd_SendFrame,
+-	AvsCmd_Quit
++	AvsCmd_SendInfo=2,
++	AvsCmd_GetFrame=3,
++	AvsCmd_SendFrame=4,
++	AvsCmd_GetAudio=5,
++	AvsCmd_SendAudio=6,
++	AvsCmd_Quit=99
+ };
+ 
+ typedef struct avsInfo
+ {
++	uint32_t version;
+ 	uint32_t width;
+ 	uint32_t height;
+ 	uint32_t fps1000;
+ 	uint32_t nbFrames;
++	uint32_t frequency;
++	uint32_t channels;
+ }avsyInfo;
++
++typedef struct 
++{
++	uint32_t sizeInFloatSample;
++	uint64_t startSample;       // -1 means continue
++}avsAudioFrame;
+ #endif
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/addons/avisynthproxy/avsproxy.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/addons/avisynthproxy/avsproxy.cpp	2010-01-17 15:52:27 UTC (rev 5856)
++++ branches/avidemux_2.6_branch_mean/addons/avisynthproxy/avsproxy.cpp	2010-01-17 16:00:09 UTC (rev 5857)
+@@ -5,14 +5,9 @@
+ // the Free Software Foundation; either version 2 of the License, or
+ // (at your option) any later version.
+ 
+-/* #include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+-#include &lt;string.h&gt;
+-#include &lt;io.h&gt;
+-#include &lt;fcntl.h&gt;
+-#include &lt;windef.h&gt;*/
+ 
+ #define __int64_t long long int
++#define uint64_t long long unsigned int
+ 
+ #include &quot;internal.h&quot;
+ #include &quot;sket.h&quot;
+@@ -22,33 +17,37 @@
+ #define INT_MAX 0x7fffffff
+ #endif
+ 
+-#define MY_VERSION &quot;Avs2YUV 0.24 ADM_0.1&quot;
++#define MY_VERSION &quot;Avs2YUV 0.24 ADM_1.1&quot;
+ #define MAX_FH 10
+-
+ #include &quot;winsock2.h&quot;
+-	int vid_width=-1;
+-	int vid_height=-1;
+-	int vid_fps1000=-1;
+-	int vid_nbFrame=-1;
+-	uint32_t currentFrame=0xFFFF0000;
+-	char *Buffer;
++#define Log printf
++/******************************************/
++int vid_width=-1;
++int vid_height=-1;
++int vid_fps1000=-1;
++int vid_nbFrame=-1;
++uint32_t currentFrame=0xFFFF0000;
++char *Buffer;
+ 
+-static int framePack(PVideoFrame p);
+-static void handleError(void);
+-static uint8_t initAvisynth(const char *infile);
+-
+-
+-
+ PVideoFrame Aframe=NULL;
+ IScriptEnvironment* env =NULL;
+ PClip clip =NULL;
+ avsyInfo    info;
+ 
++/*****************************************/
++static int framePack(PVideoFrame p);
++static void handleError(void);
++static bool initAvisynth(const char *infile);
+ 
++
++/**
++	\fn main
++*/
+ int __cdecl main(int argc, const char* argv[])
+ {
+ 	const char* infile = NULL;
+-	
++	char *audioBuffer=new char[48000*6*2];
++	char *audioBufferData=audioBuffer+sizeof(avsAudioFrame);
+ 
+ 	printf(&quot;AvsSocket Proxy, derivated from avs2yuv by  Loren Merritt \n&quot;);
+ 	fflush(stdout);
+@@ -134,14 +133,53 @@
+ 					case AvsCmd_GetInfo:
+ 							printf(&quot;Received get info...\n&quot;);
+ 							fflush(stdout);
++							if(len!=8)
++							{
++									// Version
++									printf(&quot;This version of avsproxy is not compatible with the avidemux version you are using\n&quot;);
++									fflush(stdout);
++									exit( -1);
++							}
++							uint32_t api,ver;
++							api=*(uint32_t *)payload;
++							ver=*(uint32_t *)(payload+4);
++							printf(&quot;Connection from avidemux, api=%d version=%d\n&quot;,api,ver);
++							if(api!=AVSHEADER_API_VERSION)
++							{
++									printf(&quot;This version of avsproxy has api version %d, avidemux has version %d, exiting\n&quot;,AVSHEADER_API_VERSION,api);
++									fflush(stdout);
++									exit(-1);
++							}
+ 							sket-&gt;sendData(AvsCmd_SendInfo,0,sizeof(info),(uint8_t *)&amp;info);
+ 							break;
++					case AvsCmd_GetAudio:
++							// Read payload
++							if(len!=sizeof(avsAudioFrame))
++							{
++									printf(&quot;get audio command, expected %d bytes , got %d \n&quot;,sizeof(avsAudioFrame),len);
++									fflush(stdout);
++									exit(-1);	
++							}
++							avsAudioFrame aFrame;
++							memcpy(&amp;aFrame,payload,len);
++							// Read...
++							try {
++								clip-&gt;GetAudio(audioBufferData, aFrame.startSample, aFrame.sizeInFloatSample, env);
++							}catch(AvisynthError err) 
++							{
++								fprintf(stderr, &quot;Get Audio :Avisynth error:\n%s\n&quot;, err.msg);	
++							    aFrame.sizeInFloatSample=0;
++							}
++							// Send reply...
++							memcpy(audioBuffer,&amp;aFrame,sizeof(aFrame));
++							sket-&gt;sendData(AvsCmd_SendAudio,0,aFrame.sizeInFloatSample*2*info.channels+sizeof(aFrame),(uint8_t *)audioBuffer);
++							break;
+ 					case AvsCmd_GetFrame:
+ 							if(currentFrame!=frame)
+ 							{
+ 								
+ 							try{
+-								printf(&quot;Get frame %u (old:%u)\n&quot;,frame,currentFrame);
++								Log(&quot;Get frame %u (old:%u)\n&quot;,frame,currentFrame);
+ 								fflush(stdout);
+ 								Aframe= clip-&gt;GetFrame(frame, env);
+ 								framePack(Aframe);	
+@@ -175,12 +213,12 @@
+ 			}
+ 
+ 
+-		}
+-
+-		//get(currentFrame);
+-	
++		}	
+ }
+-
++/**
++	\fn framePack
++	\brief Pack a video frame inside our buffer
++*/
+ int framePack(PVideoFrame p)
+ {
+ 			int w,stride;
+@@ -222,7 +260,9 @@
+ 			}
+ 			return 1;
+ }
+-
++/**
++	\fn handleError
++*/
+ void handleError(void)
+ {
+ 	DWORD er=GetLastError();
+@@ -231,10 +271,12 @@
+ 	exit(-1);
+ 
+ }
+-#if 1
++/**
++	\fn initAvisynth
++*/
+ typedef IScriptEnvironment * __stdcall DLLFUNC(int);
+ 
+-uint8_t initAvisynth(const char *infile)
++bool initAvisynth(const char *infile)
+ {
+ 		HMODULE instance;
+ 		DLLFUNC *CreateScriptEnvironment=NULL;
+@@ -247,7 +289,7 @@
+ 			handleError();
+ 			fprintf(stderr, &quot;failed to load avisynth.dll\n&quot;); 
+ 			fflush(stderr);
+-			return 2;
++			return false;
+ 		}
+ 		printf(&quot;Avisynth.dll loaded\n&quot;);
+ 		fflush(stdout);
+@@ -255,12 +297,18 @@
+ 		printf(&quot;Env created\n&quot;);
+ 		fflush(stdout);
+ 		if(!CreateScriptEnvironment)
+-			{fprintf(stderr, &quot;failed to load CreateScriptEnvironment()\n&quot;); fflush(stderr); return 1;}
++		{
++			fprintf(stderr, &quot;failed to load CreateScriptEnvironment()\n&quot;); 
++			fflush(stderr); 
++			return false;
++		}
+ try{
+ 		env = CreateScriptEnvironment(AVISYNTH_INTERFACE_VERSION);
+ 		if(!env)
+ 		{
+-			{fprintf(stderr, &quot;Env failed\n&quot;); fflush(stderr); return 1;}
++			fprintf(stderr, &quot;Env failed\n&quot;); 
++			fflush(stderr); 
++			return false;
+ 		}
+ 		AVSValue args[]={infile};
+ 		printf(&quot;Importing..\n&quot;);
+@@ -269,7 +317,9 @@
+ 		clip=dummy;
+ 
+ 		VideoInfo inf = clip-&gt;GetVideoInfo();
+-	
++	    memset(&amp;info,0,sizeof(info));
++		info.version=AVSHEADER_API_VERSION;
++		// Video part
+ 		info.width=vid_width=inf.width;
+ 		info.height=vid_height=inf.height;
+ 		info.fps1000=vid_fps1000=(inf.fps_numerator*1000)/inf.fps_denominator;
+@@ -280,59 +330,52 @@
+ 		f/=inf.fps_denominator;
+ 		vid_fps1000=info.fps1000=(uint32_t)ceil(f);
+ 		info.nbFrames=vid_nbFrame=inf.num_frames;
+-		
++		// audio part
++		info.frequency=inf.SamplesPerSecond(); // 0 means no audio
++		info.channels=inf.AudioChannels();
++		if(inf.SampleType()!=SAMPLE_INT16)
++		{
++			printf(&quot;Only int16 for audio and not %d!\n&quot;,(int)inf.SampleType());
++			fflush(stdout);
++			handleError();
++			return false;	
++		}
+ 		if(!inf.IsYV12()) 
+ 		{
+ 			printf(&quot;Only yv12!\n&quot;);
+ 			fflush(stdout);
+ 			handleError();
++			return false;
+ 		}
+ 		if(!inf.IsYV12())
+-			{fprintf(stderr, &quot;Couldn't convert input to YV12\n&quot;); fflush(stderr); return 1;}
++			{fprintf(stderr, &quot;Couldn't convert input to YV12\n&quot;); fflush(stderr); return false;}
+ 		if(inf.IsFieldBased())
+-			{fprintf(stderr, &quot;Needs progressive input\n&quot;); fflush(stderr); return 1;}
++			{fprintf(stderr, &quot;Needs progressive input\n&quot;); fflush(stderr); return false;}
+ 
+ 	
+ 		// Incoming ready
+-		printf(&quot;Info\n&quot;);
+-		printf(&quot;Width   :%d \n&quot;,vid_width);
+-		printf(&quot;Height  :%d \n&quot;,vid_height);
+-		printf(&quot;Fps1K   :%d \n&quot;,vid_fps1000);
+-		printf(&quot;NbFrame :%d \n&quot;,vid_nbFrame);
++		printf(&quot;Clip Info\n&quot;);
++		printf(&quot;_________\n&quot;);
++		printf(&quot;Width     :%d \n&quot;,vid_width);
++		printf(&quot;Height    :%d \n&quot;,vid_height);
++		printf(&quot;Fps1K     :%d \n&quot;,vid_fps1000);
++		printf(&quot;NbFrame   :%d \n&quot;,vid_nbFrame);
++		printf(&quot;Frequency :%d \n&quot;,info.frequency);
++		printf(&quot;#channels :%d \n&quot;,info.channels);
+ 		fflush(stdout);
++		return true;
+ }
+ catch(AvisynthError err) {
+ 		
+ 			fprintf(stderr, &quot;\nAvisynth error:\n%s\n&quot;, err.msg);
+ 			fflush(stderr);
+-		return 1;
++		return false;
+ 	}
+ 
+ 
+ 
+-		return 1;
++		return true;
+ }
+ 
+-#else
+-typedef IScriptEnvironment * __stdcall FUNC(int);
+-uint8_t initAvisynth(const char *infile)
+-{
+-HINSTANCE lib = LoadLibrary(&quot;avisynth.dll&quot;);
+-FUNC *func = (FUNC *)GetProcAddress(lib, &quot;CreateScriptEnvironment&quot;);
+-IScriptEnvironment *env = func(AVISYNTH_INTERFACE_VERSION);
+-
+-{
+-	AVSValue args[] = { infile };
+-	PClip clip(env-&gt;Invoke(&quot;Import&quot;, AVSValue(args, 1)).AsClip());
+-	const VideoInfo&amp; vi = clip-&gt;GetVideoInfo();
+-
+-	printf(&quot;%d %d %d&quot;, vi.width, vi.height, vi.BitsPerPixel());
+-}
+-
+-delete env;
+-FreeLibrary(lib);
+-return 1;
+-}
+-#endif
+ //EOF
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/addons/avisynthproxy/avsproxy.vcproj
+===================================================================
+--- branches/avidemux_2.6_branch_mean/addons/avisynthproxy/avsproxy.vcproj	2010-01-17 15:52:27 UTC (rev 5856)
++++ branches/avidemux_2.6_branch_mean/addons/avisynthproxy/avsproxy.vcproj	2010-01-17 16:00:09 UTC (rev 5857)
+@@ -1,10 +1,11 @@
+ &lt;?xml version=&quot;1.0&quot; encoding=&quot;Windows-1252&quot;?&gt;
+ &lt;VisualStudioProject
+ 	ProjectType=&quot;Visual C++&quot;
+-	Version=&quot;8.00&quot;
++	Version=&quot;9,00&quot;
+ 	Name=&quot;avsproxy&quot;
+ 	ProjectGUID=&quot;{FDA95A7F-919C-4343-96C6-FB0F59FFE5B0}&quot;
+ 	RootNamespace=&quot;avsproxy&quot;
++	TargetFrameworkVersion=&quot;131072&quot;
+ 	&gt;
+ 	&lt;Platforms&gt;
+ 		&lt;Platform
+@@ -77,6 +78,8 @@
+ 				SuppressStartupBanner=&quot;true&quot;
+ 				ProgramDatabaseFile=&quot;./avsproxy.pdb&quot;
+ 				SubSystem=&quot;1&quot;
++				RandomizedBaseAddress=&quot;1&quot;
++				DataExecutionPrevention=&quot;0&quot;
+ 				TargetMachine=&quot;1&quot;
+ 			/&gt;
+ 			&lt;Tool
+@@ -98,9 +101,6 @@
+ 				Name=&quot;VCAppVerifierTool&quot;
+ 			/&gt;
+ 			&lt;Tool
+-				Name=&quot;VCWebDeploymentTool&quot;
+-			/&gt;
+-			&lt;Tool
+ 				Name=&quot;VCPostBuildEventTool&quot;
+ 			/&gt;
+ 		&lt;/Configuration&gt;
+@@ -170,6 +170,8 @@
+ 				GenerateDebugInformation=&quot;true&quot;
+ 				ProgramDatabaseFile=&quot;./avsproxy.pdb&quot;
+ 				SubSystem=&quot;1&quot;
++				RandomizedBaseAddress=&quot;1&quot;
++				DataExecutionPrevention=&quot;0&quot;
+ 				TargetMachine=&quot;1&quot;
+ 			/&gt;
+ 			&lt;Tool
+@@ -191,9 +193,6 @@
+ 				Name=&quot;VCAppVerifierTool&quot;
+ 			/&gt;
+ 			&lt;Tool
+-				Name=&quot;VCWebDeploymentTool&quot;
+-			/&gt;
+-			&lt;Tool
+ 				Name=&quot;VCPostBuildEventTool&quot;
+ 			/&gt;
+ 		&lt;/Configuration&gt;
+
+Modified: branches/avidemux_2.6_branch_mean/addons/avisynthproxy/sket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/addons/avisynthproxy/sket.cpp	2010-01-17 15:52:27 UTC (rev 5856)
++++ branches/avidemux_2.6_branch_mean/addons/avisynthproxy/sket.cpp	2010-01-17 16:00:09 UTC (rev 5857)
+@@ -1,17 +1,21 @@
+-/*
++/**
++	\file sket.cpp
++	\brief Socket handling
++	\author mean <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+ 
++*/
++// This program is free software; you can redistribute it and/or modify
++// it under the terms of the GNU General Public License as published by
++// the Free Software Foundation; either version 2 of the License, or
++// (at your option) any later version.
+ 
+ 
+-*/
+-
++//#define DEBUG
+ #include &lt;stdio.h&gt;
+ #include &quot;sket.h&quot;
+ 
+ Sket::Sket(void)
+ {
+-
+-
+-
+ 	mySocket=0;
+ 	port=9999;
+ 
+@@ -20,19 +24,49 @@
+   sockaddr_in service;
+   service.sin_family = AF_INET;
+ #ifdef DEBUG
+-  service.sin_addr.s_addr = inet_addr(&quot;192.168.0.10&quot;);
++	// Get the local host information
++  hostent* localHost;
++  char* localIP;
++	localHost = gethostbyname(&quot;&quot;);
++	localIP = inet_ntoa (*(struct in_addr *)*localHost-&gt;h_addr_list);
++	service.sin_addr.s_addr = inet_addr(localIP);
++	printf(&quot;Binding ...\n&quot;);
++	int ip=service.sin_addr.s_addr;
++	for(int i=0;i&lt;4;i++)
++	{
++			printf(&quot;%d &quot;,ip&amp;0xff);
++		    ip&gt;&gt;=8;
++	}
++	printf(&quot;\n&quot;);
+ #else
+-  service.sin_addr.s_addr = inet_addr(&quot;127.0.0.1&quot;);
++	#define BIND_ADR &quot;127.0.0.1&quot;
++    service.sin_addr.s_addr = inet_addr(BIND_ADR);
++	printf(&quot;Binding on %s\n&quot;,BIND_ADR);
+ #endif
++  
++  
+   service.sin_port = htons(port);
+ 
+-   if (bind( mySocket,   (SOCKADDR*) &amp;service,  sizeof(service)) == SOCKET_ERROR) 
+-   {
+-    printf(&quot;bind() failed to port %u \n&quot;,port);
+-	fflush(stdout);
+-    closesocket(mySocket);
+-	mySocket=0;
+-    exit(-1);
++
++  int one=true;
++  if (bind( mySocket,   (SOCKADDR*) &amp;service,  sizeof(service)) == SOCKET_ERROR) 
++  {
++	int opt=setsockopt(mySocket,
++				SOL_SOCKET,
++				SO_REUSEADDR,
++				(char *)&amp;one,sizeof(one));
++	printf(&quot;Trying to use SO_REUSEADDR\n&quot;);
++	if(opt) printf(&quot;Error in setsockopt:%d\n&quot;,opt);
++  
++	  // Retry with SO_REUSEADDR set...
++	   if (bind( mySocket,   (SOCKADDR*) &amp;service,  sizeof(service)) == SOCKET_ERROR) 
++	   {
++		printf(&quot;bind() failed to port %u \n&quot;,port);
++		fflush(stdout);
++		closesocket(mySocket);
++		mySocket=0;
++		exit(-1);
++	  }
+   }
+    // Set high buffer + low delay
+   printf(&quot;Socket bound to port %u\n&quot;,port);
+@@ -82,10 +116,10 @@
+ 	SktHeader header;
+ 	memset(&amp;header,0,sizeof(header));
+ 
+-
+-	if( sizeof(header)!=recv(workSocket,(char *)&amp;header,sizeof(header),0))
++	int rx=recv(workSocket,(char *)&amp;header,sizeof(header),0);
++	if( sizeof(header)!=rx)
+ 	{
+-		printf(&quot;Error in receivedata: header\n&quot;);
++		printf(&quot;Error in receivedata: header, expected %d, received %d\n&quot;,(int) sizeof(header),rx);
+ 		fflush(stdout);
+ 		exit(-1);
+ 	}
+
+Modified: branches/avidemux_2.6_branch_mean/addons/avisynthproxy/sket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/addons/avisynthproxy/sket.h	2010-01-17 15:52:27 UTC (rev 5856)
++++ branches/avidemux_2.6_branch_mean/addons/avisynthproxy/sket.h	2010-01-17 16:00:09 UTC (rev 5857)
+@@ -7,7 +7,7 @@
+ #include &quot;proxytype.h&quot;
+ #ifndef SKET_H
+ #define SKET_H
+-
++#define DEBUG
+ #define MAGGIC 0xDEADBEEF
+ 
+ typedef struct SktHeader
+
+Added: branches/avidemux_2.6_branch_mean/addons/avisynthproxy/vc90.idb
+===================================================================
+--- branches/avidemux_2.6_branch_mean/addons/avisynthproxy/vc90.idb	2010-01-17 15:52:27 UTC (rev 5856)
++++ branches/avidemux_2.6_branch_mean/addons/avisynthproxy/vc90.idb	2010-01-17 16:00:09 UTC (rev 5857)
+@@ -0,0 +1,82 @@
++Microsoft C/C++ MSF 7.00
++DS
+
++
++
++
++
+
++
++
++
++
++
++
++
++
++
+
+dks\windows\v6.0a\include\ktmtypes.h
+inversedeps/c:\program files (x86)\microsoft visual studio 9.0\vc\include\vadefs.h
+
+
+files\microsoft sdks\windows\v6.0a\include\winsmcrd.h
+oft sdks\windows\v6.0a\include\ktmtypes.h
+
+
+r/inversedeps/c:\program files\microsoft sdks\windows\v6.0a\include\guiddef.h
+ef.h
++
++
+xception
++
++
++
++
++
++
++
++
++
++
+nversedeps/c:\program files (x86)\microsoft visual studio 9.0\vc\include\climits
+m files (x86)\microsoft visual studio 9.0\vc\include\vector
+S
++
++
++
++
+
+m files\microsoft sdDRS 8
+
+lude\xstddef
+
++
++
++
++
++
++
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
++
++
++
++
+\program files\microsoft sdks\windows\v6.0a\include\specstrings_undef.h
+program files\microsoft sdks\windows\v6.0a\include\rpcnterr.h
+c:\program files\microsoft sdks\windows\v6.0a\include\commdlg.h
++
++
++
++
++
++
++
++
++
++
++
++
+
+.h
+soft sdks\windows\v6.0a\include\bcrypt.h
+nclude\windef.h
+s/c:\program files (x86)\microsoft visual studio 9.0\vc\include\codeanalysis\sourceannotations.h
++
++
++
++
++
+mr/inversedeps/c:\program files (x86)\microsoft visual studio 9.0\vc\include\vadefs.h
+ files\microsoft sdks\windows\v6.0a\include\winsmcrd.h
+
++
++
++
++
++
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
++
++
+s\v6.0a\include\commdlg.h
+ual studio 9.0\vc\include\xstddef
++
++
++
++
+
++
++
++
++
++
++
++
++
++
+poppack.h
+/d:\avidemux_2.6_branch_mean\addons\avisynthproxy\sket.h
+dows\v6.0a\include\winsock.h
+rsedeps/c:\program files\microsoft sdks\windows\v6.0a\include\guiddef.h
+gram files (x86)\microsoft visual studio 9.0\vc\include\vector
+
++
++
++
++
+
+
+
+
+\ No newline at end of file
+
+
+Property changes on: branches/avidemux_2.6_branch_mean/addons/avisynthproxy/vc90.idb
+___________________________________________________________________
+Name: svn:executable
+   + *
+
+Added: branches/avidemux_2.6_branch_mean/addons/avisynthproxy/vc90.pdb
+===================================================================
+--- branches/avidemux_2.6_branch_mean/addons/avisynthproxy/vc90.pdb	2010-01-17 15:52:27 UTC (rev 5856)
++++ branches/avidemux_2.6_branch_mean/addons/avisynthproxy/vc90.pdb	2010-01-17 16:00:09 UTC (rev 5857)
+@@ -0,0 +1,1187 @@
++Microsoft C/C++ MSF 7.00
++DS
+
+&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;!
+ &#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;!
+ &#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;!
+ &#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;
+&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;!
+ &#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;!
+ &#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;
+&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;!
+ &#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;!
+ &#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;!
+ &#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;
+&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;!
+ &#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;!
+ &#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#255;&#254;&#239;&#254;&#239;
+
++
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++
++
++&#128;
++
++
++
++&#128;
++
++
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++
++&#128;
++
++
++&#128;
++
++&#130;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#132;
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++
++
++
++&#128;
++
++
++
++&#128;
++
++
++
++
++
++
++
++&#132;
++
++
++
++
++
++&#132;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#132;
++
++
++
++
++
++&#128;
++
++
++&#132;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#132;
++
++
++
++
++&#128;
++
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#132;
++
++
++&#128;
++
++
++
++
++&#132;
++
++&#132;
++
++
++
++
++&#132;
++
++
++
++
++
++
++&#128;
++
++&#128;
++
++&#132;
++
++&#128;
++
++&#128;
++
++&#132;
++
++
++
++
++
++&#132;
++
++
++
++
++&#132;
++
++
++
++
++&#132;
++
++
++&#132;
++
++
++&#128;
++
++
++&#128;
++
++
++
++
++
++&#132;
++
++
++
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++
++&#128;
++
++&#132;
++
++&#132;
++
++&#128;
++
++
++
++&#128;
++
++&#128;
++
++
++&#132;
++
++&#128;
++
++&#132;
++
++
++
++
++
++
++
++&#132;
++
++
++&#128;
++
++&#128;
++
++
++
++
++&#132;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++
++
++
++&#128;
++
++&#128;
++
++
++
++&#128;
++
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++
++
++&#132;
++
++
++&#132;
++
++&#128;
++
++&#128;
++
++
++
++
++&#128;
++
++&#132;
++
++
++
++
++
++
++&#132;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++
++
++
++
++
++
++&#128;
+
+
++
++&#132;
++
++
++
++
++
++
++
++&#132;
++
++
++
++&#128;
++
++&#128;
++
++
++
++
++
++
++
++&#128;
++
++&#128;
++
++
++&#132;
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++
++
++
++
++
++
++
++&#128;
++
++&#132;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++
++
++&#128;
++
++
++
++
++
++
++
++
++&#128;
++
++&#132;
++
++
++&#132;
++
++
++
++
++
++
++
++
++
++
+
+C@@
++
++&#132;
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++
++
++
++
++
++
++&#132;
++
++
++
++
++
++
+EGER@@
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#132;
++
++
++
++
++
++
++
++
++
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++
++&#128;
+
+
++
+
++
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++
++
++&#128;
++
++
++
++&#128;
++
++
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++
++&#128;
++
++
++&#128;
++
++&#130;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
+
+
++
+
++
++
++
++
++
++&#132;
++
++
++
++&#132;
++
++
++
++
++
++
++
++
++&#132;
++
++
++
++
++
++&#128;
++
++&#128;
++
++&#132;
++
++
++
++
++
++&#128;
++
++&#132;
++
++
++
++
++
++&#132;
++
++
++
++
++
++&#132;
++
++
++
++
++
++&#132;
++
++
++
++
++&#132;
++
++
++&#132;
++
++
++
++
++
++&#128;
++
++&#132;
++
++
++
++
++
++&#132;
++
++
++
++
++
++
++&#132;
++
++
++
++&#132;
++
++&#128;
++
++
++&#132;
++
++&#132;
++
++&#132;
++
++&#128;
++
++&#132;
++
++&#128;
++
++
++&#132;
++
++&#128;
++
++
++
++
++&#128;
++
++&#132;
++
++&#128;
++
++
++
++
++&#128;
++
++
++
++
++&#132;
++
++&#128;
++
++
++&#132;
++
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#132;
++
++
++
++
++
++&#132;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#132;
++
++
++
++
++&#128;
++
++
++&#132;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#132;
++
++
++
++
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#132;
++
++&#132;
++
++
++
++
++
++&#128;
++
++&#132;
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++
++
++
++
++
++
++&#132;
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++&#132;
++
++
++&#132;
++
++
++
++&#128;
++
++&#128;
++
++&#132;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#132;
++
++
++
++&#128;
++
++&#132;
++
++
++
++&#128;
++
++
++
++&#132;
++
++
++
++&#128;
++
++
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++
++
++
++
++
++
++&#128;
++
++
++&#128;
++
++
++&#128;
++
++
++&#128;
++
++
+_30@@
++
++&#128;
++
++
++
++
++&#132;
++
++
++
++
++
++&#132;
++
++&#132;
++
+
++
++
++
++
++p
++I
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++
++
++&#128;
++
++
++
++&#128;
++
++
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++
++&#128;
++
++
++&#128;
++
++&#130;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
+
++
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++
++
++&#128;
++
++
++
++&#128;
++
++
++
++&#128;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++
++
++&#128;
++
++
++&#128;
++
++&#130;
++
++&#128;
++
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
++
++&#128;
+
+
++
+
+
+
+\ No newline at end of file
+
+
+Property changes on: branches/avidemux_2.6_branch_mean/addons/avisynthproxy/vc90.pdb
+___________________________________________________________________
+Name: svn:executable
+   + *
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003060.html">[Avidemux-svn-commit] r5856 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/AvsProxy
+</A></li>
+	<LI>Next message: <A HREF="003063.html">[Avidemux-svn-commit] r5858 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_avsproxy
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3062">[ date ]</a>
+              <a href="thread.html#3062">[ thread ]</a>
+              <a href="subject.html#3062">[ subject ]</a>
+              <a href="author.html#3062">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

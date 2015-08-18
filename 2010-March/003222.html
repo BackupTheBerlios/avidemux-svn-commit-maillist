@@ -1,0 +1,451 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6017 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6017%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C201003231454.o2NEskih008875%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003221.html">
+   <LINK REL="Next"  HREF="003223.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6017 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6017%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C201003231454.o2NEskih008875%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6017 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Mar 23 15:54:46 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003221.html">[Avidemux-svn-commit] r6016 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4
+</A></li>
+        <LI>Next message: <A HREF="003223.html">[Avidemux-svn-commit] r6018 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3222">[ date ]</a>
+              <a href="thread.html#3222">[ thread ]</a>
+              <a href="subject.html#3222">[ subject ]</a>
+              <a href="author.html#3222">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-03-23 15:54:45 +0100 (Tue, 23 Mar 2010)
+New Revision: 6017
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h
+Log:
+[Editor] Better PtsFromDts and DtsFromPts computation for mpeg2 style
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp	2010-03-23 14:54:41 UTC (rev 6016)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp	2010-03-23 14:54:45 UTC (rev 6017)
+@@ -24,7 +24,71 @@
+ #define GOT_NO_DTS 1
+ #define GOT_NONE   3
+ #define GOT_BOTH   0
++/* Specific cases */
++static bool setDtsFromPts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay);
++static bool setPtsFromDts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay);
++static bool updatePtsAndDts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay);
+ /**
++    \fn ADM_computeMissingPtsDts
++
++*/
++bool ADM_computeMP124MissingPtsDts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay)
++{
++    aviInfo info;
++    uint32_t flags;
++    hdr-&gt;getVideoInfo(&amp;info);
++    uint32_t nDts=0,nPts=0;
++    uint32_t nbB=0;
++    uint64_t pts,dts;
++    // Look how much bframes + how much valid PTS/DTS we have....
++    for(int i=0;i&lt;info.nb_frames;i++)
++    {
++        hdr-&gt;getFlags(i,&amp;flags);
++        if(flags &amp; AVI_B_FRAME)
++                nbB++;
++        if(true!=hdr-&gt;getPtsDts(i,&amp;pts,&amp;dts))
++        {
++            goto next;
++        }
++        if(pts!=ADM_NO_PTS)
++            nPts++;
++        if(dts!=ADM_NO_PTS)
++            nDts++;
++    }
++next:
++        ADM_info(&quot;Out of %&quot;LD&quot; frames, we have %&quot;LD&quot; valid DTS and %&quot;LD&quot; valid PTS\n&quot;,info.nb_frames,nDts,nPts);
++        ADM_info(&quot;We also have %&quot;LD&quot; bframes\n&quot;,nbB);
++        // No b frames, PTS=DTS
++        if(!nbB)
++        {
++            delay=0;
++            return setPtsEqualDts(hdr,timeIncrementUs);
++        }
++        // Case 1 : We have both, nothing to do
++        if(nDts&gt;=info.nb_frames-2 &amp;&amp; nPts&gt;=info.nb_frames-2)
++         {
++                ADM_info(&quot;Nothing to do\n&quot;);
++                *delay=0;
++                return true;
++         }
++        // Case 2: We have PTS but not DTS
++        if(nPts&gt;=info.nb_frames-2 )
++        {
++            ADM_info(&quot;Got PTS, compute dts\n&quot;);
++            return setDtsFromPts(hdr,timeIncrementUs,delay);
++        }
++        // Case 3: We have DTS but not PTS
++        if(nDts&gt;=info.nb_frames-2 )
++        {
++            ADM_info(&quot;Got DTS, compute  PTS\n&quot;);
++            return setPtsFromDts(hdr,timeIncrementUs,delay);
++        }
++        // Case 4: We have a bit of both
++        ADM_info(&quot;Get some dts and pts\n&quot;);
++        return updatePtsAndDts(hdr,timeIncrementUs,delay);
++}
++
++/**
+     \fn setPtsEqualDts
+     \brief for Low delay codec, set PTS=DTS, fill the missing values
+ */
+@@ -84,96 +148,121 @@
+     return true;
+ }
+ /**
+-    \fn setMpeg4PtsFromDts
++    \fn setDtsFromPts
+     \brief For mpeg4 SP/ASP, recompute PTS DTS using the simple I/P/B frame reordering
+     Works also for mpeg1/2
+     It absolutely NEEDS to have the proper frame type set (PTS/DTS/...)
+ */
+-bool setMpeg4PtsFromDts(vidHeader *hdr,uint64_t timeIncrementUs)
++bool setPtsFromDts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay)
+ {
+-    bool bframe=false;
++    int last=0;
++    int nbFrames;
++    int nbBframe=0;
++    int maxBframe=0;
++    uint32_t flags;
++    int nbB=0;
++    uint64_t pts,dts;
++
+     aviInfo info;
+-    uint32_t flags;
+     hdr-&gt;getVideoInfo(&amp;info);
+-
+-    uint64_t lastPts=ADM_NO_PTS;
+-    uint64_t lastDts=ADM_NO_PTS;
+-    // Scan to see if we have b-frames
+-    for(int i=0;i&lt;info.nb_frames;i++)
++    nbFrames=info.nb_frames;
++    for(int i=1;i&lt;nbFrames;i++)
+     {
+         hdr-&gt;getFlags(i,&amp;flags);
+         if(flags &amp; AVI_B_FRAME)
++                nbB++;
++        if(true!=hdr-&gt;getPtsDts(i,&amp;pts,&amp;dts))
+         {
+-            bframe=true;
+-            break;
++                    ADM_warning(&quot;Cannot get PTS/DTS\n&quot;);
++                    return false;
+         }
++        if(flags &amp; AVI_B_FRAME) nbBframe++;
++        else        
++            {
++                if(nbBframe&gt;maxBframe) maxBframe=nbBframe;
++                nbBframe=0;
++            }
+     }
+-    if(false==bframe)
++
++    for(int i=1;i&lt;nbFrames;i++)
+     {
+-        ADM_info(&quot;No B frame found, settings PTS=DTS\n&quot;);
+-        return setPtsEqualDts(hdr,timeIncrementUs);
++        hdr-&gt;getFlags(i,&amp;flags);
++        hdr-&gt;getPtsDts(i,&amp;pts,&amp;dts);
++        if(flags &amp; AVI_B_FRAME)
++        {
++            pts=dts;
++            hdr-&gt;setPtsDts(i,pts,dts);
++            nbBframe++;
++        }
++        else
++        {
++            uint64_t oldPts,oldDts;
++            uint64_t fwdPts,fwdDts;
++              hdr-&gt;getPtsDts(last,&amp;oldPts,&amp;oldDts);
++              hdr-&gt;getPtsDts(nbBframe+last+1,&amp;fwdPts,&amp;fwdDts);
++              oldPts=fwdDts;
++              hdr-&gt;setPtsDts(last,oldPts,oldDts);
++            nbBframe=0;
++            last=i;
++        }
+     }
+-#if 0
+-    for(int i=0;i&lt;info.nb_frames;i++)
++    return 1;
++}
++
++/**
++    \fn setDtsFromPts
++    \brief 
++*/
++bool setDtsFromPts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay)
++{
++    *delay=0;
++    int last=0;
++    int nbFrames;
++    int nbBframe=0;
++    int maxBframe=0;
++    uint32_t flags;
++    int nbB=0;
++    uint64_t pts,dts;
++
++    aviInfo info;
++    hdr-&gt;getVideoInfo(&amp;info);
++    nbFrames=info.nb_frames;
++    for(int i=1;i&lt;nbFrames;i++)
+     {
+-        uint64_t pts,dts;
++        hdr-&gt;getFlags(i,&amp;flags);
+         if(true!=hdr-&gt;getPtsDts(i,&amp;pts,&amp;dts))
+         {
+-            printf(&quot;[Editor] GetPtsDts failed for frame %&quot;LU&quot;\n&quot;,i);
+-            return false;
++                    ADM_warning(&quot;Cannot get PTS/DTS\n&quot;);
++                    return false;
+         }
+-        int k=0;
+-        if(pts==ADM_NO_PTS) k+=GOT_NO_PTS;
+-        if(dts==ADM_NO_PTS) k+=GOT_NO_DTS;
+-        switch(k)
++        if(flags &amp; AVI_B_FRAME)
+         {
+-            case GOT_BOTH : // Got both
+-                    lastPts=pts;
+-                    lastDts=dts;
+-                continue;            
+-                break;
+-            case GOT_NONE: // Got none
+-                {
+-                        if(lastDts!=ADM_NO_PTS)
+-                        {
+-                            lastDts+=timeIncrementUs; // Say this one = previous + timeIncrement
+-                            dts=lastDts;
+-                        }else
+-                            continue;   // We dont have a previous skip that one
+-                }
+-                break;
+-            case GOT_NO_DTS :  // got only pts
+-                        if(lastDts!=ADM_NO_PTS)
+-                        {
+-                            lastDts+=timeIncrementUs; // Say this one = previous + timeIncrement
+-                            dts=lastDts;
+-                        }else
+-                            continue;   // We dont have a previous skip that one
+-                        //
+-                        ADM_assert(dts&lt;=pts);
+-                // Dts from PTS
+-                break;
+-            case GOT_NO_PTS: // got only dts
+-                lastDts=dts;
+-                {
+-                    uint32_t flags;
+-                    hdr-&gt;getFlags(i,&amp;flags);
+-                    if(flags &amp; AVI_B_FRAME) pts=dts;
+-                }
+-                // Pts from DTS
+-                break;
+-            default:
+-                ADM_assert(0);
+-                break;
++                
++                nbB++;
++                dts=pts;
++                hdr-&gt;setPtsDts(i,pts,dts);
++                continue;
+         }
+-        ADM_assert(dts&lt;=pts);
+-        // update
+-        if(true!=hdr-&gt;setPtsDts(i,pts,dts))
+-        {
+-            printf(&quot;[Editor] SetPtsDts failed for frame %&quot;LU&quot;\n&quot;,i);
+-            return false;
+-        }
++   
++        uint64_t oldPts,oldDts;
++        uint64_t fwdPts,fwdDts;
++          hdr-&gt;getPtsDts(last,&amp;oldPts,&amp;oldDts);
++          dts=oldPts;
++          hdr-&gt;setPtsDts(i,pts,dts);
++        nbBframe=0;
++        last=i;
+     }
+-#endif
++    return 1;
++}
++
++/**
++    \fn setPtsFromDts
++    \brief Fill in the missing PTS DTS. We got some but not all.
++*/
++bool updatePtsAndDts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay)
++{
++    *delay=0;
++    ADM_error(&quot;SetPtsFromDts not implemented\n&quot;);
+     return true;
+ }
++//EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.h	2010-03-23 14:54:41 UTC (rev 6016)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.h	2010-03-23 14:54:45 UTC (rev 6017)
+@@ -20,6 +20,7 @@
+ #include &quot;ADM_Video.h&quot;
+ 
+ bool setPtsEqualDts(vidHeader *hdr,uint64_t timeIncrementUs);
+-bool setMpeg4PtsFromDts(vidHeader *hdr,uint64_t timeIncrementUs);
++// Valid for mpeg1/2/4 SP type 
++bool ADM_computeMP124MissingPtsDts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay);
+ 
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2010-03-23 14:54:41 UTC (rev 6016)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2010-03-23 14:54:45 UTC (rev 6017)
+@@ -300,26 +300,24 @@
+     {
+         ADM_info(&quot;[Editor] no decoder to check for B- frame\n&quot;);
+     }else
+-    {
+-       
+-        if(video._aviheader-&gt;providePts()==false) // Else we rely on demuxer PTS
++    {       
++        ADM_info(&quot;[Editor] This container does not provide PTS \n&quot;);
++        if(video.decoder-&gt;bFramePossible())
+         {
+-            ADM_info(&quot;[Editor] This container does not provide PTS \n&quot;);
+-            if(video.decoder-&gt;bFramePossible())
++            printf(&quot;[Editor] B- frame possible with that codec \n&quot;);
++            if(isMpeg4Compatible(info.fcc) || isMpeg12Compatible(info.fcc))
+             {
+-                printf(&quot;[Editor] B- frame possible with that codec \n&quot;);
+-                if(isMpeg4Compatible(info.fcc) || isMpeg12Compatible(info.fcc))
+-                {
+-                    ADM_info(&quot;[Editor] It is mpeg4-SP/ASP, try to guess all PTS\n&quot;);                        
+-                    setMpeg4PtsFromDts(video._aviheader,video.timeIncrementInUs);
+-                }
++                ADM_info(&quot;[Editor] It is mpeg4-SP/ASP, try to guess all PTS\n&quot;);             
++                uint64_t delay;
++                ADM_computeMP124MissingPtsDts(video._aviheader,video.timeIncrementInUs,&amp;delay);
++                _segments.updateRefVideo(&amp;video);
+             }
+-            else   
+-            {
+-                    printf(&quot;[Editor] No B frame with that codec, PTS=DTS\n&quot;);
+-                    setPtsEqualDts(video._aviheader,video.timeIncrementInUs);
+-            }
+         }
++        else   
++        {
++                printf(&quot;[Editor] No B frame with that codec, PTS=DTS\n&quot;);
++                setPtsEqualDts(video._aviheader,video.timeIncrementInUs);
++        }
+      }
+   
+   return 1;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2010-03-23 14:54:41 UTC (rev 6016)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2010-03-23 14:54:45 UTC (rev 6017)
+@@ -35,6 +35,30 @@
+     deleteAll();
+ }
+ /**
++    \fn updateRefVideo
++    \brief Update start time
++*/
++bool        ADM_EditorSegment::updateRefVideo(_VIDEOS *ref)
++{
++    int n=videos.size();
++    ADM_assert(n);
++    vidHeader *demuxer=	ref-&gt;_aviheader;
++    vidHeader *demuxer2=	videos[n-1]._aviheader;
++    ADM_assert(demuxer==demuxer2);
++    
++    
++    uint64_t pts,dts;
++    
++        demuxer-&gt;getPtsDts(0,&amp;pts,&amp;dts);
++        if(pts!=ADM_NO_PTS )
++        {
++            ADM_warning(&quot;Updating firstFramePTS, The first frame has a PTS &gt;0, adjusting to %&quot;LLU&quot; ms\n&quot;,pts/1000);
++            ref-&gt;firstFramePts=pts;
++        }
++    updateStartTime();
++    return true;
++}
++/**
+     \fn addReferenceVideo
+     \brief Add a new source video, fill in the missing info + create automatically the matching seg
+ */
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h	2010-03-23 14:54:41 UTC (rev 6016)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h	2010-03-23 14:54:45 UTC (rev 6017)
+@@ -109,6 +109,7 @@
+                         ~ADM_EditorSegment();
+ 
+             bool        addReferenceVideo(_VIDEOS *ref);
++            bool        updateRefVideo(_VIDEOS *ref);
+             bool        deleteAll(void);
+ 
+             bool        resetSegment(void);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003221.html">[Avidemux-svn-commit] r6016 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4
+</A></li>
+	<LI>Next message: <A HREF="003223.html">[Avidemux-svn-commit] r6018 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3222">[ date ]</a>
+              <a href="thread.html#3222">[ thread ]</a>
+              <a href="subject.html#3222">[ subject ]</a>
+              <a href="author.html#3222">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

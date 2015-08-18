@@ -1,0 +1,245 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4771 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_editor plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4771%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/ADM_editor%20plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904301707.n3UH7Hxe011128%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001997.html">
+   
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4771 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_editor plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4771%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/ADM_editor%20plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904301707.n3UH7Hxe011128%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4771 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_editor plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Apr 30 19:07:17 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001997.html">[Avidemux-svn-commit] r4770 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+        
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1998">[ date ]</a>
+              <a href="thread.html#1998">[ thread ]</a>
+              <a href="subject.html#1998">[ subject ]</a>
+              <a href="author.html#1998">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-04-30 19:07:07 +0200 (Thu, 30 Apr 2009)
+New Revision: 4771
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edRender.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+Log:
+[Ts] Simplified indexer, mostly ok, seek does not work
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edRender.cpp	2009-04-30 17:07:02 UTC (rev 4770)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edRender.cpp	2009-04-30 17:07:07 UTC (rev 4771)
+@@ -175,7 +175,8 @@
+     }
+     if(found==false)
+     {
+-        printf(&quot;[GoToIntra] Could not find decoded frame!\n&quot;);
++        printf(&quot;[GoToIntra] Could not find decoded frame :%&quot;LU&quot; PTS=%&quot;LLU&quot; ms, %&quot;LLU&quot; us\n&quot;,frame,wantedPts/1000,wantedPts);
++        cache-&gt;dump();
+         return false;
+     }
+     vid-&gt;lastReadPts=wantedPts;
+@@ -246,7 +247,7 @@
+             return true;
+         }else   
+         {
+-            printf(&quot;[getNextPic] Loop:%d, looking for pts :%&quot;LLU&quot;\n&quot;,loop,vid-&gt;lastReadPts/1000);
++            printf(&quot;[getNextPic] Loop:%d, looking for pts :%&quot;LLU&quot; ms %&quot;LLU&quot; us\n&quot;,loop,vid-&gt;lastReadPts/1000,vid-&gt;lastReadPts);
+             cache-&gt;dump();
+         }
+     }
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-30 17:07:02 UTC (rev 4770)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-30 17:07:07 UTC (rev 4771)
+@@ -214,7 +214,7 @@
+ indexerData  data;    
+ uint64_t fullSize;
+ dmxPacketInfo info;
+-#if 0
++
+     printf(&quot;Starting H264 indexer\n&quot;);
+     if(!videoTrac) return false;
+     if(videoTrac[0].trackType!=ADM_TS_H264)
+@@ -250,10 +250,9 @@
+             code=(code&lt;&lt;8)+pkt-&gt;readi8();
+         }
+         if(!pkt-&gt;stillOk()) break;
+-        uint8_t startCode=pkt-&gt;readi8();
++        uint8_t startCode=pkt-&gt;readi8(); // Read 5 bytes so far
+ 
+-        pkt-&gt;getInfo(&amp;info);
+-        info.offset-=5;
++       
+ 
+ //  1:0 2:Nal ref idc 5:Nal Type
+         if(startCode&amp;0x80) continue; // Marker missing
+@@ -290,11 +289,13 @@
+ 						  
+                           printf(&quot;[TsIndexer] Found video %&quot;LU&quot;x%&quot;LU&quot;, fps=%&quot;LU&quot;\n&quot;,video.w,video.h,video.fps);
+                           seq_found=1;
+-                          Mark(&amp;data,&amp;info,markStart,4+16);
+                           data.state=idx_startAtGopOrSeq;
+                           writeVideo(&amp;video,ADM_TS_H264);
+                           writeAudio();
+                           qfprintf(index,&quot;[Data]&quot;);
++                          data.frameType=1; // Force dump
++                          pkt-&gt;getInfo(&amp;info);                          
++                          Mark(&amp;data,&amp;info,5+16);
+                           // Rewind
+ #warning TODO
+                       }
+@@ -314,50 +315,27 @@
+                       case NAL_AU_DELIMITER:
+ 							  pic_started = false;
+                               break;
++#if 0
+                       case NAL_SPS:
+                               pic_started = false;
+                               aprintf(&quot;Sps \n&quot;);
+-							  Mark(&amp;data,&amp;info,markStart,4);
++                              pkt-&gt;getInfo(&amp;info);
++                              data.frameType=1;
++							  Mark(&amp;data,&amp;info,5);
+                               data.state=idx_startAtGopOrSeq;
+ 							  break;
++#endif
+                       case NAL_IDR:
++                      case NAL_NON_IDR:
+                         {
+-                          markType update=markNow;
+-						  uint32_t frameType = 1 ;
+-                          if(data.state==idx_startAtGopOrSeq) 
+-                          {
+-                                update=markEnd;
+-                          }
+-						 
+-						  data.frameType=frameType;
+-                          pkt-&gt;readi8();
+-                          pkt-&gt;readi8();
+-                          pkt-&gt;readi8();
+-                          pkt-&gt;readi8();
+-                          Mark(&amp;data,&amp;info,update,4);
+-                          data.state=idx_startAtImage;
+-                          data.nbPics++;
+-						  pic_started = true;
+-                        }
+-					  case NAL_NON_IDR:
+-                        {
+-                            #define NON_IDR_PRE_READ 8
++#define NON_IDR_PRE_READ 8
+                           uint8_t header[NON_IDR_PRE_READ+4];
+                           GetBitContext s;
++                       
++                            pkt-&gt;read(4,header);
++                            init_get_bits(&amp;s, header, NON_IDR_PRE_READ*8);
++                            int first_mb_in_slice,slice_type;
+ 
+-                          markType update=markNow;
+-						  uint32_t frameType = 2;
+-                          if(data.state==idx_startAtGopOrSeq) 
+-                          {
+-                                update=markEnd;
+-                          }
+-#warning : need un-escaping!!!						 
+-						  data.frameType=frameType;
+-                          // Let's refine a bit the frame type...
+-                          pkt-&gt;read(4,header);
+-                          init_get_bits(&amp;s, header, NON_IDR_PRE_READ*8);
+-                          int first_mb_in_slice,slice_type;
+-
+                             first_mb_in_slice= get_ue_golomb(&amp;s);
+                             slice_type= get_ue_golomb_31(&amp;s);
+                             if(slice_type&gt;4) slice_type-=5;
+@@ -369,25 +347,34 @@
+                                 case 2 : data.frameType=1;break; // I
+                                 default : data.frameType=2;break; // SP/SI
+                             }
+-                          Mark(&amp;data,&amp;info,update,4);
++
++                          if(data.state==idx_startAtGopOrSeq) 
++                          {
++                                  currentFrameType=data.frameType;;
++                                  
++                          }else
++                          {
++                                pkt-&gt;getInfo(&amp;info);
++                                Mark(&amp;data,&amp;info,5+4);
++                           }
+                           data.state=idx_startAtImage;
+                           data.nbPics++;
+ 						  pic_started = true;
+                         }
+-						  break;
++					  
++                        break;
+ 					  default:
+ 						  break;
+ 			  }
+       }
+         printf(&quot;\n&quot;);
+-        Mark(&amp;data,&amp;info,markStart,0);
++        Mark(&amp;data,&amp;info,0);
+         qfprintf(index,&quot;\n[End]\n&quot;);
+         qfclose(index);
+         index=NULL;
+         audioTracks=NULL;
+         delete pkt;
+         pkt=NULL;
+-#endif
+         return true; 
+ }
+ //***********************************************************************
+@@ -564,7 +551,7 @@
+             qfprintf(index,&quot; %c:%06&quot;LX,Type[currentFrameType],consumed-beginConsuming);
+             beginConsuming=consumed;
+         }else
+-        {
++        {  // Our first Pic
+             beginConsuming=overRead;
+             pkt-&gt;setConsumed(beginConsuming);
+         }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001997.html">[Avidemux-svn-commit] r4770 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+	
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1998">[ date ]</a>
+              <a href="thread.html#1998">[ thread ]</a>
+              <a href="subject.html#1998">[ subject ]</a>
+              <a href="author.html#1998">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

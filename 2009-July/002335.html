@@ -1,0 +1,132 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5120 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/common/ADM_commonUI	avidemux_core/ADM_coreAudioDevice/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5120%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux/common/ADM_commonUI%0A%09avidemux_core/ADM_coreAudioDevice/src&In-Reply-To=%3C200907190748.n6J7m75u016289%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002334.html">
+   <LINK REL="Next"  HREF="002336.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5120 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/common/ADM_commonUI	avidemux_core/ADM_coreAudioDevice/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5120%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux/common/ADM_commonUI%0A%09avidemux_core/ADM_coreAudioDevice/src&In-Reply-To=%3C200907190748.n6J7m75u016289%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5120 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/common/ADM_commonUI	avidemux_core/ADM_coreAudioDevice/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jul 19 09:48:07 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002334.html">[Avidemux-svn-commit] r5119 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/gtk/ADM_userInterfaces/ADM_dialog	avidemux/qt4/ADM_userInterfaces/ADM_dialog avidemux_core cmake
+</A></li>
+        <LI>Next message: <A HREF="002336.html">[Avidemux-svn-commit] r5121 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audiocodec avidemux/common/ADM_osSupport	avidemux/common/ADM_render avidemux/gtk/ADM_UIs/include	avidemux/gtk/ADM_UIs/src avidemux/gtk/ADM_userInterfaces/ADM_dialog	avidemux/gtk/ADM_userInterfaces/ADM_toolkit_gtk	avidemux/qt4/ADM_userInterfaces/ADM_dialog	avidemux_core/ADM_coreUI/include avidemux_core/ADM_coreUI/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2335">[ date ]</a>
+              <a href="thread.html#2335">[ thread ]</a>
+              <a href="subject.html#2335">[ subject ]</a>
+              <a href="author.html#2335">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-07-19 09:48:06 +0200 (Sun, 19 Jul 2009)
+New Revision: 5120
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI/DIA_prefs.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audiodevice.cpp
+Log:
+[audioDevice] Fix selecting audio device through prefs/DIA_prefs
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI/DIA_prefs.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI/DIA_prefs.cpp	2009-07-18 20:25:25 UTC (rev 5119)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_commonUI/DIA_prefs.cpp	2009-07-19 07:48:06 UTC (rev 5120)
+@@ -432,9 +432,12 @@
+                 }
+ #endif
+                 // Device
++                //printf(&quot;[AudioDevice] Old : %d, new :%d\n&quot;,olddevice,newdevice);
+                 if(olddevice!=newdevice)
+                 {
+-                      AVDM_switch((AUDIO_DEVICE)newdevice);
++                      AVDM_switch((AUDIO_DEVICE)newdevice); // Change current device
++                      AVDM_audioSave();                     // Save it in prefs
++                      AVDM_audioInit();                     // Respawn
+                 }
+                 // Downmixing (default)
+                 prefs-&gt;set(DOWNMIXING_PROLOGIC,downmix);
+@@ -483,6 +486,7 @@
+ 				// Initialise SDL again as driver may have changed
+ 				initSdl(render);
+ 			#endif
++                
+ 	}
+         for(int i=0;i&lt;nbAudioDevice+1;i++)
+         {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp	2009-07-18 20:25:25 UTC (rev 5119)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/main.cpp	2009-07-19 07:48:06 UTC (rev 5120)
+@@ -283,9 +283,7 @@
+ 	}
+ 
+     ADM_lavInit();
+-#ifdef HAVE_AUDIO
+     AVDM_audioInit();
+-#endif
+ 
+     if(SpidermonkeyInit() == true)
+         printf(&quot;Spidermonkey initialized.\n&quot;);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audiodevice.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audiodevice.cpp	2009-07-18 20:25:25 UTC (rev 5119)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audiodevice.cpp	2009-07-19 07:48:06 UTC (rev 5120)
+@@ -204,8 +204,10 @@
+ 		device=NULL;
+ 	}
+ }
+-// Switch the audio device class we are using
+-//
++/**
++    \fn AVDM_switch
++    \brief Change audio device
++*/
+ void AVDM_switch(AUDIO_DEVICE action)
+ {
+ 	if(device)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002334.html">[Avidemux-svn-commit] r5119 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/gtk/ADM_userInterfaces/ADM_dialog	avidemux/qt4/ADM_userInterfaces/ADM_dialog avidemux_core cmake
+</A></li>
+	<LI>Next message: <A HREF="002336.html">[Avidemux-svn-commit] r5121 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audiocodec avidemux/common/ADM_osSupport	avidemux/common/ADM_render avidemux/gtk/ADM_UIs/include	avidemux/gtk/ADM_UIs/src avidemux/gtk/ADM_userInterfaces/ADM_dialog	avidemux/gtk/ADM_userInterfaces/ADM_toolkit_gtk	avidemux/qt4/ADM_userInterfaces/ADM_dialog	avidemux_core/ADM_coreUI/include avidemux_core/ADM_coreUI/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2335">[ date ]</a>
+              <a href="thread.html#2335">[ thread ]</a>
+              <a href="subject.html#2335">[ subject ]</a>
+              <a href="author.html#2335">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

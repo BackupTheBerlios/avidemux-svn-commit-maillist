@@ -1,0 +1,210 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3435 - branches/avidemux_2.4_branch/avidemux
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3435%20-%20branches/avidemux_2.4_branch/avidemux&In-Reply-To=%3C200707230154.l6N1sLbF024776%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000709.html">
+   <LINK REL="Next"  HREF="000711.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3435 - branches/avidemux_2.4_branch/avidemux</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3435%20-%20branches/avidemux_2.4_branch/avidemux&In-Reply-To=%3C200707230154.l6N1sLbF024776%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3435 - branches/avidemux_2.4_branch/avidemux">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Mon Jul 23 03:54:21 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000709.html">[Avidemux-svn-commit] r3434 - branches/avidemux_2.4_branch/po
+</A></li>
+        <LI>Next message: <A HREF="000711.html">[Avidemux-svn-commit] r3436 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_utilities ADM_userInterfaces/ADM_commonUI	ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#710">[ date ]</a>
+              <a href="thread.html#710">[ thread ]</a>
+              <a href="subject.html#710">[ subject ]</a>
+              <a href="author.html#710">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2007-07-23 03:54:10 +0200 (Mon, 23 Jul 2007)
+New Revision: 3435
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/avi_vars.h
+   branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp
+Log:
+fix r3410 &amp; fix large leak when using second audio track
+
+Modified: branches/avidemux_2.4_branch/avidemux/avi_vars.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/avi_vars.h	2007-07-22 17:44:51 UTC (rev 3434)
++++ branches/avidemux_2.4_branch/avidemux/avi_vars.h	2007-07-23 01:54:10 UTC (rev 3435)
+@@ -55,7 +55,11 @@
+ ;
+ 
+ 
+-EXTERN AVDMGenericAudioStream *aviaudiostream;
++EXTERN AVDMGenericAudioStream *aviaudiostream
++#ifdef __DECLARE__
++=(AVDMGenericAudioStream *)NULL
++#endif
++;
+ EXTERN AVDMGenericAudioStream *currentaudiostream
+ #ifdef __DECLARE__
+ =(AVDMGenericAudioStream *)NULL
+
+Modified: branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp	2007-07-22 17:44:51 UTC (rev 3434)
++++ branches/avidemux_2.4_branch/avidemux/gtk_gui.cpp	2007-07-23 01:54:10 UTC (rev 3435)
+@@ -69,11 +69,8 @@
+ 
+ #include &quot;ADM_libmpeg2enc/ADM_mpeg2enc.h&quot;
+ 
+-#include &quot;ADM_filter/video_filters.h&quot;
+-
+ #include &quot;ADM_userInterfaces/ADM_commonUI/DIA_factory.h&quot;
+ 
+-#include &quot;ADM_assert.h&quot;
+ void A_handleSecondTrack (int tracktype);
+ int A_delete(uint32_t start, uint32_t end);
+ void A_saveImg (char *name);
+@@ -1035,28 +1032,7 @@
+     }
+   else
+     {
+-      /*
+-      ** &lt;JSC&gt; Sat Feb 21 15:30:15 CET 2004
+-      ** problem: second edl load will raise a crash
+-      ** why: 1) the last run generates aviaudiostream [video_body-&gt;getAudioStream()]
+-      **         which is set to currentaudiostream    [changeAudioStream()]
+-      **      2) second call of video_body-&gt;getAudioStream() will free(aviaudiostream)
+-      **         which is the same as free(currentaudiostream)
+-      **      3) following changeAudioStream() call will use the free()'d memory
+-      **         [currentaudiostream-&gt;isDestroyable()]
+-      **      efence with EF_PROTECT_FREE=1 will raise SIGSEGV and show you
+-      **      currentaudiostream is not accessable
+-      **      warning: without efense it will crash somethere other
+-      **
+-      ** I'm not sure why aviaudiostream is global. This issue will not
+-      ** occure if aviaudiostream is local and be lost at end of this block.
+-      ** nasty workaround: only the raise condition will be fixed
+-      */
+-      if( currentaudiostream == aviaudiostream ){
+-         aviaudiostream = NULL; // free of memory done in changeAudioStream()
+-      }
+-      /* &lt;/JSC&gt; */
+-      video_body-&gt;getAudioStream (&amp;aviaudiostream);
++	  video_body-&gt;getAudioStream (&amp;aviaudiostream);
+       A_changeAudioStream (aviaudiostream, AudioAvi,NULL);
+       if (aviaudiostream)
+ 	if (!aviaudiostream-&gt;isDecompressable ())
+@@ -1468,11 +1444,6 @@
+ {
+   if (currentaudiostream)
+     {
+-       if (currentaudiostream-&gt;isDestroyable ())        
+-      {
+-          delete currentaudiostream;
+-          currentaudiostream=NULL;
+-      }
+       currentAudioSource=AudioNone;
+       if(currentAudioName) ADM_dealloc(currentAudioName);
+       currentAudioName=NULL;
+@@ -1639,19 +1610,30 @@
+ 		avifileinfo=NULL;
+ 	}
+ 
+-	if (currentaudiostream)
++	if (aviaudiostream)
+ 	{
+-	// always destroyable on exit           if(currentaudiostream-&gt;isDestroyable())
+-		delete currentaudiostream;
+-		currentaudiostream=NULL;
++		delete aviaudiostream;
++		aviaudiostream=NULL;
+ 	}
+ 
++	if (secondaudiostream)
++	{
++		delete secondaudiostream;
++		secondaudiostream=NULL;
++	}
++
+ 	if (currentAudioName)
+ 	{
+ 		ADM_dealloc(currentAudioName);
+ 		currentAudioName = NULL;
+ 	}
+ 
++	if (secondAudioName)
++	{
++		ADM_dealloc(secondAudioName);
++		secondAudioName = NULL;
++	}
++
+ 	if (actual_workbench_file)
+ 	{
+ 		ADM_dealloc(actual_workbench_file);
+@@ -1664,6 +1646,7 @@
+ 		video_body=NULL;
+ 	}
+ 
++	currentaudiostream=NULL;
+ 	filterCleanUp();
+ 	admPreview::cleanUp();
+ }
+@@ -2412,8 +2395,17 @@
+       avifileinfo = (aviInfo *) NULL;
+       video_body-&gt;cleanup ();
+       curframe = 0;
+-      currentaudiostream=NULL;
+       A_changeAudioStream (NULL, AudioNone,NULL);
++
++	  if (aviaudiostream)
++		delete aviaudiostream;
++
++	  if (secondaudiostream)
++		delete secondaudiostream;
++
++	  aviaudiostream=NULL;
++	  secondaudiostream=NULL;
++
+       filterCleanUp ();
+       return 1;
+     }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000709.html">[Avidemux-svn-commit] r3434 - branches/avidemux_2.4_branch/po
+</A></li>
+	<LI>Next message: <A HREF="000711.html">[Avidemux-svn-commit] r3436 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_utilities ADM_userInterfaces/ADM_commonUI	ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#710">[ date ]</a>
+              <a href="thread.html#710">[ thread ]</a>
+              <a href="subject.html#710">[ subject ]</a>
+              <a href="author.html#710">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

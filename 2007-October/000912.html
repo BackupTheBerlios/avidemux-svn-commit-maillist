@@ -1,0 +1,338 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3641 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3641%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_encoder&In-Reply-To=%3C200710121837.l9CIbBfw026062%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000911.html">
+   <LINK REL="Next"  HREF="000913.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3641 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3641%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_encoder&In-Reply-To=%3C200710121837.l9CIbBfw026062%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3641 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Oct 12 20:37:11 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000911.html">[Avidemux-svn-commit] r3640 - branches/avidemux_2.4_branch
+</A></li>
+        <LI>Next message: <A HREF="000913.html">[Avidemux-svn-commit] r3642 - in	branches/avidemux_2.4_branch/avidemux: ADM_filter	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#912">[ date ]</a>
+              <a href="thread.html#912">[ thread ]</a>
+              <a href="subject.html#912">[ subject ]</a>
+              <a href="author.html#912">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-10-12 20:37:11 +0200 (Fri, 12 Oct 2007)
+New Revision: 3641
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.h
+   branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp
+Log:
+[Huff] Stop breaking our balls huffyuv patch to make it compatible with VFW huff codec
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2007-10-12 18:17:15 UTC (rev 3640)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2007-10-12 18:37:11 UTC (rev 3641)
+@@ -35,6 +35,8 @@
+ #include &quot;ADM_toolkit/toolkit.hxx&quot;
+ #include &quot;ADM_assert.h&quot;
+ #include &quot;ADM_codecs/ADM_ffmpeg.h&quot;
++#include &quot;ADM_libraries/ADM_libswscale/swscale.h&quot;
++#include &quot;ADM_osSupport/ADM_cpuCap.h&quot;
+ #include &quot;prefs.h&quot;
+ 
+ //#define TEST_NOB 1
+@@ -88,11 +90,11 @@
+ }
+ //static myENC_RESULT res;
+ /*****************************************/
+-ffmpegEncoder::ffmpegEncoder (uint32_t width, uint32_t height, FF_CODEC_ID id):encoder (width,
++ffmpegEncoder::ffmpegEncoder (uint32_t width, uint32_t height, FF_CODEC_ID id,PixelFormat format):encoder (width,
+ 	 height)
+ {
+-  printf (&quot;[LAVCODEC]Build: %d\n&quot;, LIBAVCODEC_BUILD);
+-
++  printf (&quot;[LAVCODEC]Build: %d, colorspace :%x\n&quot;, LIBAVCODEC_BUILD,format);
++  _targetColorSpace=format;//PIX_FMT_YUV420P
+   _id = id;
+   _swap = 0;
+   _context = NULL;
+@@ -105,10 +107,9 @@
+   _frame.pts = AV_NOPTS_VALUE;
+   _context-&gt;width = _w;
+   _context-&gt;height = _h;
+-  _frame.linesize[0] = _w;
+-  _frame.linesize[1] = _w &gt;&gt; 1;
+-  _frame.linesize[2] = _w &gt;&gt; 1;
++
+   _isMT = 0;
++  encodePreamble(NULL);
+ 
+ };
+ /*****************************************/
+@@ -143,22 +144,31 @@
+ uint8_t
+ ffmpegEncoder::encodePreamble (uint8_t * in)
+ {
+-  _frame.linesize[0] = _w;
+-  _frame.linesize[1] = _w &gt;&gt; 1;
+-  _frame.linesize[2] = _w &gt;&gt; 1;
+-
+-/*
+-   		It seems ffmpeg likes the u &amp; v to be swapped WTF...
+-
+-*/
+-
+-  _frame.data[0] = in;
+-  _frame.data[2] = in + _w * _h;
+-  _frame.data[1] = in + _w * _h + ((_w * _h) &gt;&gt; 2);
+-
+   _frame.key_frame = 0;
+   _frame.pict_type = 0;
+-// No!  _frame.quality = 0;
++
++  switch(_targetColorSpace)
++  {
++    case PIX_FMT_YUV420P:
++        _frame.linesize[0] = _w;
++        _frame.linesize[1] = _w &gt;&gt; 1;
++        _frame.linesize[2] = _w &gt;&gt; 1;
++        _frame.data[0] = in;
++        _frame.data[2] = in + _w * _h;
++        _frame.data[1] = in + _w * _h + ((_w * _h) &gt;&gt; 2);
++        break;
++ case PIX_FMT_YUV422P:
++        _frame.linesize[0] = _w;
++        _frame.linesize[1] = _w &gt;&gt; 1;
++        _frame.linesize[2] = _w &gt;&gt; 1;
++        _frame.data[0] = in;
++        _frame.data[2] = in + _w * _h;
++        _frame.data[1] = in + _w * _h + ((_w * _h) &gt;&gt; 1);
++      
++        break;
++    default:
++      ADM_assert(0);
++  }
+   return 1;
+ }
+ 
+@@ -646,7 +656,7 @@
+   /*
+      default values : Copy/past from mplayer
+    */
+-  _context-&gt;pix_fmt = PIX_FMT_YUV420P;	//PIX_FMT_YV12;
++  _context-&gt;pix_fmt = _targetColorSpace;
+ 
+   if (!_settingsPresence)
+     {
+@@ -807,6 +817,96 @@
+   return initContext ();
+ }
+ //__________________________________
++/**
++
++*/
++
++ffmpegEncoderHuff::ffmpegEncoderHuff (uint32_t width, uint32_t height,FF_CODEC_ID id) 
++  :   ffmpegEncoder (width,height, id,PIX_FMT_YUV422P) 
++{
++  // Allocate our resampler &amp; intermediate
++  yuy2=new uint8_t[width*height*2];
++  // And resizer
++  int flags;
++  flags=SWS_BICUBIC;
++  #if (defined( ARCH_X86)  || defined(ARCH_X86_64))
++		
++		#define ADD(x,y) if( CpuCaps::has##x()) flags|=SWS_CPU_CAPS_##y;
++		ADD(MMX,MMX);		
++		ADD(3DNOW,3DNOW);
++		ADD(MMXEXT,MMX2);
++#endif	
++#ifdef USE_ALTIVEC
++		flags|=SWS_CPU_CAPS_ALTIVEC;
++#endif
++
++        _contextSWs=sws_getContext(
++                        width,height,
++                        PIX_FMT_YUV420P,
++                        width,height,
++                        PIX_FMT_YUV422P,
++                        flags, NULL, NULL,NULL);
++
++        ADM_assert(_context);
++                
++}
++/**
++
++*/
++
++ffmpegEncoderHuff::~ffmpegEncoderHuff()
++{
++  if(yuy2)
++  {
++    delete [] yuy2;
++    yuy2=NULL;  
++  }
++  if(_contextSWs)
++  {
++    sws_freeContext( (SwsContext *)_contextSWs);
++    _contextSWs=NULL; 
++  }
++  stopEncoder ();
++}
++/**
++
++*/
++  uint8_t   ffmpegEncoderHuff::encode(ADMImage *in,ADMBitstream *out)
++{
++    int32_t sz = 0;
++    ADM_assert(out-&gt;bufferSize);
++    encodePreamble(yuy2);
++    /* Convert */
++    uint8_t *src[3];
++    uint8_t *dst[3];
++    int ssrc[3];
++    int ddst[3];
++
++    uint32_t page;
++
++    page=_w*_h;
++    src[0]=YPLANE(in);
++    src[1]=UPLANE(in);
++    src[2]=VPLANE(in);
++
++    ssrc[0]=_w;
++    ssrc[1]=ssrc[2]=_w&gt;&gt;1;
++
++    
++    dst[0]=yuy2;
++    dst[1]=yuy2+page;
++    dst[2]=yuy2+((page*3)&gt;&gt;1);
++    ddst[0]=_w;
++    ddst[1]=ddst[2]=_w&gt;&gt;1;
++
++    sws_scale((SwsContext *)_contextSWs,src,ssrc,0,_h,dst,ddst);
++    
++    /***/
++    if ((sz = avcodec_encode_video (_context, out-&gt;data, out-&gt;bufferSize, &amp;_frame)) &lt; 0)
++        return 0;
++    postAmble(out,sz);
++    return 1;
++}
+ //------------------------------
+ uint8_t
+   ffmpegEncoderFFHuff::init (uint32_t val, uint32_t fps1000, uint8_t vbr)
+@@ -828,7 +928,6 @@
+   return initContext ();
+ }
+ 
+-
+ //_______________________________________
+ uint8_t
+ ffmpegEncoder::getExtraData (uint32_t * l, uint8_t ** d)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.h	2007-10-12 18:17:15 UTC (rev 3640)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.h	2007-10-12 18:37:11 UTC (rev 3641)
+@@ -63,12 +63,13 @@
+   uint8_t gopMpeg1 (void);
+   uint32_t frameType (void);
+   uint8_t encodePreamble (uint8_t * in);
++  PixelFormat _targetColorSpace;
+ 
+ public:
+     uint8_t setConfig (FFcodecSetting * set);
+   uint8_t setLogFile (const char *name);
+   void encoderMT (void);
+-    ffmpegEncoder (uint32_t width, uint32_t height, FF_CODEC_ID id);
++    ffmpegEncoder (uint32_t width, uint32_t height, FF_CODEC_ID id,PixelFormat format=PIX_FMT_YUV420P);
+    virtual ~ffmpegEncoder ();
+ 
+   virtual uint8_t stopEncoder (void);
+@@ -154,20 +155,22 @@
+   virtual uint8_t encode (ADMImage * in, ADMBitstream * out);
+   virtual ~ ffmpegEncoderVBRExternal ();
+ };
+-
++//*********************************************************
+ class ffmpegEncoderHuff:public ffmpegEncoder
+ {
+ protected: 
++            uint8_t *yuy2;
++            void *_contextSWs;
++
+ public:
+-                ffmpegEncoderHuff (uint32_t width, uint32_t height,FF_CODEC_ID id):
+-                        ffmpegEncoder (width,height, id) {}
++                ffmpegEncoderHuff (uint32_t width, uint32_t height,FF_CODEC_ID id);
++                        
+ 
+   virtual uint8_t init (uint32_t val, uint32_t fps1000, uint8_t vbr = 0);
+-  virtual ~ ffmpegEncoderHuff ()
+-  {
+-    stopEncoder ();
+-  }
++          uint8_t encode(ADMImage *in,ADMBitstream *out);
++  virtual ~ ffmpegEncoderHuff ();
+ };
++//*********************************************************
+ class ffmpegEncoderFFHuff:public ffmpegEncoder
+ {
+ protected: 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp	2007-10-12 18:17:15 UTC (rev 3640)
++++ branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp	2007-10-12 18:37:11 UTC (rev 3641)
+@@ -91,7 +91,7 @@
+   ADM_assert (_vbuffer);
+   _in = instream;
+ 
+-  _codec = new ffmpegEncoderCQ (_w, _h, _id);
++  _codec = new ffmpegEncoderHuff(_w, _h, _id);
+   _codec-&gt;init (_param.qz, _fps, 0);
+   return 1;
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000911.html">[Avidemux-svn-commit] r3640 - branches/avidemux_2.4_branch
+</A></li>
+	<LI>Next message: <A HREF="000913.html">[Avidemux-svn-commit] r3642 - in	branches/avidemux_2.4_branch/avidemux: ADM_filter	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialog	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#912">[ date ]</a>
+              <a href="thread.html#912">[ thread ]</a>
+              <a href="subject.html#912">[ subject ]</a>
+              <a href="author.html#912">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

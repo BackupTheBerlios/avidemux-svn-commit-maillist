@@ -1,0 +1,183 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5804 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_coreImage/include ADM_filter ADM_video
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5804%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%0A%09ADM_coreImage/include%20ADM_filter%20ADM_video&In-Reply-To=%3C201001011841.o01If0GR029672%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   
+   <LINK REL="Next"  HREF="003012.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5804 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_coreImage/include ADM_filter ADM_video</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5804%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%0A%09ADM_coreImage/include%20ADM_filter%20ADM_video&In-Reply-To=%3C201001011841.o01If0GR029672%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5804 - in	branches/avidemux_2.5_branch_gruntster/avidemux:	ADM_coreImage/include ADM_filter ADM_video">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Jan  1 19:41:00 CET 2010</I>
+    <P><UL>
+        
+        <LI>Next message: <A HREF="003012.html">[Avidemux-svn-commit] r5805 - in	branches/avidemux_2.5_branch_gruntster/avidemux: . ADM_editor	ADM_outputs/oplug_avi ADM_outputs/oplug_mpegFF ADM_script	ADM_userInterfaces/ADM_GTK/ADM_gui2 ADM_userInterfaces/ADM_GTK/glade	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3011">[ date ]</a>
+              <a href="thread.html#3011">[ thread ]</a>
+              <a href="subject.html#3011">[ subject ]</a>
+              <a href="author.html#3011">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-01-01 19:40:56 +0100 (Fri, 01 Jan 2010)
+New Revision: 5804
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreImage/include/ADM_videoFilter_internal.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_filter/filter.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_video/ADM_vidPartial.cpp
+Log:
+[Filter] Fix partial filer, closes #66
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreImage/include/ADM_videoFilter_internal.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreImage/include/ADM_videoFilter_internal.h	2009-12-31 19:01:06 UTC (rev 5803)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreImage/include/ADM_videoFilter_internal.h	2010-01-01 18:40:56 UTC (rev 5804)
+@@ -33,7 +33,7 @@
+ }VF_CATEGORY;
+ #define VF_INVALID 		  0
+ 
+-#define VF_PARTIAL_FILTER  filterGetTagFromName( &quot;partial&quot; )
++#define VF_PARTIAL_FILTER 9 // filterGetTagFromName( &quot;partial&quot; )
+ #define VF_START_TAG 	  10
+ 
+ typedef uint32_t VF_FILTERS ;
+@@ -98,6 +98,7 @@
+ FILTER      *getCurrentVideoFilterList (uint32_t * count);
+ const FilterDescriptor * filterGetEntryFromTag (VF_FILTERS tag);
+ const char *filterGetNameFromTag(VF_FILTERS tag);
++const char  *filterGetInternalNameFromTag(VF_FILTERS tag);
+ VF_FILTERS 	filterGetTagFromName(const char *inname);
+ uint8_t 	filterAddScript(VF_FILTERS tags,uint32_t n,Arg *args);
+ 
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_filter/filter.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_filter/filter.cpp	2009-12-31 19:01:06 UTC (rev 5803)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_filter/filter.cpp	2010-01-01 18:40:56 UTC (rev 5804)
+@@ -124,6 +124,8 @@
+ 	const char *name;
+ 	int max = allfilters.size();
+ 	VF_FILTERS filter = VF_INVALID;
++    if(inname)
++        if(!strcasecmp(inname,&quot;partial&quot;)) return VF_PARTIAL_FILTER;
+ 
+ 	for (uint32_t i = 0; i &lt; max; i++)
+ 	{
+@@ -417,6 +419,13 @@
+     ADM_assert(entry);
+     return entry-&gt;name;
+ }
++
++const char  *filterGetInternalNameFromTag(VF_FILTERS tag)
++{
++    const FilterDescriptor * entry = filterGetEntryFromTag (tag);
++    ADM_assert(entry);
++    return entry-&gt;filterName;
++}
+ /*____________________________________
+ 	Save and load current set of filters
+ 
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_video/ADM_vidPartial.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_video/ADM_vidPartial.cpp	2009-12-31 19:01:06 UTC (rev 5803)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_video/ADM_vidPartial.cpp	2010-01-01 18:40:56 UTC (rev 5804)
+@@ -26,11 +26,12 @@
+ #include &quot;ADM_videoFilter.h&quot;
+ #include &quot;ADM_videoFilter_internal.h&quot;
+ #include &quot;ADM_video/ADM_vidPartial.h&quot;
++#include &quot;DIA_coreToolkit.h&quot;
+ 
+ extern AVDMGenericVideoStream *filterCreateFromTag(VF_FILTERS tag,CONFcouple *couple, AVDMGenericVideoStream *in);
+ 
+ 
+-static FILTER_PARAM partialParam={VARIABLE_PARAMS+3,{&quot;_start&quot;,&quot;_end&quot;,&quot;_tag&quot;}};
++static FILTER_PARAM partialParam={VARIABLE_PARAMS+3,{&quot;_start&quot;,&quot;_end&quot;,&quot;_name&quot;}};
+ 
+ 
+ SCRIPT_CREATE(partial_script,ADMVideoPartial,partialParam);
+@@ -50,6 +51,7 @@
+ ADMVideoPartial::ADMVideoPartial(   AVDMGenericVideoStream *in,
+ 							CONFcouple		*couples)
+ {
++        char *name;
+ 		_param=NEW( PARTIAL_CONFIG);
+ 		_param-&gt;_start=0;
+ 		_param-&gt;_end=0;
+@@ -57,7 +59,14 @@
+ 
+ 			GET(_start);
+ 			GET(_end);
+-			GET(_tag);
++            ADM_assert(couples-&gt;getCouple(&quot;_name&quot;,&amp;name));
++            _param-&gt;_tag=filterGetTagFromName(name);
++            if(_param-&gt;_tag==VF_INVALID)
++            {
++                GUI_Error_HIG(&quot;Error&quot;,&quot;Cannot find the filter with name %s&quot;,name);
++                ADM_assert(0);
++            }
++//			GET(_tag);
+ 			// we share the same parameters
+ 			_son= filterCreateFromTag((VF_FILTERS)_param-&gt;_tag,couples,_in);
+ 		 	memcpy(&amp;_info,_in-&gt;getInfo(),sizeof(_info));
+@@ -91,7 +100,8 @@
+ 				*couples=new CONFcouple(3);
+ 				CSET(_start);
+ 				CSET(_end);
+-				CSET(_tag);
++                (*couples)-&gt;setCouple(&quot;_name&quot;,filterGetInternalNameFromTag(_param-&gt;_tag));
++				//CSET(_tag);
+ 				return 1;
+ 			}
+ 
+@@ -101,7 +111,8 @@
+ 			*couples=new CONFcouple(3+nbParam);
+ 			CSET(_start);
+ 			CSET(_end);
+-			CSET(_tag);
++			//CSET(_tag);
++            (*couples)-&gt;setCouple(&quot;_name&quot;,filterGetNameFromTag(_param-&gt;_tag));
+ 
+ 	// then set the child ones
+ 	char *nm,*vl;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	
+	<LI>Next message: <A HREF="003012.html">[Avidemux-svn-commit] r5805 - in	branches/avidemux_2.5_branch_gruntster/avidemux: . ADM_editor	ADM_outputs/oplug_avi ADM_outputs/oplug_mpegFF ADM_script	ADM_userInterfaces/ADM_GTK/ADM_gui2 ADM_userInterfaces/ADM_GTK/glade	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3011">[ date ]</a>
+              <a href="thread.html#3011">[ thread ]</a>
+              <a href="subject.html#3011">[ subject ]</a>
+              <a href="author.html#3011">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

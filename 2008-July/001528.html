@@ -1,0 +1,148 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4287 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4287%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script&In-Reply-To=%3C200807261858.m6QIwaK8014206%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001527.html">
+   <LINK REL="Next"  HREF="001531.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4287 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4287%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script&In-Reply-To=%3C200807261858.m6QIwaK8014206%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4287 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jul 26 20:58:36 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001527.html">[Avidemux-svn-commit] r4286 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script
+</A></li>
+        <LI>Next message: <A HREF="001531.html">[Avidemux-svn-commit] r4288 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1528">[ date ]</a>
+              <a href="thread.html#1528">[ thread ]</a>
+              <a href="subject.html#1528">[ subject ]</a>
+              <a href="author.html#1528">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-07-26 20:58:36 +0200 (Sat, 26 Jul 2008)
+New Revision: 4287
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSFunctions.cpp
+Log:
+[Merge] 4278
+
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSFunctions.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSFunctions.cpp	2008-07-26 18:58:34 UTC (rev 4286)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script/ADM_JSFunctions.cpp	2008-07-26 18:58:36 UTC (rev 4287)
+@@ -14,7 +14,7 @@
+ #include &lt;unistd.h&gt;
+ #include &lt;sys/types.h&gt;
+ #include &lt;sys/stat.h&gt;
+-#ifndef __MINGW32__
++#ifndef ADM_WIN32
+ #include &lt;sys/wait.h&gt;
+ #include &lt;sys/param.h&gt;
+ #endif
+@@ -317,14 +317,8 @@
+         *rval=STRING_TO_JSVAL(JS_NewStringCopyZ(cx,n));
+         return JS_TRUE;
+ }
+-#ifdef __MINGW32__
+ 
+ JSBool systemExecute(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
+-{
+-		return JS_FALSE;
+-}
+-#else
+-JSBool systemExecute(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
+ {// begin systemExecute
+ 	// default return value
+ 	*rval = INT_TO_JSVAL(-1);
+@@ -359,6 +353,8 @@
+ 		}// end failure to get item
+ 		args[JSVAL_TO_INT(i)] = JS_GetStringBytes(JSVAL_TO_STRING(jsValue));
+ 	}
++
++#ifndef ADM_WIN32
+ 	if(getuid() == 0)
+ 	{// begin running as root
+ 		JS_ReportError(cx, &quot;exec() disallowed while running as root.&quot;);
+@@ -374,6 +370,7 @@
+ 		JS_ReportError(cx, &quot;exec() disallowed execution of \&quot;%s\&quot; since it is a setuid/setgid file.&quot;, pExecutable);
+ 		return JS_FALSE;
+ 	}// end setuid/setgid files disallowed
++#endif
+ 
+         enterLock();
+ 	// clear file descriptor table of forked process and fork
+@@ -382,6 +379,11 @@
+ #elif defined(__FreeBSD__) || defined(__OpenBSD__)
+ 	pid_t pidRtn = rfork(RFPROC|RFCFDG);
+ #endif
++
++#ifdef ADM_WIN32
++	intptr_t pidRtn = spawnvpe(bWait ? P_WAIT : P_NOWAIT, pExecutable, args, environ);
++	#define WEXITSTATUS
++#else
+ 	if(pidRtn == 0)
+ 	{// begin child process
+ #if defined( __linux__) || defined(__macosx__) || defined(__APPLE__) || defined(__CYGWIN__)
+@@ -409,6 +411,8 @@
+ 	{// begin rfork failure
+ 		printf(&quot;Error: execve failure errno(%d)\n&quot;,errno);
+ 	}// end rfork failure
++#endif
++
+         leaveLock();
+ 
+ 	// cleanup
+@@ -419,8 +423,7 @@
+ 		*rval = INT_TO_JSVAL(-1);	// failure
+ 	return JS_TRUE;
+ }// end systemExecute
+-#endif
+-#ifdef __MINGW32__
++#ifdef ADM_WIN32
+ 
+ JSBool systemInclude(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
+ {
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001527.html">[Avidemux-svn-commit] r4286 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script
+</A></li>
+	<LI>Next message: <A HREF="001531.html">[Avidemux-svn-commit] r4288 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_script
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1528">[ date ]</a>
+              <a href="thread.html#1528">[ thread ]</a>
+              <a href="subject.html#1528">[ subject ]</a>
+              <a href="author.html#1528">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

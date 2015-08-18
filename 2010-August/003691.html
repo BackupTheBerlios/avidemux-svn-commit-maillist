@@ -1,0 +1,347 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6504 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6504%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreDemuxerMpeg/include%0A%09avidemux_core/ADM_coreDemuxerMpeg/src%0A%09avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C20100806180938.11823480F0E%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003690.html">
+   <LINK REL="Next"  HREF="003692.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6504 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6504%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreDemuxerMpeg/include%0A%09avidemux_core/ADM_coreDemuxerMpeg/src%0A%09avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C20100806180938.11823480F0E%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6504 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Aug  6 20:09:38 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003690.html">[Avidemux-svn-commit] r6503 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+        <LI>Next message: <A HREF="003692.html">[Avidemux-svn-commit] r6505 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3691">[ date ]</a>
+              <a href="thread.html#3691">[ thread ]</a>
+              <a href="subject.html#3691">[ subject ]</a>
+              <a href="author.html#3691">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-08-06 20:09:37 +0200 (Fri, 06 Aug 2010)
+New Revision: 6504
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/dmxPSPacket.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmxPSPacket.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp
+Log:
+[PS/Demux] Partially handle SCR reset in DVD (video only)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/dmxPSPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/dmxPSPacket.h	2010-08-06 18:09:35 UTC (rev 6503)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/include/dmxPSPacket.h	2010-08-06 18:09:37 UTC (rev 6504)
+@@ -119,7 +119,7 @@
+ #endif
+ };
+ /**
+-    \class psPacketLinearTracker
++    \class packetStats
+ */
+ typedef struct
+ {
+@@ -131,13 +131,25 @@
+     uint32_t startSize;
+     uint64_t startDts;
+ }packetStats;
+-
++/**
++    \class psPacketLinearTracker
++    \brief Same as psPacketLinear, but keep stats
++*/
+ class psPacketLinearTracker : public psPacketLinear
+ {
+ protected:
+-      packetStats stats[256];
++        packetStats stats[256];
++        uint64_t    lastVobuEnd;    // In 90 Khz tick
++        uint64_t    nextVobuEnd;    // In 90 Khz tick
++        uint64_t    lastVobuPosition; 
++        uint64_t    nextVobuPosition; 
++        bool        decodeVobuPCI(uint32_t size,uint8_t *data);
++        bool        decodeVobuDSI(uint32_t size);
+ 
++
+ public:
++        uint64_t        getLastVobuEndTime(void) {return lastVobuEnd;}
++        uint64_t        getLastVobuPosition(void) {return lastVobuPosition;}
+                         psPacketLinearTracker(uint8_t pid);
+                         ~psPacketLinearTracker();
+          packetStats    *getStat(int intdex);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmxPSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmxPSPacket.cpp	2010-08-06 18:09:35 UTC (rev 6503)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreDemuxerMpeg/src/dmxPSPacket.cpp	2010-08-06 18:09:37 UTC (rev 6504)
+@@ -5,7 +5,19 @@
+     email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+         
+  ***************************************************************************/
++/**
++    Stream remapping 
+ 
++            00--   : AC3 audio
++            20--   : Subtitles
++            40--   : DTS
++            60--   : VOBU
++            80--   : 
++            A0--   : PCM
++            C0/E0..: Mpeg2 audio/Mpeg2 video/
++
++
++*/
+ /***************************************************************************
+  *                                                                         *
+  *   This program is free software; you can redistribute it and/or modify  *
+@@ -124,7 +136,8 @@
+         // subs 20-29
+         // private data 1/2
+ #define INSIDE(min,max) (stream&gt;=min &amp;&amp; stream&lt;max)
+-        if(!(  INSIDE(0xC0,0xC9) || INSIDE(0xE0,0xE9) || INSIDE(0x20,0x29) || stream==PRIVATE_STREAM_1 || stream==PRIVATE_STREAM_2
++        if(!(  INSIDE(0xC0,0xC9) || INSIDE(0xE0,0xE9) || INSIDE(0x20,0x29) || 
++                    stream==PRIVATE_STREAM_1 || stream==PRIVATE_STREAM_2
+         			)) goto _again2;
+         // Ok we got a candidate
+         if(!getPacketInfo(stream,&amp;substream,&amp;len,&amp;pts,&amp;dts))   
+@@ -133,10 +146,14 @@
+         }
+         
+         //printf(&quot;Main Stream :%x substream :%x\n&quot;,stream,substream);
+-        if(stream==PRIVATE_STREAM_1) globstream=0xFF00+substream;
+-                else                 globstream=stream;
+-
+-        *pid=globstream;
++        switch(stream)
++        {
++                case PRIVATE_STREAM_1: globstream=0xFF00+substream; break;
++                case PRIVATE_STREAM_2: globstream=0xF000+substream; break;
++                default:               globstream=stream;break;
++                        
++        }
++        *pid=globstream; // Keep only LSB 8 BITS
+         *opts=pts;
+         *odts=dts;
+         *packetSize=len;
+@@ -175,7 +192,13 @@
+                         ||(stream==SYSTEM_START_CODE) //?
+                         ) // special case, no header
+                         {
++                                
+                                 *olen=size;      
++                                if(PRIVATE_STREAM_2==stream)
++                                {
++                                    *substream=_file-&gt;read8i()+0x60;
++                                    (*olen)--;
++                                }
+                                 return 1;
+                         }
+                                 
+@@ -589,7 +612,11 @@
+ */
+  psPacketLinearTracker::psPacketLinearTracker(uint8_t pid)  : psPacketLinear(pid)
+ {
+-   resetStats();
++    resetStats();
++    lastVobuEnd=0;
++    nextVobuEnd=0;
++    nextVobuPosition=0;
++    lastVobuPosition=0;
+ }
+ /**
+     \fn ~psPacketLinearTracker
+@@ -608,6 +635,74 @@
+     return stats+index;
+ }
+ /**
++    \fn decodeVobuPCI
++*/
++bool psPacketLinearTracker::decodeVobuPCI(uint32_t size,uint8_t *data)
++{
++/*
++	nv_pck_lbn 	: 32;  // block length
++	vobu_cat 	: 16;  // vobu category
++	reserved 	: 16;
++	vobu_uop_ctl 	: 32;  // user operation
++	vobu_s_ptm	: 32;  // vobu start time in 90KHz system clock unit
++	vobu_e_ptm	: 32;  // vobu end time
++	vobu_sl_e_ptm	: 32;  // sequence end termiation time
++	e_eltm		: 32;  // cell elapse time
++	vobu_isrc[32]	: 32 * 8;
++*/
++    if(size!=0x3D3)
++        {
++            ADM_warning(&quot;PCI Data not 0x3D4 but 0x%x\n&quot;,size+1);
++            return false;
++        }
++        uint8_t *ptr=data;
++        ptr+=4+2+2+4;
++#define MK32(x) {x=(ptr[0]&lt;&lt;24)+(ptr[1]&lt;&lt;16)+(ptr[2]&lt;&lt;8)+ptr[3];ptr+=4;}
++        uint32_t start;
++        uint32_t end;
++        uint32_t seqEnd;
++        MK32(start);
++        MK32(end);
++        MK32(seqEnd);
++//        ADM_info(&quot;Vobu start : %d end: %d seqEnd:%d\n&quot;,start,end,seqEnd);
++        lastVobuEnd=nextVobuEnd;
++        nextVobuEnd=end;
++        lastVobuPosition=nextVobuPosition;
++        _file-&gt;getpos(&amp;nextVobuPosition);
++        _file-&gt;forward(size-5*4+2*2);
++        return true;
++}   
++/**
++    \fn decodeVobuDSI
++*/
++
++bool psPacketLinearTracker::decodeVobuDSI(uint32_t size)
++{
++
++        if(size!=0x3f9)
++        {
++            ADM_warning(&quot;DSI Data not 0x3fa but 0x%x\n&quot;,size+1);
++            return false;
++        }
++#define P32(x) printf(#x&quot; :%d &quot;,_file-&gt;read32i());
++#define P16(x) printf(#x&quot; :%d &quot;,_file-&gt;read16i());
++
++        P32(pck_scr);
++        P32(pck_lbn);
++        _file-&gt;read32i();//end add
++        _file-&gt;read32i();// ref1
++        _file-&gt;read32i();// ref2
++        _file-&gt;read32i();// ref3
++        P16(vobid);
++        _file-&gt;read8i();
++        P16(cellid);
++        _file-&gt;read8i();
++        P32(etm);
++        printf(&quot;\n&quot;);
++        return true;
++
++}
++/**
+     \fn getPacketgetPacketOfType
+     \brief Keep track of all the packets we have seen so far.
+     Usefull to detect the streams present and to look up the PTS/DTS of audio streams for the audio part of the index
+@@ -625,6 +720,12 @@
+                 // Update 
+                 ADM_assert(tmppid&lt;0x100);
+                 packetStats *p=stats+tmppid;
++                if(tmppid==0x60) // VOBU PCI
++                {
++                    decodeVobuPCI(*packetSize,buffer);
++                    continue;
++                }
++                
+                 uint64_t ts=*pts;
+                 if(ts==ADM_NO_PTS) ts=*dts;
+                 if(ts!=ADM_NO_PTS)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp	2010-08-06 18:09:35 UTC (rev 6503)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp	2010-08-06 18:09:37 UTC (rev 6504)
+@@ -106,6 +106,7 @@
+         DIA_workingBase  *ui;
+         bool             headerDumped;
+         uint64_t         lastValidVideoDts;
++        uint64_t         timeOffset; // In 90 khz Tick
+        
+ public:
+                 PsIndexer(void);
+@@ -147,7 +148,7 @@
+     ui=createWorking (&quot;Indexing&quot;);
+     headerDumped=false;
+     lastValidVideoDts=ADM_NO_PTS;
+-    
++    timeOffset=0;
+ }
+ 
+ /**
+@@ -334,14 +335,37 @@
+                                                   info.startAt,info.offset);
+                                   continue;
+                           }
++                          //
++                          if(info.dts!=ADM_NO_PTS) info.dts+=timeOffset;
++                          if(info.pts!=ADM_NO_PTS) info.pts+=timeOffset;
+                           if(lastValidVideoDts!=ADM_NO_PTS &amp;&amp; info.dts!=ADM_NO_PTS)
+                           {
++                            // Handle SCR reset, that happens a lot on DVD
+                                     if(lastValidVideoDts&gt;info.dts)
+                                     {
+-                                            ADM_warning(&quot;DTS are going back, aborting, maybe several video appended ?&quot;);
+-                                            ADM_warning(&quot;last Valid Dts %s\n&quot;,ADM_us2plain(timeConvert(lastValidVideoDts)));
+-                                            ADM_warning(&quot;current    Dts %s\n&quot;,ADM_us2plain(timeConvert(info.dts)));
+-                                            goto theEnd;
++                                            ADM_warning(&quot;DTS are going back, maybe several video appended ?\n&quot;);
++                                            uint64_t newOffset=pkt-&gt;getLastVobuEndTime();
++                                            uint64_t newPosition=pkt-&gt;getLastVobuPosition();
++                                            ADM_info(&quot;Trying to correct with VOBU offset :%s\n&quot;,
++                                                            ADM_us2plain(timeConvert(newOffset)));
++
++                                            uint64_t newDts=info.dts+newOffset;
++                                            if(newDts&gt;lastValidVideoDts)
++                                            {
++                                                  ADM_info(&quot;SCR reset, using vobu to correct. New time offset %s, position 0x%&quot;LLX&quot;\n&quot;,
++                                                            ADM_us2plain(timeConvert(newOffset)),newPosition);
++                                                  ADM_warning(&quot;last Valid Dts %s\n&quot;,ADM_us2plain(timeConvert(lastValidVideoDts)));
++                                                  info.dts=newDts;
++                                                  if(info.pts!=ADM_NO_PTS)
++                                                        info.pts=info.pts+newOffset;
++                                                  timeOffset+=newOffset;
++                                                  ADM_info(&quot;TimeOffset is now %s\n&quot;,ADM_us2plain(timeConvert(timeOffset)));
++                                            }else
++                                            {
++                                                ADM_warning(&quot;last Valid Dts %s\n&quot;,ADM_us2plain(timeConvert(lastValidVideoDts)));
++                                                ADM_warning(&quot;current    Dts %s\n&quot;,ADM_us2plain(timeConvert(info.dts)));
++                                                goto theEnd;
++                                            }
+                                      }
+                             }
+                             if(info.dts!=ADM_NO_PTS)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003690.html">[Avidemux-svn-commit] r6503 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+	<LI>Next message: <A HREF="003692.html">[Avidemux-svn-commit] r6505 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3691">[ date ]</a>
+              <a href="thread.html#3691">[ thread ]</a>
+              <a href="subject.html#3691">[ subject ]</a>
+              <a href="author.html#3691">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

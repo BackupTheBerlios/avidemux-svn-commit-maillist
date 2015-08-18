@@ -1,0 +1,283 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6946 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_muxerGate/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6946%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_muxerGate/src%0A%09avidemux_core/ADM_coreUtils/include%20avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C20110122082907.C46344809B2%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004119.html">
+   <LINK REL="Next"  HREF="004121.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6946 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_muxerGate/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6946%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_muxerGate/src%0A%09avidemux_core/ADM_coreUtils/include%20avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C20110122082907.C46344809B2%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6946 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_muxerGate/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jan 22 09:29:07 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004119.html">[Avidemux-svn-commit] r6945 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+        <LI>Next message: <A HREF="004121.html">[Avidemux-svn-commit] r6947 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4120">[ date ]</a>
+              <a href="thread.html#4120">[ thread ]</a>
+              <a href="subject.html#4120">[ subject ]</a>
+              <a href="author.html#4120">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-01-22 09:29:07 +0100 (Sat, 22 Jan 2011)
+New Revision: 6946
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopyFromAnnexB.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_videoInfoExtractor.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractorH264.cpp
+Log:
+[h264] move annexB conversion into core
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopyFromAnnexB.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopyFromAnnexB.cpp	2011-01-21 07:24:52 UTC (rev 6945)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopyFromAnnexB.cpp	2011-01-22 08:29:07 UTC (rev 6946)
+@@ -53,13 +53,6 @@
+ }
+ 
+ 
+-static void writeBE32(uint8_t *p, uint32_t size)
+-{
+-    p[0]=size&gt;&gt;24;
+-    p[1]=(size&gt;&gt;16)&amp;0xff;
+-    p[2]=(size&gt;&gt;8)&amp;0xff;
+-    p[3]=(size&gt;&gt;0)&amp;0xff;
+-}
+ static const char *nalType[13]=
+ {
+     &quot;invalid&quot;,&quot;nonIdr&quot;,&quot;invalid&quot;,&quot;invalid&quot;,&quot;invalid&quot;,
+@@ -174,41 +167,7 @@
+     delete myBitstream;
+     myBitstream=NULL;
+ }
+-/**
+-    \fn convertFromAnnexB   
+-    \brief convert annexB startcode (00 00 00 0 xx) to NALU
+-*/
+-int ADM_videoStreamCopyFromAnnexB::convertFromAnnexB(uint8_t *inData,uint32_t inSize,
+-                                                      uint8_t *outData,uint32_t outMaxSize)
+-{
+-    uint8_t *tgt=outData;
+-    NALU_descriptor desc[MAX_NALU_PER_CHUNK];
+-    int nbNalu=ADM_splitNalu(myBitstream-&gt;data,myBitstream-&gt;data+myBitstream-&gt;len,
+-                        MAX_NALU_PER_CHUNK,desc);
+-    int nalHeaderSize=4;
+-    int outputSize=0;
+ 
+-
+-    for(int i=0;i&lt;nbNalu;i++)
+-    {
+-        NALU_descriptor *d=desc+i;
+-        aprintf(&quot;%d/%d : Nalu :0x%x size=%d\n&quot;,i,nbNalu,d-&gt;nalu,d-&gt;size);
+-        switch(d-&gt;nalu&amp;0x1f)
+-        {
+-            case NAL_FILLER: break;
+-            case NAL_AU_DELIMITER: break; 
+-            default:
+-                  writeBE32(tgt,1+d-&gt;size);
+-                  tgt[nalHeaderSize]=d-&gt;nalu;
+-                  memcpy(tgt+1+nalHeaderSize,d-&gt;start,d-&gt;size);
+-                  tgt+=d-&gt;size+1+nalHeaderSize;
+-                  break;
+-        }
+-        outputSize=tgt-outData;
+-        ADM_assert(outputSize&lt;outMaxSize);
+-    }
+-    return outputSize;
+-}
+ static void parseNalu(uint8_t *head, uint8_t *tail)
+ {
+     printf(&quot;**** Parsing NALU : %d****&quot;,(int)(tail-head));
+@@ -228,7 +187,7 @@
+     aprintf(&quot;-------%d--------\n&quot;,(int)currentFrame);
+     if(false==ADM_videoStreamCopy::getPacket(myBitstream)) return false;
+     
+-    int size=convertFromAnnexB(myBitstream-&gt;data,myBitstream-&gt;len,out-&gt;data,out-&gt;bufferSize);
++    int size=ADM_convertFromAnnexBToMP4(myBitstream-&gt;data,myBitstream-&gt;len,out-&gt;data,out-&gt;bufferSize);
+     out-&gt;len=size;
+     out-&gt;dts=myBitstream-&gt;dts;
+     out-&gt;pts=myBitstream-&gt;pts;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_videoInfoExtractor.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_videoInfoExtractor.h	2011-01-21 07:24:52 UTC (rev 6945)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_videoInfoExtractor.h	2011-01-22 08:29:07 UTC (rev 6946)
+@@ -48,6 +48,7 @@
+ }NALU_descriptor;
+ int ADM_splitNalu(uint8_t *start, uint8_t *end, uint32_t maxNalu,NALU_descriptor *desc);
+ int ADM_findNalu(uint32_t nalu,uint32_t maxNalu,NALU_descriptor *desc);
++int ADM_convertFromAnnexBToMP4(uint8_t *inData,uint32_t inSize, uint8_t *outData,uint32_t outMaxSize);
+ 
+ #define SHORT_START_CODE
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractorH264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractorH264.cpp	2011-01-21 07:24:52 UTC (rev 6945)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_infoExtractorH264.cpp	2011-01-22 08:29:07 UTC (rev 6946)
+@@ -663,6 +663,19 @@
+ #endif
+ }
+ /**
++    \fn    packNalu
++    \brief convert mpeg type NALU into mp4 header type nalu
++*/
++static void packNalu(int idx,NALU_descriptor *nalus,uint32_t *len,uint8_t **data)
++{
++    NALU_descriptor *n=nalus+idx;
++    uint32_t size=n-&gt;size;
++    uint8_t *p=new uint8_t[size+1];
++    *data=p;
++    p[0]=n-&gt;nalu;
++    *len=1+ADM_unescapeH264(n-&gt;size, n-&gt;start,p+1);
++}
++/**
+     \fn ADM_getH264SpsPpsFromExtraData
+     \brief Returns a copy of PPS/SPS extracted from extrdata
+ */
+@@ -677,10 +690,9 @@
+                 return false;
+             }
+             //
+-            if(extra[1]==1) // MP4-type extradata
++            if(extra[0]==1) // MP4-type extradata
+             {
+                 ADM_info(&quot;MP4 style PPS/SPS\n&quot;);
+-                return false;
+ 
+                 int nbSps=extra[5]&amp;0x1f;
+                 if(nbSps!=1)    
+@@ -702,8 +714,19 @@
+                 c++;
+                 *ppsLen= (c[0]&lt;&lt;8)+(c[1]);
+                 *ppsData=c+2;
++                // Duplicate
++                uint8_t *y=new uint8_t [*spsLen];
++                memcpy(y,*spsData,*spsLen);
++                *spsData=y;
++                y=new uint8_t [*ppsLen];
++                memcpy(y,*ppsData,*ppsLen);
++                *ppsData=y;
++                ADM_info(&quot;Got extradata, ppslen=%d, spslen=%d\n&quot;,(int)(*ppsLen),(int)*spsLen);
++                return true;
++
+             }else
+-            if(!extra[0] &amp;&amp; !extra[1] &amp;&amp; extra[2]==1) // 00 00 01 type extradata
++            if(!extra[0] &amp;&amp; !extra[1])
++                if(extra[2]==1 || (!extra[2] &amp;&amp; extra[3]==1)) // 00 00 01 type extradata
+             {
+                 ADM_info(&quot;Startcoded PPS/SPS\n&quot;);
+                 #define NALU_COUNT 10
+@@ -722,17 +745,11 @@
+                     ADM_error(&quot;Cant find sps/pps in nalus\n&quot;);
+                     return false;
+                 }
+-
+-                return false;
++                packNalu(spsIndex,nalus,spsLen,spsData);
++                packNalu(ppsIndex,nalus,ppsLen,ppsData);
++                return true;
+             }
+-            // Duplicate
+-            uint8_t *y=new uint8_t [*spsLen];
+-            memcpy(y,*spsData,*spsLen);
+-            *spsData=y;
+-            y=new uint8_t [*ppsLen];
+-            memcpy(y,*ppsData,*ppsLen);
+-            *ppsData=y;
+-            return true;
++    return false;
+ }
+ /**
+     \fn ADM_splitNalu
+@@ -782,4 +799,47 @@
+     }
+     return -1;
+ }
++
++static void writeBE32(uint8_t *p, uint32_t size)
++{
++    p[0]=size&gt;&gt;24;
++    p[1]=(size&gt;&gt;16)&amp;0xff;
++    p[2]=(size&gt;&gt;8)&amp;0xff;
++    p[3]=(size&gt;&gt;0)&amp;0xff;
++}
++/**
++    \fn ADM_convertFromAnnexBToMP4   
++    \brief convert annexB startcode (00 00 00 0 xx) to NALU
++*/
++int ADM_convertFromAnnexBToMP4(uint8_t *inData,uint32_t inSize,
++                                                      uint8_t *outData,uint32_t outMaxSize)
++{
++    uint8_t *tgt=outData;
++    NALU_descriptor desc[MAX_NALU_PER_CHUNK];
++    int nbNalu=ADM_splitNalu(inData,inData+inSize,
++                        MAX_NALU_PER_CHUNK,desc);
++    int nalHeaderSize=4;
++    int outputSize=0;
++
++
++    for(int i=0;i&lt;nbNalu;i++)
++    {
++        NALU_descriptor *d=desc+i;
++        aprintf(&quot;%d/%d : Nalu :0x%x size=%d\n&quot;,i,nbNalu,d-&gt;nalu,d-&gt;size);
++        switch(d-&gt;nalu&amp;0x1f)
++        {
++            case NAL_FILLER: break;
++            case NAL_AU_DELIMITER: break; 
++            default:
++                  writeBE32(tgt,1+d-&gt;size);
++                  tgt[nalHeaderSize]=d-&gt;nalu;
++                  memcpy(tgt+1+nalHeaderSize,d-&gt;start,d-&gt;size);
++                  tgt+=d-&gt;size+1+nalHeaderSize;
++                  break;
++        }
++        outputSize=tgt-outData;
++        ADM_assert(outputSize&lt;outMaxSize);
++    }
++    return outputSize;
++}
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004119.html">[Avidemux-svn-commit] r6945 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+	<LI>Next message: <A HREF="004121.html">[Avidemux-svn-commit] r6947 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4120">[ date ]</a>
+              <a href="thread.html#4120">[ thread ]</a>
+              <a href="subject.html#4120">[ subject ]</a>
+              <a href="author.html#4120">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

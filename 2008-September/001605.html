@@ -1,0 +1,187 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4365 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_lavformat ADM_libraries/ADM_utilities	ADM_outputs/oplug_mp4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4365%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%0A%09ADM_libraries/ADM_lavformat%20ADM_libraries/ADM_utilities%0A%09ADM_outputs/oplug_mp4&In-Reply-To=%3C200809182011.m8IKBLxN000769%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001604.html">
+   <LINK REL="Next"  HREF="001606.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4365 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_lavformat ADM_libraries/ADM_utilities	ADM_outputs/oplug_mp4</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4365%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%0A%09ADM_libraries/ADM_lavformat%20ADM_libraries/ADM_utilities%0A%09ADM_outputs/oplug_mp4&In-Reply-To=%3C200809182011.m8IKBLxN000769%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4365 - in	branches/avidemux_2.4_branch/avidemux:	ADM_libraries/ADM_lavformat ADM_libraries/ADM_utilities	ADM_outputs/oplug_mp4">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Thu Sep 18 22:11:21 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001604.html">[Avidemux-svn-commit] r4364 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat
+</A></li>
+        <LI>Next message: <A HREF="001606.html">[Avidemux-svn-commit] r4366 -	branches/avidemux_2.4_branch/avidemux/ADM_osSupport
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1605">[ date ]</a>
+              <a href="thread.html#1605">[ thread ]</a>
+              <a href="subject.html#1605">[ subject ]</a>
+              <a href="author.html#1605">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-09-18 22:11:14 +0200 (Thu, 18 Sep 2008)
+New Revision: 4365
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_bitstream.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_bitstream.h
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mp4/oplug_mp4.cpp
+Log:
+[mp4] only let libavformat calculate DTS when encoding (and not copying)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp	2008-09-18 15:16:01 UTC (rev 4364)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp	2008-09-18 20:11:14 UTC (rev 4365)
+@@ -18,6 +18,10 @@
+  *                                                                         *
+  ***************************************************************************/
+ 
++#ifndef __STDC_LIMIT_MACROS
++#define __STDC_LIMIT_MACROS
++#endif
++
+ #include &quot;config.h&quot;
+ #include &quot;default.h&quot;
+ #define WIN32_CLASH
+@@ -35,7 +39,7 @@
+ #undef malloc
+ #undef realloc
+ #undef free
+-#include &lt;ADM_assert.h&gt;
++#include &quot;ADM_assert.h&quot;
+ 
+ #include &quot;ADM_toolkit/toolkit.hxx&quot;
+ 
+@@ -606,11 +610,10 @@
+ 	AVPacket pkt;
+ 	AVRational fps = {1, 1000000};
+ 	uint32_t ptsFrame = bitstream-&gt;ptsFrame + 1;
+-	bool calculateDts = true;
+ 
+ 	av_init_packet(&amp;pkt);
+ 
+-	_curDTS = av_rescale_q(bitstream-&gt;dtsFrame, video_st-&gt;codec-&gt;time_base, fps);
++	_curDTS = av_rescale_q(bitstream-&gt;frameNumber, video_st-&gt;codec-&gt;time_base, fps);
+ 
+ 	switch (_type)
+ 	{
+@@ -623,7 +626,6 @@
+ 		case MUXER_MP4:
+ 		{
+ 			ptsFrame = bitstream-&gt;ptsFrame;
+-			calculateDts = false;
+ 			// break is missing on purpose!
+ 		}
+ 		default:
+@@ -635,7 +637,7 @@
+ 
+ 	pkt.pts = av_rescale_q(ptsFrame, video_st-&gt;codec-&gt;time_base, fps);
+ 
+-	if (calculateDts)
++	if (bitstream-&gt;dtsFrame != UINT32_MAX)
+ 		pkt.dts = av_rescale_q(bitstream-&gt;dtsFrame, video_st-&gt;codec-&gt;time_base, fps);
+ 
+ 	pkt.stream_index = 0;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_bitstream.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_bitstream.cpp	2008-09-18 15:16:01 UTC (rev 4364)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_bitstream.cpp	2008-09-18 20:11:14 UTC (rev 4365)
+@@ -38,5 +38,6 @@
+     flags=0;
+     len=0;
+     dtsFrame=framenum;
++	frameNumber=framenum;
+ }
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_bitstream.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_bitstream.h	2008-09-18 15:16:01 UTC (rev 4364)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/ADM_bitstream.h	2008-09-18 20:11:14 UTC (rev 4365)
+@@ -19,6 +19,7 @@
+         uint32_t out_quantizer;         // Quantizer of the image, in case of encoding the real Q
+         uint32_t ptsFrame;              // Frame number in display order
+         uint32_t dtsFrame;              // Frame number in container order (decoding order)
++		uint32_t frameNumber;
+         uint64_t pts;			// in ms
+         uint64_t dts;			// in ms
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mp4/oplug_mp4.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mp4/oplug_mp4.cpp	2008-09-18 15:16:01 UTC (rev 4364)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_mp4/oplug_mp4.cpp	2008-09-18 20:11:14 UTC (rev 4365)
+@@ -18,6 +18,10 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
++#ifndef __STDC_LIMIT_MACROS
++#define __STDC_LIMIT_MACROS
++#endif
++
+ #include &quot;config.h&quot;
+ #include &lt;stdio.h&gt;
+ #include &lt;stdlib.h&gt;
+@@ -208,6 +212,8 @@
+              
+ preFilling:
+              bitstream.cleanup(0);
++			 bitstream.dtsFrame = UINT32_MAX;	// let libavformat calculate it
++
+              if(!(err=_encode-&gt;encode ( prefill, &amp;bitstream)))//&amp;len, videoBuffer, &amp;flags,&amp;displayFrame))
+              {
+                         printf(&quot;MP4:First frame error\n&quot;);
+@@ -338,6 +344,8 @@
+                }
+                ADM_assert(_encode);
+                bitstream.cleanup(frameWrite);
++			   bitstream.dtsFrame = UINT32_MAX;	// let libavformat calculate it
++
+                if(!prefill || frame+prefill&lt;total) 
+                {
+                   
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001604.html">[Avidemux-svn-commit] r4364 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat
+</A></li>
+	<LI>Next message: <A HREF="001606.html">[Avidemux-svn-commit] r4366 -	branches/avidemux_2.4_branch/avidemux/ADM_osSupport
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1605">[ date ]</a>
+              <a href="thread.html#1605">[ thread ]</a>
+              <a href="subject.html#1605">[ subject ]</a>
+              <a href="author.html#1605">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

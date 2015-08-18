@@ -1,0 +1,372 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6782 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/qt4/ADM_jobs/src	avidemux_core/ADM_coreSocket/include	avidemux_core/ADM_coreSocket/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6782%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux/qt4/ADM_jobs/src%0A%09avidemux_core/ADM_coreSocket/include%0A%09avidemux_core/ADM_coreSocket/src&In-Reply-To=%3C20101127080141.30DE6480FAA%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003960.html">
+   <LINK REL="Next"  HREF="003962.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6782 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/qt4/ADM_jobs/src	avidemux_core/ADM_coreSocket/include	avidemux_core/ADM_coreSocket/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6782%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common%20avidemux/qt4/ADM_jobs/src%0A%09avidemux_core/ADM_coreSocket/include%0A%09avidemux_core/ADM_coreSocket/src&In-Reply-To=%3C20101127080141.30DE6480FAA%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6782 - in branches/avidemux_2.6_branch_mean:	avidemux/common avidemux/qt4/ADM_jobs/src	avidemux_core/ADM_coreSocket/include	avidemux_core/ADM_coreSocket/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Nov 27 09:01:41 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003960.html">[Avidemux-svn-commit] r6781 -	branches/avidemux_2.6_branch_mean/avidemux
+</A></li>
+        <LI>Next message: <A HREF="003962.html">[Avidemux-svn-commit] r6783 - in	branches/avidemux_2.6_branch_mean/avidemux: common qt4/ADM_jobs/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3961">[ date ]</a>
+              <a href="thread.html#3961">[ thread ]</a>
+              <a href="subject.html#3961">[ subject ]</a>
+              <a href="author.html#3961">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-11-27 09:01:41 +0100 (Sat, 27 Nov 2010)
+New Revision: 6782
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_slave.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_runOneJob.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/include/ADM_coreCommandSocket.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/include/ADM_coreSocket.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/src/ADM_coreCommandSocket.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/src/ADM_coreSocket.cpp
+Log:
+[coreSocket] Use simple protocol above socket (handshake etc...)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_slave.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_slave.cpp	2010-11-27 08:01:39 UTC (rev 6781)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_slave.cpp	2010-11-27 08:01:41 UTC (rev 6782)
+@@ -15,6 +15,7 @@
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_coreSocket/include/ADM_coreCommandSocket.h&quot;
+ #include &quot;ADM_slave.h&quot;
++#include &quot;DIA_coreToolkit.h&quot;
+ static ADM_commandSocket *mySocket=NULL;
+ /**
+     \fn ADM_slaveConnect
+@@ -22,6 +23,7 @@
+ */
+ bool ADM_slaveConnect(uint32_t port)
+ {
++    uint32_t version;
+     mySocket=new ADM_commandSocket();
+     if(!mySocket-&gt;connectTo(port))
+     {
+@@ -30,7 +32,31 @@
+         mySocket=NULL;
+     }
+     ADM_info(&quot;Connected to port %d\n&quot;,(int)port);
++ // 3b- handshake
++    ADM_info(&quot;Waiting for hello message...\n&quot;);
++    ADM_socketMessage msg;
++    msg.setPayloadAsUint32_t(ADM_COMMAND_SOCKET_VERSION);
++    msg.command=ADM_socketCommand_Hello;
++    if(!mySocket-&gt;sendMessage(msg))
++    {
++        GUI_Error_HIG(&quot;&quot;,&quot;Cannot send hello message&quot;);
++        goto done;
++    }
++    if(!mySocket-&gt;getMessage(msg))
++    {
++        GUI_Error_HIG(&quot;&quot;,&quot;Cannot get hello message&quot;);
++        goto done;
++    }
++    
++    if(!msg.getPayloadAsUint32_t(&amp;version) || version!=ADM_COMMAND_SOCKET_VERSION)
++    {
++        GUI_Error_HIG(&quot;&quot;,&quot;Wrong command version\n&quot;);
++        goto done;
++    }
+     return true;
++done:
++    ADM_assert(0);
++    return false;
+ }
+ /**
+     \fn ADM_slaveShutdown
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_runOneJob.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_runOneJob.cpp	2010-11-27 08:01:39 UTC (rev 6781)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_jobs/src/ADM_runOneJob.cpp	2010-11-27 08:01:41 UTC (rev 6782)
+@@ -91,9 +91,10 @@
+ bool jobWindow::runOneJob( ADMJob &amp;job)   
+ {
+     bool r=false;
++    uint32_t version;
+     job.startTime=ADM_getSecondsSinceEpoch();
+     job.status=ADM_JOB_RUNNING;
+-    ADM_socket *runSocket=NULL;
++    ADM_commandSocket *runSocket=NULL;
+     ADM_jobUpdate(job);
+     
+     // 1- Start listening to socket
+@@ -115,6 +116,27 @@
+         ADM_error(&quot;No connect\n&quot;);
+         goto done;
+     }
++    // 3b- handshake
++    ADM_info(&quot;Waiting for hello message...\n&quot;);
++    ADM_socketMessage msg;
++    msg.setPayloadAsUint32_t(ADM_COMMAND_SOCKET_VERSION);
++    msg.command=ADM_socketCommand_Hello;
++    if(!runSocket-&gt;sendMessage(msg))
++    {
++        popup(&quot;Cannot send hello message&quot;);
++        goto done;
++    }
++    if(!runSocket-&gt;getMessage(msg))
++    {
++        popup(&quot;Cannot get hello message&quot;);
++        goto done;
++    }
++    
++    if(!msg.getPayloadAsUint32_t(&amp;version) || version!=ADM_COMMAND_SOCKET_VERSION)
++    {
++        popup(&quot;Wrong command version\n&quot;);
++        goto done;
++    }
+     // 4- wait for complete and/or success message
+     while(runSocket-&gt;isAlive()) 
+     {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/include/ADM_coreCommandSocket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/include/ADM_coreCommandSocket.h	2010-11-27 08:01:39 UTC (rev 6781)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/include/ADM_coreCommandSocket.h	2010-11-27 08:01:41 UTC (rev 6782)
+@@ -16,6 +16,8 @@
+ #define ADM_CORE_COMMAND_SOCKET_H
+ #include &quot;ADM_coreSocket.h&quot;
+ 
++#define ADM_COMMAND_SOCKET_VERSION 2
++
+ #define ADM_COMMAND_SOCKET_MAX_PAYLOAD 16
+ 
+ /**
+@@ -31,7 +33,7 @@
+ /**
+         \struct ADM_socketMessage
+ */
+-typedef struct
++class ADM_socketMessage
+ {
+ public:
+     ADM_socketCommand command;
+@@ -39,7 +41,7 @@
+     uint8_t  payload[ADM_COMMAND_SOCKET_MAX_PAYLOAD];
+     bool     getPayloadAsUint32_t(uint32_t *v);
+     bool     setPayloadAsUint32_t(uint32_t v);
+-}ADM_socketMessage;
++};
+ 
+ 
+ /**
+@@ -50,6 +52,7 @@
+ {
+     protected:
+     public:
++        virtual ADM_commandSocket *waitForConnect(uint32_t timeoutMs);
+         bool sendMessage(const ADM_socketMessage &amp;msg);
+         bool getMessage(ADM_socketMessage &amp;msg);
+     public:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/include/ADM_coreSocket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/include/ADM_coreSocket.h	2010-11-27 08:01:39 UTC (rev 6781)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/include/ADM_coreSocket.h	2010-11-27 08:01:41 UTC (rev 6782)
+@@ -27,11 +27,11 @@
+         admMutex    lock;       
+         bool        create(void);
+     public:
+-        ADM_socket *waitForConnect(uint32_t timeoutMs);
++virtual ADM_socket *waitForConnect(uint32_t timeoutMs);
+         bool        createBindAndAccept(uint32_t *port);
+         bool        connectTo(uint32_t port);
+         bool        rxData(uint32_t howmuch, uint8_t *where);
+-        bool        txData(uint32_t howmuch, uint8_t *where);
++        bool        txData(uint32_t howmuch, const uint8_t *where);
+         bool        close(void);
+         bool        isAlive(void);
+     public:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/src/ADM_coreCommandSocket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/src/ADM_coreCommandSocket.cpp	2010-11-27 08:01:39 UTC (rev 6781)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/src/ADM_coreCommandSocket.cpp	2010-11-27 08:01:41 UTC (rev 6782)
+@@ -17,6 +17,22 @@
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_coreCommandSocket.h&quot;
+ 
++
++static bool     uint32_to_char(uint32_t v,uint8_t *p)
++ {
++    *p++=(v&amp;0xff);v&gt;&gt;=8;
++    *p++=(v&amp;0xff);v&gt;&gt;=8;
++    *p++=(v&amp;0xff);v&gt;&gt;=8;
++    *p++=(v&amp;0xff);v&gt;&gt;=8;
++    return true;
++}
++static bool     char_to_uint32(uint32_t *v,uint8_t *p)
++ {
++    uint32_t a=(p[0])+(p[1]&lt;&lt;8)+(p[2]&lt;&lt;16)+(p[4]&lt;&lt;24);
++    *v=a;
++    return true;
++}
++
+ /**
+     \fn ctor
+ */
+@@ -39,18 +55,56 @@
+ {
+ }
+ /**
+-    
++        \fn sendMessage
+ */
+ bool ADM_commandSocket::sendMessage(const ADM_socketMessage &amp;msg)
+ {
+-    return false;
++
++#define TXX(u,v) if(!txData(u,tmp)) {ADM_error(v&quot; error sending data\n&quot;);return false;}
++
++    uint8_t tmp[4];
++    if(!mySocket) return false;
++    // 1- Send command as uint8_t
++    tmp[0]=(uint8_t)msg.command;
++    TXX(1,&quot;command&quot;);
++    
++    // 2- Send size as uint32_t
++    uint32_to_char(msg.payloadLength,tmp);
++    TXX(4,&quot;payloadLength&quot;);
++    if(msg.payloadLength)
++    {
++        if(!txData(msg.payloadLength,msg.payload))
++        {
++            ADM_error(&quot;Cannot send payload for command %d\n&quot;,msg.command);
++            return false;
++        }
++    }
++    return true;
+ }
+ /**
+-    \fn 
++    \fn getMessage
+ */
+ bool ADM_commandSocket::getMessage(ADM_socketMessage &amp;msg)
+ {
+-    return false;
++#define RXX(u,v) if(!rxData(u,tmp)) {ADM_error(v&quot; error rxing data\n&quot;);return false;}
++    uint8_t tmp[4];
++    if(!mySocket) return false;
++    // 1- Send command as uint8_t
++    RXX(1,&quot;command&quot;);
++    msg.command=(ADM_socketCommand)tmp[0];
++    RXX(4,&quot;payloadLength&quot;);
++    char_to_uint32(&amp;(msg.payloadLength),tmp);
++    if(msg.payloadLength)
++    {
++        ADM_assert(msg.payloadLength&lt;ADM_COMMAND_SOCKET_MAX_PAYLOAD);
++        if(!rxData(msg.payloadLength,msg.payload)) 
++        {
++                ADM_error(&quot; error rxing payload\n&quot;);
++                return false;
++        }
++
++    }
++    return true;
+ }
+ /**
+     \fn getPayloadAsUint32_t
+@@ -62,8 +116,8 @@
+         ADM_error(&quot;payload is not uint32\n&quot;);
+         return false;
+     }
+-    uint32_t a=(payload[0])+(payload[1]&lt;&lt;8)+(payload[2]&lt;&lt;16)+(payload[4]&lt;&lt;24);
+-    *v=a;
++
++    char_to_uint32(v,payload);
+     return true;
+ }
+ /**
+@@ -71,12 +125,19 @@
+ */
+ bool     ADM_socketMessage::setPayloadAsUint32_t(uint32_t v)
+ {
+-    uint8_t *p=payload;
+-    *p++=(v&amp;0xff);v&gt;&gt;=8;
+-    *p++=(v&amp;0xff);v&gt;&gt;=8;
+-    *p++=(v&amp;0xff);v&gt;&gt;=8;
+-    *p++=(v&amp;0xff);v&gt;&gt;=8;
++    uint32_to_char(v,payload);
+     payloadLength=4;    
+     return true;
+ }
++
++/**
++    \fn waitForConnect
++    \brief wait for incoming TCP connection...
++    \return null if no connection
++*/
++ADM_commandSocket *ADM_commandSocket::waitForConnect(uint32_t timeoutMs)
++{
++#warning fixme badly
++    return (ADM_commandSocket *)ADM_socket::waitForConnect(timeoutMs);
++}
+ // EOF
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/src/ADM_coreSocket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/src/ADM_coreSocket.cpp	2010-11-27 08:01:39 UTC (rev 6781)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreSocket/src/ADM_coreSocket.cpp	2010-11-27 08:01:41 UTC (rev 6782)
+@@ -123,7 +123,7 @@
+ /**
+     \fn txData
+ */
+-bool ADM_socket::txData(uint32_t howmuch, uint8_t *where)
++bool ADM_socket::txData(uint32_t howmuch, const uint8_t *where)
+ {
+ uint32_t got=0,tx;
+     while(got&lt;howmuch)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003960.html">[Avidemux-svn-commit] r6781 -	branches/avidemux_2.6_branch_mean/avidemux
+</A></li>
+	<LI>Next message: <A HREF="003962.html">[Avidemux-svn-commit] r6783 - in	branches/avidemux_2.6_branch_mean/avidemux: common qt4/ADM_jobs/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3961">[ date ]</a>
+              <a href="thread.html#3961">[ thread ]</a>
+              <a href="subject.html#3961">[ subject ]</a>
+              <a href="author.html#3961">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

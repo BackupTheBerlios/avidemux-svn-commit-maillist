@@ -1,0 +1,121 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5222 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_codecs	ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5222%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20ADM_codecs%0A%09ADM_editor&In-Reply-To=%3C200908070708.n7778vOC004565%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002434.html">
+   <LINK REL="Next"  HREF="002436.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5222 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_codecs	ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5222%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20ADM_codecs%0A%09ADM_editor&In-Reply-To=%3C200908070708.n7778vOC004565%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5222 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_codecs	ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Aug  7 09:08:57 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002434.html">[Avidemux-svn-commit] r5221 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="002436.html">[Avidemux-svn-commit] r5223 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libpostproc
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2435">[ date ]</a>
+              <a href="thread.html#2435">[ thread ]</a>
+              <a href="subject.html#2435">[ subject ]</a>
+              <a href="author.html#2435">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-08-07 09:08:54 +0200 (Fri, 07 Aug 2009)
+New Revision: 5222
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_codecs/ADM_ffmp43.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+Log:
+[UI/audio] Menu to select audio track, fixes #18
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_codecs/ADM_ffmp43.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_codecs/ADM_ffmp43.cpp	2009-08-07 07:08:49 UTC (rev 5221)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_codecs/ADM_ffmp43.cpp	2009-08-07 07:08:54 UTC (rev 5222)
+@@ -362,18 +362,23 @@
+   if (in-&gt;dataLength == 0 &amp;&amp; !_allowNull)	// Null frame, silently skipped
+     {
+       
+-      printf (&quot;[lavc] null frame\n&quot;);
+-      {
++      printf (&quot;[Codec] null frame\n&quot;);
+         // search the last image
+-        if (_context-&gt;coded_frame &amp;&amp; _context-&gt;coded_frame-&gt;data)
++        if (_context-&gt;coded_frame &amp;&amp; 
++            _context-&gt;coded_frame-&gt;data &amp;&amp;
++            _context-&gt;coded_frame-&gt;data[0]
++            )
+           {
+-            
++            printf(&quot;[Codec] Cloning older pic\n&quot;);
+             clonePic (_context-&gt;coded_frame, out);
+             out-&gt;Pts=ADM_COMPRESSED_NO_PTS;
+           }
+         else
+-          out-&gt;_noPicture = 1;
+-          }
++            {
++                out-&gt;_noPicture = 1;
++                out-&gt;Pts=ADM_COMPRESSED_NO_PTS;
++                printf(&quot;[Codec] No Picture\n&quot;);
++            }
+           return 1;
+     }
+    // Put a safe value....
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-08-07 07:08:49 UTC (rev 5221)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-08-07 07:08:54 UTC (rev 5222)
+@@ -429,7 +429,8 @@
+         if(tmpImage-&gt;_noPicture &amp;&amp; refOnly)
+         {
+             printf(&quot;[decompressImage] NoPicture\n&quot;);
+-            return false;
++            // Fill in with black
++            return true;
+         }
+         aprintf(&quot;[::Decompress] in:%&quot;LU&quot; out:%&quot;LU&quot; flags:%x\n&quot;,in-&gt;demuxerPts,out-&gt;Pts,out-&gt;flags);
+ 	// If not quant and it is already YV12, we can stop here
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002434.html">[Avidemux-svn-commit] r5221 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="002436.html">[Avidemux-svn-commit] r5223 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libpostproc
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2435">[ date ]</a>
+              <a href="thread.html#2435">[ thread ]</a>
+              <a href="subject.html#2435">[ subject ]</a>
+              <a href="author.html#2435">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

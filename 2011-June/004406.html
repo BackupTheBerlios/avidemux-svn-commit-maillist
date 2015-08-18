@@ -1,0 +1,221 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7252 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/changeFps
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7252%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/changeFps&In-Reply-To=%3C20110602114356.60A76480BAD%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004405.html">
+   <LINK REL="Next"  HREF="004407.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7252 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/changeFps</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7252%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/changeFps&In-Reply-To=%3C20110602114356.60A76480BAD%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7252 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/changeFps">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jun  2 13:43:56 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004405.html">[Avidemux-svn-commit] r7251 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6
+</A></li>
+        <LI>Next message: <A HREF="004407.html">[Avidemux-svn-commit] r7253 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4406">[ date ]</a>
+              <a href="thread.html#4406">[ thread ]</a>
+              <a href="subject.html#4406">[ subject ]</a>
+              <a href="author.html#4406">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-06-02 13:43:56 +0200 (Thu, 02 Jun 2011)
+New Revision: 7252
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/changeFps/changeFps.cpp
+Log:
+[changeFps] Working filter
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/changeFps/changeFps.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/changeFps/changeFps.cpp	2011-06-02 11:43:55 UTC (rev 7251)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/changeFps/changeFps.cpp	2011-06-02 11:43:56 UTC (rev 7252)
+@@ -55,6 +55,7 @@
+ {
+ protected:
+         confChangeFps       configuration;
++        bool                updateTimingInfo(void);
+ public:
+                             changeFps(ADM_coreVideoFilter *previous,CONFcouple *conf);
+                             ~changeFps();
+@@ -102,6 +103,7 @@
+         configuration.oldFpsDen=1000;
+ 
+     }
++    updateTimingInfo();
+ }
+ /**
+     \fn dtor
+@@ -117,8 +119,12 @@
+ */
+ bool         changeFps::goToTime(uint64_t usSeek)
+ {
+-#warning TODO rescale time
+-    if(false==ADM_coreVideoFilter::goToTime(usSeek)) return false;
++    double timing=(double)usSeek;
++    timing/=configuration.oldFpsNum;
++    timing/=configuration.newFpsDen;
++    timing*=configuration.newFpsNum;
++    timing*=configuration.oldFpsDen;
++    if(false==ADM_coreVideoFilter::goToTime((uint64_t)timing)) return false;
+     return true;
+ }
+ 
+@@ -134,24 +140,55 @@
+ */
+  bool         changeFps::getNextFrame(uint32_t *fn,ADMImage *image)
+ {
++    if(false==previousFilter-&gt;getNextFrame(fn,image))
++            return false;
++    if(image-&gt;Pts==ADM_NO_PTS)
++        return true;
++    double timing=image-&gt;Pts;
+ 
++    timing*=configuration.oldFpsNum;
++    timing*=configuration.newFpsDen;
++    timing/=configuration.newFpsNum;
++    timing/=configuration.oldFpsDen;
+ 
++    image-&gt;Pts=(uint64_t)timing;
++
+     return true;
+ }
++/**
++    \fn updateTimingInfo
++    \brief update the info part with new fps
++*/
++bool changeFps::updateTimingInfo(void)
++{
++    
++    double fps1000=configuration.newFpsNum*1000;
++    fps1000/=configuration.newFpsDen;
++    // 1 update frame increment...
++    info.frameIncrement=ADM_Fps1000FromUs( (uint64_t)fps1000);
+ 
++    // 2 update duration
++    double timing=previousFilter-&gt;getInfo()-&gt;totalDuration;
++    timing*=configuration.oldFpsNum;
++    timing*=configuration.newFpsDen;
++    timing/=configuration.newFpsNum;
++    timing/=configuration.oldFpsDen;
++    info.totalDuration=(uint64_t)timing;
++    return true;
++}
+ /**
+     \fn configure
+ */
+ bool changeFps::configure(void)
+ {
++again:
++    float newFrac=configuration.newFpsNum; 
++    newFrac/=configuration.newFpsDen;
+ 
+-    float f=configuration.newFpsNum; 
+-    f/=configuration.newFpsDen;
++    float oldFrac=configuration.oldFpsNum; 
++    oldFrac/=configuration.oldFpsDen;
+ 
+-    float f2=configuration.oldFpsNum; 
+-    f2/=configuration.oldFpsDen;
+ 
+-
+ ADM_assert(nbPredefined == 6);
+   
+    diaMenuEntry tFps[]={
+@@ -163,12 +200,12 @@
+     
+ 
+     diaElemMenu mFps(&amp;(configuration.oldMode),   QT_TR_NOOP(&quot;Source Fps:&quot;), 6,tFps);
+-    diaElemFloat fps(&amp;f2,QT_TR_NOOP(&quot;Source frame rate:&quot;),1,200.);
++    diaElemFloat fps(&amp;oldFrac,QT_TR_NOOP(&quot;Source frame rate:&quot;),1,200.);
+ 
+     mFps.link(tFps+0,1,&amp;fps); // only activate entry in custom mode
+ 
+     diaElemMenu targetmFps(&amp;(configuration.newMode),   QT_TR_NOOP(&quot;Source Fps:&quot;), 6,tFps);
+-    diaElemFloat targetfps(&amp;f,QT_TR_NOOP(&quot;Source frame rate:&quot;),1,200.);
++    diaElemFloat targetfps(&amp;newFrac,QT_TR_NOOP(&quot;Source frame rate:&quot;),1,200.);
+ 
+     targetmFps.link(tFps+0,1,&amp;targetfps); // only activate entry in custom mode
+ 
+@@ -179,11 +216,16 @@
+     if( !diaFactoryRun(QT_TR_NOOP(&quot;Change fps&quot;),4,elems))
+         return false;
+     
++    if(newFrac==0 || oldFrac==0)
++    {
++        GUI_Error_HIG(&quot;Error&quot;,&quot;Invalid fps&quot;);
++        goto again;
++    }
+       // 
+       if(!configuration.newMode) // Custom mode
+       {
+-          f*=1000;
+-          configuration.newFpsNum=(uint32_t)floor(f+0.4);
++          newFrac*=1000;
++          configuration.newFpsNum=(uint32_t)floor(newFrac+0.4);
+           configuration.newFpsDen=(uint32_t)1000;
+       }else   // Preset
+         {
+@@ -194,8 +236,8 @@
+ 
+     if(!configuration.oldMode) // Custom mode
+       {
+-          f2*=1000;
+-          configuration.oldFpsNum=(uint32_t)floor(f2+0.4);
++          oldFrac*=1000;
++          configuration.oldFpsNum=(uint32_t)floor(oldFrac+0.4);
+           configuration.oldFpsDen=(uint32_t)1000;
+       }else   // Preset
+         {
+@@ -203,7 +245,7 @@
+             configuration.oldFpsNum=me-&gt;num;
+             configuration.oldFpsDen=me-&gt;den;
+         }
+-
++      updateTimingInfo();
+       return true;
+ }
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004405.html">[Avidemux-svn-commit] r7251 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6
+</A></li>
+	<LI>Next message: <A HREF="004407.html">[Avidemux-svn-commit] r7253 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4406">[ date ]</a>
+              <a href="thread.html#4406">[ thread ]</a>
+              <a href="subject.html#4406">[ subject ]</a>
+              <a href="author.html#4406">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

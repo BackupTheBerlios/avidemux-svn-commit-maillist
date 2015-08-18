@@ -1,0 +1,188 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7302 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7302%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters&In-Reply-To=%3C20110626171426.DE9C2482442%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004455.html">
+   <LINK REL="Next"  HREF="004457.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7302 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7302%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters&In-Reply-To=%3C20110626171426.DE9C2482442%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7302 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jun 26 19:14:26 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004455.html">[Avidemux-svn-commit] r7301 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+        <LI>Next message: <A HREF="004457.html">[Avidemux-svn-commit] r7303 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4456">[ date ]</a>
+              <a href="thread.html#4456">[ thread ]</a>
+              <a href="subject.html#4456">[ subject ]</a>
+              <a href="author.html#4456">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-06-26 19:14:26 +0200 (Sun, 26 Jun 2011)
+New Revision: 7302
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters/ADM_vidVdpauFilterDeint.cpp
+Log:
+[vdpau] Benchmark vdpauDeint process
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters/ADM_vidVdpauFilterDeint.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters/ADM_vidVdpauFilterDeint.cpp	2011-06-26 17:14:25 UTC (rev 7301)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters/ADM_vidVdpauFilterDeint.cpp	2011-06-26 17:14:26 UTC (rev 7302)
+@@ -3,7 +3,15 @@
+     \author mean (C) 2010
+     This is slow as we copy back and forth data to/from the video cards
+     
++    On a Q6600
+ 
++    FullHD: 
++            Readback ~ 5 ms, RGB 2 YUV ~ 20 ms : 100% CPU
++    720
++            Readback ~ 2 ms, RGB2YUV ~ 10 ms  : 50% CPU
++            
++
++
+ */
+ #include &quot;ADM_cpp.h&quot;
+ #include &lt;list&gt;
+@@ -26,6 +34,9 @@
+ #define ADM_INVALID_FRAME_NUM 0x80000000
+ #define ADM_NB_SURFACES 5
+ 
++//#define DO_BENCHMARK
++#define NB_BENCH 100
++
+ #if 0
+ #define aprintf printf
+ #else
+@@ -469,6 +480,15 @@
+         aprintf(&quot;Mixing %d %d\n&quot;,i,(int)in[i]);
+     }
+     //
++
++#ifdef DO_BENCHMARK
++    ADMBenchmark bmark;
++    for(int i=0;i&lt;NB_BENCH;i++)
++    {
++        bmark.start();
++#endif
++    
++       
+     // ---------- Top field ------------
+     if(VDP_STATUS_OK!=admVdpau::mixerRenderWithPastAndFuture(topField, 
+                 mixer,
+@@ -479,7 +499,14 @@
+     {
+         ADM_warning(&quot;[Vdpau] Cannot mixerRender\n&quot;);
+         r= false;
+-    }    
++    }   
++                     
++#ifdef DO_BENCHMARK
++        bmark.end();
++    }
++    ADM_warning(&quot;Mixer Benchmark\n&quot;);
++    bmark.printResult();
++#endif 
+     return r;
+ }
+ /**
+@@ -488,6 +515,14 @@
+ */
+ bool vdpauVideoFilterDeint::getResult(ADMImage *image)
+ {
++
++#ifdef DO_BENCHMARK
++    ADMBenchmark bmark;
++    for(int i=0;i&lt;NB_BENCH;i++)
++    {
++        bmark.start();
++#endif
++  
+     if(VDP_STATUS_OK!=admVdpau::outputSurfaceGetBitsNative(outputSurface,
+                                                             tempBuffer, 
+                                                             info.width,info.height))
+@@ -495,7 +530,14 @@
+         ADM_warning(&quot;[Vdpau] Cannot copy back data from output surface\n&quot;);
+         return false;
+     }
+-
++  
++                     
++#ifdef DO_BENCHMARK
++        bmark.end();
++    }
++    ADM_warning(&quot;Read surface Benchmark\n&quot;);
++    bmark.printResult();
++#endif 
+     // Convert from VDP_RGBA_FORMAT_B8G8R8A8 to YV12
+     uint32_t sourceStride[3]={info.width*4,0,0};
+     uint8_t  *sourceData[3]={tempBuffer,NULL,NULL};
+@@ -512,8 +554,23 @@
+     ts=destStride[2];destStride[2]=destStride[1];destStride[1]=ts;
+     td=destData[1];destData[2]=destData[2];destData[1]=td;
+ #endif
++
++
++#ifdef DO_BENCHMARK
++    ADMBenchmark bmark2;
++    for(int i=0;i&lt;NB_BENCH;i++)
++    {
++        bmark2.start();
++#endif
+     scaler-&gt;convertPlanes(  sourceStride,destStride,     
+                             sourceData,destData);
++#ifdef DO_BENCHMARK
++        bmark2.end();
++    }
++    ADM_warning(&quot;RGB-&gt;YUV Benchmark\n&quot;);
++    bmark2.printResult();
++#endif
++
+     return true;
+ }
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004455.html">[Avidemux-svn-commit] r7301 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+	<LI>Next message: <A HREF="004457.html">[Avidemux-svn-commit] r7303 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4456">[ date ]</a>
+              <a href="thread.html#4456">[ thread ]</a>
+              <a href="subject.html#4456">[ subject ]</a>
+              <a href="author.html#4456">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

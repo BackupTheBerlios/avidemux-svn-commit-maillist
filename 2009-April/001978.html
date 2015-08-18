@@ -1,0 +1,183 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4751 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4751%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904211804.n3LI4Msm031329%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001979.html">
+   <LINK REL="Next"  HREF="001980.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4751 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4751%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904211804.n3LI4Msm031329%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4751 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Apr 21 20:04:22 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001979.html">[Avidemux-svn-commit] r4750 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="001980.html">[Avidemux-svn-commit] r4752 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1978">[ date ]</a>
+              <a href="thread.html#1978">[ thread ]</a>
+              <a href="subject.html#1978">[ subject ]</a>
+              <a href="author.html#1978">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-04-21 20:04:21 +0200 (Tue, 21 Apr 2009)
+New Revision: 4751
+
+Modified:
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+Log:
+[TS indexer] Framework to handle audio
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.cpp	2009-04-21 18:04:20 UTC (rev 4750)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudioProbe.cpp	2009-04-21 18:04:21 UTC (rev 4751)
+@@ -51,7 +51,7 @@
+         
+         
+         // dont even try if it is not audio
+-        if(trackInfo-&gt;trackType!=ADM_TS_MPEG2 &amp;&amp;trackInfo-&gt;trackType!=ADM_TS_AC3) return false;
++        if(trackInfo-&gt;trackType!=ADM_TS_MPEG_AUDIO &amp;&amp;trackInfo-&gt;trackType!=ADM_TS_AC3) return false;
+ 
+         // Go back where we were
+         p-&gt;changePid(trackInfo-&gt;esId); 
+@@ -66,7 +66,7 @@
+         uint32_t fq,br,chan,off;
+         switch(trackInfo-&gt;trackType)
+         {
+-            case ADM_TS_MPEG2: // MP2
++            case ADM_TS_MPEG_AUDIO: // MP2
+                             {
+                                 if(! tsCheckMp2Audio(&amp;(trackInfo-&gt;wav),audioBuffer,rd))
+                                 {
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-21 18:04:20 UTC (rev 4750)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-21 18:04:21 UTC (rev 4751)
+@@ -111,7 +111,7 @@
+ 
+     ADM_TS_TRACK *tracks;
+     uint32_t nbTracks;
+-    listOfTsAudioTracks *audioTrack;
++    listOfTsAudioTracks audioTrack;
+ 
+     if(TS_scanForPrograms(file,&amp;nbTracks,&amp;tracks)==false) 
+     {
+@@ -127,19 +127,23 @@
+     for(int i=1;i&lt;nbTracks;i++)
+     {
+         tsAudioTrackInfo trk;
++        trk.esId=tracks[i].trackPid;
++        trk.trackType=tracks[i].trackType;
+         if(true==tsGetAudioInfo(p,&amp;trk))
+         {
+-                
++              audioTrack.push_back(trk);  
+         }
+     }
+     delete p;
+-    printf(&quot;[TsIndexer] Audio probed, doing video\n&quot;);
++    printf(&quot;[TsIndexer] Audio probed, %d found, doing video\n&quot;,(int)audioTrack.size());
+     //
+-    TsIndexer *dx=new TsIndexer(audioTrack);
++    TsIndexer *dx=new TsIndexer(&amp;audioTrack);
+     switch(tracks[0].trackType)
+     {
+-    case ADM_TS_MPEG2: r=dx-&gt;runMpeg2(file,&amp;(tracks[0]));break;
+-    default:
++            case ADM_TS_MPEG2: 
++                            r=dx-&gt;runMpeg2(file,&amp;(tracks[0]));
++                            break;
++            default:
+                         r=0;
+                         break;
+     }
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp	2009-04-21 18:04:20 UTC (rev 4750)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp	2009-04-21 18:04:21 UTC (rev 4751)
+@@ -138,15 +138,7 @@
+     }
+     {
+         //
+-    #if 0 // TO REMOVE
+-        TS_PESpacket pes(list[videoIndex].trackPid);
+-        t-&gt;getNextPES(&amp;pes);printf(&quot;pts :%lld dts:%lld\n&quot;,pes.pts,pes.dts);
+-        t-&gt;getNextPES(&amp;pes);printf(&quot;pts :%lld dts:%lld\n&quot;,pes.pts,pes.dts);
+-        t-&gt;getNextPES(&amp;pes);printf(&quot;pts :%lld dts:%lld\n&quot;,pes.pts,pes.dts);
+-        t-&gt;getNextPES(&amp;pes);printf(&quot;pts :%lld dts:%lld\n&quot;,pes.pts,pes.dts);
+-        t-&gt;getNextPES(&amp;pes);printf(&quot;pts :%lld dts:%lld\n&quot;,pes.pts,pes.dts);
+-        t-&gt;getNextPES(&amp;pes);printf(&quot;pts :%lld dts:%lld\n&quot;,pes.pts,pes.dts);
+-    #endif
++ 
+         // After here we cannot fail (normally...)
+         tracks=new ADM_TS_TRACK[list.size()];
+         *outTracks=tracks;
+@@ -156,7 +148,7 @@
+         list.erase(list.begin()+videoIndex);
+         nb++;
+         // Also add audio tracks we know of
+-         for(int i=0;i&lt;list.size();i++)
++        for(int i=0;i&lt;list.size();i++)
+         {
+             ADM_TS_TRACK_TYPE type=list[i].trackType;
+             if(type==ADM_TS_MPEG_AUDIO || type==ADM_TS_AC3 || type==ADM_TS_AAC)
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-21 18:04:20 UTC (rev 4750)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-21 18:04:21 UTC (rev 4751)
+@@ -463,6 +463,7 @@
+             else
+                 if(packLen&gt;maxLen)
+                 {
++                    printf(&quot;[TS Packet] PackLen=%d, avalailble=%d\n&quot;,packLen,maxLen);
+                     fail(&quot;Pes too long&quot;);
+                 }   
+         }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001979.html">[Avidemux-svn-commit] r4750 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="001980.html">[Avidemux-svn-commit] r4752 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1978">[ date ]</a>
+              <a href="thread.html#1978">[ thread ]</a>
+              <a href="subject.html#1978">[ subject ]</a>
+              <a href="author.html#1978">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

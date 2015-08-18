@@ -1,0 +1,336 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6455 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_render avidemux_core/ADM_coreVdpau/include	avidemux_core/ADM_coreVdpau/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6455%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_render%20avidemux_core/ADM_coreVdpau/include%0A%09avidemux_core/ADM_coreVdpau/src&In-Reply-To=%3C20100714121729.C74FF480BDF%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003642.html">
+   <LINK REL="Next"  HREF="003644.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6455 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_render avidemux_core/ADM_coreVdpau/include	avidemux_core/ADM_coreVdpau/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6455%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_render%20avidemux_core/ADM_coreVdpau/include%0A%09avidemux_core/ADM_coreVdpau/src&In-Reply-To=%3C20100714121729.C74FF480BDF%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6455 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_render avidemux_core/ADM_coreVdpau/include	avidemux_core/ADM_coreVdpau/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Jul 14 14:17:29 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003642.html">[Avidemux-svn-commit] r6454 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_commonUI avidemux/common/ADM_render	avidemux_core/ADM_coreVdpau/include avidemux_core/ADM_coreVdpau/src
+</A></li>
+        <LI>Next message: <A HREF="003644.html">[Avidemux-svn-commit] r6456 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3643">[ date ]</a>
+              <a href="thread.html#3643">[ thread ]</a>
+              <a href="subject.html#3643">[ subject ]</a>
+              <a href="author.html#3643">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-07-14 14:17:29 +0200 (Wed, 14 Jul 2010)
+New Revision: 6455
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVdpau/include/ADM_coreVdpau.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVdpau/src/ADM_coreVdpau.cpp
+Log:
+[Vdpau] First (simple) version of vdpau render
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp	2010-07-14 12:17:27 UTC (rev 6454)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp	2010-07-14 12:17:29 UTC (rev 6455)
+@@ -22,8 +22,11 @@
+ #include &quot;GUI_accelRender.h&quot;
+ #include &quot;GUI_vdpauRender.h&quot;
+ #include &quot;ADM_coreVdpau/include/ADM_coreVdpau.h&quot;
++
+ static VdpOutputSurface surface[2]={VDP_INVALID_HANDLE,VDP_INVALID_HANDLE};
+-static int currentSurface=0;
++static VdpVideoSurface  input=VDP_INVALID_HANDLE;
++static VdpVideoMixer    mixer=VDP_INVALID_HANDLE;
++static int              currentSurface=0;
+ static VdpPresentationQueue queue=VDP_INVALID_HANDLE;
+ //________________Wrapper around Xv_______________
+ /**
+@@ -48,6 +51,11 @@
+     // Create couple of outputSurface
+     surface[0]=surface[1]=VDP_INVALID_HANDLE;
+     currentSurface=0;
++    if(VDP_STATUS_OK!=admVdpau::surfaceCreate(w,h,&amp;input)) 
++    {
++        ADM_error(&quot;Cannot create input Surface\n&quot;);
++        goto badInit;
++    }
+     if(VDP_STATUS_OK!=admVdpau::outputSurfaceCreate(VDP_RGBA_FORMAT_B8G8R8A8,w,h,&amp;surface[0])) 
+     {
+         ADM_error(&quot;Cannot create outputSurface0\n&quot;);
+@@ -63,6 +71,11 @@
+         ADM_error(&quot;Cannot create queue\n&quot;);
+         goto badInit;
+     } 
++    if(VDP_STATUS_OK!=admVdpau::mixerCreate(w,h,&amp;mixer)) 
++    {
++        ADM_error(&quot;Cannot create mixer\n&quot;);
++        goto badInit;
++    } 
+ 
+     return true;
+ badInit:
+@@ -74,11 +87,16 @@
+ */
+ bool vdpauRender::cleanup(void)
+ {
++    if(input!=VDP_INVALID_HANDLE) admVdpau::surfaceDestroy(input);
+     if(surface[0]!=VDP_INVALID_HANDLE)  admVdpau::outputSurfaceDestroy(surface[0]);
+     if(surface[1]!=VDP_INVALID_HANDLE)  admVdpau::outputSurfaceDestroy(surface[1]);
+     if(queue!=VDP_INVALID_HANDLE)  admVdpau::presentationQueueDestroy(queue);
++    if(mixer!=VDP_INVALID_HANDLE) admVdpau::mixerDestroy(mixer);
+     surface[0]=surface[1]=VDP_INVALID_HANDLE;
+     queue=VDP_INVALID_HANDLE;
++    input=VDP_INVALID_HANDLE;
++    mixer=VDP_INVALID_HANDLE;
++    return true;
+ }
+ /**
+     \fn stop
+@@ -95,19 +113,30 @@
+ */
+ bool vdpauRender::displayImage(ADMImage *pic)
+ {
+-    // Blit pic into our next image
++    // Blit pic into our video Surface
+     int next=currentSurface^1;
+     uint32_t pitches[3];
+     uint8_t *planes[3];
+     pic-&gt;GetPitches(pitches);
+     pic-&gt;GetReadPlanes(planes);
+-    if(VDP_STATUS_OK!=admVdpau::outPutSurfacePutBitsYV12( 
+-            surface[next],
++
++    // Put out stuff in input...
++
++    if(VDP_STATUS_OK!=admVdpau::surfacePutBits( 
++            input,
+             planes,pitches))
+     {
+-        ADM_warning(&quot;Cannot putbits\n&quot;);
++        ADM_warning(&quot;video surface : Cannot putbits\n&quot;);
+         return false;
+     }
++
++    // Call mixer...
++    if(VDP_STATUS_OK!=admVdpau::mixerRender( mixer,input,surface[next], pic-&gt;_width,pic-&gt;_height))
++
++    {
++        ADM_warning(&quot;Cannot mixerRender\n&quot;);
++        return false;
++    }
+     // Display!
+     if(VDP_STATUS_OK!=admVdpau::presentationQueueDisplay(queue,surface[next]))
+     {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVdpau/include/ADM_coreVdpau.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVdpau/include/ADM_coreVdpau.h	2010-07-14 12:17:27 UTC (rev 6454)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVdpau/include/ADM_coreVdpau.h	2010-07-14 12:17:29 UTC (rev 6455)
+@@ -34,6 +34,7 @@
+     static  VdpStatus   surfaceCreate(uint32_t width,uint32_t height,VdpVideoSurface *surface);
+     static  VdpStatus   surfaceDestroy(VdpVideoSurface surface);
+     static  VdpStatus   getDataSurface(VdpVideoSurface surface,uint8_t *planes[3],uint32_t stride[3]);
++    static  VdpStatus   surfacePutBits(VdpVideoSurface surface,uint8_t *planes[3],uint32_t stride[3]);
+     /* Decoder */
+     static  VdpStatus   decoderCreate( VdpDecoderProfile profile,    uint32_t          width,    uint32_t          height,    uint32_t          max_references,       VdpDecoder *      decoder);
+     static  VdpStatus   decoderDestroy(VdpDecoder decoder);
+@@ -61,5 +62,9 @@
+     static VdpStatus presentationQueueCreate(VdpPresentationQueue *queue);
+     static VdpStatus presentationQueueDestroy(VdpPresentationQueue queue);
+     static VdpStatus presentationQueueDisplay(VdpPresentationQueue queue,VdpOutputSurface outputSurface);
++    /* Mixer */
++    static VdpStatus mixerCreate(uint32_t width,uint32_t height, VdpVideoMixer *mixer);
++    static VdpStatus mixerDestroy(VdpVideoMixer mixer);
++    static VdpStatus mixerRender(VdpVideoMixer mixer,VdpVideoSurface sourceSurface,VdpOutputSurface targetOutputSurface, uint32_t targetWidth, uint32_t targetHeight );
+ };
+ #endif
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVdpau/src/ADM_coreVdpau.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVdpau/src/ADM_coreVdpau.cpp	2010-07-14 12:17:27 UTC (rev 6454)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVdpau/src/ADM_coreVdpau.cpp	2010-07-14 12:17:29 UTC (rev 6455)
+@@ -36,8 +36,8 @@
+     VdpVideoSurfaceCreate   *createSurface;
+     VdpVideoSurfaceDestroy  *destroySurface;
+     VdpVideoSurfaceGetBitsYCbCr *getDataSurface;
++    VdpVideoSurfacePutBitsYCbCr *surfacePutBitsYCbCr;
+ 
+-
+  
+ 
+     VdpOutputSurfaceCreate  *createOutputSurface;
+@@ -56,6 +56,10 @@
+     VdpPresentationQueueGetTime       *presentationQueueGetTime;
+     VdpPresentationQueueDisplay       *presentationQueueDisplay;
+ 
++    VdpVideoMixerCreate               *mixerCreate;
++    VdpVideoMixerDestroy              *mixerDestroy;
++    VdpVideoMixerRender               *mixerRender;
++
+     VdpPresentationQueueTargetCreateX11 *presentationQueueDisplayX11Create;
+ }VdpFunctions;
+ 
+@@ -108,7 +112,9 @@
+     GetMe(createSurface,VDP_FUNC_ID_VIDEO_SURFACE_CREATE);
+     GetMe(destroySurface,VDP_FUNC_ID_VIDEO_SURFACE_DESTROY);
+     GetMe(getDataSurface,VDP_FUNC_ID_VIDEO_SURFACE_GET_BITS_Y_CB_CR);
++    GetMe(surfacePutBitsYCbCr,VDP_FUNC_ID_VIDEO_SURFACE_PUT_BITS_Y_CB_CR);
+ 
++
+     GetMe(decoderCreate,VDP_FUNC_ID_DECODER_CREATE);
+     GetMe(decoderDestroy,VDP_FUNC_ID_DECODER_DESTROY);
+     GetMe(decoderRender,VDP_FUNC_ID_DECODER_RENDER);
+@@ -123,7 +129,13 @@
+     GetMe(presentationQueueDisplay,VDP_FUNC_ID_PRESENTATION_QUEUE_DISPLAY);
+ 
+     GetMe(presentationQueueDisplayX11Create,VDP_FUNC_ID_PRESENTATION_QUEUE_TARGET_CREATE_X11);
++
++    GetMe(mixerCreate,VDP_FUNC_ID_VIDEO_MIXER_CREATE);
++    GetMe(mixerDestroy,VDP_FUNC_ID_VIDEO_MIXER_DESTROY);
++    GetMe(mixerRender,VDP_FUNC_ID_VIDEO_MIXER_RENDER);
+   
++
++
+     if(VDP_STATUS_OK!=funcs.presentationQueueDisplayX11Create(vdpDevice,x-&gt;window,&amp;queueX11))
+     {
+         ADM_warning(&quot;Cannot create X11 Presentation Queue\n&quot;);
+@@ -226,6 +238,18 @@
+                 ));
+ }
+ /**
++    \fn 
++    \brief
++*/
++VdpStatus   admVdpau::surfacePutBits(VdpVideoSurface surface,uint8_t *planes[3],uint32_t stride[3])
++{
++    CHECK(funcs.surfacePutBitsYCbCr(surface,  
++                VDP_YCBCR_FORMAT_YV12, //VdpYCbCrFormat   destination_ycbcr_format,
++                ( void * const *)planes, //void * const *   destination_data,
++                stride //destination_pitches
++                ));
++}
++/**
+     \fn
+     \brief
+ */
+@@ -315,6 +339,76 @@
+     }
+     CHECK(funcs.presentationQueueDisplay(queue,outputSurface,0,0,t));
+ }
++/**
++    \fn mixerCreate
++*/
++VdpStatus admVdpau::mixerCreate(uint32_t width,uint32_t height, VdpVideoMixer *mixer)
++{
++#define MIXER_NB_PARAM 3
++
++VdpVideoMixerParameter parameters[MIXER_NB_PARAM]=
++                                              {VDP_VIDEO_MIXER_PARAMETER_VIDEO_SURFACE_WIDTH,
++                                               VDP_VIDEO_MIXER_PARAMETER_VIDEO_SURFACE_HEIGHT,
++                                               VDP_VIDEO_MIXER_PARAMETER_CHROMA_TYPE};
++uint32_t color=VDP_CHROMA_TYPE_420;
++void    *values[MIXER_NB_PARAM]={&amp;width,&amp;height,&amp;color};
++    
++    
++    VdpStatus e=funcs.mixerCreate(vdpDevice,
++                        0,NULL,
++                        MIXER_NB_PARAM,parameters,values,
++                        mixer);
++    if(VDP_STATUS_OK!=e)
++    {
++        
++        ADM_warning(&quot;MixerCreate  failed :%s\n&quot;,getErrorString(e));
++        
++    }
++    return e;
++}
++/**
++    \fn mixerDestroy
++*/
++
++VdpStatus admVdpau::mixerDestroy(VdpVideoMixer mixer)
++{
++    CHECK(funcs.mixerDestroy(mixer));
++}
++/**
++    \fn mixerRender
++*/
++
++VdpStatus admVdpau::mixerRender(VdpVideoMixer mixer,
++                                VdpVideoSurface sourceSurface,
++                                VdpOutputSurface targetOutputSurface, 
++                                uint32_t targetWidth, 
++                                uint32_t targetHeight )
++{
++const VdpVideoSurface listOfSurface[1]={sourceSurface};
++const VdpVideoSurface listOfInvalidSurface[1]={VDP_INVALID_HANDLE};
++      VdpStatus e=funcs.mixerRender(mixer,
++                VDP_INVALID_HANDLE,NULL,    // Background
++                VDP_VIDEO_MIXER_PICTURE_STRUCTURE_FRAME,
++                
++                0,            listOfInvalidSurface, // Past...
++                sourceSurface,                      // current
++                0,            listOfInvalidSurface, // Future
++                NULL,                               // source RECT
++                targetOutputSurface,
++                NULL,                               // dest Rec
++                NULL,                               // dest video Rec
++                0,NULL);                            // Layers
++                
++            
++  if(VDP_STATUS_OK!=e)
++    {
++        
++        ADM_warning(&quot;MixerCreate  failed :%s\n&quot;,getErrorString(e));
++        
++    }
++    return e;
++}
++
+ #else 
+ //******************************************
+ //******************************************
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003642.html">[Avidemux-svn-commit] r6454 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_commonUI avidemux/common/ADM_render	avidemux_core/ADM_coreVdpau/include avidemux_core/ADM_coreVdpau/src
+</A></li>
+	<LI>Next message: <A HREF="003644.html">[Avidemux-svn-commit] r6456 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3643">[ date ]</a>
+              <a href="thread.html#3643">[ thread ]</a>
+              <a href="subject.html#3643">[ subject ]</a>
+              <a href="author.html#3643">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

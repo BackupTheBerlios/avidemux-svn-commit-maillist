@@ -1,0 +1,195 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3128 - in	branches/avidemux_2.4_branch/avidemux/ADM_inputs: ADM_mp4	ADM_mpegdemuxer
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3128%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs%3A%20ADM_mp4%0A%09ADM_mpegdemuxer&In-Reply-To=%3C200705231500.l4NF0MYV013029%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000422.html">
+   <LINK REL="Next"  HREF="000424.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3128 - in	branches/avidemux_2.4_branch/avidemux/ADM_inputs: ADM_mp4	ADM_mpegdemuxer</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3128%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs%3A%20ADM_mp4%0A%09ADM_mpegdemuxer&In-Reply-To=%3C200705231500.l4NF0MYV013029%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3128 - in	branches/avidemux_2.4_branch/avidemux/ADM_inputs: ADM_mp4	ADM_mpegdemuxer">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed May 23 17:00:22 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000422.html">[Avidemux-svn-commit] r3127 - branches/avidemux_2.4_branch/po
+</A></li>
+        <LI>Next message: <A HREF="000424.html">[Avidemux-svn-commit] r3129 - in	branches/avidemux_2.4_branch/avidemux:	ADM_userInterfaces/ADM_GTK/ADM_dialog ADM_video
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#423">[ date ]</a>
+              <a href="thread.html#423">[ thread ]</a>
+              <a href="subject.html#423">[ subject ]</a>
+              <a href="author.html#423">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-05-23 17:00:21 +0200 (Wed, 23 May 2007)
+New Revision: 3128
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_infoextractor.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp
+Log:
+Better decoding of SPS, accept more PMT (free.fr H264 files)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_infoextractor.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_infoextractor.cpp	2007-05-22 17:24:31 UTC (rev 3127)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mp4/ADM_infoextractor.cpp	2007-05-23 15:00:21 UTC (rev 3128)
+@@ -246,6 +246,36 @@
+                  return 0;
+ }
+ /**
++    \fn unescapeH264
++    \brief Remove escape stuff
++
++*/
++static uint32_t unescapeH264(uint32_t len,uint8_t *in, uint8_t *out)
++{
++  uint32_t outlen=0;
++  uint8_t *tail=in+len;
++    if(len&lt;3) return 0;
++    while(in&lt;tail-3)
++    {
++      if(!in[0]  &amp;&amp; !in[1] &amp;&amp; in[2]==3)
++      {
++        out[0]=0;
++        out[1]=0;
++        out+=2;
++        outlen+=2;
++        in+=3; 
++      }
++      *out++=*in++;
++      outlen++;
++    }
++    // copy last bytes
++    uint32_t left=tail-in;
++    memcpy(out,in,left);
++    outlen+=left;
++    return outlen;
++    
++}
++/**
+     \fn extractSPSInfo
+     \brief Extract info from H264 SPS
+     See 7.3.2.1 of 14496-10
+@@ -254,29 +284,39 @@
+ {
+    GetBitContext s;
+    
+-   uint32_t profile,constraint,level,pic_order_cnt_type,w,h;
++   uint32_t profile,constraint,level,pic_order_cnt_type,w,h,z;
++   uint8_t buf[len];
++   uint32_t outlen;
++   uint32_t id,dum;
+    
+-           init_get_bits( &amp;s,data, len*8);
++           outlen=unescapeH264(len,data,buf);
++           init_get_bits( &amp;s,buf, outlen*8);
+             
+            profile=get_bits(&amp;s,8);
+            constraint=get_bits(&amp;s,8)&gt;&gt;5;
+            level=get_bits(&amp;s,8);
+-           
+-           if(profile&gt;100) // ?? Borrowed from H264.C/FFMPEG
++           id=get_ue_golomb(&amp;s); // Seq parameter set id           
++           printf(&quot;[H264]Profile : %u, Level :%u, SPSid:%u\n&quot;,profile,level,id);
++           if(profile&gt;=100) // ?? Borrowed from H264.C/FFMPEG
+            {
+-              printf(&quot;Warning : High profile\n&quot;);
++              printf(&quot;[H264]Warning : High profile\n&quot;);
+               if(get_ue_golomb(&amp;s) == 3) //chroma_format_idc
+                 get_bits1(&amp;s);  //residual_color_transform_flag
+             get_ue_golomb(&amp;s);  //bit_depth_luma_minus8
+             get_ue_golomb(&amp;s);  //bit_depth_chroma_minus8
+             get_bits1(&amp;s);
++            get_bits1(&amp;s); //incomplete FIXME
+            }    // /??
+            
+-           get_ue_golomb(&amp;s); // Seq parameter set id
+-           get_ue_golomb(&amp;s); // log2_max_frame_num_minus4
+-           if(!(pic_order_cnt_type=get_ue_golomb(&amp;s))) // pic_order_cnt_type
++
++           dum=get_ue_golomb(&amp;s); // log2_max_frame_num_minus4
++           printf(&quot;[H264]Log2maxFrame-4:%u\n&quot;,dum);
++           pic_order_cnt_type=get_ue_golomb(&amp;s);
++           printf(&quot;[H264]Pic Order Cnt Type:%u\n&quot;,pic_order_cnt_type);
++           if(!pic_order_cnt_type) // pic_order_cnt_type
+            {
+-              get_ue_golomb(&amp;s); //log2_max_pic_order_cnt_lsb_minus4
++              dum=get_ue_golomb(&amp;s); //log2_max_pic_order_cnt_lsb_minus4
++              printf(&quot;[H264]Log2maxPix-4:%u\n&quot;,dum);
+            }else
+            {
+              if(pic_order_cnt_type==1)
+@@ -296,12 +336,15 @@
+                return 0;
+              }
+            }
+-           get_ue_golomb(&amp;s);     //num_ref_frames
++           dum=get_ue_golomb(&amp;s);     //num_ref_frames
++           printf(&quot;[H264] # of ref frames : %u\n&quot;,dum);
+            get_bits1(&amp;s);         // gaps_in_frame_num_value_allowed_flag
+            w=get_ue_golomb(&amp;s);   //pic_width_in_mbs_minus1
+            h=get_ue_golomb(&amp;s);   //pic_height_in_mbs_minus1
+-           printf(&quot;%d\n&quot;,w); 
+-           printf(&quot;%d\n&quot;, h); 
++           z=get_ue_golomb(&amp;s); 
++           printf(&quot;[H264] Width in mb -1  :%d\n&quot;,w); 
++           printf(&quot;[H264] Height in mb -1 :%d\n&quot;, h);
++           printf(&quot;[H264] z               :%d\n&quot;, z);  
+             *wwidth=(w+1)*16;
+             *hheight=(h+1)*16*2; /* Fixme : frame_mbs_only_flag in slice header!! */
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp	2007-05-22 17:24:31 UTC (rev 3127)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp	2007-05-23 15:00:21 UTC (rev 3128)
+@@ -424,7 +424,7 @@
+               
+               sectionLength=misc&amp;0xFFF;
+               
+-              if(sectionLength&lt;=9 || sectionLength &gt;= (left-4-4) || left&lt;9)
++              if(sectionLength&lt;=9 || sectionLength &gt; (left-4) || left&lt;9)
+               {
+                 printf(&quot;SectionLength too short :%d,left %d\n&quot;, sectionLength,left);
+                  parser-&gt;setpos(startPos-1+left); // skip packet
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000422.html">[Avidemux-svn-commit] r3127 - branches/avidemux_2.4_branch/po
+</A></li>
+	<LI>Next message: <A HREF="000424.html">[Avidemux-svn-commit] r3129 - in	branches/avidemux_2.4_branch/avidemux:	ADM_userInterfaces/ADM_GTK/ADM_dialog ADM_video
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#423">[ date ]</a>
+              <a href="thread.html#423">[ thread ]</a>
+              <a href="subject.html#423">[ subject ]</a>
+              <a href="author.html#423">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

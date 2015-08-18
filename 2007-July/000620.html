@@ -1,0 +1,205 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3343 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3343%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200707071838.l67Ic4SB003322%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000619.html">
+   <LINK REL="Next"  HREF="000621.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3343 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3343%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200707071838.l67Ic4SB003322%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3343 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jul  7 20:38:04 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000619.html">[Avidemux-svn-commit] r3342 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+        <LI>Next message: <A HREF="000621.html">[Avidemux-svn-commit] r3344 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_gui2 glade
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#620">[ date ]</a>
+              <a href="thread.html#620">[ thread ]</a>
+              <a href="subject.html#620">[ subject ]</a>
+              <a href="author.html#620">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-07-07 20:38:03 +0200 (Sat, 07 Jul 2007)
+New Revision: 3343
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_ebml.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ebml.cpp
+Log:
+[MKV] some cosmetics : progress bar when indexing clusters, use DIA_working + dont trust header in case of AC3 and extract infos from the actual stream
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_ebml.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_ebml.h	2007-07-07 17:07:57 UTC (rev 3342)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_ebml.h	2007-07-07 18:38:03 UTC (rev 3343)
+@@ -62,6 +62,7 @@
+                     uint64_t  tell(void);
+                     uint8_t   seek(uint64_t pos);
+                     uint8_t   finished(void);
++                    uint64_t  getFileSize(void) {return _size;};
+                     uint8_t   find(ADM_MKV_SEARCHTYPE search,
+                                         MKV_ELEM_ID  prim,MKV_ELEM_ID second,uint32_t *len,uint32_t rewind=1);
+                     uint8_t   simplefind(MKV_ELEM_ID  prim,uint32_t *len,uint32_t rewind=1);
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-07-07 17:07:57 UTC (rev 3342)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-07-07 18:38:03 UTC (rev 3343)
+@@ -31,6 +31,7 @@
+ 
+ #include &quot;mkv_tags.h&quot;
+ #include &quot;ADM_userInterfaces/ADM_commonUI/DIA_idx_pg.h&quot;
++#include &quot;ADM_userInterfaces/ADM_commonUI/DIA_working.h&quot;
+ #define VIDEO _tracks[0]
+ /**
+     \fn videoIndexer
+@@ -45,7 +46,7 @@
+   const char *ss;
+   
+    parser-&gt;seek(0);
+-   DIA_progressIndexing *work=new DIA_progressIndexing(&quot;Matroska Images&quot;);
++   DIA_working *work=new DIA_working(&quot;Matroska Images&quot;);
+    // Start with a small index, it will grow automatically afterward
+    for(int i=0;i&lt;_nbAudioTrack+1;i++)
+    {
+@@ -53,7 +54,7 @@
+     _tracks[i]._index=new mkvIndex[_tracks[i]._indexMax];
+    }
+     //************
+-   work-&gt;update(0,_nbClusters,0,0,0,0);
++   work-&gt;update(0);
+    for(int clusters=0;clusters&lt;_nbClusters;clusters++)
+    {
+    parser-&gt;seek(_clusters[clusters].pos);
+@@ -61,7 +62,7 @@
+    int thiscluster=0;
+    while(!cluster.finished())
+    {
+-      work-&gt;update(clusters,_nbClusters,VIDEO._nbIndex,0,0,0);
++      work-&gt;update(clusters,_nbClusters);
+       cluster.readElemId(&amp;id,&amp;len);
+       if(!ADM_searchMkvTag( (MKV_ELEM_ID)id,&amp;ss,&amp;type))
+       {
+@@ -403,22 +404,19 @@
+   _nbClusters=0;
+   
+   // Search segment
+-   
+-   parser-&gt;seek(0x7000000000LL); //Hackish, fixme
+-   fileSize=parser-&gt;tell();
+-   parser-&gt;seek(0);
+-   
++   fileSize=parser-&gt;getFileSize();
+    if(!parser-&gt;simplefind(MKV_SEGMENT,&amp;vlen,1))
+    {
+      printf(&quot;[MKV] cluster indexer, cannot find CLUSTER atom\n&quot;);
+      return 0;
+    }
+    ADM_ebml_file segment(parser,vlen);
+-   DIA_progressIndexing *work=new DIA_progressIndexing(&quot;Matroska clusters&quot;);
++   DIA_working *work=new DIA_working(&quot;Matroska clusters&quot;);
+    while(segment.simplefind(MKV_CLUSTER,&amp;alen,0)) 
+    {
++     
+      // UI update
+-     work-&gt;update(segment.tell()&gt;&gt;10,fileSize&gt;&gt;10,_nbClusters,0,0,0);
++     work-&gt;update(segment.tell()&gt;&gt;10,fileSize&gt;&gt;10);
+      // Grow clusters index if needed
+      if(_nbClusters==_clustersCeil-1)
+      {
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2007-07-07 17:07:57 UTC (rev 3342)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv_audio.cpp	2007-07-07 18:38:03 UTC (rev 3343)
+@@ -28,7 +28,7 @@
+ #include &quot;ADM_toolkit/toolkit.hxx&quot;
+ 
+ #include &quot;ADM_mkv.h&quot;
+-
++#include &quot;ADM_audio/ADM_a52info.h&quot;
+ #define vprintf(...) {}
+ 
+ /**
+@@ -303,6 +303,23 @@
+   _currentLace=_maxLace=0;
+   _clusterParser=NULL;
+   goToCluster(0);
++  /* In case of AC3, do not trust the header...*/
++  if(_wavheader-&gt;encoding==WAV_AC3)
++  {
++    uint8_t ac3Buffer[20000];
++    uint32_t len,sample,timecode;
++     if( getPacket(ac3Buffer, &amp;len, &amp;sample,&amp;timecode))
++     {
++       uint32_t fq,br,chan,syncoff;
++        if( ADM_AC3GetInfo(ac3Buffer, len, &amp;fq, &amp;br, &amp;chan,&amp;syncoff) )
++        {
++            _wavheader-&gt;channels=chan;
++            _wavheader-&gt;frequency=fq;
++            _wavheader-&gt;byterate=br;
++        }
++     }
++     goToCluster(0);
++  }
+ }
+ /**
+     \fn goToCluster
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ebml.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ebml.cpp	2007-07-07 17:07:57 UTC (rev 3342)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ebml.cpp	2007-07-07 18:38:03 UTC (rev 3343)
+@@ -361,7 +361,7 @@
+   const char *ss;
+   
+ 
+-    printf(&quot;[MKV] Simple Searching for tag %llx\n&quot;,prim);
++    vprintf(&quot;[MKV] Simple Searching for tag %llx\n&quot;,prim);
+     if(rewind) seek(_begin);
+    
+       while(!finished())
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000619.html">[Avidemux-svn-commit] r3342 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+	<LI>Next message: <A HREF="000621.html">[Avidemux-svn-commit] r3344 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_gui2 glade
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#620">[ date ]</a>
+              <a href="thread.html#620">[ thread ]</a>
+              <a href="subject.html#620">[ subject ]</a>
+              <a href="author.html#620">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

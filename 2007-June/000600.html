@@ -1,0 +1,471 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3323 - in branches/avidemux_2.4_branch: .	avidemux avidemux/ADM_audiodevice	avidemux/ADM_userInterfaces/ADM_commonUI cmake
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3323%20-%20in%20branches/avidemux_2.4_branch%3A%20.%0A%09avidemux%20avidemux/ADM_audiodevice%0A%09avidemux/ADM_userInterfaces/ADM_commonUI%20cmake&In-Reply-To=%3C200706300942.l5U9g4Tu015082%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000599.html">
+   
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3323 - in branches/avidemux_2.4_branch: .	avidemux avidemux/ADM_audiodevice	avidemux/ADM_userInterfaces/ADM_commonUI cmake</H1>
+    <B>mihailzenkov at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3323%20-%20in%20branches/avidemux_2.4_branch%3A%20.%0A%09avidemux%20avidemux/ADM_audiodevice%0A%09avidemux/ADM_userInterfaces/ADM_commonUI%20cmake&In-Reply-To=%3C200706300942.l5U9g4Tu015082%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3323 - in branches/avidemux_2.4_branch: .	avidemux avidemux/ADM_audiodevice	avidemux/ADM_userInterfaces/ADM_commonUI cmake">mihailzenkov at mail.berlios.de
+       </A><BR>
+    <I>Sat Jun 30 11:42:04 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000599.html">[Avidemux-svn-commit] r3322 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter
+</A></li>
+        
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#600">[ date ]</a>
+              <a href="thread.html#600">[ thread ]</a>
+              <a href="subject.html#600">[ subject ]</a>
+              <a href="author.html#600">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mihailzenkov
+Date: 2007-06-30 11:42:02 +0200 (Sat, 30 Jun 2007)
+New Revision: 3323
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.h
+Modified:
+   branches/avidemux_2.4_branch/ConfigureChecks.cmake
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_audiodevice.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_audiodevice.h
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/CMakeLists.txt
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/audio_out.h
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp
+   branches/avidemux_2.4_branch/avidemux/CMakeLists.txt
+   branches/avidemux_2.4_branch/cmake/conf_summary.cmake
+   branches/avidemux_2.4_branch/config.h.cmake
+Log:
+basic jack support
+
+Modified: branches/avidemux_2.4_branch/ConfigureChecks.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/ConfigureChecks.cmake	2007-06-29 19:18:11 UTC (rev 3322)
++++ branches/avidemux_2.4_branch/ConfigureChecks.cmake	2007-06-30 09:42:02 UTC (rev 3323)
+@@ -184,6 +184,12 @@
+ ADM_CHECK_HL(Esd esd.h  esd esd_close USE_ESD)
+ endif(NOT WIN32)
+ ########################################
++# JACK
++########################################
++if(NOT WIN32)
++ADM_CHECK_HL(Jack jack/jack.h  jack jack_client_close USE_JACK)
++endif(NOT WIN32)
++########################################
+ # Aften
+ ########################################
+ if(WIN32)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_audiodevice.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_audiodevice.cpp	2007-06-29 19:18:11 UTC (rev 3322)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_audiodevice.cpp	2007-06-30 09:42:02 UTC (rev 3323)
+@@ -52,6 +52,10 @@
+ #include &quot;ADM_deviceEsd.h&quot;
+ #endif
+ 
++#ifdef USE_JACK
++#include &quot;ADM_deviceJack.h&quot;
++#endif
++
+ #ifdef __APPLE__
+ #include &quot;ADM_audiodevice/ADM_deviceAudioCore.h&quot;
+ #endif
+@@ -140,6 +144,7 @@
+ 			case DEVICE_SDL:
+ 			case DEVICE_WIN32:
+ 			case DEVICE_ESD:
++			case DEVICE_JACK:
+ 			
+ 						printf(&quot;Using real audio device\n&quot;);
+ 						AVDM_switch(id);
+@@ -206,6 +211,12 @@
+ 								currentDevice=DEVICE_ESD;;
+ 								break;
+ #endif
++#if defined(USE_JACK) &amp;&amp; !defined(ADM_WIN32)
++		  case  DEVICE_JACK:
++								device=new 	 jackAudioDevice;
++								currentDevice=DEVICE_JACK;
++								break;
++#endif
+ #ifdef USE_ARTS
+ 		case DEVICE_ARTS:
+ 								device=new 	 artsAudioDevice;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_audiodevice.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_audiodevice.h	2007-06-29 19:18:11 UTC (rev 3322)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_audiodevice.h	2007-06-30 09:42:02 UTC (rev 3323)
+@@ -25,7 +25,6 @@
+                                         audioDevice(void);
+                         virtual uint8_t init(uint8_t channel, uint32_t fq ) {ADM_assert(0);return 0;}
+                         virtual uint8_t stop(void) {ADM_assert(0);return 0;}
+-                        virtual uint8_t play(uint32_t len, uint8_t *data) {ADM_assert(0);return 0;}//deprecate
+                         virtual uint8_t play(uint32_t len, float *data) {ADM_assert(0);return 0;}
+                         virtual uint8_t setVolume(int volume) {return 1;}
+ }   ;
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.cpp	2007-06-29 19:18:11 UTC (rev 3322)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.cpp	2007-06-30 09:42:02 UTC (rev 3323)
+@@ -0,0 +1,178 @@
++//
++// Author: Mihail Zenkov &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">mihail.zenkov at gmail.com</A>&gt;, (C) 2007
++//
++// Copyright: See COPYING file that comes with this distribution
++//
++//
++
++#include &quot;config.h&quot;
++
++#if defined(USE_JACK) &amp;&amp; !defined(ADM_WIN32)
++
++#include &lt;unistd.h&gt;
++#include &lt;stdio.h&gt;
++#include &lt;stdint.h&gt;
++
++#include &quot;default.h&quot;
++#include &quot;ADM_audiodevice.h&quot;
++#include &lt;ADM_assert.h&gt;
++#include &quot;ADM_audiodevice/ADM_deviceoss.h&quot;
++#include &quot;ADM_audiodevice/ADM_deviceALSA.h&quot;
++#include &quot;ADM_audiodevice/ADM_deviceJack.h&quot;
++
++jackAudioDevice::jackAudioDevice()
++{
++	client = NULL;
++}
++
++void jackAudioDevice::jack_shutdown(void *arg)
++{
++	((jackAudioDevice*)arg)-&gt;stop();
++}
++
++uint8_t jackAudioDevice::stop()
++{
++	if (client) {
++		jack_client_close(client);
++		client = NULL;
++		jack_ringbuffer_free(ringbuffer);
++	}
++
++	return 1;
++}
++
++uint8_t jackAudioDevice::init(uint8_t channels, uint32_t fq)
++{
++	jack_status_t status;
++	_channels = channels;
++
++	if (sizeof(jack_default_audio_sample_t) != sizeof(float)) {
++		printf(&quot;[JACK] jack_default_audio_sample_t != float\n&quot;);
++		return 0;
++	}
++
++	client = jack_client_open(&quot;avidemux&quot;, JackNullOption, &amp;status, NULL);
++
++	if (client == NULL) {
++		printf(&quot;[JACK] jack_client_open() failed, status = 0x%2.0x\n&quot;, status);
++		if (status &amp; JackServerFailed)
++			printf((&quot;[JACK] Unable to connect to server\n&quot;));
++		return 0;
++	}
++
++	if (status &amp; JackServerStarted)
++		printf(&quot;[JACK] Server started\n&quot;);
++
++	jack_set_process_callback(client, process_callback, this);
++	jack_on_shutdown(client, jack_shutdown, this);
++
++	ringbuffer = jack_ringbuffer_create(65536 * channels);
++
++	char name[10];
++	for (int i = 0; i &lt; channels; i++) {
++		snprintf(name, 10, &quot;output-%d&quot;, i);
++		ports[i] = jack_port_register(client, name, JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
++		if (!ports[i]) {
++			printf(&quot;[JACK] Can't create new port\n&quot;);
++			stop();
++			return 0; 
++		}
++	}
++
++	if (jack_activate(client)) {
++		printf(&quot;[JACK] Cannot activate client\n&quot;);
++		stop();
++		return 0;
++	}
++
++	const char **input_ports = jack_get_ports(client, NULL, NULL, JackPortIsInput|JackPortIsPhysical);
++
++	for (int i = 0; i &lt; channels &amp;&amp; input_ports[i]; i++) {
++		if (jack_connect(client, jack_port_name(ports[i]), input_ports[i]))
++			printf(&quot;[JACK] Connecting failed\n&quot;);
++	}
++
++	if (channels == 1 &amp;&amp; input_ports[1])
++		if (jack_connect(client, jack_port_name(ports[0]), input_ports[1]))
++			printf(&quot;[JACK] Connecting failed\n&quot;);
++
++	return 1;
++}
++
++int jackAudioDevice::process(jack_nframes_t nframes)
++{
++	jack_default_audio_sample_t *pbuf[_channels];
++	for (int c = 0; c &lt; _channels; c++)
++		pbuf[c] = (jack_default_audio_sample_t *) jack_port_get_buffer(ports[c], nframes);
++
++	size_t read = jack_ringbuffer_read_space(ringbuffer) / sizeof(jack_default_audio_sample_t) / _channels;
++
++	if (read &gt; nframes)
++		read = nframes;
++
++	int i;
++	for (i = 0; i &lt; read; i++)
++		for (int c = 0; c &lt; _channels; c++) {
++			jack_ringbuffer_read(ringbuffer, (char *)pbuf[c], sizeof(jack_default_audio_sample_t));
++			pbuf[c]++;
++		}
++
++	for (; i &lt; nframes; i++)
++		for (int c = 0; c &lt; _channels; c++) {
++			pbuf[c] = 0;
++			pbuf[c]++;
++		}
++
++	if (read != nframes)
++		printf(&quot;[JACK] UNDERRUN!\n&quot;);
++
++
++
++	return 0;
++}
++
++int jackAudioDevice::process_callback(jack_nframes_t nframes, void* arg)
++{
++	return ((jackAudioDevice*)arg)-&gt;process(nframes);
++}
++
++
++uint8_t jackAudioDevice::play(uint32_t len, float *data)
++{
++	size_t write;
++
++	while (len) {
++		if ((write = jack_ringbuffer_write_space(ringbuffer) / sizeof(jack_default_audio_sample_t)) &gt; _channels) {
++			if (write &gt; len)
++				write = len;
++			jack_ringbuffer_write(ringbuffer, (char *)data, write * sizeof(jack_default_audio_sample_t));
++			data += write;
++			len -= write;
++		} else {
++			printf(&quot;[JACK] OVERRUN!\n&quot;);
++			usleep(10000);
++		}
++	}
++
++        return 1;
++}
++
++uint8_t jackAudioDevice::setVolume(int volume){
++#ifdef OSS_SUPPORT
++	ossAudioDevice dev;
++	dev.setVolume(volume);
++#else
++#ifdef ALSA_SUPPORT
++	alsaAudioDevice dev;
++	dev.setVolume(volume);
++#endif
++#endif
++	return 1;
++}
++
++#else
++void dummy_jack_func( void);
++void dummy_jack_func( void)
++{
++}
++#endif
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.h	2007-06-29 19:18:11 UTC (rev 3322)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceJack.h	2007-06-30 09:42:02 UTC (rev 3323)
+@@ -0,0 +1,34 @@
++//
++// Author: Mihail Zenkov &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">mihail.zenkov at gmail.com</A>&gt;, (C) 2007
++//
++// Copyright: See COPYING file that comes with this distribution
++//
++//
++
++#ifdef USE_JACK
++
++
++#include &lt;jack/jack.h&gt;
++#include &lt;jack/ringbuffer.h&gt;
++
++#define MAX_CHANNELS 9
++
++class jackAudioDevice : public audioDevice
++{
++public:
++	jackAudioDevice();
++	virtual uint8_t init(uint8_t channel,uint32_t fq);
++	virtual uint8_t play(uint32_t len, float *data);
++	virtual uint8_t stop();
++	uint8_t setVolume(int volume);
++	int process(jack_nframes_t nframes);
++
++protected:
++	static void jack_shutdown(void *arg);
++	static int process_callback(jack_nframes_t nframes, void *arg);
++
++	jack_port_t *ports[MAX_CHANNELS];
++	jack_client_t *client;
++	jack_ringbuffer_t *ringbuffer;
++};
++#endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/CMakeLists.txt	2007-06-29 19:18:11 UTC (rev 3322)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/CMakeLists.txt	2007-06-30 09:42:02 UTC (rev 3323)
+@@ -1,7 +1,7 @@
+ 
+ SET(ADM_audiodevice_SRCS 
+ ADM_audiodevice.cpp  ADM_deviceArts.cpp       ADM_deviceEsd.cpp  ADM_deviceSDL.cpp    oss_out.cpp
+-ADM_deviceALSA.cpp   ADM_deviceAudioCore.cpp  ADM_deviceoss.cpp  ADM_deviceWin32.cpp)
++ADM_deviceALSA.cpp   ADM_deviceAudioCore.cpp  ADM_deviceoss.cpp  ADM_deviceWin32.cpp  ADM_deviceJack.cpp)
+ ADD_LIBRARY(ADM_audiodevice STATIC ${ADM_audiodevice_SRCS})
+ SDLify(ADM_deviceSDL.cpp)
+ if(USE_ARTS)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/audio_out.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/audio_out.h	2007-06-29 19:18:11 UTC (rev 3322)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/audio_out.h	2007-06-30 09:42:02 UTC (rev 3323)
+@@ -28,7 +28,8 @@
+ 	DEVICE_COREAUDIO,
+ 	DEVICE_SDL,
+ 	DEVICE_WIN32,
+-    DEVICE_ESD
++	DEVICE_ESD,
++	DEVICE_JACK
+ }AUDIO_DEVICE;
+ 
+ typedef struct 
+@@ -61,6 +62,9 @@
+ #ifdef USE_ESD	
+ 	MKADID(ESD),
+ #endif	
++#ifdef USE_JACK	
++	MKADID(JACK),
++#endif	
+ 
+ 	MKADID(DUMMY)
+ };
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp	2007-06-29 19:18:11 UTC (rev 3322)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp	2007-06-30 09:42:02 UTC (rev 3323)
+@@ -251,6 +251,9 @@
+ #ifdef USE_ESD	
+ 	MKADID(ESD),
+ #endif	
++#ifdef USE_JACK
++	MKADID(JACK),
++#endif	
+         MKADID(DUMMY)
+ };
+         diaElemMenu menuAudio(&amp;newdevice,_(&quot;_Audio output:&quot;), sizeof(audioEntries)/sizeof(diaMenuEntry),audioEntries,&quot;&quot;);
+
+Modified: branches/avidemux_2.4_branch/avidemux/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/CMakeLists.txt	2007-06-29 19:18:11 UTC (rev 3322)
++++ branches/avidemux_2.4_branch/avidemux/CMakeLists.txt	2007-06-30 09:42:02 UTC (rev 3323)
+@@ -301,7 +301,12 @@
+ add_libs_all_targets(esd )
+ endif(USE_ESD)
+ 
++# JACK
++if(USE_JACK)
++add_libs_all_targets(jack )
++endif(USE_JACK)
+ 
++
+ # x264
+ if(USE_X264)
+ add_libs_all_targets(x264 )
+
+Modified: branches/avidemux_2.4_branch/cmake/conf_summary.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/cmake/conf_summary.cmake	2007-06-29 19:18:11 UTC (rev 3322)
++++ branches/avidemux_2.4_branch/cmake/conf_summary.cmake	2007-06-30 09:42:02 UTC (rev 3323)
+@@ -31,6 +31,7 @@
+ ADM_DISPLAY(&quot;ESD       &quot; USE_ESD)
+ ADM_DISPLAY(&quot;OSS       &quot; OSS_SUPPORT)
+ ADM_DISPLAY(&quot;ARTS      &quot; USE_ARTS)
++ADM_DISPLAY(&quot;JACK      &quot; USE_JACK)
+ 
+ MESSAGE(&quot;*** Misc       ***&quot;)
+ ADM_DISPLAY(&quot;SDL       &quot; USE_SDL)
+
+Modified: branches/avidemux_2.4_branch/config.h.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/config.h.cmake	2007-06-29 19:18:11 UTC (rev 3322)
++++ branches/avidemux_2.4_branch/config.h.cmake	2007-06-30 09:42:02 UTC (rev 3323)
+@@ -453,6 +453,9 @@
+ /* ESD detected */
+ #cmakedefine USE_ESD
+ 
++/* Jack detected */
++#cmakedefine USE_JACK
++
+ /* &quot;Use faac audio enccoder&quot; */
+ #cmakedefine USE_FAAC
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000599.html">[Avidemux-svn-commit] r3322 -	branches/avidemux_2.4_branch/avidemux/ADM_videoFilter
+</A></li>
+	
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#600">[ date ]</a>
+              <a href="thread.html#600">[ thread ]</a>
+              <a href="subject.html#600">[ subject ]</a>
+              <a href="author.html#600">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

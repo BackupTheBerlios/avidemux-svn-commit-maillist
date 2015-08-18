@@ -1,0 +1,253 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2925 - in branches/avidemux_2.4_branch: .	avidemux/ADM_audiofilter
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2925%20-%20in%20branches/avidemux_2.4_branch%3A%20.%0A%09avidemux/ADM_audiofilter&In-Reply-To=%3C200704051921.l35JL29c011962%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000242.html">
+   <LINK REL="Next"  HREF="000244.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2925 - in branches/avidemux_2.4_branch: .	avidemux/ADM_audiofilter</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2925%20-%20in%20branches/avidemux_2.4_branch%3A%20.%0A%09avidemux/ADM_audiofilter&In-Reply-To=%3C200704051921.l35JL29c011962%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2925 - in branches/avidemux_2.4_branch: .	avidemux/ADM_audiofilter">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Apr  5 21:21:02 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000242.html">[Avidemux-svn-commit] r2924 - in	branches/avidemux_2.4_branch/avidemux: ADM_audiofilter	ADM_editor ADM_script
+</A></li>
+        <LI>Next message: <A HREF="000244.html">[Avidemux-svn-commit] r2926 - in	branches/avidemux_2.4_branch/avidemux: ADM_outputs/oplug_avi	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_NONE/ADM_dialogFactory	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory	ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#243">[ date ]</a>
+              <a href="thread.html#243">[ thread ]</a>
+              <a href="subject.html#243">[ subject ]</a>
+              <a href="author.html#243">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-04-05 21:21:01 +0200 (Thu, 05 Apr 2007)
+New Revision: 2925
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_audiofilter/audioencoder_aften.cpp
+   branches/avidemux_2.4_branch/configure.in.in
+Log:
+grunster : aften 0.6 support
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiofilter/audioencoder_aften.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiofilter/audioencoder_aften.cpp	2007-04-05 19:07:45 UTC (rev 2924)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiofilter/audioencoder_aften.cpp	2007-04-05 19:21:01 UTC (rev 2925)
+@@ -33,7 +33,11 @@
+ //
+ extern &quot;C&quot;
+ {
+-#include &quot;aften/aften.h&quot;
++#ifdef USE_AFTEN_06
++	#include &quot;aften.h&quot;
++#else
++	#include &quot;aften/aften.h&quot;
++#endif
+ };
+ #include &quot;ADM_audiofilter/audioencoder_aften_param.h&quot;
+ #include &quot;ADM_audiofilter/audioencoder_aften.h&quot;
+@@ -76,7 +80,13 @@
+ 
+ 
+ int ret=0;
++
++#if defined(USE_AFTEN_05) || defined(USE_AFTEN_06)
+ int mask;
++#else
++unsigned int mask;
++#endif
++
+     _wavheader-&gt;byterate=(config-&gt;bitrate*1000)/8;
+     _HANDLE-&gt;sample_format=A52_SAMPLE_FMT_FLT;
+     _HANDLE-&gt;channels=_wavheader-&gt;channels;
+@@ -92,7 +102,13 @@
+         case 5: mask = 0x37;  break;
+         case 6: mask = 0x3F;  break;
+       }
+-      aften_wav_chmask_to_acmod(_wavheader-&gt;channels, mask, &amp;(_HANDLE-&gt;acmod), &amp;(_HANDLE-&gt;lfe));
++
++#if defined(USE_AFTEN_05) || defined(USE_AFTEN_06)
++	aften_wav_chmask_to_acmod(_wavheader-&gt;channels, mask, &amp;(_HANDLE-&gt;acmod), &amp;(_HANDLE-&gt;lfe));
++#else
++	aften_wav_channels_to_acmod(_wavheader-&gt;channels, mask, &amp;(_HANDLE-&gt;acmod), &amp;(_HANDLE-&gt;lfe));
++#endif
++
+    //   _HANDLE-&gt;params.verbose=2;
+     int er= aften_encode_init(_HANDLE);
+     if(er&lt;0)
+@@ -122,8 +138,13 @@
+         }
+         ptr=(void *)&amp;(tmpbuffer[tmphead]);
+         ADM_assert(tmptail&gt;=tmphead);
+-        aften_remap_wav_to_a52(ptr, 256*6, _wavheader-&gt;channels,A52_SAMPLE_FMT_FLT,  (_HANDLE-&gt;acmod), (_HANDLE-&gt;lfe));
+ 
++#ifdef USE_AFTEN_05
++		aften_remap_wav_to_a52(ptr, 256*6, _wavheader-&gt;channels, A52_SAMPLE_FMT_FLT, (_HANDLE-&gt;acmod), (_HANDLE-&gt;lfe));
++#else
++		aften_remap_wav_to_a52(ptr, 256*6, _wavheader-&gt;channels, A52_SAMPLE_FMT_FLT, (_HANDLE-&gt;acmod));
++#endif
++
+         r=aften_encode_frame(_HANDLE, dest,(void *)ptr);
+         if(r&lt;0)
+         {
+
+Modified: branches/avidemux_2.4_branch/configure.in.in
+===================================================================
+--- branches/avidemux_2.4_branch/configure.in.in	2007-04-05 19:07:45 UTC (rev 2924)
++++ branches/avidemux_2.4_branch/configure.in.in	2007-04-05 19:21:01 UTC (rev 2925)
+@@ -404,16 +404,15 @@
+ have_libdca=yes
+ have_aften=yes
+ have_nspr=yes
++
+ dnl ____________________ Cygwin / mingwin ? ___________
+ use_cygwin=no
+ AC_MSG_CHECKING(win32 host)
+ 
+-
+ AC_TRY_COMPILE([
+-	#if !defined(__CYGWIN__) &amp;&amp;!defined(__MINGW32__)
++	#if !defined(__CYGWIN__) &amp;&amp; !defined(__MINGW32__)
+ 		#error
+ 	#endif
+-
+ ],
+ int z=0
+ ,[
+@@ -486,16 +485,66 @@
+ if test &quot;x$with_aften&quot; = &quot;xno&quot;; then
+    have_aften=no
+ fi
+-if test &quot;x$with_aften&quot; != &quot;xno&quot;; then
+-AC_MSG_CHECKING(for aften codec )
+-AC_CHECK_HEADER(aften/aften.h,,have_aften=no)
++
+ if test &quot;x$have_aften&quot; = &quot;xyes&quot;; then
+- AC_CHECK_LIB(aften,aften_encode_init,,have_aften=no,-lm )
++	AC_MSG_CHECKING([for aften codec])
++	AC_CHECK_HEADER(aften/aften.h,aften_header=aften/aften.h,have_aften=no)
++	
++	if test &quot;x$have_aften&quot; = &quot;xno&quot;; then
++		have_aften=yes
++		AC_CHECK_HEADER(aften.h,aften_header=aften.h,have_aften=no)		
++	fi
+ fi
++
++if test &quot;x$have_aften&quot; = &quot;xyes&quot;; then
++	AC_LANG_PUSH(C++)
++	AC_TRY_RUN([
++		#include &quot;$aften_header&quot;
++
++		int determineVersion(char *version)
++		{
++			if (version == &quot;0.06&quot;) { return 6; } else { return 0; }
++		}
++		
++		int determineVersion(double version)
++		{
++			if (version == 0.05) { return 5; } else { return 0; }
++		}
++		
++		int main()
++		{
++			// AFTEN_VERSION is deprecated after v0.06 so if this compiles the version must be &lt;= 0.06
++			return determineVersion(AFTEN_VERSION);
++		}
++	])
++	AC_LANG_POP()
++
++	if test &quot;x$ac_status&quot; = &quot;x5&quot;; then
++		aften_version=&quot;0.05&quot;
++		AC_DEFINE(USE_AFTEN_05, 1, [Use Aften 0.05 or earlier])
++		AC_CHECK_LIB(aften,aften_encode_init,,have_aften=no,-lm)
++	else
++		if test &quot;x$ac_status&quot; = &quot;x6&quot;; then
++			aften_version=&quot;0.06&quot;
++			AC_DEFINE(USE_AFTEN_06, 1, [Use Aften 0.06])
++			AC_CHECK_LIB(aften,aften_encode_init,,have_aften=no,-lm)
++		else
++			AC_CHECK_LIB(aften,aften_get_version,,have_aften=no,-lm)
++			
++			if test &quot;x$have_aften&quot; = &quot;xno&quot;; then			
++				aften_version=&quot;unsupported&quot;
++			else
++				aften_version=&quot;&gt;= 0.06&quot;
++			fi
++		fi
++	fi
++
++	AC_MSG_CHECKING([version of Aften])	
++	AC_MSG_RESULT($aften_version)
+ fi
+ 
+ if test &quot;x$have_aften&quot; = &quot;xyes&quot;; then
+-AC_DEFINE(USE_AFTEN,1,[use aften ac3 encoder])
++	AC_DEFINE(USE_AFTEN,1,[use aften ac3 encoder])
+ fi
+ 
+ dnl __________________x264_________________
+@@ -574,13 +623,9 @@
+ 	fi
+  fi
+ 
+-dnl __________________FFMPEG______________
+-
+-dnl __________________/FFMPEG______________
+ dnl __________________OS dep stuff_____________
+ 
+ dnl __________________Lrintf_____________
+-
+ have_lrintf=no
+ AC_MSG_CHECKING(for lrintf in math.h)
+ AC_TRY_COMPILE([
+@@ -595,8 +640,8 @@
+   AC_DEFINE(HAVE_LRINTF,1,[roundup function])
+ fi
+ AC_MSG_RESULT($have_lrintf)
++
+ dnl __________________fast int_____________
+-
+ have_fastint=no
+ AC_MSG_CHECKING(for fastint)
+ AC_TRY_COMPILE([
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000242.html">[Avidemux-svn-commit] r2924 - in	branches/avidemux_2.4_branch/avidemux: ADM_audiofilter	ADM_editor ADM_script
+</A></li>
+	<LI>Next message: <A HREF="000244.html">[Avidemux-svn-commit] r2926 - in	branches/avidemux_2.4_branch/avidemux: ADM_outputs/oplug_avi	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_NONE/ADM_dialogFactory	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory	ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#243">[ date ]</a>
+              <a href="thread.html#243">[ thread ]</a>
+              <a href="subject.html#243">[ subject ]</a>
+              <a href="author.html#243">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

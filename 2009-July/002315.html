@@ -1,0 +1,276 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5100 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_encoder	ADM_outputs/oplug_mpegFF
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5100%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%20ADM_encoder%0A%09ADM_outputs/oplug_mpegFF&In-Reply-To=%3C200907171930.n6HJUMOC020352%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002314.html">
+   <LINK REL="Next"  HREF="002316.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5100 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_encoder	ADM_outputs/oplug_mpegFF</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5100%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/avidemux%3A%20ADM_encoder%0A%09ADM_outputs/oplug_mpegFF&In-Reply-To=%3C200907171930.n6HJUMOC020352%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5100 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_encoder	ADM_outputs/oplug_mpegFF">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Fri Jul 17 21:30:22 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002314.html">[Avidemux-svn-commit] r5099 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Win32
+</A></li>
+        <LI>Next message: <A HREF="002316.html">[Avidemux-svn-commit] r5101 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/gtk
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2315">[ date ]</a>
+              <a href="thread.html#2315">[ thread ]</a>
+              <a href="subject.html#2315">[ subject ]</a>
+              <a href="author.html#2315">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-07-17 21:30:16 +0200 (Fri, 17 Jul 2009)
+New Revision: 5100
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encRequant.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp
+Log:
+[mpeg1/2] adopt user settings instead of defaults
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp	2009-07-17 18:27:43 UTC (rev 5099)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp	2009-07-17 19:30:16 UTC (rev 5100)
+@@ -39,6 +39,7 @@
+ extern uint8_t DIA_videoCodec(int *codecIndex);
+ extern void UI_setVideoCodec(int i);
+ extern void getMainWindowHandles(intptr_t *handle, intptr_t *nativeHandle);
++extern uint8_t isMpeg12Compatible (uint32_t fourcc);
+ 
+ // Some static stuff
+ void setVideoEncoderSettings(COMPRESSION_MODE mode, uint32_t param, uint32_t extraConf, uint8_t *extraData);
+@@ -54,6 +55,8 @@
+ #include &quot;adm_encmjpeg.h&quot;
+ #include &quot;adm_encCopy.h&quot;
+ #include &quot;adm_encyv12.h&quot;
++#include &quot;adm_encmpeg2enc.h&quot;
++#include &quot;adm_encRequant.h&quot;
+ #include &quot;ADM_pluginLoad.h&quot;
+ #include &quot;ADM_externalEncoder.h&quot;
+ 
+@@ -581,7 +584,7 @@
+ 		e = new EncoderFFMPEG (FF_MPEG4, desc);
+ 		break;
+ 	case CodecMjpeg:
+-		e = new EncoderMjpeg (&amp;MjpegCodec);
++		e = new EncoderMjpeg (desc);
+ 		break;
+ 	case CodecFLV1:
+ 		e = new EncoderFFMPEGFLV1 (desc);
+@@ -595,10 +598,46 @@
+ 
+ 		e = new EncoderFFMPEG (FF_H263, desc);
+ 		break;
++	case CodecXVCD:
++		e=new EncoderFFMPEGMpeg1(FF_MPEG1, desc);
++		printf(&quot;\n Using ffmpeg mpeg1 encoder\n&quot;);
++		break;
++	case CodecXSVCD:
++		e=new EncoderFFMPEGMpeg1(FF_MPEG2, desc);
++		printf(&quot;\n Using ffmpeg mpeg2 encoder\n&quot;);
++		break;
++	case CodecXDVD:
++		e=new EncoderFFMPEGMpeg1(FF_MPEG2, desc);
++		printf(&quot;\n Using ffmpeg mpeg2 encoder (DVD)\n&quot;);
++		break;
++	case CodecDVD:
++		e=new EncoderMpeg2enc(MPEG2ENC_DVD, desc);
++		printf(&quot;\n Using mpeg2enc encoder (DVD)\n&quot;);
++		break;
++	case CodecRequant:
++		if(!isMpeg12Compatible(avifileinfo-&gt;fcc))
++		{
++			GUI_Error_HIG(&quot;Incompatible Input&quot;,&quot;The input file must be mpeg2 to be able to use requant!&quot;);
++			break;
++		}
++
++		e=new EncoderRequant(desc);
++
++		printf(&quot;\n Using mpeg2 requant\n&quot;);
++		break;
++	case CodecSVCD:
++		e=new EncoderMpeg2enc(MPEG2ENC_SVCD, desc);
++		printf(&quot;\n Using mpeg2enc encoder (SVCD)\n&quot;);
++		break;
++	case CodecVCD:
++		e=new EncoderMpeg2enc(MPEG2ENC_VCD, desc);
++		printf(&quot;\n Using mpeg2enc encoder (VCD)\n&quot;);
++		break;
+ 	case CodecExternal:
+ 		e = new externalEncoder(&amp;AllVideoCodec[currentCodecIndex], globalHeaderFlag);
+ 		break;
+ 	}
++
+ 	return e;
+ }
+ 
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encRequant.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encRequant.h	2009-07-17 18:27:43 UTC (rev 5099)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encRequant.h	2009-07-17 19:30:16 UTC (rev 5100)
+@@ -13,8 +13,8 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
+-#ifndef __ADM_encoder_copy__
+-#define __ADM_encoder_copy__
++#ifndef __ADM_encoder_requant__
++#define __ADM_encoder_requant__
+ 
+ 
+ class EncoderRequant:public Encoder
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp	2009-07-17 18:27:43 UTC (rev 5099)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_outputs/oplug_mpegFF/oplug_vcdff.cpp	2009-07-17 19:30:16 UTC (rev 5100)
+@@ -22,8 +22,6 @@
+ #include &quot;config.h&quot;
+ 
+ #ifdef USE_FFMPEG
+-#include &lt;math.h&gt;
+-
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_threads.h&quot;
+ 
+@@ -32,20 +30,11 @@
+ }
+ 
+ #include &quot;avi_vars.h&quot;
+-#include &quot;prototype.h&quot;
+-
+-//#include &quot;ADM_colorspace/colorspace.h&quot;
+ #include &quot;DIA_coreToolkit.h&quot;
+-#include &quot;ADM_videoFilter.h&quot;
+-#include &quot;ADM_videoFilter_internal.h&quot;
+ 
+ #include &quot;ADM_encoder/ADM_vidEncode.hxx&quot;
+ #include &quot;ADM_encoder/adm_encoder.h&quot;
+ 
+-#include &quot;ADM_codecs/ADM_ffmpeg.h&quot;
+-#include &quot;ADM_encoder/adm_encffmpeg.h&quot;
+-#include &quot;ADM_encoder/adm_encmpeg2enc.h&quot;
+-#include &quot;ADM_encoder/adm_encRequant.h&quot;
+ #include &quot;../oplug_mpegFF/oplug_vcdff.h&quot;
+ 
+ #include &quot;ADM_userInterfaces/ADM_commonUI/DIA_encoding.h&quot;
+@@ -54,20 +43,12 @@
+ #include &quot;../ADM_lavformat.h&quot;
+ 
+ #include &quot;ADM_encoder/adm_encConfig.h&quot;
+-#include &quot;ADM_encoder/ADM_vidEncode.hxx&quot;
+-
+ #include &quot;ADM_libraries/ADM_mplex/ADM_mthread.h&quot;
+ 
+ static uint8_t *_buffer = NULL, *_outbuffer = NULL;
+ static void end(void);
+ extern const char *getStrFromAudioCodec(uint32_t codec);
+ 
+-extern COMPRES_PARAMS ffmpeg1Codec,ffmpeg2DVDCodec,ffmpeg2SVCDCodec,RequantCodec;	
+-extern FFcodecSetting ffmpeg1Extra,ffmpeg2DVDExtra,ffmpeg2SVCDExtra;
+-extern COMPRES_PARAMS SVCDCodec, DVDCodec,VCDCodec;
+-
+-extern uint8_t    isMpeg12Compatible (uint32_t fourcc);
+-
+ extern SelectCodecType videoCodecGetType(void);
+ 
+ static char *twoPass = NULL;
+@@ -186,49 +167,11 @@
+             }
+          }        
+         // Create muxer
+-       
+-       
+-        switch (videoCodecGetType())
+-        {
+-                
+-                case CodecXVCD:
+-                        encoder=new EncoderFFMPEGMpeg1(FF_MPEG1,&amp;ffmpeg1Codec);
+-                        printf(&quot;\n Using ffmpeg mpeg1 encoder\n&quot;);
+-                        break;
+-                case CodecXSVCD:
+-                        encoder=new EncoderFFMPEGMpeg1(FF_MPEG2,&amp;ffmpeg2SVCDCodec);
+-                        printf(&quot;\n Using ffmpeg mpeg2 encoder\n&quot;);
+-                        break;
+-                case CodecXDVD:
+-                        encoder=new EncoderFFMPEGMpeg1(FF_MPEG2,&amp;ffmpeg2DVDCodec);
+-                        printf(&quot;\n Using ffmpeg mpeg2 encoder (DVD)\n&quot;);
+-                        break;
+-                case CodecDVD:
+-                  encoder=new EncoderMpeg2enc(MPEG2ENC_DVD,&amp;DVDCodec);
+-                  printf(&quot;\n Using mpeg2enc encoder (DVD)\n&quot;);
+-                  break;
+-                case CodecRequant:
+-                  if(!isMpeg12Compatible(avifileinfo-&gt;fcc))
+-                  {
+-                    GUI_Error_HIG(&quot;Incompatible Input&quot;,&quot;The input file must be mpeg2 to be able to use requant!&quot;);
+-                    return 0; // Fixme, do some cleanup 
+-                  }
+-                  encoder=new EncoderRequant(&amp;RequantCodec);
+-                  printf(&quot;\n Using mpeg2 requant\n&quot;);
+-                  break;
+-                break;
+-                case CodecSVCD:
+-                  encoder=new EncoderMpeg2enc(MPEG2ENC_SVCD,&amp;SVCDCodec);
+-                  printf(&quot;\n Using mpeg2enc encoder (SVCD)\n&quot;);
+-                  break;
+-                case CodecVCD:
+-                  encoder=new EncoderMpeg2enc(MPEG2ENC_VCD,&amp;VCDCodec);
+-                  printf(&quot;\n Using mpeg2enc encoder (VCD)\n&quot;);
+-                  break;
+-                default:
+-                ADM_assert(0);
+-      }
++       encoder = getVideoEncoder(_w, _h, 0);
+ 
++	   if (encoder == NULL)
++		   return 0;
++
+       encoder-&gt;setLogFile(twoPass,total);
+ 
+ 	  if (encoder-&gt;isDualPass())
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002314.html">[Avidemux-svn-commit] r5099 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Win32
+</A></li>
+	<LI>Next message: <A HREF="002316.html">[Avidemux-svn-commit] r5101 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/gtk
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2315">[ date ]</a>
+              <a href="thread.html#2315">[ thread ]</a>
+              <a href="subject.html#2315">[ subject ]</a>
+              <a href="author.html#2315">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

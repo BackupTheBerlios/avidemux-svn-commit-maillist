@@ -1,0 +1,214 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6473 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6473%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters&In-Reply-To=%3C20100722053428.E1B7E480BE7%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003660.html">
+   <LINK REL="Next"  HREF="003662.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6473 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6473%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters&In-Reply-To=%3C20100722053428.E1B7E480BE7%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6473 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jul 22 07:34:28 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003660.html">[Avidemux-svn-commit] r6472 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters
+</A></li>
+        <LI>Next message: <A HREF="003662.html">[Avidemux-svn-commit] r6474 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoFilter2/include	avidemux_core/ADM_coreVideoFilter/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3661">[ date ]</a>
+              <a href="thread.html#3661">[ thread ]</a>
+              <a href="subject.html#3661">[ subject ]</a>
+              <a href="author.html#3661">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-07-22 07:34:28 +0200 (Thu, 22 Jul 2010)
+New Revision: 6473
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters/ADM_vidVdpauFilterDeint.cpp
+Log:
+[VdpauDeint] Simplify
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters/ADM_vidVdpauFilterDeint.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters/ADM_vidVdpauFilterDeint.cpp	2010-07-21 19:03:39 UTC (rev 6472)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters/ADM_vidVdpauFilterDeint.cpp	2010-07-22 05:34:28 UTC (rev 6473)
+@@ -18,7 +18,11 @@
+ #define ADM_INVALID_FRAME_NUM 0x80000000
+ #define ADM_NB_SURFACES 3
+ 
++#if 0
+ #define aprintf printf
++#else
++#define aprintf(...) {}
++#endif
+ 
+ enum
+ {
+@@ -33,8 +37,8 @@
+ class vdpauVideoFilterDeint : public  ADM_coreVideoFilter
+ {
+ protected:
++                    bool                 secondField;
+                     uint64_t             nextPts;
+-                    uint32_t             outputFrameNumber;
+                     ADMColorScalerSimple *scaler;
+                     bool                 passThrough;
+                     bool                 setupVdpau(void);
+@@ -45,7 +49,6 @@
+                     VdpOutputSurface     surface;
+                     VdpVideoSurface      input[ADM_NB_SURFACES];
+                     uint32_t             frameDesc[ADM_NB_SURFACES];
+-                    uint32_t             currentIndex;
+                     VdpVideoMixer        mixer;
+                     bool                 uploadImage(ADMImage *next,uint32_t surfaceIndex,uint32_t frameNumber) ;
+                     bool                 getResult(ADMImage *image);
+@@ -106,9 +109,8 @@
+ */
+ bool         vdpauVideoFilterDeint::goToTime(uint64_t usSeek)
+ {
++    secondField=false;
+     for(int i=0;i&lt;ADM_NB_SURFACES;i++)             frameDesc[i]=ADM_INVALID_FRAME_NUM;
+-    currentIndex=0;
+-    outputFrameNumber=0;
+     return ADM_coreVideoFilter::goToTime(usSeek);
+ }
+ 
+@@ -118,9 +120,9 @@
+ bool vdpauVideoFilterDeint::setupVdpau(void)
+ {
+     scaler=NULL;
++    secondField=false;
+     for(int i=0;i&lt;ADM_NB_SURFACES;i++)             frameDesc[i]=ADM_INVALID_FRAME_NUM;
+-    currentIndex=0;
+-    outputFrameNumber=0;
++    nextFrame=0;
+     if(!admVdpau::isOperationnal())
+     {
+         ADM_warning(&quot;Vdpau not operationnal\n&quot;);
+@@ -317,14 +319,14 @@
+              in[0]=VDP_INVALID_HANDLE;
+     }else
+     {
+-             in[0]=input[(currentIndex+ADM_NB_SURFACES-1)%ADM_NB_SURFACES];
++             in[0]=input[(nextFrame+ADM_NB_SURFACES-1)%ADM_NB_SURFACES];
+     }
+         // CURRENT
+-     in[1]=input[currentIndex%ADM_NB_SURFACES];
++     in[1]=input[nextFrame%ADM_NB_SURFACES];
+         // NEXT
+     if(next)
+     {
+-     in[2]=input[(currentIndex+1)%ADM_NB_SURFACES];
++     in[2]=input[(nextFrame+1)%ADM_NB_SURFACES];
+     }
+     else
+     {
+@@ -333,7 +335,7 @@
+ 
+     //
+ #if VDP_DEBUG
+-    printf(&quot;Current index=%d\n&quot;,(int)currentIndex);
++    printf(&quot;Current index=%d\n&quot;,(int)nextFrame);
+     for(int i=0;i&lt;3;i++) printf(&quot;Calling with in[%d]=%d\n&quot;,i,in[i]);
+     for(int i=0;i&lt;3;i++) printf(&quot;Desc[%d]=%d\n&quot;,i, frameDesc[i]);
+ #endif
+@@ -393,13 +395,13 @@
+ bool vdpauVideoFilterDeint::getNextFrame(uint32_t *fn,ADMImage *image)
+ {
+ bool r=true;
+-uint64_t currentPts=ADM_NO_PTS;
+ #define FAIL {r=false;goto endit;}
+      if(passThrough) return previousFilter-&gt;getNextFrame(fn,image);
+     // top field has already been sent, grab bottom field
+-    if((outputFrameNumber&amp;1)&amp;&amp;(configuration.deintMode==ADM_KEEP_BOTH))
++    if((secondField)&amp;&amp;(configuration.deintMode==ADM_KEEP_BOTH))
+         {
+-            *fn=outputFrameNumber++;
++            secondField=false;
++            *fn=nextFrame*2+1;
+             if(false==getResult(image)) return false;
+             if(ADM_NO_PTS==nextPts) image-&gt;Pts=nextPts;
+                 else image-&gt;Pts=nextPts-info.frameIncrement;
+@@ -407,12 +409,12 @@
+             return true;
+         }
+     
+-    // our first frame, we need to send it + the next one
++    // our first frame, we need to preload one frame
+     if(!nextFrame)
+     {
+             ADMImage *prev= vidCache-&gt;getImage( 0);
+             // Upload top field
+-            if(false==uploadImage(prev,currentIndex,0)) 
++            if(false==uploadImage(prev,nextFrame,0)) 
+             {
+                 vidCache-&gt;unlockAll();
+                 return false;
+@@ -422,7 +424,7 @@
+     // regular image, in fact we get the next image here
+     
+     ADMImage *next= vidCache-&gt;getImage(nextFrame+1);
+-    if(false==uploadImage(next,currentIndex+1,nextFrame+1)) 
++    if(false==uploadImage(next,nextFrame+1,nextFrame+1)) 
+             {
+                 vidCache-&gt;unlockAll();
+                 FAIL
+@@ -450,10 +452,14 @@
+           aprintf(&quot;BOTTOM : Pts=%s\n&quot;,ADM_us2plain(image-&gt;Pts));
+     }
+     // Top Field..
+-endit:   
++endit:  
++    if(configuration.deintMode==ADM_KEEP_BOTH) 
++    {
++        *fn=nextFrame*2;
++        secondField=true;
++    }
++        else    *fn=nextFrame;
+     nextFrame++;
+-    currentIndex+=1; // Two fields at a time...
+-    outputFrameNumber++;
+     image-&gt;Pts=nextPts;
+     if(next) nextPts=next-&gt;Pts;
+     return r;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003660.html">[Avidemux-svn-commit] r6472 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/vdpauFilters
+</A></li>
+	<LI>Next message: <A HREF="003662.html">[Avidemux-svn-commit] r6474 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoFilter2/include	avidemux_core/ADM_coreVideoFilter/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3661">[ date ]</a>
+              <a href="thread.html#3661">[ thread ]</a>
+              <a href="subject.html#3661">[ subject ]</a>
+              <a href="author.html#3661">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

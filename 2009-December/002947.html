@@ -1,0 +1,160 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5740 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_ac3
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5740%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_ac3&In-Reply-To=%3C200912271736.nBRHaFTS000423%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002946.html">
+   <LINK REL="Next"  HREF="002948.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5740 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_ac3</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5740%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_ac3&In-Reply-To=%3C200912271736.nBRHaFTS000423%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5740 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_ac3">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Dec 27 18:36:15 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002946.html">[Avidemux-svn-commit] r5739 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src
+</A></li>
+        <LI>Next message: <A HREF="002948.html">[Avidemux-svn-commit] r5741 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2947">[ date ]</a>
+              <a href="thread.html#2947">[ thread ]</a>
+              <a href="subject.html#2947">[ subject ]</a>
+              <a href="author.html#2947">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-12-27 18:36:14 +0100 (Sun, 27 Dec 2009)
+New Revision: 5740
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_ac3/ADM_ad_a52.cpp
+Log:
+[A52] Use ADM_info, printf, duplicate the given wavheader (just in case)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_ac3/ADM_ad_a52.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_ac3/ADM_ad_a52.cpp	2009-12-27 17:36:13 UTC (rev 5739)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_ac3/ADM_ad_a52.cpp	2009-12-27 17:36:14 UTC (rev 5740)
+@@ -29,7 +29,6 @@
+ 	protected:
+ 		void *ac3_handle;
+ 		void *ac3_sample;
+-		uint32_t _downmix;
+ 
+ 	public:
+ 		ADM_AudiocodecAC3(uint32_t fourcc, WAVHeader *info,uint32_t extraLength,uint8_t *extraDatab);
+@@ -54,6 +53,7 @@
+ 		:   ADM_Audiocodec(fourcc)
+ {
+     int flags=0;
++    _wavHeader = new WAVHeader;
+     ADM_assert(fourcc==WAV_AC3);
+     ac3_handle=NULL;
+     ac3_sample=NULL;
+@@ -67,18 +67,17 @@
+     ac3_handle=(void *)a52_init(flags);
+     if(!ac3_handle)
+     {
+-        printf(&quot;Cannot init a52\n&quot;);
++        ADM_error(&quot;Cannot init a52\n&quot;);
+         ADM_assert(0);
+     }
+     ac3_sample=(sample_t *)a52_samples(AC3_HANDLE);
+     if(!ac3_sample)
+     {
+-        printf(&quot;Cannot init a52 sample\n&quot;);
++        ADM_warning(&quot;Cannot init a52 sample\n&quot;);
+         ADM_assert(0);
+     }
+-        _downmix=0;
+-      _wavHeader = info;
+-      ADM_assert(_wavHeader);
++      _wavHeader = new WAVHeader;
++      *_wavHeader=*info;
+ }
+ 
+ ADM_AudiocodecAC3::~ADM_AudiocodecAC3( )
+@@ -89,6 +88,11 @@
+         ac3_handle=NULL;
+         ac3_sample=NULL;
+     }
++    if( _wavHeader)
++    {
++        delete  _wavHeader;
++        _wavHeader=NULL;
++    }
+ }
+ 
+ uint8_t ADM_AudiocodecAC3::beginDecompress( void )
+@@ -115,13 +119,13 @@
+         if(nbIn&lt;7)
+         {
+             if(nbIn)
+-                printf(&quot;[a52]: no data to decode avail %u\n&quot;,nbIn);
++                ADM_warning(&quot;[a52]: no enough data to decode, available %&quot;LU&quot; bytes, need at least 7\n&quot;,nbIn);
+             break;
+         }
+         length = a52_syncinfo(inptr, &amp;flags, &amp;samprate, &amp;bitrate);
+         if(length==0)
+         {
+-            printf(&quot;[a52] No startcode found\n&quot;);
++            ADM_warning(&quot;[a52] No startcode found\n&quot;);
+             break;
+         }
+         if(length&gt;nbIn)
+@@ -182,7 +186,7 @@
+ 
+         if (a52_frame(AC3_HANDLE, inptr, &amp;flags, &amp;level, bias))
+         {
+-            printf(&quot;\n A52_frame failed!&quot;);
++            ADM_warning(&quot; A52_frame failed!\n&quot;);
+             inptr+=length;
+             nbIn-=length;
+             *nbOut += 256 * chan * 6;
+@@ -195,7 +199,7 @@
+         float *cur;
+         for (int i = 0; i &lt; 6; i++) {
+                 if (a52_block(AC3_HANDLE)) {
+-                        printf(&quot;\n A52_block failed! on fblock :%&quot;LU&quot;&quot;, i);
++                        ADM_warning(&quot; A52_block failed! on fblock :%d\n&quot;, i);
+                         // in that case we silent out the chunk
+                         memset(outptr, 0, 256 * chan * sizeof(float));
+                 } else {
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002946.html">[Avidemux-svn-commit] r5739 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src
+</A></li>
+	<LI>Next message: <A HREF="002948.html">[Avidemux-svn-commit] r5741 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/PulseAudioSimple
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2947">[ date ]</a>
+              <a href="thread.html#2947">[ thread ]</a>
+              <a href="subject.html#2947">[ subject ]</a>
+              <a href="author.html#2947">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

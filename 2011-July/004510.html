@@ -1,0 +1,341 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7358 - in branches/avidemux_2.6_branch_mean:	avidemux/qt4/ADM_UIs/include avidemux/qt4/ADM_UIs/src	avidemux_plugins/ADM_videoFilters6_openGl/sample
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7358%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/qt4/ADM_UIs/include%20avidemux/qt4/ADM_UIs/src%0A%09avidemux_plugins/ADM_videoFilters6_openGl/sample&In-Reply-To=%3C20110727193005.B49AF480E5B%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004509.html">
+   <LINK REL="Next"  HREF="004511.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7358 - in branches/avidemux_2.6_branch_mean:	avidemux/qt4/ADM_UIs/include avidemux/qt4/ADM_UIs/src	avidemux_plugins/ADM_videoFilters6_openGl/sample</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7358%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/qt4/ADM_UIs/include%20avidemux/qt4/ADM_UIs/src%0A%09avidemux_plugins/ADM_videoFilters6_openGl/sample&In-Reply-To=%3C20110727193005.B49AF480E5B%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7358 - in branches/avidemux_2.6_branch_mean:	avidemux/qt4/ADM_UIs/include avidemux/qt4/ADM_UIs/src	avidemux_plugins/ADM_videoFilters6_openGl/sample">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Jul 27 21:30:05 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004509.html">[Avidemux-svn-commit] r7355 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample
+</A></li>
+        <LI>Next message: <A HREF="004511.html">[Avidemux-svn-commit] r7359 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4510">[ date ]</a>
+              <a href="thread.html#4510">[ thread ]</a>
+              <a href="subject.html#4510">[ subject ]</a>
+              <a href="author.html#4510">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-07-27 21:30:05 +0200 (Wed, 27 Jul 2011)
+New Revision: 7358
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGLFilter.h
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample/sampleGl.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample/sampleGl.h
+Log:
+[openGl: First working fragment shader effect (crash on win32)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGLFilter.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGLFilter.h	2011-07-27 17:40:28 UTC (rev 7357)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/include/T_openGLFilter.h	2011-07-27 19:30:05 UTC (rev 7358)
+@@ -30,7 +30,8 @@
+                     const   QGLContext           *context;
+                             QGLFramebufferObject *fboY;
+                             QGLFramebufferObject *fboUV;
+-                            QGLShaderProgram     *glProgram;
++                            QGLShaderProgram     *glProgramY;
++                            QGLShaderProgram     *glProgramUV;
+                             int                   firstRun;
+                             GlActiveTexture_Type *myGlActiveTexture;
+ protected:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp	2011-07-27 17:40:28 UTC (rev 7357)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_UIs/src/T_openGL.cpp	2011-07-27 19:30:05 UTC (rev 7358)
+@@ -50,7 +50,8 @@
+ :ADM_coreVideoFilter(previous,conf)
+ {
+     context=NULL;
+-    glProgram=NULL;
++    glProgramY=NULL;
++    glProgramUV=NULL;
+     fboY=NULL;
+     fboUV=NULL;
+     firstRun=0;
+@@ -77,8 +78,10 @@
+ ADM_coreVideoFilterQtGl::~ADM_coreVideoFilterQtGl()
+ {
+     ADM_info(&quot;Gl filter : Destroying..\n&quot;);
+-    if(glProgram) delete glProgram;
+-    glProgram=NULL;
++    if(glProgramY) delete glProgramY;
++    glProgramY=NULL;
++    if(glProgramUV) delete glProgramUV;
++    glProgramUV=NULL;
+     if(fboY) delete fboY;
+     fboY=NULL;
+     if(fboUV) delete fboUV;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample/sampleGl.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample/sampleGl.cpp	2011-07-27 17:40:28 UTC (rev 7357)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample/sampleGl.cpp	2011-07-27 19:30:05 UTC (rev 7358)
+@@ -59,8 +59,9 @@
+ {
+ protected:
+ protected:
+-                        bool uploadTexture(ADMImage *image, ADM_PLANE plane);
++                        //bool uploadTexture(ADMImage *image, ADM_PLANE plane);
+                         bool render(ADMImage *image,ADM_PLANE plane,QGLFramebufferObject *fbo);
++                        void tinyUploadTex(ADMImage *img, ADM_PLANE plane, GLuint tex,int texNum );
+ public:
+                              openGlSample(ADM_coreVideoFilter *previous,CONFcouple *conf);
+                             ~openGlSample();
+@@ -92,37 +93,48 @@
+ UNUSED_ARG(setup);
+         fboY-&gt;bind();
+         printf(&quot;Compiling shader \n&quot;);
+-        glProgram = new QGLShaderProgram(context);
+-        ADM_assert(glProgram);
+-        if ( !glProgram-&gt;addShaderFromSourceCode(QGLShader::Fragment, myShader))
++        glProgramY = new QGLShaderProgram(context);
++        ADM_assert(glProgramY);
++        if ( !glProgramY-&gt;addShaderFromSourceCode(QGLShader::Fragment, myShaderY))
+         {
+-                ADM_error(&quot;[GL Render] Fragment log: %s\n&quot;, glProgram-&gt;log().toUtf8().constData());
++                ADM_error(&quot;[GL Render] Fragment log: %s\n&quot;, glProgramY-&gt;log().toUtf8().constData());
+                 ADM_assert(0);
+         }
+-        if ( !glProgram-&gt;link())
++        if ( !glProgramY-&gt;link())
+         {
+-            ADM_error(&quot;[GL Render] Link log: %s\n&quot;, glProgram-&gt;log().toUtf8().constData());
++            ADM_error(&quot;[GL Render] Link log: %s\n&quot;, glProgramY-&gt;log().toUtf8().constData());
+             ADM_assert(0);
+         }
+ 
+-        if ( !glProgram-&gt;bind())
++        if ( !glProgramY-&gt;bind())
+         {
+                 ADM_error(&quot;[GL Render] Binding FAILED\n&quot;);
+                 ADM_assert(0);
+         }
++        fboY-&gt;release();
++//
++        fboUV-&gt;bind();
++        printf(&quot;Compiling shader \n&quot;);
++        glProgramUV = new QGLShaderProgram(context);
++        ADM_assert(glProgramUV);
++        if ( !glProgramUV-&gt;addShaderFromSourceCode(QGLShader::Fragment, myShaderY))
++        {
++                ADM_error(&quot;[GL Render] Fragment log: %s\n&quot;, glProgramUV-&gt;log().toUtf8().constData());
++                ADM_assert(0);
++        }
++        if ( !glProgramUV-&gt;link())
++        {
++            ADM_error(&quot;[GL Render] Link log: %s\n&quot;, glProgramUV-&gt;log().toUtf8().constData());
++            ADM_assert(0);
++        }
+ 
+-        glProgram-&gt;setUniformValue(&quot;myTex&quot;, 0); 
+-        printf(&quot;Setuping texture\n&quot;);
+-        glProgram-&gt;setUniformValue(&quot;texY&quot;, 0);
+-        myGlActiveTexture(GL_TEXTURE0);
+-        glBindTexture(GL_TEXTURE_RECTANGLE_NV, 0);
+-        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+-        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+-        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+-        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+-        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+-        //glTexImage2D(GL_TEXTURE_RECTANGLE_NV, 0, GL_LUMINANCE, WIDTH, HEIGHT, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, myTexture);
+-        fboY-&gt;release();
++        if ( !glProgramUV-&gt;bind())
++        {
++                ADM_error(&quot;[GL Render] Binding FAILED\n&quot;);
++                ADM_assert(0);
++        }
++        fboUV-&gt;release();
++
+ }
+ /**
+     \fn openGlSample
+@@ -145,8 +157,30 @@
+         ADM_warning(&quot;FlipFilter : Cannot get frame\n&quot;);
+         return false;
+     }
++    float angle=*fn;
++    angle=0.3+angle/40;
++    glProgramY-&gt;setUniformValue(&quot;teta&quot;, angle); 
++    glProgramUV-&gt;setUniformValue(&quot;teta&quot;, angle); 
++        // size is the last one...
++    fboY-&gt;bind();
++    tinyUploadTex(image,PLANAR_Y,GL_TEXTURE0,0);
++    glProgramY-&gt;setUniformValue(&quot;myTexture&quot;, 0); 
+     render(image,PLANAR_Y,fboY);
+     downloadTexture(image,PLANAR_Y,fboY);
++    fboY-&gt;release();
++
++    fboUV-&gt;bind();
++    tinyUploadTex(image,PLANAR_U,GL_TEXTURE1,1);
++    glProgramUV-&gt;setUniformValue(&quot;myTexture&quot;, 1); 
++    render(image,PLANAR_U,fboUV);
++    downloadTexture(image,PLANAR_U,fboUV);
++    
++    tinyUploadTex(image,PLANAR_V,GL_TEXTURE2,2);
++    glProgramUV-&gt;setUniformValue(&quot;myTexture&quot;, 2); 
++    render(image,PLANAR_V,fboUV);
++    downloadTexture(image,PLANAR_V,fboUV);
++    fboUV-&gt;release();
++    firstRun=false;
+     return true;
+ }
+ /**
+@@ -170,22 +204,32 @@
+ /**
+     \fn uploadTexture
+ */
+-bool openGlSample::uploadTexture(ADMImage *image, ADM_PLANE plane)
++void openGlSample::tinyUploadTex(ADMImage *image, ADM_PLANE plane, GLuint tex,int texNum )
+ {
+-	if (firstRun&lt;3)
+-		glTexImage2D(GL_TEXTURE_RECTANGLE_NV, 0, GL_LUMINANCE, 
+-                        image-&gt;GetPitch(plane),
+-                        image-&gt;GetHeight(plane), 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, 
+-                        image-&gt;GetReadPtr(plane));
+-	else
+-		glTexSubImage2D(GL_TEXTURE_RECTANGLE_NV, 0, 0, 0, 
++        myGlActiveTexture(tex);
++        glBindTexture(GL_TEXTURE_RECTANGLE_NV, texNum);
++        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++        glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
++        if(!firstRun)
++        {
++            glTexImage2D(GL_TEXTURE_RECTANGLE_NV, 0, GL_LUMINANCE, 
++                            image-&gt;GetPitch(plane),
++                            image-&gt;GetHeight(plane), 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, 
++                            image-&gt;GetReadPtr(plane));
++        }else
++        {
++            glTexSubImage2D(GL_TEXTURE_RECTANGLE_NV, 0, 0, 0, 
+                 image-&gt;GetPitch(plane),
+                 image-&gt;GetHeight(plane),
+                 GL_LUMINANCE, GL_UNSIGNED_BYTE, 
+-                image-&gt;GetReadPtr(plane));
+-    firstRun++;
+-    return true;
++                image-&gt;GetReadPtr(plane));
++        }
+ }
++
++
+ /**
+     \fn render
+ */
+@@ -194,15 +238,12 @@
+     int width=image-&gt;GetWidth(plane);
+     int height=image-&gt;GetHeight(plane);
+ 
+-    fbo-&gt;bind();
+     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+ 	glViewport(0, 0, width, height);
+     glMatrixMode(GL_PROJECTION);
+     glLoadIdentity();
+     glOrtho(0, width, 0, height, -1, 1);
+ 
+-    // load input texture in fbo
+-    uploadTexture(image,plane);
+     //
+     glBegin(GL_QUADS);
+ 	glTexCoord2i(0, 0);
+@@ -214,7 +255,6 @@
+ 	glTexCoord2i(0, height);
+ 	glVertex2i(0, height);
+ 	glEnd();	// draw cube background
+-    fbo-&gt;release();
+     return true;
+ }
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample/sampleGl.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample/sampleGl.h	2011-07-27 17:40:28 UTC (rev 7357)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample/sampleGl.h	2011-07-27 19:30:05 UTC (rev 7358)
+@@ -1,14 +1,33 @@
+ // Invert x &amp; y
+-static const char *myShader =
++static const char *myShaderY =
+ 	&quot;#extension GL_ARB_texture_rectangle: enable\n&quot;
+-	&quot;uniform sampler2DRect myTex;\n&quot;
++	&quot;uniform sampler2DRect myTexture;\n&quot;
++    &quot;uniform float teta;\n&quot;
+ 
+ 	&quot;void main(void) {\n&quot;
++    &quot;  float angle=teta;\n&quot; //&quot;0.2;&quot;
+ 	&quot;  float nx = gl_TexCoord[0].x;\n&quot;
+ 	&quot;  float ny = gl_TexCoord[0].y;\n&quot;
+-	&quot;  float t =  texture2DRect(myTex, vec2(ny, nx)).r;\n&quot;
++    &quot;  float s= sin(angle);\n&quot;
++    &quot;  float c= cos(angle);\n&quot;
++    &quot;  float my= nx*s+ny*c;\n&quot;
++    &quot;  float mx= nx*c+ny*s;\n&quot;
++	&quot;  float t =  texture2DRect(myTexture, vec2(mx, my)).r;\n&quot;
+        // no op
+ 	&quot;  gl_FragColor = vec4(t, t, t, 1.0);\n&quot;
+ 	//&quot;  gl_FragColor = vec4(t, 1.0-t, 2*t, 1.0);\n&quot;
+ 	&quot;}\n&quot;;
++static const char *myShaderUV =
++	&quot;#extension GL_ARB_texture_rectangle: enable\n&quot;
++	&quot;uniform sampler2DRect myUVTex;\n&quot;
+ 
++	&quot;void main(void) {\n&quot;
++	&quot;  float nx = gl_TexCoord[0].x;\n&quot;
++	&quot;  float ny = gl_TexCoord[0].y;\n&quot;
++	&quot;  float t =  texture2DRect(myUVTex, vec2(nx, ny)).r;\n&quot;
++       // no op
++	&quot;  gl_FragColor = vec4(t, t, t, 1.0);\n&quot;
++	//&quot;  gl_FragColor = vec4(t, 1.0-t, 2*t, 1.0);\n&quot;
++	&quot;}\n&quot;;
++
++
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004509.html">[Avidemux-svn-commit] r7355 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample
+</A></li>
+	<LI>Next message: <A HREF="004511.html">[Avidemux-svn-commit] r7359 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl/sample
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4510">[ date ]</a>
+              <a href="thread.html#4510">[ thread ]</a>
+              <a href="subject.html#4510">[ subject ]</a>
+              <a href="author.html#4510">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

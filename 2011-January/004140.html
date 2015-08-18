@@ -1,0 +1,383 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6966 -	branches/avidemux_2.6_branch_mean/avidemux/common
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6966%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common&In-Reply-To=%3C20110129095730.34B84480F6B%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004139.html">
+   <LINK REL="Next"  HREF="004141.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6966 -	branches/avidemux_2.6_branch_mean/avidemux/common</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6966%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common&In-Reply-To=%3C20110129095730.34B84480F6B%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6966 -	branches/avidemux_2.6_branch_mean/avidemux/common">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jan 29 10:57:29 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004139.html">[Avidemux-svn-commit] r6965 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4
+</A></li>
+        <LI>Next message: <A HREF="004141.html">[Avidemux-svn-commit] r6967 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders/lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4140">[ date ]</a>
+              <a href="thread.html#4140">[ thread ]</a>
+              <a href="subject.html#4140">[ subject ]</a>
+              <a href="author.html#4140">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-01-29 10:57:29 +0100 (Sat, 29 Jan 2011)
+New Revision: 6966
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/gui_save.cpp
+Log:
+[save/audio] Handle copy and process
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gui_save.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gui_save.cpp	2011-01-27 19:05:43 UTC (rev 6965)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gui_save.cpp	2011-01-29 09:57:29 UTC (rev 6966)
+@@ -38,6 +38,7 @@
+ #include &quot;A_functions.h&quot;
+ int      A_Save(const char *name);
+ uint8_t  GUI_getFrameContent(ADMImage *image, uint32_t frame);
++extern   ADM_audioStream  *audioCreateEncodingStream(bool globalHeader,uint64_t startTime,int32_t shift);
+ 
+ /**
+     \fn HandleAction_Navigate
+@@ -120,7 +121,7 @@
+     ADM_audioStream *stream;
+     if(false==video_body-&gt;getAudioStream( &amp;stream)) 
+     {
+-        printf(&quot;[A_audioSave] No stream\n&quot;);
++        ADM_error(&quot;[A_audioSave] No stream\n&quot;);
+         return 0;
+     }
+ 	if (audioProcessMode())
+@@ -137,140 +138,10 @@
+ }
+ 
+ /**
+-    \fn A_saveAudioProcessed
+-    \brief Save current stream (generally avi...)
+-     in decoded mode (assuming MP3)
++        \fn A_saveAudioCommon
++        \brief Save giveb stream 
+ */
+-int A_saveAudioProcessed (const char *name)
+-{
+-#if 0
+-// debug audio seek
+-  uint32_t len, gauge = 0;
+-  uint32_t written = 0;
+-  FILE *out;
+-  AVDMGenericAudioStream *saveFilter;
+-
+-  uint64_t sampleTarget,sampleCurrent;
+-
+-#undef BITT
+-#define BITT 4*1152
+-#define OUTCHUNK 1024*1024
+-  uint8_t *outbuffer;
+-
+-  if (!currentaudiostream)
+-    return;
+-
+-
+-  if (!(out = ADM_fopen (name, &quot;wb&quot;)))
+-    {
+-      GUI_Error_HIG (QT_TR_NOOP(&quot;File error&quot;), QT_TR_NOOP(&quot;Cannot open \&quot;%s\&quot; for writing.&quot;), name);
+-      return false;
+-    }
+-
+-  outbuffer = (uint8_t *) ADM_alloc (2 * OUTCHUNK);	// 1Meg cache;
+-  if (!outbuffer)
+-    {
+-      GUI_Error_HIG (QT_TR_NOOP(&quot;Memory Error&quot;), NULL);
+-      return false;
+-    }
+-
+-
+-
+-// re-ignite first filter...
+-
+-
+-
+-
+-  // Write Wav header
+-
+-  /* Sat Nov 09 06:11:52 CET 2002 Fixes from Maik Broemme &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">mbroemme at plusserver.de</A>&gt; */
+-  /* If you set negative delay and save the audio stream, the saved stream was shorter than the video stream. */
+-
+-  /* Example: video stream is 10 minutes long, audio stream perhaps 20 minutes, you need the audio stream from */
+-  /*          minute 1 until 11, so you setup an audio delay from -60 seconds, but this 60 seconds were removed */
+-  /*          from begin and end of the audio stream. That was not good :) Now it runs correctly also if you use */
+-  /*          audio stream with same length then video, therefore is premature ending :) */
+-
+-
+-
+-//        saveFilter =  buildAudioFilter (currentaudiostream,video_body-&gt;getTime (frameStart));
+-
+-		if (saveFilter == NULL)
+-		{
+-			fclose(out);
+-			ADM_dealloc(outbuffer);
+-			return false;
+-		}
+-
+-    	DIA_working *work=new DIA_working(QT_TR_NOOP(&quot;Saving audio&quot;));
+-
+-
+-//
+-//  Create First filter that is null filter
+-//
+-  saveFilter-&gt;writeHeader (out);
+-  uint32_t tstart,tend,samples;
+-  double duration;
+-  tstart=video_body-&gt;getTime(frameStart);
+-  tend=video_body-&gt;getTime(frameEnd+1);
+-  duration=(tend-tstart);
+-  duration*=saveFilter-&gt;getInfo()-&gt;frequency;
+-  duration/=1000.;
+-
+-  sampleTarget=(uint64_t)floor(duration);
+-  sampleCurrent=0;
+-  gauge=0;
+-
+-  if( frameStart == frameEnd ){
+-     /* JSC: we will write some bytes, but nobody should expect useful data */
+-    GUI_Error_HIG(QT_TR_NOOP(&quot;No frames to encode&quot;),QT_TR_NOOP(&quot;Please check markers. Is \&quot;A&gt;\&quot; == \&quot;&gt;B\&quot;?&quot;));
+-  }
+-
+-  while ((sampleCurrent&lt;sampleTarget))
+-    {
+-      if(!saveFilter-&gt;getPacket(outbuffer + gauge,&amp;len,&amp;samples))
+-      {
+-        printf(&quot;Audio save:Read error\n&quot;);
+-      	break;
+-      }
+-      
+-      gauge += len;
+-      sampleCurrent+=samples;
+-      // update GUI
+-	// JSC: if &quot;A&gt;&quot; == &quot;&gt;B&quot; we will get &gt;100% here =&gt; assert in work-&gt;update()
+-	if (work-&gt;update ((sampleCurrent&gt;&gt;10 &gt; sampleTarget&gt;&gt;10 ? sampleTarget&gt;&gt;10 : sampleCurrent&gt;&gt;10), sampleTarget&gt;&gt;10))	// abort request ?
+-	    break;;
+-      if (gauge &gt; OUTCHUNK)	// either out buffer is full
+-	{
+-	  fwrite (outbuffer, 1, gauge, out);
+-	  written += gauge;
+-	  gauge = 0;
+-	}
+-    };
+-// Clean up
+-	if(gauge)
+-	{
+-		fwrite (outbuffer,  gauge,1, out);
+-		written += gauge;
+-		gauge = 0;
+-	}
+-  saveFilter-&gt;endWrite (out, written);
+-  fclose (out);
+-  ADM_dealloc (outbuffer);
+-  delete work;
+-//  deleteAudioFilter (saveFilter);
+-//  currentaudiostream-&gt;endDecompress ();
+-  printf (&quot;AudioSave: actually written %u\n&quot;, written);
+-  printf (&quot;Audiosave: target sample:%llu, got :%llu\n&quot;,sampleTarget,sampleCurrent);
+-#else
+-  return 0;
+-#endif
+-}
+-/**
+-        \fn A_saveAudioCopy
+-        \brief Save current stream (generally avi...)     in raw mode
+-*/
+-int A_saveAudioCopy (const char *name)
++static bool A_saveAudioCommon (const char *name,ADM_audioStream *stream,double duration)
+ { 
+   uint32_t written, max;
+   uint64_t dts;
+@@ -279,43 +150,24 @@
+ 
+ #define ONE_STRIKE (64*1024)
+   uint8_t *buffer=NULL;
+-  ADM_audioStream *stream;
+-  if(false==video_body-&gt;getAudioStream( &amp;stream)) 
+-    {
+-        printf(&quot;[A_audioSave] No stream\n&quot;);
+-        return false;
+-    }
+ 
+ 
+   out = ADM_fopen (name, &quot;wb&quot;);
+-  if (!out) return false;
++  if (!out) 
++  {
++    ADM_error(&quot;Cannot open file for writing\n&quot;);
++    return false;
++  }
+ 
+   work=createWorking(QT_TR_NOOP(&quot;Saving audio&quot;));
+ 
+   uint64_t timeEnd,timeStart;
+   uint32_t hold,len,sample;
+   uint64_t tgt_sample,cur_sample;
+-  double   duration;
+ 
+-  // compute start position and duration in samples
+-
+-   timeStart=video_body-&gt;getMarkerAPts ();
+-   timeEnd=video_body-&gt;getMarkerBPts ();
+-   
+-   duration=timeEnd-timeStart;
+-   if(duration&lt;0) 
+-    {
+-            stream-&gt;goToTime (timeEnd);
+-            duration=-duration;
+-    }else
+-    {
+-            stream-&gt;goToTime (timeStart);
+-    }
+    duration*=stream-&gt;getInfo()-&gt;frequency;
+    duration/=1000000; // in seconds to have samples
+    tgt_sample=(uint64_t)floor(duration);
+-   printf(&quot;[saveAudio] Start time :%&quot;LLU&quot; ms\n&quot;,timeStart/1000);
+-   printf(&quot;[saveAudio] End time :%&quot;LLU&quot; ms\n&quot;,timeEnd/1000);
+    printf(&quot;[saveAudio]Duration:%f ms\n&quot;,duration/1000);
+    printf(&quot;[saveAudio]Samples:%&quot;LLU&quot; ms\n&quot;,tgt_sample);
+ 
+@@ -323,6 +175,7 @@
+    written = 0;
+    hold=0;
+    buffer=new uint8_t[ONE_STRIKE*2];
++
+    while (1)
+     {
+     	if(!stream-&gt;getPacket(buffer+hold,&amp;len,ONE_STRIKE,&amp;sample,&amp;dts)) break;
+@@ -352,8 +205,89 @@
+   return true;
+ }
+ 
++/**
++        \fn A_saveAudioCopy
++        \brief Save current stream (generally avi...)     in raw mode
++*/
++int A_saveAudioCopy (const char *name)
++{ 
++  uint32_t written, max;
++  uint64_t dts;
+ 
++#define ONE_STRIKE (64*1024)
++  ADM_audioStream *stream;
++  if(false==video_body-&gt;getAudioStream( &amp;stream)) 
++    {
++        ADM_error(&quot;[A_audioSave] No stream\n&quot;);
++        return false;
++    }
++
++  uint64_t timeEnd,timeStart;
++  double   duration;
++
++  // compute start position and duration in samples
++
++   timeStart=video_body-&gt;getMarkerAPts ();
++   timeEnd=video_body-&gt;getMarkerBPts ();
++   
++   duration=timeEnd-timeStart;
++   if(duration&lt;0) 
++    {
++            stream-&gt;goToTime (timeEnd);
++            duration=-duration;
++    }else
++    {
++            stream-&gt;goToTime (timeStart);
++    }
++   ADM_info(&quot;Saving from %s \n&quot;,ADM_us2plain(timeStart));
++   ADM_info(&quot;Saving to %s \n&quot;,ADM_us2plain(timeEnd));
++   ADM_info(&quot;duration %s \n&quot;,ADM_us2plain((uint64_t)duration));
++   return A_saveAudioCommon (name,stream,duration);
++   
++}
++
++
+ /**
++    \fn A_saveAudioProcessed
++    \brief Save current stream (generally avi...)
++     in decoded mode (assuming MP3)
++*/
++int A_saveAudioProcessed (const char *name)
++{
++#if 0
++    GUI_Error_HIG(&quot;Audio&quot;,&quot;Function not implemented\n&quot;);
++    return false;
++#else
++
++  uint64_t timeEnd,timeStart;
++  uint32_t hold,len,sample;
++  uint64_t tgt_sample,cur_sample;
++  double   duration;
++   timeStart=video_body-&gt;getMarkerAPts ();
++   timeEnd=video_body-&gt;getMarkerBPts ();
++   uint64_t start=timeStart;
++   duration=timeEnd-timeStart;
++   if(duration&lt;0) 
++    {
++            start=timeEnd;
++            duration=-duration;
++    }
++  ADM_audioStream *access=audioCreateEncodingStream(false,start,0);
++  if(!access)
++    {
++        GUI_Error_HIG(&quot;Audio&quot;,&quot;Cannot create stream&quot;);
++        return false;
++    }
++  #warning Fixme,duration can change! e.g. pal2film /film2pal
++  bool r=A_saveAudioCommon (name,access,duration);
++  delete access;
++  if(false==r)
++        GUI_Error_HIG(&quot;Audio&quot;,&quot;Saving failed&quot;);
++  return r;
++#endif   
++}
++
++/**
+         \fn A_saveJpg
+         \brief Save a Jpg image from current display buffer
+ */
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004139.html">[Avidemux-svn-commit] r6965 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4
+</A></li>
+	<LI>Next message: <A HREF="004141.html">[Avidemux-svn-commit] r6967 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders/lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4140">[ date ]</a>
+              <a href="thread.html#4140">[ thread ]</a>
+              <a href="subject.html#4140">[ subject ]</a>
+              <a href="author.html#4140">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

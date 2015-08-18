@@ -1,0 +1,207 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6142 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/include	avidemux/common/ADM_videoCodec/src	avidemux_core/ADM_coreVideoCodec/include
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6142%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_videoCodec/include%0A%09avidemux/common/ADM_videoCodec/src%0A%09avidemux_core/ADM_coreVideoCodec/include&In-Reply-To=%3C201004251535.o3PFZxSI018830%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003344.html">
+   <LINK REL="Next"  HREF="003346.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6142 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/include	avidemux/common/ADM_videoCodec/src	avidemux_core/ADM_coreVideoCodec/include</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6142%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_videoCodec/include%0A%09avidemux/common/ADM_videoCodec/src%0A%09avidemux_core/ADM_coreVideoCodec/include&In-Reply-To=%3C201004251535.o3PFZxSI018830%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6142 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoCodec/include	avidemux/common/ADM_videoCodec/src	avidemux_core/ADM_coreVideoCodec/include">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Apr 25 17:35:59 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003344.html">[Avidemux-svn-commit] r6141 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src
+</A></li>
+        <LI>Next message: <A HREF="003346.html">[Avidemux-svn-commit] r6143 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3345">[ date ]</a>
+              <a href="thread.html#3345">[ thread ]</a>
+              <a href="subject.html#3345">[ subject ]</a>
+              <a href="author.html#3345">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-04-25 17:35:58 +0200 (Sun, 25 Apr 2010)
+New Revision: 6142
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/include/ADM_codecVdpau.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_videoCodec.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/include/ADM_codec.h
+Log:
+[VDPAU] Add a new method to know if the decoder did get initialized properly. By default it is set to true. Vdpau can return false if, for example, the decoder is already used by another application. The cleanup in that case is a bit messy
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/include/ADM_codecVdpau.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/include/ADM_codecVdpau.h	2010-04-25 15:35:55 UTC (rev 6141)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/include/ADM_codecVdpau.h	2010-04-25 15:35:58 UTC (rev 6142)
+@@ -2,6 +2,7 @@
+ class decoderFFVDPAU:public decoderFF
+ {
+ protected:
++                    bool alive;
+                     int b_age;
+                     int ip_age[2];
+ 
+@@ -31,5 +32,6 @@
+         return 1;
+       }
+     virtual const char *getDecoderName(void) {return &quot;VDPAU&quot;;}
++    virtual bool  initializedOk(void)  {return alive;};
+ };
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2010-04-25 15:35:55 UTC (rev 6141)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_ffmpeg_vdpau.cpp	2010-04-25 15:35:58 UTC (rev 6142)
+@@ -206,6 +206,8 @@
+ :decoderFF (w,h,fcc,extraDataLen,extraData,bpp)
+ {
+         destroying=false;
++        alive=true;
++        scratch=NULL;
+         _context-&gt;opaque          = this;
+         _context-&gt;get_buffer      = ADM_VDPAUgetBuffer;
+         _context-&gt;release_buffer  = ADM_VDPAUreleaseBuffer;
+@@ -219,13 +221,27 @@
+         WRAP_OpenByName(h264_vdpau,CODEC_ID_H264);
+         ADM_info(&quot;[VDPAU] Decoder created \n&quot;);
+         // Now instantiate our VDPAU surface &amp; decoder
+-        ADM_assert(VDP_STATUS_OK==funcs.decoderCreate(vdpDevice,VDP_DECODER_PROFILE_H264_HIGH,w,h,15,&amp;(VDPAU-&gt;vdpDecoder)));
++        for(int i=0;i&lt;NB_SURFACE;i++)
++            VDPAU-&gt;renders[i]=NULL;
++
++        if(VDP_STATUS_OK!=funcs.decoderCreate(vdpDevice,VDP_DECODER_PROFILE_H264_HIGH,
++                                w,h,15,&amp;(VDPAU-&gt;vdpDecoder)))
++        {
++            ADM_error(&quot;Cannot create VDPAU decoder\n&quot;);
++            alive=false;
++            return;
++        }
+         // Create our surfaces...
+         for(int i=0;i&lt;NB_SURFACE;i++)
+         {
+             VDPAU-&gt;renders[i]=new vdpau_render_state;
+             memset(VDPAU-&gt;renders[i],0,sizeof( vdpau_render_state));
+-            ADM_assert(VDP_STATUS_OK==funcs.createSurface(vdpDevice,VDP_CHROMA_TYPE_420,w,h,&amp;(VDPAU-&gt;renders[i]-&gt;surface)));
++            if(VDP_STATUS_OK!=funcs.createSurface(vdpDevice,VDP_CHROMA_TYPE_420,w,h,&amp;(VDPAU-&gt;renders[i]-&gt;surface)))
++            {
++                ADM_error(&quot;Cannot create surface %d/%d\n&quot;,i,NB_SURFACE);
++                alive=false;
++                return;
++            }
+             VDPAU-&gt;freeQueue.push_back(VDPAU-&gt;renders[i]);
+         }
+         scratch=new ADMImage(w,h,1);
+@@ -241,11 +257,20 @@
+         destroying=true;
+         for(int i=0;i&lt;NB_SURFACE;i++)
+         {
+-            ADM_assert(VDP_STATUS_OK==funcs.destroySurface((VDPAU-&gt;renders[i]-&gt;surface)));
+-            delete VDPAU-&gt;renders[i];
++            if(VDPAU-&gt;renders[i])
++            {
++                if(VDPAU-&gt;renders[i]-&gt;surface)
++                {
++                    if(VDPAU-&gt;renders[i]-&gt;surface)
++                        if(VDP_STATUS_OK!=funcs.destroySurface((VDPAU-&gt;renders[i]-&gt;surface)))
++                                ADM_error(&quot;Error destroying surface %d\n&quot;,i);
++                }
++                delete VDPAU-&gt;renders[i];
++            }
+         }
+-        ADM_info(&quot;[VDPAU] Destroying decoder\n&quot;);
+-         ADM_assert(VDP_STATUS_OK==funcs.decoderDestroy(VDPAU-&gt;vdpDecoder));
++         ADM_info(&quot;[VDPAU] Destroying decoder\n&quot;);
++         if(VDP_STATUS_OK!=funcs.decoderDestroy(VDPAU-&gt;vdpDecoder))
++                ADM_error(&quot;Error destroying VDPAU decoder\n&quot;);
+          delete VDPAU;
+          vdpau=NULL;
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_videoCodec.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_videoCodec.cpp	2010-04-25 15:35:55 UTC (rev 6141)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoCodec/src/ADM_videoCodec.cpp	2010-04-25 15:35:58 UTC (rev 6142)
+@@ -27,7 +27,7 @@
+ #include &quot;avidemutils.h&quot;
+ #include &quot;fourcc.h&quot;
+ #include &quot;ADM_codecVdpau.h&quot;
+-
++#include &quot;DIA_coreToolkit.h&quot;
+ extern bool vdpauUsable(void);
+ 
+ /**
+@@ -41,7 +41,16 @@
+     {
+ #if defined(USE_VDPAU) 
+         if(vdpauUsable()==true)
+-            return (decoders *) (new decoderFFVDPAU (w,h,fcc,extraLen,extraData,bpp));
++        {
++            decoderFFVDPAU *dec=new decoderFFVDPAU (w,h,fcc,extraLen,extraData,bpp);
++            if(dec-&gt;initializedOk()==true)
++                return (decoders *) (dec);
++            else
++            {
++                GUI_Error_HIG(&quot;VDPAU&quot;,&quot;Cannot initialize VDPAU, make sure it is not already used by another application.\nSwitching to default decoder.&quot;);
++                delete dec;
++            }
++        }
+         
+ #endif
+     }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/include/ADM_codec.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/include/ADM_codec.h	2010-04-25 15:35:55 UTC (rev 6141)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/include/ADM_codec.h	2010-04-25 15:35:58 UTC (rev 6142)
+@@ -48,6 +48,7 @@
+   virtual ~ decoders ()
+   {
+   };
++  virtual bool   initializedOk(void) {return true;};
+   virtual uint8_t getPARWidth (void)
+   {
+     return 1;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003344.html">[Avidemux-svn-commit] r6141 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src
+</A></li>
+	<LI>Next message: <A HREF="003346.html">[Avidemux-svn-commit] r6143 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3345">[ date ]</a>
+              <a href="thread.html#3345">[ thread ]</a>
+              <a href="subject.html#3345">[ subject ]</a>
+              <a href="author.html#3345">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

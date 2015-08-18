@@ -1,0 +1,167 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5424 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5424%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate%3A%0A%09include%20src&In-Reply-To=%3C200910281910.n9SJAAYi015448%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002634.html">
+   <LINK REL="Next"  HREF="002636.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5424 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate:	include src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5424%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate%3A%0A%09include%20src&In-Reply-To=%3C200910281910.n9SJAAYi015448%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5424 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Oct 28 20:10:10 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002634.html">[Avidemux-svn-commit] r5423 -	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2
+</A></li>
+        <LI>Next message: <A HREF="002636.html">[Avidemux-svn-commit] r5425 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2635">[ date ]</a>
+              <a href="thread.html#2635">[ thread ]</a>
+              <a href="subject.html#2635">[ subject ]</a>
+              <a href="author.html#2635">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-10-28 20:10:10 +0100 (Wed, 28 Oct 2009)
+New Revision: 5424
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/include/ADM_videoCopy.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopy.cpp
+Log:
+[Editor/Save] Better handing of PTS/DTS in copy mode
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/include/ADM_videoCopy.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/include/ADM_videoCopy.h	2009-10-28 19:10:08 UTC (rev 5423)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/include/ADM_videoCopy.h	2009-10-28 19:10:10 UTC (rev 5424)
+@@ -13,7 +13,8 @@
+ class ADM_videoStreamCopy: public ADM_videoStream
+ {
+ protected:
+-            uint64_t startTime,endTime;
++            uint64_t startTimePts,startTimeDts;
++            uint64_t endTimePts;
+             uint32_t currentFrame;
+             ADMCompressedImage image;
+             bool eofMet;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopy.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopy.cpp	2009-10-28 19:10:08 UTC (rev 5423)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopy.cpp	2009-10-28 19:10:10 UTC (rev 5424)
+@@ -52,10 +52,13 @@
+         }
+     }
+     eofMet=false;
+-    this-&gt;startTime=dtsStart;
+-    this-&gt;endTime=endTime;
++
++    this-&gt;startTimeDts=dtsStart;
++    this-&gt;startTimePts=ptsStart;
++    this-&gt;endTimePts=endTime;
++
+     video_body-&gt;goToIntraTimeVideo(ptsStart);
+-    ADM_info(&quot; Fixating start time by %u\n&quot;,abs((int)(this-&gt;startTime-dtsStart)));
++    ADM_info(&quot; Fixating start time by %d\n&quot;,abs((int)(startTime-startTimeDts)));
+ }
+ /**
+     \fn ADM_videoStreamCopy
+@@ -78,7 +81,7 @@
+ uint64_t  ADM_videoStreamCopy::rescaleTs(uint64_t in)
+ {
+     if(in==ADM_NO_PTS) return in;
+-    if(in&gt;startTime) return in-startTime;
++    if(in&gt;startTimeDts) return in-startTimeDts;
+     ADM_warning(&quot;Negative time!\n&quot;);
+     return 0;
+ }
+@@ -87,7 +90,7 @@
+ */
+ uint64_t  ADM_videoStreamCopy::getStartTime(void)
+ {
+-    return this-&gt;startTime;
++    return this-&gt;startTimeDts;
+ }
+ /**
+     \fn getPacket
+@@ -97,6 +100,7 @@
+                     uint32_t *flags)
+ {
+     if(true==eofMet) return false;
++again:
+     image.data=data;
+     if(false==video_body-&gt;getCompressedPicture(&amp;image))
+     {
+@@ -105,12 +109,20 @@
+     }
+     *len=image.dataLength;
+     ADM_assert(*len&lt;maxLen);
+-    
++    if(image.demuxerPts!=ADM_NO_PTS)
++        if(image.demuxerPts&lt;startTimePts)   
++        {
++            if(image.flags &amp; AVI_B_FRAME) 
++            {
++                ADM_warning(&quot;Dropping orphean B frame (PTS=%&quot;LLU&quot; ms)\n&quot;,image.demuxerPts/1000);
++                goto again;
++            }
++        }
+     *pts=rescaleTs(image.demuxerPts);
+     *dts=rescaleTs(image.demuxerDts);
+-    if(image.demuxerDts!=ADM_NO_PTS)
++    if(image.demuxerPts!=ADM_NO_PTS)
+     {
+-        if(image.demuxerPts!=ADM_NO_PTS)
++          if(image.demuxerDts!=ADM_NO_PTS)
+           {
+             if(image.demuxerPts&lt;image.demuxerDts)
+               {
+@@ -119,7 +131,7 @@
+               }
+ 
+           }
+-        if(image.demuxerDts&gt;endTime ) 
++        if(image.demuxerPts&gt;endTimePts ) 
+         {
+             eofMet=true;
+             return false;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002634.html">[Avidemux-svn-commit] r5423 -	branches/avidemux_2.6_branch_mean/avidemux/gtk/ADM_userInterfaces/ADM_gui2
+</A></li>
+	<LI>Next message: <A HREF="002636.html">[Avidemux-svn-commit] r5425 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2635">[ date ]</a>
+              <a href="thread.html#2635">[ thread ]</a>
+              <a href="subject.html#2635">[ subject ]</a>
+              <a href="author.html#2635">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

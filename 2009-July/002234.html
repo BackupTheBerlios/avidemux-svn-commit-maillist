@@ -1,0 +1,314 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5019 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder:	ADM_vidEnc_x264 ADM_vidEnc_x264/qt4 common
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5019%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder%3A%0A%09ADM_vidEnc_x264%20ADM_vidEnc_x264/qt4%20common&In-Reply-To=%3C200907082042.n68KgcKD025510%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002233.html">
+   <LINK REL="Next"  HREF="002235.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5019 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder:	ADM_vidEnc_x264 ADM_vidEnc_x264/qt4 common</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5019%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder%3A%0A%09ADM_vidEnc_x264%20ADM_vidEnc_x264/qt4%20common&In-Reply-To=%3C200907082042.n68KgcKD025510%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5019 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder:	ADM_vidEnc_x264 ADM_vidEnc_x264/qt4 common">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Wed Jul  8 22:42:38 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002233.html">[Avidemux-svn-commit] r5018 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreVideoEncoder/include	avidemux_core/ADM_coreVideoEncoder/src	avidemux_plugins/ADM_videoEncoder/ffMpeg4
+</A></li>
+        <LI>Next message: <A HREF="002235.html">[Avidemux-svn-commit] r5020 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2234">[ date ]</a>
+              <a href="thread.html#2234">[ thread ]</a>
+              <a href="subject.html#2234">[ subject ]</a>
+              <a href="author.html#2234">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-07-08 22:42:32 +0200 (Wed, 08 Jul 2009)
+New Revision: 5019
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/common/PluginOptions.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/common/PluginOptions.h
+Log:
+[x264] interpret preset xml block and load appropriate config
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-07-08 18:00:57 UTC (rev 5018)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-07-08 20:42:32 UTC (rev 5019)
+@@ -157,8 +157,12 @@
+ 	bool success = true;
+ 
+ 	if (pluginOptions)
++	{
+ 		success = _options.fromXml(pluginOptions, PLUGIN_XML_INTERNAL);
+ 
++		_options.loadPresetConfiguration();
++	}
++
+ 	if (encodeOptions &amp;&amp; success)
+ 	{
+ 		memcpy(&amp;_encodeOptions, encodeOptions, sizeof(vidEncOptions));
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.cpp	2009-07-08 18:00:57 UTC (rev 5018)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.cpp	2009-07-08 20:42:32 UTC (rev 5019)
+@@ -171,15 +171,20 @@
+ 	bool origDisableGenericSlots = disableGenericSlots;
+ 	QMap&lt;QString, int&gt; configs;
+ 	QStringList filter(&quot;*.xml&quot;);
+-	QStringList list = QDir(getUserConfigDirectory()).entryList(filter, QDir::Files | QDir::Readable);
++	char* configDir = x264Options::getUserConfigDirectory();
++	QStringList list = QDir(configDir).entryList(filter, QDir::Files | QDir::Readable);
+ 
++	delete [] configDir;
+ 	disableGenericSlots = true;
+ 
+ 	for (int item = 0; item &lt; list.size(); item++)
+ 		configs.insert(QFileInfo(list[item]).completeBaseName(), PLUGIN_CONFIG_USER);
+ 
+-	list = QDir(getSystemConfigDirectory()).entryList(filter, QDir::Files | QDir::Readable);
++	configDir = x264Options::getSystemConfigDirectory();
++	list = QDir(configDir).entryList(filter, QDir::Files | QDir::Readable);
+ 
++	delete [] configDir;
++
+ 	for (int item = 0; item &lt; list.size(); item++)
+ 		configs.insert(QFileInfo(list[item]).completeBaseName(), PLUGIN_CONFIG_SYSTEM);
+ 
+@@ -282,28 +287,18 @@
+ 		ui.deleteButton-&gt;setEnabled(false);
+ 	else
+ 	{
+-		int configType = ui.configurationComboBox-&gt;itemData(index).toInt();
++		PluginConfigType configType = (PluginConfigType)ui.configurationComboBox-&gt;itemData(index).toInt();
+ 		QString configFileName;
+ 
+ 		ui.deleteButton-&gt;setEnabled(configType == PLUGIN_CONFIG_USER);
+ 
+-		if (configType == PLUGIN_CONFIG_SYSTEM)
+-			configFileName = QFileInfo(getSystemConfigDirectory(), ui.configurationComboBox-&gt;itemText(index) + &quot;.xml&quot;).filePath();
+-		else	// PLUGIN_CONFIG_USER
+-			configFileName = QFileInfo(getUserConfigDirectory(), ui.configurationComboBox-&gt;itemText(index) + &quot;.xml&quot;).filePath();
++		x264Options options;
++		vidEncOptions *encodeOptions;
+ 
+-		QFile configFile(configFileName);
++		options.setPresetConfiguration(ui.configurationComboBox-&gt;itemText(index).toUtf8().constData(), configType);
+ 
+-		if (configFile.exists())
++		if (options.loadPresetConfiguration())
+ 		{
+-			configFile.open(QIODevice::ReadOnly | QIODevice::Text);
+-
+-			QByteArray fileContents = configFile.readAll();
+-			x264Options options;
+-			vidEncOptions *encodeOptions;
+-
+-			configFile.close();
+-			options.fromXml(fileContents.constData(), PLUGIN_XML_EXTERNAL);
+ 			encodeOptions = options.getEncodeOptions();
+ 
+ 			loadSettings(encodeOptions, &amp;options);
+@@ -351,9 +346,12 @@
+ 
+ void x264ConfigDialog::deleteButton_pressed(void)
+ {
+-	QString configFileName = QFileInfo(getUserConfigDirectory(), ui.configurationComboBox-&gt;currentText() + &quot;.xml&quot;).filePath();
++	char *configDir = x264Options::getUserConfigDirectory();
++	QString configFileName = QFileInfo(QString(configDir), ui.configurationComboBox-&gt;currentText() + &quot;.xml&quot;).filePath();
+ 	QFile configFile(configFileName);
+ 
++	delete [] configDir;
++
+ 	if (GUI_Question(QT_TR_NOOP(&quot;Are you sure you wish to delete the selected configuration?&quot;)) &amp;&amp; configFile.exists())
+ 	{
+ 		disableGenericSlots = true;
+@@ -991,26 +989,6 @@
+ 	options-&gt;setFullRangeSamples(ui.fullRangeSamplesCheckBox-&gt;isChecked());
+ }
+ 
+-QString x264ConfigDialog::getUserConfigDirectory(void)
+-{
+-	char *userConfigDirectory = ADM_getHomeRelativePath(&quot;x264&quot;);
+-	QString qstring = QString(userConfigDirectory);
+-
+-	delete [] userConfigDirectory;
+-
+-	return qstring;
+-}
+-
+-QString x264ConfigDialog::getSystemConfigDirectory(void)
+-{
+-	char* pluginPath = ADM_getPluginPath();
+-	QString qstring = QString(pluginPath).append(&quot;/&quot;).append(PLUGIN_SUBDIR);
+-
+-	delete [] pluginPath;
+-
+-	return qstring;
+-}
+-
+ extern &quot;C&quot; int showX264ConfigDialog(vidEncConfigParameters *configParameters, vidEncVideoProperties *properties, vidEncOptions *encodeOptions, x264Options *options)
+ {
+ 	x264ConfigDialog dialog(configParameters, properties, encodeOptions, options);
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.h	2009-07-08 18:00:57 UTC (rev 5018)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.h	2009-07-08 20:42:32 UTC (rev 5019)
+@@ -50,8 +50,6 @@
+ 	void loadSettings(vidEncOptions *encodeOptions, x264Options *options);
+ 	int getValueIndexInArray(uint8_t value, const uint8_t valueArray[], int elementCount);
+ 	int getValueIndexInArray(int8_t value, const int8_t valueArray[], int elementCount);
+-	QString getUserConfigDirectory(void);
+-	QString getSystemConfigDirectory(void);
+ 
+ public:
+ 	x264ConfigDialog(vidEncConfigParameters *configParameters, vidEncVideoProperties *properties, vidEncOptions *encodeOptions, x264Options *options);
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/common/PluginOptions.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/common/PluginOptions.cpp	2009-07-08 18:00:57 UTC (rev 5018)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/common/PluginOptions.cpp	2009-07-08 20:42:32 UTC (rev 5019)
+@@ -124,6 +124,54 @@
+ 	_configurationType = PLUGIN_CONFIG_CUSTOM;
+ }
+ 
++bool PluginOptions::loadPresetConfiguration(void)
++{
++	char *dir = NULL;
++	bool success = false;
++	PluginConfigType configurationType = _configurationType;
++	char configurationName[strlen(_configurationName) + 1];
++
++	strcpy(configurationName, _configurationName);
++
++	if (configurationType == PLUGIN_CONFIG_USER)
++		dir = getUserConfigDirectory();
++	else if (configurationType == PLUGIN_CONFIG_SYSTEM)
++		dir = getSystemConfigDirectory();
++
++	if (dir)
++	{
++		char presetConfigFile[strlen(dir) + strlen(configurationName) + 6];
++
++		strcpy(presetConfigFile, dir);
++		strcat(presetConfigFile, &quot;/&quot;);
++		strcat(presetConfigFile, configurationName);
++		strcat(presetConfigFile, &quot;.xml&quot;);
++
++		delete [] dir;
++		FILE *file = fopen(presetConfigFile, &quot;r&quot;);
++
++		if (file)
++		{
++			fseek(file, 0, SEEK_END);
++
++			long size = ftell(file);
++			char presetXml[size];
++
++			fseek(file, 0, SEEK_SET);
++			size = fread(presetXml, 1, size, file);
++			presetXml[size] = 0;
++			fclose(file);
++
++			success = fromXml(presetXml, PLUGIN_XML_EXTERNAL);
++			setPresetConfiguration(configurationName, configurationType);
++		}
++		else
++			printf(&quot;Error - Unable to open or read %s\n&quot;, presetConfigFile);
++	}
++
++	return success;
++}
++
+ void PluginOptions::setEncodeOptionsToDefaults(void)
+ {
+ 	_encodeOptions.encodeMode = _defaultEncodeMode;
+@@ -311,3 +359,22 @@
+ 	setPresetConfiguration(name, type);
+ 	free(name);
+ }
++
++char* PluginOptions::getUserConfigDirectory(void)
++{
++	return ADM_getHomeRelativePath(PLUGIN_SUBDIR);
++}
++
++char* PluginOptions::getSystemConfigDirectory(void)
++{
++	char* pluginPath = ADM_getPluginPath();
++	char* systemConfigPath = new char[strlen(pluginPath) + strlen(PLUGIN_SUBDIR) + 2];
++
++	strcpy(systemConfigPath, pluginPath);
++	strcat(systemConfigPath, &quot;/&quot;);
++	strcat(systemConfigPath, PLUGIN_SUBDIR);
++
++	delete [] pluginPath;
++
++	return systemConfigPath;
++}
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/common/PluginOptions.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/common/PluginOptions.h	2009-07-08 18:00:57 UTC (rev 5018)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/common/PluginOptions.h	2009-07-08 20:42:32 UTC (rev 5019)
+@@ -66,12 +66,16 @@
+ 	virtual void getPresetConfiguration(char** configurationName, PluginConfigType *configurationType);
+ 	virtual void setPresetConfiguration(const char* configurationName, PluginConfigType configurationType);
+ 	virtual void clearPresetConfiguration(void);
++	virtual bool loadPresetConfiguration(void);
+ 
+ 	virtual void addOptionsToXml(xmlNodePtr xmlNodeRoot) = 0;
+ 	virtual void parseOptions(xmlNode *node) = 0;
+ 
+ 	virtual char* toXml(PluginXmlType xmlType);
+ 	virtual int fromXml(const char *xml, PluginXmlType xmlType);
++
++	static char* getUserConfigDirectory(void);
++	static char* getSystemConfigDirectory(void);
+ };
+ 
+ #endif	// options_h
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002233.html">[Avidemux-svn-commit] r5018 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreVideoEncoder/include	avidemux_core/ADM_coreVideoEncoder/src	avidemux_plugins/ADM_videoEncoder/ffMpeg4
+</A></li>
+	<LI>Next message: <A HREF="002235.html">[Avidemux-svn-commit] r5020 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2234">[ date ]</a>
+              <a href="thread.html#2234">[ thread ]</a>
+              <a href="subject.html#2234">[ subject ]</a>
+              <a href="author.html#2234">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

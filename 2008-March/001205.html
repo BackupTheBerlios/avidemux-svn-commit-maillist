@@ -1,0 +1,143 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3943 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3943%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4&In-Reply-To=%3C200803281902.m2SJ2Jfu007308%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001204.html">
+   <LINK REL="Next"  HREF="001206.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3943 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3943%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4&In-Reply-To=%3C200803281902.m2SJ2Jfu007308%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3943 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Fri Mar 28 20:02:19 CET 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001204.html">[Avidemux-svn-commit] r3942 - in	branches/avidemux_2.5_branch_gruntster:	autononreg/dialogFactory avidemux/ADM_coreUI/include	avidemux/ADM_coreUI/src avidemux/ADM_script	avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialogFactory
+</A></li>
+        <LI>Next message: <A HREF="001206.html">[Avidemux-svn-commit] r3944 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1205">[ date ]</a>
+              <a href="thread.html#1205">[ thread ]</a>
+              <a href="subject.html#1205">[ subject ]</a>
+              <a href="author.html#1205">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-03-28 20:02:18 +0100 (Fri, 28 Mar 2008)
+New Revision: 3943
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ui_support.cpp
+Log:
+[Qt4] correctly cache translated strings
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ui_support.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ui_support.cpp	2008-03-28 18:50:25 UTC (rev 3942)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_QT4/ui_support.cpp	2008-03-28 19:02:18 UTC (rev 3943)
+@@ -1,12 +1,8 @@
+ #include &lt;stdio.h&gt;
+-#include &lt;string.h&gt;
+ 
+ #include &lt;QApplication&gt;
+-#include &lt;QLocale&gt;
+-#include &lt;QTranslator&gt;
++#include &lt;QtCore&gt;
+ 
+-static const int MAX_MESSAGE_COUNT = 300;
+-static char* translatedMessage[MAX_MESSAGE_COUNT];
+ static QTranslator qtTranslator;
+ static QTranslator avidemuxTranslator;
+ 
+@@ -23,28 +19,17 @@
+ 		printf(&quot;FAILED\n&quot;);		
+ }
+ 
+-void initTranslator(void)
+-{
+-	memset(translatedMessage, 0, MAX_MESSAGE_COUNT * sizeof(char*));
+-}
++void initTranslator(void) {}
+ 
+ const char* translate(const char *__domainname, const char *__msgid)
+ {
+-	static int counter = 0;
+-	QString messageString = QApplication::translate(&quot;&quot;,  __msgid);
++	static QMap&lt;QString, QByteArray&gt; map;
++	QString msgid = QString(__msgid);
+ 
+-	counter++;
++	if (!map.contains(msgid))
++		map[msgid] = QApplication::translate(&quot;&quot;, __msgid).toUtf8();
+ 
+-	if (counter &gt;= MAX_MESSAGE_COUNT)
+-		counter = 0;
+-
+-	if (translatedMessage[counter])
+-		delete[] translatedMessage[counter];
+-
+-	translatedMessage[counter] = new char[messageString.toUtf8().length() + 1];
+-	strcpy(translatedMessage[counter], messageString.toUtf8().constData());
+-
+-	return translatedMessage[counter];
++	return map.value(msgid).constData();
+ }
+ 
+ #define HIDE_STRING_FROM_QT(domainname, msgid)  QApplication::translate(domainname, msgid) // to hide string from lupdate so a true test can be conducted
+@@ -61,17 +46,8 @@
+ 	printf(&quot;[Locale] Test: &amp;Edit -&gt; %s\n\n&quot;, HIDE_STRING_FROM_QT(&quot;MainWindow&quot;, &quot;&amp;Edit&quot;).toUtf8().data());
+ }
+ 
+-void destroyTranslator(void)
+-{
+-	for (int counter = 0; counter &lt; MAX_MESSAGE_COUNT; counter++)
+-	{
+-		if (translatedMessage[counter])
+-			delete[] translatedMessage[counter];
+-	}
++void destroyTranslator(void) {}
+ 
+-	memset(translatedMessage, 0, MAX_MESSAGE_COUNT * sizeof(char*));
+-}
+-
+ void getUIDescription(char* desc)
+ {
+ 	sprintf(desc, &quot;Qt4 (%s)&quot;, qVersion());
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001204.html">[Avidemux-svn-commit] r3942 - in	branches/avidemux_2.5_branch_gruntster:	autononreg/dialogFactory avidemux/ADM_coreUI/include	avidemux/ADM_coreUI/src avidemux/ADM_script	avidemux/ADM_userInterfaces/ADM_GTK/ADM_dialogFactory
+</A></li>
+	<LI>Next message: <A HREF="001206.html">[Avidemux-svn-commit] r3944 - branches/avidemux_2.4_branch/avidemux
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1205">[ date ]</a>
+              <a href="thread.html#1205">[ thread ]</a>
+              <a href="subject.html#1205">[ subject ]</a>
+              <a href="author.html#1205">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

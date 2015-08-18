@@ -1,0 +1,374 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4326 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_osSupport
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4326%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_osSupport&In-Reply-To=%3C200809131406.m8DE6WqC028968%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001565.html">
+   <LINK REL="Next"  HREF="001567.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4326 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_osSupport</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4326%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_osSupport&In-Reply-To=%3C200809131406.m8DE6WqC028968%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4326 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_osSupport">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Sat Sep 13 16:06:32 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001565.html">[Avidemux-svn-commit] r4325 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreAudio/src
+</A></li>
+        <LI>Next message: <A HREF="001567.html">[Avidemux-svn-commit] r4327 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_dialog ADM_dialogFactory ADM_gui2 glade
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1566">[ date ]</a>
+              <a href="thread.html#1566">[ thread ]</a>
+              <a href="subject.html#1566">[ subject ]</a>
+              <a href="author.html#1566">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-09-13 16:06:25 +0200 (Sat, 13 Sep 2008)
+New Revision: 4326
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_x264.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_xvid4.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_xvid4.h
+   branches/avidemux_2.4_branch/avidemux/ADM_osSupport/win32.cpp
+Log:
+[Win32] use a safe path for x264 and Xvid stat file
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_x264.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_x264.cpp	2008-09-11 00:08:37 UTC (rev 4325)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_x264.cpp	2008-09-13 14:06:25 UTC (rev 4326)
+@@ -36,6 +36,9 @@
+ #define HANDLE ((x264_t *)_handle)
+ #define PICS ((x264_picture_t *)_pic)
+ 
++#ifdef __WIN32
++extern void convertPathToAnsi(const char *path, char **ansiPath);
++#endif
+ 
+ typedef struct avcc		// for avcc atom
+ {
+@@ -436,14 +439,26 @@
+   param.rc.b_stat_write = 1;
+   param.rc.b_stat_read = 0;
+   if (!zparam-&gt;logfile)
+-    param.rc.psz_stat_out = &quot;/tmp/x264_log.tmp&quot;;
++    param.rc.psz_stat_out = ADM_strdup(&quot;/tmp/x264_log.tmp&quot;);
+   else
+-    param.rc.psz_stat_out = zparam-&gt;logfile;
++  {
++#ifdef __WIN32
++	char *logFile;
++
++	convertPathToAnsi(zparam-&gt;logfile, &amp;logFile);
++	param.rc.psz_stat_out = logFile;
++#else
++	param.rc.psz_stat_out = ADM_strdup(zparam-&gt;logfile);
++#endif
++  }
++
+   printf (&quot;[x264] codec using %s as statfile\n&quot;, param.rc.psz_stat_out);
+   return preamble (fps1000, &amp;admParam);
+ }
+ X264EncoderPass1::~X264EncoderPass1 ()
+ {
++	delete param.rc.psz_stat_out;
++	param.rc.psz_stat_out = NULL;
+   stopEncoder ();
+ }
+ //*********************Pass1***************
+@@ -470,17 +485,28 @@
+   param.rc.b_stat_write = 0;
+   param.rc.b_stat_read = 1;
+ 
+-
+   if (!zparam-&gt;logfile)
+-    param.rc.psz_stat_in = &quot;/tmp/x264_log.tmp&quot;;
++    param.rc.psz_stat_in = ADM_strdup(&quot;/tmp/x264_log.tmp&quot;);
+   else
+-    param.rc.psz_stat_in = zparam-&gt;logfile;
++  {
++#ifdef __WIN32
++	char *logFile;
++
++	convertPathToAnsi(zparam-&gt;logfile, &amp;logFile);
++	param.rc.psz_stat_in = logFile;
++#else
++	param.rc.psz_stat_in = ADM_strdup(zparam-&gt;logfile);
++#endif
++  }
++
+   printf (&quot;[x264] using %s as statfile\n&quot;, param.rc.psz_stat_in);
+ 
+   return preamble (fps1000, &amp;admParam);
+ }
+ X264EncoderPass2::~X264EncoderPass2 ()
+ {
++	delete param.rc.psz_stat_in;
++	param.rc.psz_stat_in = NULL;
+   stopEncoder ();
+ }
+   // Create avcc atom as extradata
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_xvid4.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_xvid4.cpp	2008-09-11 00:08:37 UTC (rev 4325)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_xvid4.cpp	2008-09-13 14:06:25 UTC (rev 4326)
+@@ -37,6 +37,10 @@
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+ extern ADM_Composer *video_body;
+ 
++#ifdef __WIN32
++extern void convertPathToAnsi(const char *path, char **ansiPath);
++#endif
++
+ static const int motion_presets[] = {
+   0,
+   0,
+@@ -655,8 +659,16 @@
+ 
+ 
+   pass1.version = XVID_VERSION;
+-  pass1.filename = (char *) _param.logName;
+ 
++#ifdef __WIN32
++	char *logFile;
++
++	convertPathToAnsi(_param.logName, &amp;logFile);
++	pass1.filename = logFile;
++#else
++	pass1.filename = ADM_strdup(_param.logName);
++#endif
++
+   xvid_enc_create.plugins = plugins;
+   xvid_enc_create.num_plugins = 1;
+ 
+@@ -682,8 +694,12 @@
+   return 1;
+ }
+ 
++xvid4EncoderPass1::~xvid4EncoderPass1()
++{
++	delete pass1.filename;
++	pass1.filename = NULL;
++}
+ 
+-
+ // *************************************************
+ // *************************************************
+ //              Pass2
+@@ -717,8 +733,16 @@
+   plugins[1].param = NULL;
+ 
+   pass2.version = XVID_VERSION;
+-  pass2.filename = (char *) _param.logName;
+ 
++#ifdef __WIN32
++	char *logFile;
++
++	convertPathToAnsi(_param.logName, &amp;logFile);
++	pass2.filename = logFile;
++#else
++	pass2.filename = ADM_strdup(_param.logName);
++#endif
++
+   pass2.bitrate = br;		// Average bitrate
+ #define CPY(x) pass2.x=_param.x;printf(&quot;[xvid] &quot;#x&quot;=%d\n&quot;,pass2.x);
+ 
+@@ -758,5 +782,9 @@
+   return 1;
+ }
+ 
+-
++xvid4EncoderPass2::~xvid4EncoderPass2()
++{
++	delete pass2.filename;
++	pass2.filename = NULL;
++}
+ #endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_xvid4.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_xvid4.h	2008-09-11 00:08:37 UTC (rev 4325)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_xvid4.h	2008-09-13 14:06:25 UTC (rev 4326)
+@@ -112,6 +112,7 @@
+ 
+   virtual uint8_t init (uint32_t val, uint32_t fps1000,
+ 			xvid4EncParam * param);
++  ~xvid4EncoderPass1();
+   
+ };
+ class xvid4EncoderPass2:public xvid4Encoder
+@@ -126,7 +127,7 @@
+ 
+   virtual uint8_t init (uint32_t val, uint32_t fps1000,
+ 			xvid4EncParam * param);
+-  
++  ~xvid4EncoderPass2();
+ };
+ 
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_osSupport/win32.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_osSupport/win32.cpp	2008-09-11 00:08:37 UTC (rev 4325)
++++ branches/avidemux_2.4_branch/avidemux/ADM_osSupport/win32.cpp	2008-09-13 14:06:25 UTC (rev 4326)
+@@ -2,12 +2,17 @@
+ 
+ #ifdef ADM_WIN32
+ #define WIN32_CLASH
++#define WINVER 0x500
++
+ #include &lt;stdio.h&gt;
+ #include &lt;stdlib.h&gt;
++#include &lt;windows.h&gt;
++#include &lt;algorithm&gt;
++#include &lt;string&gt;
+ 
+ #include &quot;default.h&quot; 
+ #include &quot;ADM_misc.h&quot;
+-#include &quot;windows.h&quot;
++
+ #include &quot;io.h&quot;
+ #include &quot;winsock2.h&quot;
+ #include &quot;ADM_assert.h&quot; 
+@@ -499,4 +504,101 @@
+ 
+ 	return multiByteStringLen;
+ }
++
++// Convert string from Wide Char to ANSI code page
++int wideCharStringToAnsi(const wchar_t *wideCharString, int wideCharStringLength, char *ansiString, const char *filler)
++{
++	int flags = WC_COMPOSITECHECK;
++
++	if (filler)
++		flags |= WC_NO_BEST_FIT_CHARS | WC_DEFAULTCHAR;
++
++	int ansiStringLen = WideCharToMultiByte(CP_ACP, flags, wideCharString, wideCharStringLength, NULL, 0, filler, NULL);
++
++	if (ansiString)
++		WideCharToMultiByte(CP_ACP, flags, wideCharString, wideCharStringLength, ansiString, ansiStringLen, filler, NULL);
++
++	return ansiStringLen;
++}
++
++// Convert UTF-8 file path to an ANSI path with short 8.3 directories
++void convertPathToAnsi(const char *path, char **ansiPath)
++{
++	const char *filename = GetFileName(path);
++	bool statFile = false;
++	int filenameLength = strlen(filename);
++	int directoryLength = filename - path;
++
++	// Clip off .stat extension and tack it on later
++	if (filenameLength &gt;= 5 &amp;&amp; strcmp(filename + filenameLength - 5, &quot;.stat&quot;) == 0)
++	{
++		statFile = true;
++		filenameLength -= 5;
++	}
++
++	// Convert directory to wide char
++	int wcDirLength = utf8StringToWideChar(path, directoryLength, NULL) + 1;
++	int wcFileLength = utf8StringToWideChar(filename, filenameLength, NULL) + 1;
++	wchar_t *wcDirectory = new wchar_t[wcDirLength];
++
++	memset(wcDirectory, 0, wcDirLength * sizeof(wchar_t));
++	utf8StringToWideChar(path, directoryLength, wcDirectory);
++
++	// Get short directory
++	int shortDirLength = GetShortPathNameW(wcDirectory, NULL, 0);
++	wchar_t *wcShortDir = new wchar_t[shortDirLength + wcFileLength];
++
++	memset(wcShortDir, 0, (shortDirLength + wcFileLength) * sizeof(wchar_t));
++	GetShortPathNameW(wcDirectory, wcShortDir, shortDirLength);
++	delete [] wcDirectory;
++
++	// Append filename to directory
++	utf8StringToWideChar(filename, filenameLength, wcShortDir + (shortDirLength - 1));
++
++	// Convert path to ANSI
++	int dirtyAnsiPathLength = wideCharStringToAnsi(wcShortDir, -1, NULL, &quot;?&quot;);
++	char *dirtyAnsiPath = new char[dirtyAnsiPathLength];
++
++	wideCharStringToAnsi(wcShortDir, -1, dirtyAnsiPath, &quot;?&quot;);
++
++	// Clean converted path
++	std::string cleanPath = std::string(dirtyAnsiPath);
++	std::string::iterator lastPos = std::remove(cleanPath.begin(), cleanPath.end(), '?');
++
++	cleanPath.erase(lastPos, cleanPath.end());
++	delete [] dirtyAnsiPath;
++
++	// Make sure we have a filename, otherwise use &quot;avidemux&quot; as default
++	if (filenameLength || statFile)
++	{
++		filename = GetFileName(cleanPath.c_str());
++
++		int filenameStart = filename - cleanPath.c_str();
++
++		if (filenameStart)
++		{
++			int filenameEnd = cleanPath.length();
++
++			// Ignore extension if it exists
++			int extensionIndex = cleanPath.rfind(&quot;.&quot;, filenameEnd);
++
++			if (extensionIndex != std::string::npos)
++				filenameEnd = extensionIndex;
++
++			// Create a filename if one doesn't exist
++			if (filenameEnd - filenameStart == 0)
++				cleanPath.insert(filenameStart, &quot;avidemux&quot;);
++		}
++		else
++			cleanPath.append(&quot;avidemux&quot;);
++
++		if (statFile)
++			cleanPath.append(&quot;.stat&quot;);
++	}
++
++	*ansiPath = new char[cleanPath.length() + 1];
++	strcpy(*ansiPath, cleanPath.c_str());
++
++	delete [] wcShortDir;
++}
+ #endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001565.html">[Avidemux-svn-commit] r4325 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_coreAudio/src
+</A></li>
+	<LI>Next message: <A HREF="001567.html">[Avidemux-svn-commit] r4327 - in	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK:	ADM_dialog ADM_dialogFactory ADM_gui2 glade
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1566">[ date ]</a>
+              <a href="thread.html#1566">[ thread ]</a>
+              <a href="subject.html#1566">[ subject ]</a>
+              <a href="author.html#1566">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

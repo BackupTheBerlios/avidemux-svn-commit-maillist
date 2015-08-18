@@ -1,0 +1,189 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6077 - in	branches/avidemux_2.6_branch_mean/avidemux: common	qt4/ADM_userInterfaces/ADM_gui
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6077%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20common%0A%09qt4/ADM_userInterfaces/ADM_gui&In-Reply-To=%3C201004061510.o36FAXxl023955%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003280.html">
+   <LINK REL="Next"  HREF="003282.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6077 - in	branches/avidemux_2.6_branch_mean/avidemux: common	qt4/ADM_userInterfaces/ADM_gui</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6077%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux%3A%20common%0A%09qt4/ADM_userInterfaces/ADM_gui&In-Reply-To=%3C201004061510.o36FAXxl023955%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6077 - in	branches/avidemux_2.6_branch_mean/avidemux: common	qt4/ADM_userInterfaces/ADM_gui">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Apr  6 17:10:33 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003280.html">[Avidemux-svn-commit] r6076 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+        <LI>Next message: <A HREF="003282.html">[Avidemux-svn-commit] r6078 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3281">[ date ]</a>
+              <a href="thread.html#3281">[ thread ]</a>
+              <a href="subject.html#3281">[ subject ]</a>
+              <a href="author.html#3281">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-04-06 17:10:32 +0200 (Tue, 06 Apr 2010)
+New Revision: 6077
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/gui_play.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui/gui2.ui
+Log:
+[playback] Allow input &amp; output playback
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.cpp	2010-04-06 15:10:31 UTC (rev 6076)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_preview.cpp	2010-04-06 15:10:32 UTC (rev 6077)
+@@ -49,14 +49,11 @@
+ #include &quot;ADM_preview.h&quot;
+ #define MAX(a,b) ( (a)&gt;(b) ? (a) : (b) )
+ #include &quot;DIA_coreToolkit.h&quot;
+-extern void    UI_setCurrentTime(uint64_t curTime);
++extern void                 UI_setCurrentTime(uint64_t curTime);
+ 
+-static void previewBlit(ADMImage *from,ADMImage *to,uint32_t startx,uint32_t starty);
++static void                 previewBlit(ADMImage *from,ADMImage *to,uint32_t startx,uint32_t starty);
++static ADM_PREVIEW_MODE     previewMode=ADM_PREVIEW_NONE;
+ 
+-static   AVDMGenericVideoStream *preview=NULL;
+-
+-static ADM_PREVIEW_MODE previewMode=ADM_PREVIEW_NONE;
+-
+ static uint32_t             defered_display=0;  /* When 1, it means we are in playback mode */
+ static uint32_t             playbackOffset=0;   /* in playback mode, frame 0 = playbackOffset compared to real beginning of the file */
+ static renderZoom           zoom=ZOOM_1_1;
+@@ -173,24 +170,12 @@
+ {
+             aprintf(&quot;--killing\n&quot;);
+             renderLock();
+-#if 0
+-            getFirstVideoFilter();
+-            
+-            preview=videofilters[  nb_active_filter-1].filter;
+-            aprintf(&quot;--spawning\n&quot;);
+-            ADM_assert(!previewImage)
+-                
+-            previewImage=new ADMImage(preview-&gt;getInfo()-&gt;width,preview-&gt;getInfo()-&gt;height);
+-#endif            
+             ADM_assert(!original);
+             switch(previewMode)
+             {
+-#if 0
+-              case  ADM_PREVIEW_SEPARATE:
+-                  DIA_previewInit(preview-&gt;getInfo()-&gt;width,preview-&gt;getInfo()-&gt;height);
+-#endif                  
+                   /* no break here, not a mistake */
+               case  ADM_PREVIEW_NONE:
++              case  ADM_PREVIEW_OUTPUT:
+               
+                   rdrWindowWUnzoomed=rdrPhysicalW;
+                   rdrWindowHUnzoomed=rdrPhysicalH;
+@@ -200,6 +185,7 @@
+                   rdrWindowWUnzoomed=preview-&gt;getInfo()-&gt;width;
+                   rdrWindowHUnzoomed=preview-&gt;getInfo()-&gt;height;
+                   break;
++
+               case  ADM_PREVIEW_SIDE:
+               {
+                   rdrWindowWUnzoomed=rdrPhysicalW+preview-&gt;getInfo()-&gt;width;
+@@ -703,7 +689,7 @@
+     switch(previewMode)
+     {
+       case ADM_PREVIEW_NONE:
+-           
++      case ADM_PREVIEW_OUTPUT:     
+            if(zoom==ZOOM_1_1 || renderHasAccelZoom() )
+             {
+                 renderUpdateImage(rdrImage-&gt;data,zoom);
+@@ -713,6 +699,7 @@
+                 renderUpdateImage(resized-&gt;data,zoom);
+             }
+         break;
++#if 0
+       case ADM_PREVIEW_OUTPUT:
+             if(zoom==ZOOM_1_1 || renderHasAccelZoom() )
+             {
+@@ -723,7 +710,7 @@
+                 renderUpdateImage(resized-&gt;data,zoom);
+             }
+             break;
+-#if 0
++
+       case ADM_PREVIEW_SEPARATE:
+             if(zoom==ZOOM_1_1 || renderHasAccelZoom()  )
+             {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gui_play.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gui_play.cpp	2010-04-06 15:10:31 UTC (rev 6076)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gui_play.cpp	2010-04-06 15:10:32 UTC (rev 6077)
+@@ -278,13 +278,6 @@
+                     systemTime = ticktock.getElapsedMS();
+                     delta=movieTime-systemTime;
+                 }
+-
+-                if(getPreviewMode()==ADM_PREVIEW_SEPARATE )
+-                {
+-                  UI_purge();
+-                  UI_purge();
+-                  refreshCounter=0;
+-                }
+         }
+       }
+     while (!stop_req);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui/gui2.ui
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui/gui2.ui	2010-04-06 15:10:31 UTC (rev 6076)
++++ branches/avidemux_2.6_branch_mean/avidemux/qt4/ADM_userInterfaces/ADM_gui/gui2.ui	2010-04-06 15:10:32 UTC (rev 6077)
+@@ -1481,9 +1481,6 @@
+    &lt;/attribute&gt;
+    &lt;addaction name=&quot;actionPreviewInput&quot;/&gt;
+    &lt;addaction name=&quot;actionPreviewOutput&quot;/&gt;
+-   &lt;addaction name=&quot;actionPreviewSide&quot;/&gt;
+-   &lt;addaction name=&quot;actionPreviewTop&quot;/&gt;
+-   &lt;addaction name=&quot;actionPreviewSeparate&quot;/&gt;
+   &lt;/widget&gt;
+   &lt;action name=&quot;actionOpen&quot;&gt;
+    &lt;property name=&quot;icon&quot;&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003280.html">[Avidemux-svn-commit] r6076 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+	<LI>Next message: <A HREF="003282.html">[Avidemux-svn-commit] r6078 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3281">[ date ]</a>
+              <a href="thread.html#3281">[ thread ]</a>
+              <a href="subject.html#3281">[ subject ]</a>
+              <a href="author.html#3281">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

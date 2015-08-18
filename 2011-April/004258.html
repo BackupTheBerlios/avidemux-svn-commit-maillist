@@ -1,0 +1,205 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7097 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_editor	avidemux_plugins/ADM_videoEncoder/x264 cmake
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7097%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_editor%0A%09avidemux_plugins/ADM_videoEncoder/x264%20cmake&In-Reply-To=%3C20110402193001.AB0B6480BED%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   
+   <LINK REL="Next"  HREF="004259.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7097 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_editor	avidemux_plugins/ADM_videoEncoder/x264 cmake</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7097%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_editor%0A%09avidemux_plugins/ADM_videoEncoder/x264%20cmake&In-Reply-To=%3C20110402193001.AB0B6480BED%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7097 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_editor	avidemux_plugins/ADM_videoEncoder/x264 cmake">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Apr  2 21:30:01 CEST 2011</I>
+    <P><UL>
+        
+        <LI>Next message: <A HREF="004259.html">[Avidemux-svn-commit] r7099 -	branches/avidemux_2.6_branch_mean/avidemux_core
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4258">[ date ]</a>
+              <a href="thread.html#4258">[ thread ]</a>
+              <a href="subject.html#4258">[ subject ]</a>
+              <a href="author.html#4258">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-04-02 21:30:01 +0200 (Sat, 02 Apr 2011)
+New Revision: 7097
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPySave.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp
+   branches/avidemux_2.6_branch_mean/cmake/admSerialization.py
+Log:
+[core/x264] Fix py loading when line &gt; 1024 chars, use full name for structure in conf couple/serialization
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPySave.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPySave.cpp	2011-03-29 11:59:11 UTC (rev 7096)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPySave.cpp	2011-04-02 19:30:01 UTC (rev 7097)
+@@ -44,13 +44,20 @@
+ static void dumpConf(FILE *fd,CONFcouple *c)
+ {
+  if(!c) return;
+-        
++    int count=0;    
+     uint32_t n=c-&gt;getSize();
+     for(int j=0;j&lt;n;j++)
+     {
+         char *name,*value;
+         c-&gt;getInternalName(j,&amp;name,&amp;value);
+         qfprintf(fd,&quot;,\&quot;%s=%s\&quot;&quot;,name,value);
++        // tinyPy does not like line &gt; 1024 chars
++        if(count&gt;=20)
++        {
++            qfprintf(fd,&quot;\\\n&quot;);
++            count=0;
++        }
++        count++;
+     }
+     delete c;
+     c=NULL;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp	2011-03-29 11:59:11 UTC (rev 7096)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp	2011-04-02 19:30:01 UTC (rev 7097)
+@@ -1,9 +1,9 @@
+ const ADM_paramList x264_encoder_param[]={
+- {&quot;params&quot;,offsetof(x264_encoder,general.params),&quot;COMPRES_PARAMS&quot;,ADM_param_video_encode},
+- {&quot;threads&quot;,offsetof(x264_encoder,general.threads),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;general.params&quot;,offsetof(x264_encoder,general.params),&quot;COMPRES_PARAMS&quot;,ADM_param_video_encode},
++ {&quot;general.threads&quot;,offsetof(x264_encoder,general.threads),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;level&quot;,offsetof(x264_encoder,level),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;sar_height&quot;,offsetof(x264_encoder,vui.sar_height),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;sar_width&quot;,offsetof(x264_encoder,vui.sar_width),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;vui.sar_height&quot;,offsetof(x264_encoder,vui.sar_height),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;vui.sar_width&quot;,offsetof(x264_encoder,vui.sar_width),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;MaxRefFrames&quot;,offsetof(x264_encoder,MaxRefFrames),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;MinIdr&quot;,offsetof(x264_encoder,MinIdr),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;MaxIdr&quot;,offsetof(x264_encoder,MaxIdr),&quot;uint32_t&quot;,ADM_param_uint32_t},
+@@ -16,39 +16,39 @@
+  {&quot;i_deblocking_filter_beta&quot;,offsetof(x264_encoder,i_deblocking_filter_beta),&quot;int32_t&quot;,ADM_param_int32_t},
+  {&quot;cabac&quot;,offsetof(x264_encoder,cabac),&quot;bool&quot;,ADM_param_bool},
+  {&quot;interlaced&quot;,offsetof(x264_encoder,interlaced),&quot;bool&quot;,ADM_param_bool},
+- {&quot;b_8x8&quot;,offsetof(x264_encoder,analyze.b_8x8),&quot;bool&quot;,ADM_param_bool},
+- {&quot;b_i4x4&quot;,offsetof(x264_encoder,analyze.b_i4x4),&quot;bool&quot;,ADM_param_bool},
+- {&quot;b_i8x8&quot;,offsetof(x264_encoder,analyze.b_i8x8),&quot;bool&quot;,ADM_param_bool},
+- {&quot;b_p8x8&quot;,offsetof(x264_encoder,analyze.b_p8x8),&quot;bool&quot;,ADM_param_bool},
+- {&quot;b_p16x16&quot;,offsetof(x264_encoder,analyze.b_p16x16),&quot;bool&quot;,ADM_param_bool},
+- {&quot;b_b16x16&quot;,offsetof(x264_encoder,analyze.b_b16x16),&quot;bool&quot;,ADM_param_bool},
+- {&quot;weighted_pred&quot;,offsetof(x264_encoder,analyze.weighted_pred),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;weighted_bipred&quot;,offsetof(x264_encoder,analyze.weighted_bipred),&quot;bool&quot;,ADM_param_bool},
+- {&quot;direct_mv_pred&quot;,offsetof(x264_encoder,analyze.direct_mv_pred),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;chroma_offset&quot;,offsetof(x264_encoder,analyze.chroma_offset),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;me_method&quot;,offsetof(x264_encoder,analyze.me_method),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;subpel_refine&quot;,offsetof(x264_encoder,analyze.subpel_refine),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;chroma_me&quot;,offsetof(x264_encoder,analyze.chroma_me),&quot;bool&quot;,ADM_param_bool},
+- {&quot;mixed_references&quot;,offsetof(x264_encoder,analyze.mixed_references),&quot;bool&quot;,ADM_param_bool},
+- {&quot;trellis&quot;,offsetof(x264_encoder,analyze.trellis),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;fast_pskip&quot;,offsetof(x264_encoder,analyze.fast_pskip),&quot;bool&quot;,ADM_param_bool},
+- {&quot;dct_decimate&quot;,offsetof(x264_encoder,analyze.dct_decimate),&quot;bool&quot;,ADM_param_bool},
+- {&quot;noise_reduction&quot;,offsetof(x264_encoder,analyze.noise_reduction),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;psy&quot;,offsetof(x264_encoder,analyze.psy),&quot;bool&quot;,ADM_param_bool},
+- {&quot;rc_method&quot;,offsetof(x264_encoder,ratecontrol.rc_method),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;qp_constant&quot;,offsetof(x264_encoder,ratecontrol.qp_constant),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;qp_min&quot;,offsetof(x264_encoder,ratecontrol.qp_min),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;qp_max&quot;,offsetof(x264_encoder,ratecontrol.qp_max),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;qp_step&quot;,offsetof(x264_encoder,ratecontrol.qp_step),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;bitrate&quot;,offsetof(x264_encoder,ratecontrol.bitrate),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;vbv_max_bitrate&quot;,offsetof(x264_encoder,ratecontrol.vbv_max_bitrate),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;vbv_buffer_size&quot;,offsetof(x264_encoder,ratecontrol.vbv_buffer_size),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;vbv_buffer_init&quot;,offsetof(x264_encoder,ratecontrol.vbv_buffer_init),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;ip_factor&quot;,offsetof(x264_encoder,ratecontrol.ip_factor),&quot;float&quot;,ADM_param_float},
+- {&quot;pb_factor&quot;,offsetof(x264_encoder,ratecontrol.pb_factor),&quot;float&quot;,ADM_param_float},
+- {&quot;aq_mode&quot;,offsetof(x264_encoder,ratecontrol.aq_mode),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;aq_strength&quot;,offsetof(x264_encoder,ratecontrol.aq_strength),&quot;float&quot;,ADM_param_float},
+- {&quot;mb_tree&quot;,offsetof(x264_encoder,ratecontrol.mb_tree),&quot;bool&quot;,ADM_param_bool},
+- {&quot;lookahead&quot;,offsetof(x264_encoder,ratecontrol.lookahead),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;analyze.b_8x8&quot;,offsetof(x264_encoder,analyze.b_8x8),&quot;bool&quot;,ADM_param_bool},
++ {&quot;analyze.b_i4x4&quot;,offsetof(x264_encoder,analyze.b_i4x4),&quot;bool&quot;,ADM_param_bool},
++ {&quot;analyze.b_i8x8&quot;,offsetof(x264_encoder,analyze.b_i8x8),&quot;bool&quot;,ADM_param_bool},
++ {&quot;analyze.b_p8x8&quot;,offsetof(x264_encoder,analyze.b_p8x8),&quot;bool&quot;,ADM_param_bool},
++ {&quot;analyze.b_p16x16&quot;,offsetof(x264_encoder,analyze.b_p16x16),&quot;bool&quot;,ADM_param_bool},
++ {&quot;analyze.b_b16x16&quot;,offsetof(x264_encoder,analyze.b_b16x16),&quot;bool&quot;,ADM_param_bool},
++ {&quot;analyze.weighted_pred&quot;,offsetof(x264_encoder,analyze.weighted_pred),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;analyze.weighted_bipred&quot;,offsetof(x264_encoder,analyze.weighted_bipred),&quot;bool&quot;,ADM_param_bool},
++ {&quot;analyze.direct_mv_pred&quot;,offsetof(x264_encoder,analyze.direct_mv_pred),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;analyze.chroma_offset&quot;,offsetof(x264_encoder,analyze.chroma_offset),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;analyze.me_method&quot;,offsetof(x264_encoder,analyze.me_method),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;analyze.subpel_refine&quot;,offsetof(x264_encoder,analyze.subpel_refine),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;analyze.chroma_me&quot;,offsetof(x264_encoder,analyze.chroma_me),&quot;bool&quot;,ADM_param_bool},
++ {&quot;analyze.mixed_references&quot;,offsetof(x264_encoder,analyze.mixed_references),&quot;bool&quot;,ADM_param_bool},
++ {&quot;analyze.trellis&quot;,offsetof(x264_encoder,analyze.trellis),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;analyze.fast_pskip&quot;,offsetof(x264_encoder,analyze.fast_pskip),&quot;bool&quot;,ADM_param_bool},
++ {&quot;analyze.dct_decimate&quot;,offsetof(x264_encoder,analyze.dct_decimate),&quot;bool&quot;,ADM_param_bool},
++ {&quot;analyze.noise_reduction&quot;,offsetof(x264_encoder,analyze.noise_reduction),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;analyze.psy&quot;,offsetof(x264_encoder,analyze.psy),&quot;bool&quot;,ADM_param_bool},
++ {&quot;ratecontrol.rc_method&quot;,offsetof(x264_encoder,ratecontrol.rc_method),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;ratecontrol.qp_constant&quot;,offsetof(x264_encoder,ratecontrol.qp_constant),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;ratecontrol.qp_min&quot;,offsetof(x264_encoder,ratecontrol.qp_min),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;ratecontrol.qp_max&quot;,offsetof(x264_encoder,ratecontrol.qp_max),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;ratecontrol.qp_step&quot;,offsetof(x264_encoder,ratecontrol.qp_step),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;ratecontrol.bitrate&quot;,offsetof(x264_encoder,ratecontrol.bitrate),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;ratecontrol.vbv_max_bitrate&quot;,offsetof(x264_encoder,ratecontrol.vbv_max_bitrate),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;ratecontrol.vbv_buffer_size&quot;,offsetof(x264_encoder,ratecontrol.vbv_buffer_size),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;ratecontrol.vbv_buffer_init&quot;,offsetof(x264_encoder,ratecontrol.vbv_buffer_init),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;ratecontrol.ip_factor&quot;,offsetof(x264_encoder,ratecontrol.ip_factor),&quot;float&quot;,ADM_param_float},
++ {&quot;ratecontrol.pb_factor&quot;,offsetof(x264_encoder,ratecontrol.pb_factor),&quot;float&quot;,ADM_param_float},
++ {&quot;ratecontrol.aq_mode&quot;,offsetof(x264_encoder,ratecontrol.aq_mode),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;ratecontrol.aq_strength&quot;,offsetof(x264_encoder,ratecontrol.aq_strength),&quot;float&quot;,ADM_param_float},
++ {&quot;ratecontrol.mb_tree&quot;,offsetof(x264_encoder,ratecontrol.mb_tree),&quot;bool&quot;,ADM_param_bool},
++ {&quot;ratecontrol.lookahead&quot;,offsetof(x264_encoder,ratecontrol.lookahead),&quot;uint32_t&quot;,ADM_param_uint32_t},
+ {NULL,0,NULL}
+ };
+
+Modified: branches/avidemux_2.6_branch_mean/cmake/admSerialization.py
+===================================================================
+--- branches/avidemux_2.6_branch_mean/cmake/admSerialization.py	2011-03-29 11:59:11 UTC (rev 7096)
++++ branches/avidemux_2.6_branch_mean/cmake/admSerialization.py	2011-04-02 19:30:01 UTC (rev 7097)
+@@ -59,7 +59,8 @@
+         fullName=varName
+     else:
+         fullName=fullPath+&quot;.&quot;+varName
+-    outputDesc(&quot; {\&quot;&quot;+str(varName)+&quot;\&quot;,offsetof(&quot;+str(structName)+&quot;,&quot;+str(fullName)+&quot;),\&quot;&quot;+str(ctype)+&quot;\&quot;,&quot;+str(atype)+&quot;},&quot;)
++    #outputDesc(&quot; {\&quot;&quot;+str(varName)+&quot;\&quot;,offsetof(&quot;+str(structName)+&quot;,&quot;+str(fullName)+&quot;),\&quot;&quot;+str(ctype)+&quot;\&quot;,&quot;+str(atype)+&quot;},&quot;)
++    outputDesc(&quot; {\&quot;&quot;+str(fullName)+&quot;\&quot;,offsetof(&quot;+str(structName)+&quot;,&quot;+str(fullName)+&quot;),\&quot;&quot;+str(ctype)+&quot;\&quot;,&quot;+str(atype)+&quot;},&quot;)
+ ###################################################################################################################################
+ def writeDescHead():
+     outputHeader(&quot;// automatically generated by admSerialization.py, do not edit!&quot;)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	
+	<LI>Next message: <A HREF="004259.html">[Avidemux-svn-commit] r7099 -	branches/avidemux_2.6_branch_mean/avidemux_core
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4258">[ date ]</a>
+              <a href="thread.html#4258">[ thread ]</a>
+              <a href="subject.html#4258">[ subject ]</a>
+              <a href="author.html#4258">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

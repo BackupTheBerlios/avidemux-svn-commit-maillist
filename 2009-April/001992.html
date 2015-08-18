@@ -1,0 +1,225 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4764 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4764%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904261230.n3QCUW7P017322%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001991.html">
+   <LINK REL="Next"  HREF="001993.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4764 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4764%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904261230.n3QCUW7P017322%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4764 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Apr 26 14:30:32 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001991.html">[Avidemux-svn-commit] r4763 - in	branches/avidemux_2.5_branch_gruntster/platforms/windows:	build_scripts build_scripts/avidemux installer
+</A></li>
+        <LI>Next message: <A HREF="001993.html">[Avidemux-svn-commit] r4765 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_coreDemuxerMpeg/src	avidemux/ADM_coreUtils/include plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1992">[ date ]</a>
+              <a href="thread.html#1992">[ thread ]</a>
+              <a href="subject.html#1992">[ subject ]</a>
+              <a href="author.html#1992">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-04-26 14:30:32 +0200 (Sun, 26 Apr 2009)
+New Revision: 4764
+
+Modified:
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.h
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsReadIndex.cpp
+Log:
+[TSDemuxer] Also read audio track
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.cpp	2009-04-26 11:03:11 UTC (rev 4763)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.cpp	2009-04-26 12:30:32 UTC (rev 4764)
+@@ -70,12 +70,12 @@
+         printf(&quot;[tsDemux] Cannot read Video section of %s\n&quot;,idxName);
+         goto abt;
+     }
+-#if 0
++
+     if(!readAudio(&amp;index,name)) 
+     {
+         printf(&quot;[tsDemux] Cannot read Audio section of %s =&gt; No audio\n&quot;,idxName);
+     }
+-#endif
++
+     if(!readIndex(&amp;index))
+     {
+         printf(&quot;[tsDemux] Cannot read index for file %s\n&quot;,idxName);
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.h	2009-04-26 11:03:11 UTC (rev 4763)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.h	2009-04-26 12:30:32 UTC (rev 4764)
+@@ -59,7 +59,7 @@
+ class ADM_tsAccess : public ADM_audioAccess
+ {
+ protected:
+-                
++                TS_PESpacket    *packet;
+                 tsPacket        demuxer;
+                 uint8_t         pid;
+                 uint64_t        dtsOffset;
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp	2009-04-26 11:03:11 UTC (rev 4763)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsAudio.cpp	2009-04-26 12:30:32 UTC (rev 4764)
+@@ -1,5 +1,5 @@
+ /***************************************************************************
+-    \file ADM_psAudio.cpp
++    \file ADM_tsAudio.cpp
+ 
+     copyright            : (C) 2006/2009 by mean
+     email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+@@ -37,6 +37,7 @@
+         if(append) fp=FP_APPEND;
+         this-&gt;pid=pid;
+         if(!demuxer.open(name,fp)) ADM_assert(0);
++        packet=new TS_PESpacket(pid);
+ }
+ 
+ /**
+@@ -45,6 +46,8 @@
+ ADM_tsAccess::~ADM_tsAccess()
+ {
+     demuxer.close();
++    if(packet) delete packet;
++    packet=NULL;
+ }
+ /**
+     \fn push
+@@ -122,15 +125,17 @@
+ bool      ADM_tsAccess::getPacket(uint8_t *buffer, uint32_t *size, uint32_t maxSize,uint64_t *dts)
+ {
+ uint64_t p,d,start;
+-    if(false==demuxer.getPacketOfType(pid,maxSize,size,&amp;p,&amp;d,buffer,&amp;start)) return false;
+-    if(d==ADM_NO_PTS) *dts=p;
+-            else *dts=d;
+-    *dts=timeConvert(*dts);
++    if(false==demuxer.getNextPES(packet)) return false;
++    int avail=packet-&gt;payloadSize-packet-&gt;offset;
++    if(avail&gt;maxSize) ADM_assert(0);
++    *dts=packet-&gt;pts;
++    *size=avail;
++    memcpy(buffer,packet-&gt;payload+packet-&gt;offset,avail);
++    *dts=timeConvert(packet-&gt;pts);
+     if(*dts!=ADM_NO_PTS) 
+     {
+         aprintf(&quot;[psAudio] getPacket dts = %&quot;LU&quot; ms\n&quot;,(uint32_t)*dts/1000);
+     }
+-
+     return true;
+ }
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsReadIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsReadIndex.cpp	2009-04-26 11:03:11 UTC (rev 4763)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsReadIndex.cpp	2009-04-26 12:30:32 UTC (rev 4764)
+@@ -30,7 +30,7 @@
+ {
+ char buffer[2000];
+ bool firstAudio=true;
+-        printf(&quot;[psDemuxer] Reading index\n&quot;);
++        printf(&quot;[TsDemuxerer] Reading index\n&quot;);
+         if(!index-&gt;goToSection(&quot;Data&quot;)) return false;
+       
+         while(1)
+@@ -98,7 +98,7 @@
+             uint32_t offset;
+             if(4!=sscanf(head,&quot;at:%&quot;LLX&quot;:%&quot;LX&quot; Pts:%&quot;LLD&quot;:%&quot;LLD,&amp;startAt,&amp;offset,&amp;pts,&amp;dts))
+             {
+-                    printf(&quot;[psDemuxer] cannot read fields in  :%s\n&quot;,buffer);
++                    printf(&quot;[TsDemuxerer] cannot read fields in  :%s\n&quot;,buffer);
+                     return false;
+             }
+             
+@@ -117,7 +117,7 @@
+                 cur++;
+                 if(*(cur)!=':')
+                 {
+-                    printf(&quot;[psDemux]  instead of : (%c %x %x):\n&quot;,*cur,*(cur-1),*cur);
++                    printf(&quot;[TsDemuxer]  instead of : (%c %x %x):\n&quot;,*cur,*(cur-1),*cur);
+                 }
+                 *cur++;
+                 next=strstr(start,&quot; &quot;);
+@@ -167,7 +167,7 @@
+ */
+ bool    tsHeader::readVideo(indexFile *index)
+ {
+-    printf(&quot;[psDemuxer] Reading Video\n&quot;);
++    printf(&quot;[TsDemuxerer] Reading Video\n&quot;);
+     if(!index-&gt;readSection(&quot;Video&quot;)) return false;
+     uint32_t w,h,fps,ar;
+     
+@@ -208,7 +208,7 @@
+     nbTracks=index-&gt;getAsUint32(&quot;Tracks&quot;);
+     if(!nbTracks)
+     {
+-        printf(&quot;[PsDemux] No audio\n&quot;);
++        printf(&quot;[TsDemuxer] No audio\n&quot;);
+         return true;
+     }
+     for(int i=0;i&lt;nbTracks;i++)
+@@ -229,14 +229,13 @@
+             hdr.byterate=br;
+             hdr.channels=chan;
+             hdr.encoding=codec;
++
+         ADM_tsAccess *access=new ADM_tsAccess(name,pid,true);
+             ADM_tsTrackDescriptor *desc=new ADM_tsTrackDescriptor;
+             desc-&gt;stream=NULL;
+             desc-&gt;access=access;
+             memcpy(&amp;(desc-&gt;header),&amp;hdr,sizeof(hdr));
+             listOfAudioTracks.push_back(desc);
+-
+-
+     }
+     return true;
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001991.html">[Avidemux-svn-commit] r4763 - in	branches/avidemux_2.5_branch_gruntster/platforms/windows:	build_scripts build_scripts/avidemux installer
+</A></li>
+	<LI>Next message: <A HREF="001993.html">[Avidemux-svn-commit] r4765 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_coreDemuxerMpeg/src	avidemux/ADM_coreUtils/include plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1992">[ date ]</a>
+              <a href="thread.html#1992">[ thread ]</a>
+              <a href="subject.html#1992">[ subject ]</a>
+              <a href="author.html#1992">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,136 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5930 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src	avidemux_core/ADM_coreAudioEncoder/include	avidemux_plugins/ADM_audioEncoders/lame
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5930%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_audioFilter/src%0A%09avidemux_core/ADM_coreAudioEncoder/include%0A%09avidemux_plugins/ADM_audioEncoders/lame&In-Reply-To=%3C201002132010.o1DKAq4R005594%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003135.html">
+   <LINK REL="Next"  HREF="003136.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5930 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src	avidemux_core/ADM_coreAudioEncoder/include	avidemux_plugins/ADM_audioEncoders/lame</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5930%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_audioFilter/src%0A%09avidemux_core/ADM_coreAudioEncoder/include%0A%09avidemux_plugins/ADM_audioEncoders/lame&In-Reply-To=%3C201002132010.o1DKAq4R005594%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5930 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src	avidemux_core/ADM_coreAudioEncoder/include	avidemux_plugins/ADM_audioEncoders/lame">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Feb 13 21:10:52 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003135.html">[Avidemux-svn-commit] r5929 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src
+</A></li>
+        <LI>Next message: <A HREF="003136.html">[Avidemux-svn-commit] r5931 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3134">[ date ]</a>
+              <a href="thread.html#3134">[ thread ]</a>
+              <a href="subject.html#3134">[ subject ]</a>
+              <a href="author.html#3134">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-02-13 21:10:52 +0100 (Sat, 13 Feb 2010)
+New Revision: 5930
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_access.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioEncoder/include/audioencoder.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioEncoder/include/audioencoderInternal.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders/lame/audioencoder_lame.h
+Log:
+[audioEncoder] Handle case here audio encoder does not provide accurate sample per packet count, in that case rely entirely on the audio parser (.e.g lame when bitrate reservoir is on
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_access.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_access.cpp	2010-02-13 20:10:49 UTC (rev 5929)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_access.cpp	2010-02-13 20:10:52 UTC (rev 5930)
+@@ -98,7 +98,16 @@
+ 
+     float d=(float)samplesSeen*1000.*1000.;
+     d/=(float)(filter-&gt;getInfo()-&gt;frequency);
+-    *dts=startTimeUs+(uint64_t)d;
++    if(false==encoder-&gt;provideAccurateSample())
++    {
++        if(!samplesSeen) 
++            *dts=startTimeUs;
++         else 
++            *dts=ADM_AUDIO_NO_DTS;  // rely on the parser to get exact DTS
++    }else   
++    {
++        *dts=startTimeUs+(uint64_t)d;
++    }
+     //printf(&quot;EncoderAccess: dts=%&quot;LLD&quot;\n&quot;,*dts);
+     samplesSeen+=samples;
+     endMet=false;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioEncoder/include/audioencoder.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioEncoder/include/audioencoder.h	2010-02-13 20:10:49 UTC (rev 5929)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioEncoder/include/audioencoder.h	2010-02-13 20:10:52 UTC (rev 5930)
+@@ -67,5 +67,7 @@
+     virtual bool    isVBR(void) {return true;}
+     virtual bool    initialize(void)=0; /// Returns true if init ok, false if encoding is impossible
+     virtual bool    encode(uint8_t *dest, uint32_t *len, uint32_t *samples)=0; /// returns false if eof met
++    virtual bool    provideAccurateSample(void) {return true;} /// Some encoder does not provide samples, in that case
++                                                                /// Return false, but the matching parser must exist!
+ };
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioEncoder/include/audioencoderInternal.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioEncoder/include/audioencoderInternal.h	2010-02-13 20:10:49 UTC (rev 5929)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioEncoder/include/audioencoderInternal.h	2010-02-13 20:10:52 UTC (rev 5930)
+@@ -15,7 +15,7 @@
+ #ifndef AUDIOENCODERINTERNAL_H
+ #define AUDIOENCODERINTERNAL_H
+ 
+-#define ADM_AUDIO_ENCODER_API_VERSION 4
++#define ADM_AUDIO_ENCODER_API_VERSION 5
+ #include &quot;stddef.h&quot;
+ #include &quot;audioencoder.h&quot;
+ #include &quot;ADM_paramList.h&quot;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders/lame/audioencoder_lame.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders/lame/audioencoder_lame.h	2010-02-13 20:10:49 UTC (rev 5929)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders/lame/audioencoder_lame.h	2010-02-13 20:10:52 UTC (rev 5930)
+@@ -34,6 +34,7 @@
+             
+    virtual bool         encode(uint8_t *dest, uint32_t *len, uint32_t *samples);
+    virtual bool         initialize(void);
++           bool         provideAccurateSample(void) {return false;} 
+ };
+ 
+ #endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003135.html">[Avidemux-svn-commit] r5929 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src
+</A></li>
+	<LI>Next message: <A HREF="003136.html">[Avidemux-svn-commit] r5931 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3134">[ date ]</a>
+              <a href="thread.html#3134">[ thread ]</a>
+              <a href="subject.html#3134">[ subject ]</a>
+              <a href="author.html#3134">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

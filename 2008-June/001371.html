@@ -1,0 +1,158 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4115 - in	branches/avidemux_2.4_branch/avidemux: ADM_audio	ADM_outputs/oplug_avi
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4115%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_audio%0A%09ADM_outputs/oplug_avi&In-Reply-To=%3C200806170610.m5H6AkXm009203%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001370.html">
+   <LINK REL="Next"  HREF="001372.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4115 - in	branches/avidemux_2.4_branch/avidemux: ADM_audio	ADM_outputs/oplug_avi</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4115%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_audio%0A%09ADM_outputs/oplug_avi&In-Reply-To=%3C200806170610.m5H6AkXm009203%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4115 - in	branches/avidemux_2.4_branch/avidemux: ADM_audio	ADM_outputs/oplug_avi">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Jun 17 08:10:46 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001370.html">[Avidemux-svn-commit] r4114 - in	branches/avidemux_2.4_branch/avidemux: . ADM_filter	ADM_osSupport ADM_script ADM_toolkit	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_GTK/ADM_toolkit_gtk	ADM_userInterfaces/ADM_NONE/ADM_gui2	ADM_userInterfaces/ADM_QT4/ADM_gui
+</A></li>
+        <LI>Next message: <A HREF="001372.html">[Avidemux-svn-commit] r4116 - in	branches/avidemux_2.4_branch/avidemux: . ADM_osSupport
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1371">[ date ]</a>
+              <a href="thread.html#1371">[ thread ]</a>
+              <a href="subject.html#1371">[ subject ]</a>
+              <a href="author.html#1371">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-06-17 08:10:44 +0200 (Tue, 17 Jun 2008)
+New Revision: 4115
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_audio/audio_packetizer.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_aviwrite.cpp
+Log:
+[Avi] Fix headers when using PCM/LPCM (FS#450)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audio/audio_packetizer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audio/audio_packetizer.cpp	2008-06-17 02:15:24 UTC (rev 4114)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audio/audio_packetizer.cpp	2008-06-17 06:10:44 UTC (rev 4115)
+@@ -156,27 +156,28 @@
+ 	return 0;
+ 
+ }
+-//*************
+-// The packet is 1024 bytes long BUT the 4/8 bytes (mono/stereo) are used for predictor initialization
+-//
+-// See Mike Melanson nice doc <A HREF="http://www.multimedia.cx/simpleaudio.html">http://www.multimedia.cx/simpleaudio.html</A>
+-//___________________________
++/**
++        \fn getPacketPCM
++        \brief
++*/
+ uint8_t		AVDMGenericAudioStream::getPacketPCM(uint8_t *dest, uint32_t *len, 
+ 								uint32_t *samples)
+ {
+-// Take ~ 10 m packets
++// Take ~ 32 samples packet
+ //
+ 	uint32_t count,sample;
+-			sample=_wavheader-&gt;frequency/100;			
+-			count=sample*_wavheader-&gt;channels;
++    uint32_t sampleSizeInBytes=1;
+                         if(_wavheader-&gt;encoding!=WAV_ULAW &amp;&amp; _wavheader-&gt;encoding!=WAV_8BITS_UNSIGNED)
+ 			{
+-				count*=2;			
++				sampleSizeInBytes=2;
+ 			}
++			count=32*_wavheader-&gt;channels;
++            count*=sampleSizeInBytes;
++
+ 			if(packetTail-packetHead&lt;count)
+ 			{
+ 				count=packetTail-packetHead;
+-				count&amp;=0xffffffC;
++				count&amp;=~(sampleSizeInBytes*_wavheader-&gt;channels);
+ 			}
+ 			memcpy(dest,&amp;packetBuffer[packetHead],count);			
+ 			packetHead+=count;
+@@ -189,15 +190,7 @@
+ 				printf(&quot;Wav Packetizer: running empty, last packet sent\n&quot;);
+ 				return 0;
+ 			}
+-                        if(_wavheader-&gt;encoding!=WAV_ULAW &amp;&amp; _wavheader-&gt;encoding!=WAV_8BITS_UNSIGNED&amp;&amp;
+-                                        _wavheader-&gt;encoding!=WAV_IMAADPCM  )
+-			{
+-				*samples=sample/2;
+-			}
+-			else
+-			{
+-				*samples=sample;
+-			}
++			*samples=sample/sampleSizeInBytes;
+ 			*len=count;
+ 			return 1;
+ }
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_aviwrite.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_aviwrite.cpp	2008-06-17 02:15:24 UTC (rev 4114)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_aviwrite.cpp	2008-06-17 06:10:44 UTC (rev 4115)
+@@ -421,13 +421,18 @@
+ 			header-&gt;dwSampleSize 	= wav.blockalign;
+ 			header-&gt;dwInitialFrames =1;				
+ 			header-&gt;dwSuggestedBufferSize=10*wav.blockalign;				
+-			
+ 			extra=(uint8_t *)&wmaheader;
+ 			extraLen=12;
+ 			break;
++    case WAV_PCM:
++    case WAV_LPCM:
++            header-&gt;dwScale=header-&gt;dwSampleSize=wav.blockalign=2*wav.channels; // Realign
++            header-&gt;dwLength/=header-&gt;dwScale;
++            break;
+           case WAV_8BITS_UNSIGNED:
+                         wav.encoding=WAV_PCM;
+-			header-&gt;dwScale 	= 1;
++			header-&gt;dwScale=header-&gt;dwSampleSize=wav.blockalign=wav.channels;
++			header-&gt;dwLength/=header-&gt;dwScale;
+                         wav.bitspersample=8;
+                         break;
+                         
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001370.html">[Avidemux-svn-commit] r4114 - in	branches/avidemux_2.4_branch/avidemux: . ADM_filter	ADM_osSupport ADM_script ADM_toolkit	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_GTK/ADM_toolkit_gtk	ADM_userInterfaces/ADM_NONE/ADM_gui2	ADM_userInterfaces/ADM_QT4/ADM_gui
+</A></li>
+	<LI>Next message: <A HREF="001372.html">[Avidemux-svn-commit] r4116 - in	branches/avidemux_2.4_branch/avidemux: . ADM_osSupport
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1371">[ date ]</a>
+              <a href="thread.html#1371">[ thread ]</a>
+              <a href="subject.html#1371">[ subject ]</a>
+              <a href="author.html#1371">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

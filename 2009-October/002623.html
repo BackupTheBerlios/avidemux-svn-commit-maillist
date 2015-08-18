@@ -1,0 +1,566 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5412 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5412%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200910251827.n9PIRRhA000418%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002622.html">
+   <LINK REL="Next"  HREF="002624.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5412 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5412%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200910251827.n9PIRRhA000418%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5412 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Oct 25 19:27:27 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002622.html">[Avidemux-svn-commit] r5411 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame
+</A></li>
+        <LI>Next message: <A HREF="002624.html">[Avidemux-svn-commit] r5413 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2623">[ date ]</a>
+              <a href="thread.html#2623">[ thread ]</a>
+              <a href="subject.html#2623">[ subject ]</a>
+              <a href="author.html#2623">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-10-25 19:27:25 +0100 (Sun, 25 Oct 2009)
+New Revision: 5412
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADMedAVIAUD.cpp
+Log:
+[Editor] Better segment switching + preliminary audio handling when switching segment
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-10-24 15:58:45 UTC (rev 5411)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-10-25 18:27:25 UTC (rev 5412)
+@@ -129,6 +129,9 @@
+     {
+         goto np_nextSeg;
+     }
++        // Refresh in case we switched....
++        seg=_segments.getSegment(_currentSegment);
++        updateImageTiming(seg,image);
+         // no we have our image, let's check it is within this segment range..
+         pts=image-&gt;Pts;
+         tail=seg-&gt;_startTimeUs+seg-&gt;_durationUs;
+@@ -136,10 +139,11 @@
+         {
+                 ADM_info(&quot;Got an image (%&quot;LU&quot; ms, but is out of this segment (%&quot;LU&quot;+%&quot;LU&quot;=%&quot;LU&quot; ms)\n&quot;,
+                                                                     pts,seg-&gt;_startTimeUs,seg-&gt;_durationUs,tail);
++                _segments.dump();
+                 goto np_nextSeg;
+         }
+         
+-        updateImageTiming(seg,image);
++
+         return true;
+ 
+ // Try to get an image for the following segment....
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2009-10-24 15:58:45 UTC (rev 5411)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2009-10-25 18:27:25 UTC (rev 5412)
+@@ -52,8 +52,7 @@
+ 
+    packetBufferSize=0;
+    packetBufferDts=ADM_NO_PTS;
+-  _audioseg = 0;
+-  _audiooffset = 0;
++  _audioSeg = 0;
+   _audioSample=0;
+ 
+   // Initialize a default postprocessing (dummy)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-10-24 15:58:45 UTC (rev 5411)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-10-25 18:27:25 UTC (rev 5412)
+@@ -45,12 +45,12 @@
+ */
+ typedef enum
+ {
+-	ENV_EDITOR_NONE=   0x0000,
+-	ENV_EDITOR_BFRAME= 0x0001,
+-	ENV_EDITOR_PVOP=   0x0002,
+-    ENV_EDITOR_X264=   0x0004,
+-    ENV_EDITOR_SMART=  0x0005,
+-	ENV_EDITOR_LAST=   0x8000
++        ENV_EDITOR_NONE=   0x0000,
++        ENV_EDITOR_BFRAME= 0x0001,
++        ENV_EDITOR_PVOP=   0x0002,
++        ENV_EDITOR_X264=   0x0004,
++        ENV_EDITOR_SMART=  0x0005,
++        ENV_EDITOR_LAST=   0x8000
+ }_ENV_EDITOR_FLAGS;
+ 
+ 
+@@ -91,27 +91,24 @@
+   private:
+                     ADM_EditorSegment _segments;
+                     uint8_t     dupe(ADMImage *src,ADMImage *dst,_VIDEOS *vid); 
+-                                                            // Duplicate img, do colorspace
+-                                                            // if needed
+-  					uint32_t	_internalFlags;
+-  					ADM_PP 		_pp;
+-					ADMImage	*_imageBuffer;
+-  				
+-  					// _audiooffset points to the offset / the total segment
+-  					// not the used part !
+-  					uint32_t  _audioseg;
+-					int64_t   _audioSample;
+-  					uint32_t  _audiooffset;
++                    uint32_t	_internalFlags;  // Flags :
++                    ADM_PP      _pp;             // Postprocessing settings
++                    ADMImage	*_imageBuffer;   // Temp buffer used for decoding
++                    uint32_t    _currentSegment;   // Current video segment
++//****************************** Audio **********************************
++                    // _audiooffset points to the offset / the total segment
++                    // not the used part !
++                    uint32_t  _audioSeg;
++                    int64_t   _audioSample;
+ 
+-                    uint32_t  _currentSegment;
+-       				//uint32_t _lastseg,_lastframe,_lastlen;
+-
+                     ADM_audioStreamTrack *getTrack(uint32_t i);
+                     ADMImage    *_scratch;																		;
+-                    uint8_t  	updateAudioTrack(uint32_t seg);			   	
+-                    void 		deleteAllVideos(void );
+-                    uint8_t 	getMagic(const char *name,uint32_t *magic);
+-                    uint32_t 	searchForwardSeg(uint32_t startframe);
++                    uint8_t  	updateAudioTrack(uint32_t seg);
++                    bool        switchToNextAudioSegment(void);
++//****************************** Audio **********************************
++                    void        deleteAllVideos(void );
++                    uint8_t     getMagic(const char *name,uint32_t *magic);
++                    uint32_t    searchForwardSeg(uint32_t startframe);
+                     bool        rederiveFrameType(vidHeader *demuxer);
+ 
+   public:
+@@ -120,16 +117,16 @@
+                     uint32_t    getPARWidth(void);
+                     uint32_t    getPARHeight(void);
+                     bool        rebuildDuration(void);
+-  								ADM_Composer();
+-  				virtual 			~ADM_Composer();
+-                    void		clean( void );
++                                ADM_Composer();
++virtual                         ~ADM_Composer();
++                    void        clean( void );
+                     uint8_t     saveAsScript (const char *name, const char *out);
+                     uint8_t 	saveWorbench(const char *name);
+                     uint8_t 	loadWorbench(const char *name);
+                     uint8_t     resetSeg( void );
+                     bool     	addFile (const char *name);
+                     uint8_t 	cleanup( void);
+-                    bool 	    isMultiSeg( void);
++                    bool        isMultiSeg( void);
+ /************************************* Markers *****************************/
+ private:        
+                     uint64_t    markerAPts,markerBPts;
+@@ -163,7 +160,7 @@
+ public:
+                     
+             virtual uint8_t         getPacket(uint8_t *buffer,uint32_t *size, uint32_t sizeMax,uint32_t *nbSample,uint64_t *dts);
+-                    uint8_t         getPCMPacket(float  *dest, uint32_t sizeMax, uint32_t *samples,uint64_t *odts);
++                    bool            getPCMPacket(float  *dest, uint32_t sizeMax, uint32_t *samples,uint64_t *odts);
+             virtual bool            goToTime(uint64_t nbUs);
+                     bool            getExtraData(uint32_t *l, uint8_t **d);
+                     uint64_t        getDurationInUs(void);
+@@ -174,13 +171,13 @@
+                     bool            getAudioStreamsInfo(uint64_t xtime,uint32_t *nbStreams, audioInfo **infos);
+                     bool            changeAudioStream(uint64_t xtime,uint32_t newstream);
+                     uint32_t        getCurrentAudioStreamNumber(uint64_t xframe);
+-                    bool    		setDecodeParam( uint64_t frameTime );
++                    bool            setDecodeParam( uint64_t frameTime );
+ /**************************************** Video Info **************************/
+-	 				AVIStreamHeader 	*getVideoStreamHeader(void ) ;
+-	 				MainAVIHeader 		*getMainHeader(void );
+-	 				ADM_BITMAPINFOHEADER 	*getBIH(void ) ;
++                    AVIStreamHeader 	*getVideoStreamHeader(void ) ;
++                    MainAVIHeader 		*getMainHeader(void );
++                    ADM_BITMAPINFOHEADER 	*getBIH(void ) ;
+ 
+-	  				uint8_t			getVideoInfo(aviInfo *info);
++                    uint8_t			getVideoInfo(aviInfo *info);
+                     uint64_t        getVideoDuration(void);
+                     uint64_t        getFrameIncrement(void); /// Returns the # of us between 2 frames or the smaller value of them
+ 
+@@ -189,18 +186,18 @@
+ 					
+ /***************************************** Seeking *****************************/            
+ public:
+-                    bool			getNKFramePTS(uint64_t *frameTime);
+-                    bool			getPKFramePTS(uint64_t *frameTime);   
++                    bool                getNKFramePTS(uint64_t *frameTime);
++                    bool                getPKFramePTS(uint64_t *frameTime);
+ /******************************* Post Processing ************************************/
+-					uint8_t 		setPostProc( uint32_t type, uint32_t strength,	uint32_t swapuv);
+-					uint8_t 		getPostProc( uint32_t *type, uint32_t *strength,uint32_t *swapuv);
++                    uint8_t             setPostProc( uint32_t type, uint32_t strength,	uint32_t swapuv);
++                    uint8_t             getPostProc( uint32_t *type, uint32_t *strength,uint32_t *swapuv);
+ /******************************* /Post Processing ************************************/	
+ /******************************* Editing ************************************/	
+-                    bool            remove(uint64_t start,uint64_t end);
++                    bool                remove(uint64_t start,uint64_t end);
+ /******************************* /Editing **********************************/										
+ /******************************* Misc ************************************/				
+-					uint8_t			setEnv(_ENV_EDITOR_FLAGS newflag);
+-					uint8_t			getEnv(_ENV_EDITOR_FLAGS newflag);
++                    uint8_t             setEnv(_ENV_EDITOR_FLAGS newflag);
++                    uint8_t             getEnv(_ENV_EDITOR_FLAGS newflag);
+ /******************************* /Misc ************************************/				
+ 
+ };
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h	2009-10-24 15:58:45 UTC (rev 5411)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.h	2009-10-25 18:27:25 UTC (rev 5412)
+@@ -33,7 +33,7 @@
+     ADM_audioStream  *stream;
+     audioInfo        *info;
+     ADM_Audiocodec   *codec;
+-    WAVHeader		 wavheader;
++    WAVHeader        wavheader;
+     bool             vbr;
+     uint64_t         duration;
+     uint64_t         size;
+@@ -48,25 +48,25 @@
+ */
+ typedef struct
+ {
+-  	vidHeader 							*_aviheader;  /// Demuxer
+-  	decoders							*decoder;     /// Video codec
+-    COL_Generic2YV12                    *color;       /// Color conversion if needed
++      vidHeader *_aviheader; /// Demuxer
++      decoders *decoder; /// Video codec
++      COL_Generic2YV12 *color; /// Color conversion if needed
+ 
+-	/* Audio part */
++      /* Audio part */
+ 
+-    uint32_t                            nbAudioStream;   
+-    uint32_t                            currentAudioStream;
+-    ADM_audioStreamTrack                **audioTracks;
++      uint32_t nbAudioStream;
++      uint32_t currentAudioStream;
++      ADM_audioStreamTrack **audioTracks;
+ 
+-	uint32_t							_nb_video_frames;  /// Really needed ?	
+-	EditorCache							*_videoCache;      /// Decoded video cache
++      uint32_t _nb_video_frames; /// Really needed ?
++      EditorCache *_videoCache; /// Decoded video cache
+ 
+-    /* Timeing info */
++      /* Timeing info */
+ 
+-    uint32_t                            lastSentFrame;     /// Last frame read/sent to decoder
+-    uint64_t                            lastDecodedPts;    /// Pts of last frame out of decoder
+-    uint64_t                            lastReadPts;       /// Pts of the last frame we read
+-    uint64_t                            timeIncrementInUs; /// in case the video has no PTS, time increment (us)
++      uint32_t lastSentFrame; /// Last frame read/sent to decoder
++      uint64_t lastDecodedPts; /// Pts of last frame out of decoder
++      uint64_t lastReadPts; /// Pts of the last frame we read
++      uint64_t timeIncrementInUs; /// in case the video has no PTS, time increment (us)
+ }_VIDEOS;
+ 
+ /**
+@@ -76,13 +76,13 @@
+ */
+ typedef struct
+ {
+-  	uint32_t							_reference;       /// Reference video
+- 	uint64_t							_refStartTimeUs;  /// Starting time in reference
+-    uint64_t                            _startTimeUs;     /// Start time in current (=sum(_duration of previous seg))
+-	uint64_t							_durationUs;      ///
+-    uint32_t                            _nbFrame;
+-    uint32_t                            _curFrame;        ///
+-}_SEGMENT;
++        uint32_t _reference; /// Reference video
++        uint64_t _refStartTimeUs; /// Starting time in reference
++        uint64_t _startTimeUs; /// Start time in current (=sum(_duration of previous seg))
++        uint64_t _durationUs; ///
++        uint32_t _nbFrame;
++        uint32_t _curFrame; ///
++} _SEGMENT;
+ /*
+     Use vectors to store our videos &amp; segments
+ */
+@@ -98,9 +98,10 @@
+         ListOfSegments segments;
+         ListOfVideos   videos;
+         bool           updateStartTime(void);
+-        void           dump(void);
+ 
++
+ public:
++            void        dump(void);
+                         ADM_EditorSegment(void);
+                         ~ADM_EditorSegment();
+             bool        addReferenceVideo(_VIDEOS *ref);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADMedAVIAUD.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADMedAVIAUD.cpp	2009-10-24 15:58:45 UTC (rev 5411)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADMedAVIAUD.cpp	2009-10-25 18:27:25 UTC (rev 5412)
+@@ -1,11 +1,11 @@
+ /***************************************************************************
+-                          ADMedAVIAUD.cpp  -  description
+-                             -------------------
++   \fn  ADMedAVIAUD.cpp
++   \brief Interface to audio track(s) from editor
+ 
+     Handle switching from pieces of movie
+     Also fix the gap/overlap in audio to offer a strictly continuous audio stream
+     
+-    copyright            : (C) 2008 by mean
++    copyright            : (C) 2008/2009 by mean
+     email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
+ 
+ Todo:
+@@ -50,7 +50,29 @@
+ 
+ // ADM_audioStreamTack *
+ #define MYAUDIO (_videos[0].audioTracks[_videos[0].currentAudioStream])
++/**
++ *      \fn switchToNextAudioSegment
++ *
++ */
++bool ADM_Composer::switchToNextAudioSegment(void)
++{
++        // Try to switch segment
++        if(_audioSeg+1&gt;=_segments.getNbSegments()) return false;
+ 
++        ADM_warning(&quot;Switching to segment %&quot;LU&quot;\n&quot;,_audioSeg+1);
++        _audioSeg++;
++        _SEGMENT *seg=_segments.getSegment(_audioSeg);
++        ADM_audioStreamTrack *trk=getTrack(seg-&gt;_reference);
++        // Go to beginning of the stream
++        if(false==trk-&gt;stream-&gt;goToTime(seg-&gt;_refStartTimeUs))
++          {
++            ADM_warning(&quot;Fail to seek audio to %&quot;LLU&quot;ms\n&quot;,seg-&gt;_refStartTimeUs/1000);
++            return false;
++          }
++        ADM_info(&quot;Switched ok to audio segment %&quot;LU&quot;\n&quot;,_audioSeg);
++        return true;
++
++}
+ /**
+     \fn refillPacketBuffer
+     \brief Fetch a new packet
+@@ -58,31 +80,58 @@
+ bool ADM_Composer::refillPacketBuffer(void)
+ {
+    packetBufferSize=0; 
+-   ADM_audioStreamTrack *trk=getTrack(0);
++   uint64_t dts;
++   _SEGMENT *seg=_segments.getSegment(_audioSeg);
++   if(!seg) return false;
++
++   if(lastDts&gt;=seg-&gt;_startTimeUs+seg-&gt;_durationUs)
++     {
++       ADM_info(&quot;Consumed all data from this audio segment\n&quot;);
++       switchToNextAudioSegment();
++       seg=_segments.getSegment(_audioSeg);
++     }
++
++
++
++   ADM_audioStreamTrack *trk=getTrack(seg-&gt;_reference);
+     if(!trk) return false;    
+-   if(!trk-&gt;stream-&gt;getPacket(packetBuffer,&amp;packetBufferSize,ADM_EDITOR_PACKET_BUFFER_SIZE,
+-                        &amp;packetBufferSamples,&amp;packetBufferDts))
++
++    if(!trk-&gt;stream-&gt;getPacket(packetBuffer,&amp;packetBufferSize,ADM_EDITOR_PACKET_BUFFER_SIZE,
++                        &amp;packetBufferSamples,&amp;dts))
+     {
+-            adm_printf(ADM_PRINT_ERROR,&quot;[Composer::getPCMPacket] Read failed\n&quot;);
+-            return false;
++              if(true==switchToNextAudioSegment())
++                 return refillPacketBuffer();
++             ADM_warning(&quot;End of audio\n&quot;);
++             return false;
+     }
++    //
++    // Ok we have a packet, rescale audio
++    if(dts==ADM_NO_PTS) packetBufferDts=ADM_NO_PTS;
++    else
++    {
++      if(dts&gt;=seg-&gt;_refStartTimeUs) packetBufferDts=dts+seg-&gt;_startTimeUs-seg-&gt;_refStartTimeUs;
++      else
++        {
++          ADM_warning(&quot;Got PTS=%&quot;LLU&quot; which is too early for start=%&quot;LLU&quot;ms\n&quot;,dts/1000,seg-&gt;_refStartTimeUs);
++          return refillPacketBuffer();
++        }
++    }
+     return true;
+ }
+ 
+-
+ /**
+     \fn     getPCMPacket
+     \brief  Get audio packet
+ 
+ */
+ 
+-uint8_t ADM_Composer::getPCMPacket(float  *dest, uint32_t sizeMax, uint32_t *samples,uint64_t *odts)
++bool ADM_Composer::getPCMPacket(float  *dest, uint32_t sizeMax, uint32_t *samples,uint64_t *odts)
+ {
+ uint32_t fillerSample=0;   // FIXME : Store &amp; fix the DTS error correctly!!!!
+ uint32_t inSize;
+ bool drop=false;
++static bool fail=false;
+ 
+-
+ again:
+     *samples=0;
+     ADM_audioStreamTrack *trk=getTrack(0);
+@@ -92,14 +141,16 @@
+     {
+         if(!refillPacketBuffer())
+         {
+-            printf(&quot;[Editor] Cannot refill audio\n&quot;);
+-            return 0;
++            if(fail==false)
++              ADM_warning(&quot;[Editor] Cannot refill audio\n&quot;);
++            fail=true;
++            return false;
+         }
+     }
+     // We do now
+     vprintf(&quot;[PCMPacket]  Got %d samples, time code %08lu  lastDts=%08lu delta =%08ld\n&quot;,packetBufferSamples,packetBufferDts,lastDts,packetBufferDts-lastDts);
++    fail=false;
+ 
+-
+     // Check if the Dts matches
+     if(lastDts!=ADM_AUDIO_NO_DTS &amp;&amp;packetBufferDts!=ADM_AUDIO_NO_DTS)
+     {
+@@ -198,12 +249,24 @@
+ */
+ bool ADM_Composer::goToTime (uint64_t ustime)
+ {
+-    printf(&quot;[Editor] go to time %02.2f secs\n&quot;,((float)ustime)/1000000.);
+-    ADM_audioStreamTrack *trk=getTrack(0);
+-    if(!trk) return 0;
+-    
+-    
+-    if(true==trk-&gt;stream-&gt;goToTime(ustime))
++  uint32_t seg;
++  uint64_t segTime;
++    ADM_info(&quot; go to time %02.2f secs\n&quot;,((float)ustime)/1000000.);
++    if(false==_segments.convertLinearTimeToSeg(ustime,&amp;seg,&amp;segTime))
++      {
++        ADM_warning(&quot;Cannot convert %&quot;LLU&quot; to linear time\n&quot;,ustime/1000);
++        return false;
++      }
++    _SEGMENT *s=_segments.getSegment(seg);
++    ADM_audioStreamTrack *trk=getTrack(s-&gt;_reference);
++    if(!trk)
++      {
++        ADM_warning(&quot;No audio for segment %&quot;LU&quot;\n&quot;,seg);
++        return false;
++      }
++    uint64_t seekTime;
++    seekTime=segTime+s-&gt;_refStartTimeUs;
++    if(true==trk-&gt;stream-&gt;goToTime(seekTime))
+     {
+         setDts(ustime);
+         return true;
+@@ -234,8 +297,10 @@
+ */
+ WAVHeader       *ADM_Composer::getInfo(void)
+ {
+-     ADM_audioStreamTrack *trk=getTrack(0);
+-    if(!trk) return 0;
++
++  _SEGMENT *seg=_segments.getSegment(_audioSeg);
++    ADM_audioStreamTrack *trk=getTrack(seg-&gt;_reference);
++    if(!trk) return NULL;
+     return trk-&gt;stream-&gt;getInfo();
+ }
+ /**
+@@ -244,29 +309,33 @@
+ */
+  CHANNEL_TYPE    *ADM_Composer::getChannelMapping(void )
+ {
+-  ADM_audioStreamTrack *trk=getTrack(0);
++  _SEGMENT *seg=_segments.getSegment(_audioSeg);
++  ADM_audioStreamTrack *trk=getTrack(seg-&gt;_reference);
+     if(!trk) return NULL;
+     return trk-&gt;codec-&gt;channelMapping;
+-
+ }
+ /**
+     \fn getExtraData
+ */
+ bool            ADM_Composer::getExtraData(uint32_t *l, uint8_t **d)
+ {
++  _SEGMENT *seg=_segments.getSegment(_audioSeg);
++  ADM_audioStreamTrack *trk=getTrack(seg-&gt;_reference);
++
+     *l=0;
+     *d=NULL;
+-     ADM_audioStreamTrack *trk=getTrack(0);
+     if(!trk) return false;
+     return trk-&gt;stream-&gt;getExtraData(l,d); 
+ 
+ }
+ /**
+     \fn getTrack
++    \brief Returns Track for ref video given as parameter
++    @param : Reference video
+ */
+-ADM_audioStreamTrack *ADM_Composer::getTrack(uint32_t i)
++ADM_audioStreamTrack *ADM_Composer::getTrack(uint32_t refVideo)
+ {
+-    _VIDEOS *v=_segments.getRefVideo(0);
++    _VIDEOS *v=_segments.getRefVideo(refVideo);
+     if(!v-&gt;audioTracks) return NULL;
+ 
+     return v-&gt;audioTracks[v-&gt;currentAudioStream];
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002622.html">[Avidemux-svn-commit] r5411 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/lame
+</A></li>
+	<LI>Next message: <A HREF="002624.html">[Avidemux-svn-commit] r5413 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2623">[ date ]</a>
+              <a href="thread.html#2623">[ thread ]</a>
+              <a href="subject.html#2623">[ subject ]</a>
+              <a href="author.html#2623">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

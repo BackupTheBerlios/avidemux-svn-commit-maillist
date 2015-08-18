@@ -1,0 +1,332 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6656 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_muxerGate/include ADM_muxerGate/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6656%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%0A%09ADM_muxerGate/include%20ADM_muxerGate/src&In-Reply-To=%3C20100925150236.67C8A480FCF%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003839.html">
+   <LINK REL="Next"  HREF="003841.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6656 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_muxerGate/include ADM_muxerGate/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6656%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%0A%09ADM_muxerGate/include%20ADM_muxerGate/src&In-Reply-To=%3C20100925150236.67C8A480FCF%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6656 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_muxerGate/include ADM_muxerGate/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Sep 25 17:02:36 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003839.html">[Avidemux-svn-commit] r6655 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml
+</A></li>
+        <LI>Next message: <A HREF="003841.html">[Avidemux-svn-commit] r6657 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_muxerGate/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3840">[ date ]</a>
+              <a href="thread.html#3840">[ thread ]</a>
+              <a href="subject.html#3840">[ subject ]</a>
+              <a href="author.html#3840">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-09-25 17:02:36 +0200 (Sat, 25 Sep 2010)
+New Revision: 6656
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/include/ADM_videoCopy.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopyFromAnnexB.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/gui_savenew.cpp
+Log:
+[annexb] Better but still incomplete annexb to iso copy
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/include/ADM_videoCopy.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/include/ADM_videoCopy.h	2010-09-25 15:02:34 UTC (rev 6655)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/include/ADM_videoCopy.h	2010-09-25 15:02:36 UTC (rev 6656)
+@@ -45,6 +45,7 @@
+         uint8_t         *myExtra;
+         uint32_t        myExtraLen;
+         bool            findNalu(int nalu,uint8_t *start,uint8_t *end,uint8_t **outPtr,uint32_t *outLen);
++        bool            compactNalus(ADMBitstream *out);
+         int             convertFromAnnexB(uint8_t *inData,uint32_t inSize,
+                                                       uint8_t *outData,uint32_t outMaxSize);
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopyFromAnnexB.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopyFromAnnexB.cpp	2010-09-25 15:02:34 UTC (rev 6655)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_muxerGate/src/ADM_videoCopyFromAnnexB.cpp	2010-09-25 15:02:36 UTC (rev 6656)
+@@ -24,8 +24,10 @@
+ extern void mixDump(uint8_t *ptr, uint32_t len);
+ #if 1
+ #define aprintf ADM_info
++#define check isNalValid
+ #else
+ #define aprintf(...) {}
++#define check(...) {}
+ #endif
+ 
+ static uint32_t readBE32(uint8_t *p)
+@@ -41,9 +43,27 @@
+     p[2]=(size&gt;&gt;8)&amp;0xff;
+     p[3]=(size&gt;&gt;0)&amp;0xff;
+ }
+-
++static const char *nalType[13]=
++{
++    &quot;invalid&quot;,&quot;nonIdr&quot;,&quot;invalid&quot;,&quot;invalid&quot;,&quot;invalid&quot;,
++    &quot;idr&quot;,&quot;sei&quot;,&quot;sps&quot;,&quot;pps&quot;,&quot;au delimiter&quot;,&quot;invalid&quot;,&quot;invalid&quot;,&quot;filler&quot;
++};
++static bool isNalValid(int nal)
++{
++    nal&amp;=0x1f;
++    switch(nal)
++    {
++        case 1:case 5:case 6: case 7: case 8: case 9:case 0xc:
++                break;
++        default:
++            ADM_warning(&quot;Invalid NAL 0x%x\n&quot;,nal);
++    }
++    if(nal&lt;=12) ADM_info(&quot;Nal : %s&quot;,nalType[nal]);
++    return true;
++}
+ /**
+     \fn findNalu
++    \brief lookup for a specific NALU in the given buffer
+ */
+ bool ADM_videoStreamCopyFromAnnexB::findNalu(int nalu,uint8_t *start,uint8_t *end,
+             uint8_t **outPtr,uint32_t *outLen)
+@@ -53,11 +73,13 @@
+     {
+         uint32_t len=readBE32(start);
+         uint8_t  n=start[4];
++        
+         if(len+start+4&gt;end)
+         {
+             ADM_warning(&quot;Nal size too big (%d)\n&quot;,len);
+             return false;
+         }
++        check(n);
+         aprintf(&quot;Looking for %x found %x, size=%d at offset 0x%x\n&quot;,nalu,n,len,start-realstart);
+         if((n&amp;0x1f)==nalu)
+         {
+@@ -110,20 +132,20 @@
+             myExtraLen=5+1+2+spsLen+1+2+ppsLen;
+             myExtra=new uint8_t[myExtraLen];
+             uint8_t *ptr=myExtra;
+-            *ptr++=1;
+-            *ptr++=0x64;
+-            *ptr++=0x00;
+-            *ptr++=0x33;
+-            *ptr++=0xff;
++            *ptr++=1;           // AVC version
++            *ptr++=0x64;        // Profile
++            *ptr++=0x00;        // Profile
++            *ptr++=0x33;        // Level
++            *ptr++=0xff;        // Nal size minus 1
+ 
+-            *ptr++=0xe1;
++            *ptr++=0xe1;        // SPS
+             *ptr++=spsLen&gt;&gt;8;
+             *ptr++=spsLen&amp;0xff;
+ 
+             memcpy(ptr,spsStart,spsLen);
+             ptr+=spsLen;
+ 
+-            *ptr++=0x1;
++            *ptr++=0x1;         // PPS
+             *ptr++=ppsLen&gt;&gt;8;
+             *ptr++=ppsLen&amp;0xff;
+ 
+@@ -152,32 +174,38 @@
+     myBitstream=NULL;
+ }
+ /**
+-    \fn unescape
++    \fn unescapeH264
+     \brief should be moved to coreUtils
+ */
+-static uint32_t unescape(uint8_t *in, uint32_t len,uint8_t *out)
++static uint32_t unescapeH264(uint8_t *in, uint32_t len,uint8_t *out)
+ {
+   uint32_t outlen=0;
++  uint8_t *start=out;
+   uint8_t *tail=in+len;
+-    if(len&lt;3) return 0;
+-    while(in&lt;tail-3)
++
++    if(len&lt;3) 
+     {
++        memcpy(out,in,len);
++        return len;
++    }
++    while(in+3&lt;tail)
++    {
+       if(!in[0]  &amp;&amp; !in[1] &amp;&amp; in[2]==3)
+       {
+         out[0]=0;
+         out[1]=0;
+         out+=2;
+-        outlen+=2;
+         in+=3;
+         continue;
+       }
+       *out++=*in++;
+-      outlen++;
+     }
+     // copy last bytes
+     uint32_t left=tail-in;
+     memcpy(out,in,left);
+-    outlen+=left;
++    out+=left;
++    outlen=out-start;
++    ADM_assert(outlen&lt;=len);
+     return outlen;
+  ;
+ 
+@@ -200,6 +228,7 @@
+     {
+         if(false==ADM_findH264StartCode(head,tail,&amp;startCode,&amp;offset))
+             break;
++        check(startCode);
+         if(true==first)
+         {
+             oldStartCode=startCode;
+@@ -209,7 +238,7 @@
+         }
+         uint32_t toEscape=offset-5; // ignore startcode
+         uint32_t nalHeaderSize=4;
+-        uint32_t nalSize=unescape(head,toEscape,tgt+nalHeaderSize+1);
++        uint32_t nalSize=unescapeH264(head,toEscape,tgt+nalHeaderSize+1);
+         head+=offset;
+         writeBE32(tgt,1+nalSize);
+         aprintf(&quot;%x , %d -&gt; %d at offset 0x%x\n&quot;,oldStartCode,toEscape,nalSize,tgt-outData);
+@@ -221,7 +250,7 @@
+     }
+     uint32_t toEscape=tail-head;
+     uint32_t nalHeaderSize=4;
+-    uint32_t nalSize=unescape(head,toEscape,tgt+nalHeaderSize+1);
++    uint32_t nalSize=unescapeH264(head,toEscape,tgt+nalHeaderSize+1);
+     writeBE32(tgt,1+nalSize);
+     aprintf(&quot;%x , %d -&gt; %d at offset 0x%x\n&quot;,oldStartCode,toEscape,nalSize,tgt-outData);
+     tgt[nalHeaderSize]=oldStartCode;
+@@ -231,18 +260,58 @@
+     return outputSize;
+ }
+ /**
++    \fn compactNalus
++    \brief remove unwanted NALU, marge NALU of the same type
++*/
++bool ADM_videoStreamCopyFromAnnexB::compactNalus(ADMBitstream *out)
++{
++    uint8_t *start=out-&gt;data;
++    uint8_t *end=start+out-&gt;len;
++    uint8_t *realstart=start;
++    uint8_t *write=start;
++    uint8_t lastNalu=0xff;
++    uint32_t originalSize=out-&gt;len;
++    while(start+5&lt;end) // NALU starts with 4 bytes size + (1 bytes nalu id, size-1 other payload)
++    {
++        uint32_t len=readBE32(start);
++        uint8_t  n=start[4];
++        if(len+start+4&gt;end)
++        {
++            ADM_warning(&quot;Nal size too big (4+%d/%d)\n&quot;,len,end-start);
++            return false;
++        }
++        check(n);
++        aprintf(&quot;Compacting: Nal %d, size %d\n&quot;,n,len);
++        switch(n&amp;0x1f)
++        {
++            case NAL_FILLER: break;
++            case NAL_AU_DELIMITER: break;
++            default: // keep it
++                memmove(write,start,len+4);
++                write+=4+len;
++                break;
++        }
++        start+=4+len;
++    }
++    out-&gt;len=write-realstart;
++    aprintf(&quot;compact %d -&gt; %d\n&quot;,originalSize,out-&gt;len);
++    return true;
++}
++/**
+     \fn getPacket
+ */
+ 
+ bool    ADM_videoStreamCopyFromAnnexB::getPacket(ADMBitstream *out)
+ {
++    aprintf(&quot;-------%d--------\n&quot;,(int)currentFrame);
+     if(false==ADM_videoStreamCopy::getPacket(myBitstream)) return false;
+-    aprintf(&quot;---------------\n&quot;);
++    
+     int size=convertFromAnnexB(myBitstream-&gt;data,myBitstream-&gt;len,out-&gt;data,out-&gt;bufferSize);
+     out-&gt;len=size;
+     out-&gt;dts=myBitstream-&gt;dts;
+     out-&gt;pts=myBitstream-&gt;pts;
+     out-&gt;flags=myBitstream-&gt;flags;
++    compactNalus(out);
+     return true;
+ }
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gui_savenew.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gui_savenew.cpp	2010-09-25 15:02:34 UTC (rev 6655)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gui_savenew.cpp	2010-09-25 15:02:36 UTC (rev 6656)
+@@ -261,7 +261,21 @@
+     // Video Stream
+     if(!videoEncoderIndex) // Copy
+     {
+-        ADM_videoStreamCopy *copy=new ADM_videoStreamCopy(markerA,markerB);
++        aviInfo info;
++        video_body-&gt;getVideoInfo(&amp;info);
++        uint8_t *extra;
++        uint32_t extraLen;
++        video_body-&gt;getExtraHeaderData(&amp;extraLen,&amp;extra);
++#warning do something better
++        ADM_videoStreamCopy *copy=NULL;
++        if(isH264Compatible(info.fcc) &amp;&amp; !extraLen)
++        {
++            ADM_info(&quot;Probably AnnexB bitstream\n&quot;);
++            copy=new ADM_videoStreamCopyFromAnnexB(markerA,markerB);
++        }else   
++        {
++            copy=new ADM_videoStreamCopy(markerA,markerB);
++        }
+         video=copy;
+         // In that case, get the real time and update audio with it...
+         // Because we might have go back in time to catch the first intra
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003839.html">[Avidemux-svn-commit] r6655 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/OpenDml
+</A></li>
+	<LI>Next message: <A HREF="003841.html">[Avidemux-svn-commit] r6657 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_muxerGate/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3840">[ date ]</a>
+              <a href="thread.html#3840">[ thread ]</a>
+              <a href="subject.html#3840">[ subject ]</a>
+              <a href="author.html#3840">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

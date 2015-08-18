@@ -1,0 +1,523 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4171 - in branches/avidemux_2.4_branch: .	avidemux avidemux/ADM_audiodevice	avidemux/ADM_userInterfaces/ADM_commonUI cmake
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4171%20-%20in%20branches/avidemux_2.4_branch%3A%20.%0A%09avidemux%20avidemux/ADM_audiodevice%0A%09avidemux/ADM_userInterfaces/ADM_commonUI%20cmake&In-Reply-To=%3C200806280820.m5S8Kdmg002798%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001423.html">
+   <LINK REL="Next"  HREF="001425.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4171 - in branches/avidemux_2.4_branch: .	avidemux avidemux/ADM_audiodevice	avidemux/ADM_userInterfaces/ADM_commonUI cmake</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4171%20-%20in%20branches/avidemux_2.4_branch%3A%20.%0A%09avidemux%20avidemux/ADM_audiodevice%0A%09avidemux/ADM_userInterfaces/ADM_commonUI%20cmake&In-Reply-To=%3C200806280820.m5S8Kdmg002798%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4171 - in branches/avidemux_2.4_branch: .	avidemux avidemux/ADM_audiodevice	avidemux/ADM_userInterfaces/ADM_commonUI cmake">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jun 28 10:20:39 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001423.html">[Avidemux-svn-commit] r4169 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv
+</A></li>
+        <LI>Next message: <A HREF="001425.html">[Avidemux-svn-commit] r4172 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1424">[ date ]</a>
+              <a href="thread.html#1424">[ thread ]</a>
+              <a href="subject.html#1424">[ subject ]</a>
+              <a href="author.html#1424">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-06-28 10:20:38 +0200 (Sat, 28 Jun 2008)
+New Revision: 4171
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_devicePulseSimple.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_devicePulseSimple.h
+   branches/avidemux_2.4_branch/cmake/FindPulseAudioSimple.cmake
+Modified:
+   branches/avidemux_2.4_branch/ConfigureChecks.cmake
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_audiodevice.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/CMakeLists.txt
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/audio_out.h
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp
+   branches/avidemux_2.4_branch/avidemux/CMakeLists.txt
+   branches/avidemux_2.4_branch/cmake/conf_summary.cmake
+   branches/avidemux_2.4_branch/config.h.cmake
+Log:
+[Audio] Simple pulseaudio support
+
+Modified: branches/avidemux_2.4_branch/ConfigureChecks.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/ConfigureChecks.cmake	2008-06-27 19:35:24 UTC (rev 4170)
++++ branches/avidemux_2.4_branch/ConfigureChecks.cmake	2008-06-28 08:20:38 UTC (rev 4171)
+@@ -343,7 +343,14 @@
+ IF (NOT ADM_OS_WINDOWS)
+ 	INCLUDE(FindArts)
+ ENDIF (NOT ADM_OS_WINDOWS)
++########################################
++# PulseAudioSimple
++########################################
++IF (NOT ADM_OS_WINDOWS)
++	INCLUDE(FindPulseAudioSimple)
++ENDIF (NOT ADM_OS_WINDOWS)
+ 
++
+ ########################################
+ # ESD
+ ########################################
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_audiodevice.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_audiodevice.cpp	2008-06-27 19:35:24 UTC (rev 4170)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_audiodevice.cpp	2008-06-28 08:20:38 UTC (rev 4171)
+@@ -26,6 +26,8 @@
+ 
+ #include &quot;avi_vars.h&quot;
+ #include &quot;prefs.h&quot;
++
++
+ #ifdef HAVE_AUDIO
+ #include &quot;ADM_assert.h&quot;
+ #include &quot;ADM_audiodevice.h&quot;
+@@ -56,10 +58,16 @@
+ #include &quot;ADM_deviceJack.h&quot;
+ #endif
+ 
++#ifdef USE_PULSE_SIMPLE
++#include &quot;ADM_devicePulseSimple.h&quot;
++#endif
++
+ #ifdef __APPLE__
+ #include &quot;ADM_audiodevice/ADM_deviceAudioCore.h&quot;
+ #endif
+ 
++
++
+ #include &quot;gui_action.hxx&quot;
+ #include &quot;audio_out.h&quot;
+ 
+@@ -144,6 +152,7 @@
+ 			case DEVICE_WIN32:
+ 			case DEVICE_ESD:
+ 			case DEVICE_JACK:
++            case DEVICE_PULSE_SIMPLE:
+ 			
+ 						printf(&quot;Using real audio device\n&quot;);
+ 						AVDM_switch(id);
+@@ -208,6 +217,13 @@
+ 								break;
+ 
+ #endif
++#ifdef USE_PULSE_SIMPLE
++		  case  DEVICE_PULSE_SIMPLE :
++								device=new 	 pulseSimpleAudioDevice;
++								currentDevice=DEVICE_PULSE_SIMPLE;;
++								break;
++
++#endif
+ #if defined(OSS_SUPPORT) &amp;&amp; !defined(ADM_WIN32)
+ 		  case  DEVICE_OSS :
+ 								device=new 	 ossAudioDevice;
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_devicePulseSimple.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_devicePulseSimple.cpp	2008-06-27 19:35:24 UTC (rev 4170)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_devicePulseSimple.cpp	2008-06-28 08:20:38 UTC (rev 4171)
+@@ -0,0 +1,139 @@
++/***************************************************************************
++                          ADM_devicePulseSimple.cpp  -  description
++
++  Simple Pulse audio out
++                          
++    copyright            : (C) 2008 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;config.h&quot;
++#if defined( USE_PULSE_SIMPLE ) &amp;&amp; !defined(ADM_WIN32)
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++#include &lt;unistd.h&gt;
++#include &lt;errno.h&gt;
++
++#include &lt;fcntl.h&gt;
++#include &lt;sys/ioctl.h&gt;
++
++ 
++
++#include &quot;default.h&quot;
++#include &quot;ADM_audiodevice.h&quot;
++#include &lt;ADM_assert.h&gt;
++#include &quot;ADM_audiodevice/ADM_deviceoss.h&quot;
++#include &quot;ADM_toolkit/toolkit.hxx&quot;
++#include  &quot;ADM_audiodevice/ADM_devicePulseSimple.h&quot;
++
++#include &quot;pulse/simple.h&quot;
++//#define ADM_PULSE_INT16
++/**
++    \fn pulseSimpleAudioDevice
++    \brief Constructor
++
++*/
++pulseSimpleAudioDevice::pulseSimpleAudioDevice()
++{
++    instance=NULL;
++}
++
++#define INSTANCE  ((pa_simple *)instance)
++/**
++    \fn stop
++    \brief stop &amp; release device
++
++*/
++
++uint8_t  pulseSimpleAudioDevice::stop(void) 
++{
++int er;
++    ADM_assert(instance);
++    pa_simple_flush(INSTANCE,&amp;er);
++    pa_simple_free(INSTANCE);
++    instance=NULL;
++    printf(&quot;[PulseAudio] Stopped\n&quot;);
++    return 1;
++}
++
++/**
++    \fn init
++    \brief Take &amp; initialize the device
++
++*/
++uint8_t pulseSimpleAudioDevice::init(uint8_t channels, uint32_t fq) 
++{
++
++pa_simple *s;
++pa_sample_spec ss;
++int er;
++ 
++#ifdef ADM_PULSE_INT16
++  ss.format = PA_SAMPLE_S16NE;
++#else
++    ss.format = PA_SAMPLE_FLOAT32NE;//PA_SAMPLE_S16NE; //FIXME big endian
++#endif
++  ss.channels = channels;
++  ss.rate =fq;
++ 
++  instance= pa_simple_new(NULL,               // Use the default server.
++                    &quot;Avidemux2&quot;,           // Our application's name.
++                    PA_STREAM_PLAYBACK,
++                    NULL,               // Use the default device.
++                    &quot;Sound&quot;,            // Description of our stream.
++                    &amp;ss,                // Our sample format.
++                    NULL,               // Use default channel map
++                    NULL ,             // Use default buffering attributes.
++                    &amp;er               // Ignore error code.
++                    );
++  if(!instance)
++    {
++        printf(&quot;[PulseSimple] open failed\n&quot;);
++        return 0;
++    }
++    printf(&quot;[PulseSimple] open ok\n&quot;);
++    return 1;
++
++}
++
++/**
++    \fn play
++    \brief Playback samples
++
++*/
++uint8_t pulseSimpleAudioDevice::play(uint32_t len, float *data)
++{
++int er;
++#ifdef ADM_PULSE_INT16
++	dither16(data, len, _channels);
++    pa_simple_write(INSTANCE,data,len*2,&amp;er);
++#else
++    pa_simple_write(INSTANCE,data,len*4,&amp;er);
++#endif
++	return 1;
++}
++/**
++    \fn setVolume
++    \brief Cannot be done with pulse simple
++*/
++uint8_t pulseSimpleAudioDevice::setVolume(int volume)
++{
++	return 1;
++}
++
++#else
++void dummy_pulseSimple_func( void);
++void dummy_pulseSimple_func( void)
++ {
++}
++
++#endif
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_devicePulseSimple.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_devicePulseSimple.h	2008-06-27 19:35:24 UTC (rev 4170)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_devicePulseSimple.h	2008-06-28 08:20:38 UTC (rev 4171)
+@@ -0,0 +1,29 @@
++/***************************************************************************
++                          ADM_deviceEsd.h  -  description
++                             -------------------
++                             Audio device for ESD sound daemon
++    copyright            : (C) 2005 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#ifdef USE_PULSE_SIMPLE
++class pulseSimpleAudioDevice : public audioDevice
++	 {
++		 protected :
++                    void  *instance;
++		  public:
++		  			pulseSimpleAudioDevice(void);
++		     		virtual uint8_t init(uint8_t channels, uint32_t fq);
++	    			virtual uint8_t play(uint32_t len, float *data);
++		      		virtual uint8_t stop(void);
++				uint8_t setVolume(int volume);
++		 }     ;
++#endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/CMakeLists.txt	2008-06-27 19:35:24 UTC (rev 4170)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/CMakeLists.txt	2008-06-28 08:20:38 UTC (rev 4171)
+@@ -1,9 +1,15 @@
+ 
+ SET(ADM_audiodevice_SRCS 
+ ADM_audiodevice.cpp  ADM_deviceArts.cpp       ADM_deviceEsd.cpp  ADM_deviceSDL.cpp    oss_out.cpp
+-ADM_deviceALSA.cpp   ADM_deviceAudioCore.cpp  ADM_deviceoss.cpp  ADM_deviceWin32.cpp  ADM_deviceJack.cpp)
++ADM_deviceALSA.cpp   ADM_deviceAudioCore.cpp  ADM_deviceoss.cpp  ADM_deviceWin32.cpp  ADM_deviceJack.cpp
++ADM_devicePulseSimple.cpp
++)
+ ADD_LIBRARY(ADM_audiodevice STATIC ${ADM_audiodevice_SRCS})
+ SDLify(ADM_deviceSDL.cpp)
+ if(USE_ARTS)
+   add_definitions(${ARTS_CFLAGS})
+ endif(USE_ARTS)
++if(USE_PULSE_SIMPLE)
++  add_definitions(${PULSEAUDIOSIMPLE_DEFINITIONS})
++  include_directories(${PULSEAUDIOSIMPLE_INCLUDE_DIR})
++endif(USE_ARTS)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/audio_out.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/audio_out.h	2008-06-27 19:35:24 UTC (rev 4170)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/audio_out.h	2008-06-28 08:20:38 UTC (rev 4171)
+@@ -14,7 +14,6 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
+-
+ #ifndef AUDIOOUPUT_H
+ #define AUDIOOUPUT_H
+ //#include &quot;avi_vars.h&quot;
+@@ -29,7 +28,9 @@
+ 	DEVICE_SDL,
+ 	DEVICE_WIN32,
+ 	DEVICE_ESD,
+-	DEVICE_JACK
++	DEVICE_JACK,
++    DEVICE_PULSE_SIMPLE,
++    DEVICE_LIMIT
+ }AUDIO_DEVICE;
+ 
+ typedef struct 
+@@ -65,6 +66,9 @@
+ #ifdef USE_JACK	
+ 	MKADID(JACK),
+ #endif	
++#ifdef USE_PULSE_SIMPLE	
++	MKADID(PULSE_SIMPLE),
++#endif	
+ 
+ 	MKADID(DUMMY)
+ };
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp	2008-06-27 19:35:24 UTC (rev 4170)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp	2008-06-28 08:20:38 UTC (rev 4171)
+@@ -38,7 +38,9 @@
+ extern void 		AVDM_audioPref( void );
+ 
+ 
++// FIXME
+ 
++
+ uint8_t DIA_Preferences(void);
+ 
+ /**
+@@ -318,6 +320,10 @@
+ 		#ifdef OSS_SUPPORT
+ 			{DEVICE_OSS, QT_TR_NOOP(&quot;OSS&quot;)},
+ 		#endif
++		#ifdef USE_PULSE_SIMPLE
++			{DEVICE_PULSE_SIMPLE, QT_TR_NOOP(&quot;Pulse Audio&quot;)},
++		#endif
++
+ 		#if	defined(USE_SDL) &amp;&amp; !defined(ADM_WIN32)
+ 			{DEVICE_SDL, QT_TR_NOOP(&quot;SDL&quot;)},
+ 		#endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/CMakeLists.txt	2008-06-27 19:35:24 UTC (rev 4170)
++++ branches/avidemux_2.4_branch/avidemux/CMakeLists.txt	2008-06-28 08:20:38 UTC (rev 4171)
+@@ -247,7 +247,8 @@
+ if(NEED_LIBICONV)
+ 	add_libs_all_targets(iconv)
+ endif(NEED_LIBICONV)
+-
++# Pulse audio
++	add_libs_all_targets(pulse-simple)
+ #gettext
+ if(ADM_GETTEXT_LIB)
+ 	INCLUDE_DIRECTORIES(${ADM_GETTEXT_INCLUDE})
+
+Added: branches/avidemux_2.4_branch/cmake/FindPulseAudioSimple.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/cmake/FindPulseAudioSimple.cmake	2008-06-27 19:35:24 UTC (rev 4170)
++++ branches/avidemux_2.4_branch/cmake/FindPulseAudioSimple.cmake	2008-06-28 08:20:38 UTC (rev 4171)
+@@ -0,0 +1,58 @@
++# - Try to find PulseAudioSimple
++# Once done this will define
++#
++#  PULSEAUDIOSIMPLE_FOUND - system has PulseAudioSimple
++#  PULSEAUDIOSIMPLE_INCLUDE_DIR - the PulseAudioSimple include directory
++#  PULSEAUDIOSIMPLE_LIBRARIES - the libraries needed to use PulseAudioSimple
++#  PULSEAUDIOSIMPLE_DEFINITIONS - Compiler switches required for using PulseAudioSimple
++#
++MESSAGE(STATUS &quot;&lt;** PulseAudio **&gt;&quot;)
++MESSAGE(STATUS &quot;&lt;----------------&gt;&quot;)
++
++IF(NO_PULSE_SIMPLE)
++        message(status &quot;&lt;disabled per request&gt;&quot;)
++ELSE(NO_PULSE_SIMPLE)
++
++IF (PULSEAUDIOSIMPLE_INCLUDE_DIR AND PULSEAUDIOSIMPLE_LIBRARIES)
++   # in cache already
++   SET(PULSEAUDIOSIMPLE_FIND_QUIETLY TRUE)
++ENDIF (PULSEAUDIOSIMPLE_INCLUDE_DIR AND PULSEAUDIOSIMPLE_LIBRARIES)
++
++IF (NOT WIN32)
++   # use pkg-config to get the directories and then use these values
++   # in the FIND_PATH() and FIND_LIBRARY() calls
++   INCLUDE(UsePkgConfig)
++   PKGCONFIG(libpulse-simple _PASIncDir _PASLinkDir _PASLinkFlags _PASCflags)
++   SET(PULSEAUDIOSIMPLE_DEFINITIONS ${_PASCflags})
++ENDIF (NOT WIN32)
++
++FIND_PATH(PULSEAUDIOSIMPLE_INCLUDE_DIR pulse/simple.h
++   PATHS
++   ${_PASIncDir}
++   PATH_SUFFIXES pulse
++   )
++
++FIND_LIBRARY(PULSEAUDIOSIMPLE_LIBRARIES NAMES pulse-simple libpulse-simple
++   PATHS
++   ${_PASLinkDir}
++   )
++
++IF (PULSEAUDIOSIMPLE_INCLUDE_DIR AND PULSEAUDIOSIMPLE_LIBRARIES)
++   SET(PULSEAUDIOSIMPLE_FOUND TRUE)
++ELSE (PULSEAUDIOSIMPLE_INCLUDE_DIR AND PULSEAUDIOSIMPLE_LIBRARIES)
++   SET(PULSEAUDIOSIMPLE_FOUND FALSE)
++ENDIF (PULSEAUDIOSIMPLE_INCLUDE_DIR AND PULSEAUDIOSIMPLE_LIBRARIES)
++
++IF (PULSEAUDIOSIMPLE_FOUND)
++   IF (NOT PULSEAUDIOSIMPLE_FIND_QUIETLY)
++      MESSAGE(STATUS &quot;Found PulseAudio Simple: ${PULSEAUDIOSIMPLE_LIBRARIES}&quot;)
++   ENDIF (NOT PULSEAUDIOSIMPLE_FIND_QUIETLY)
++   SET(USE_PULSE_SIMPLE 1)
++ELSE (PULSEAUDIOSIMPLE_FOUND)
++      MESSAGE(STATUS &quot;Could NOT find LibXml2&quot;)
++ENDIF (PULSEAUDIOSIMPLE_FOUND)
++
++MARK_AS_ADVANCED(PULSEAUDIOSIMPLE_INCLUDE_DIR PULSEAUDIOSIMPLE_LIBRARIES)
++
++ENDIf(NO_PULSE_SIMPLE)
++
+
+Modified: branches/avidemux_2.4_branch/cmake/conf_summary.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/cmake/conf_summary.cmake	2008-06-27 19:35:24 UTC (rev 4170)
++++ branches/avidemux_2.4_branch/cmake/conf_summary.cmake	2008-06-28 08:20:38 UTC (rev 4171)
+@@ -32,6 +32,7 @@
+ ADM_DISPLAY(&quot;OSS       &quot; OSS_SUPPORT)
+ ADM_DISPLAY(&quot;ARTS      &quot; USE_ARTS)
+ ADM_DISPLAY(&quot;JACK      &quot; USE_JACK)
++ADM_DISPLAY(&quot;PULSE SIMP&quot; USE_PULSE_SIMPLE)
+ 
+ MESSAGE(&quot;*** Misc       ***&quot;)
+ ADM_DISPLAY(&quot;SDL       &quot; USE_SDL)
+
+Modified: branches/avidemux_2.4_branch/config.h.cmake
+===================================================================
+--- branches/avidemux_2.4_branch/config.h.cmake	2008-06-27 19:35:24 UTC (rev 4170)
++++ branches/avidemux_2.4_branch/config.h.cmake	2008-06-28 08:20:38 UTC (rev 4171)
+@@ -190,6 +190,9 @@
+ /* aRts detected */
+ #cmakedefine USE_ARTS
+ 
++/* PulseAudioSimple detected */
++#cmakedefine USE_PULSE_SIMPLE
++
+ /* ESD detected */
+ #cmakedefine USE_ESD
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001423.html">[Avidemux-svn-commit] r4169 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_flv
+</A></li>
+	<LI>Next message: <A HREF="001425.html">[Avidemux-svn-commit] r4172 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1424">[ date ]</a>
+              <a href="thread.html#1424">[ thread ]</a>
+              <a href="subject.html#1424">[ subject ]</a>
+              <a href="author.html#1424">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

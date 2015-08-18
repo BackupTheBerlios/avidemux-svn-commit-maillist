@@ -1,0 +1,186 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5572 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5572%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200911281348.nASDm53a013380%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002779.html">
+   <LINK REL="Next"  HREF="002786.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5572 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5572%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200911281348.nASDm53a013380%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5572 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Nov 28 14:48:05 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002779.html">[Avidemux-svn-commit] r5571 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_videoFilter2/include ADM_videoFilter2/src
+</A></li>
+        <LI>Next message: <A HREF="002786.html">[Avidemux-svn-commit] r5573 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2780">[ date ]</a>
+              <a href="thread.html#2780">[ thread ]</a>
+              <a href="subject.html#2780">[ subject ]</a>
+              <a href="author.html#2780">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-11-28 14:48:05 +0100 (Sat, 28 Nov 2009)
+New Revision: 5572
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp
+Log:
+[Editor] Factorize some project generation code
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp	2009-11-28 13:48:03 UTC (rev 5571)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edLoadSave.cpp	2009-11-28 13:48:05 UTC (rev 5572)
+@@ -34,8 +34,25 @@
+ #include &quot;GUI_ui.h&quot;
+ #include &quot;ADM_videoFilters.h&quot;
+ #include &quot;ADM_videoFilterApi.h&quot;
+-
+ /**
++    \fn dumpConf
++    \brief dump configuration as name=value pairs
++*/
++static void dumpConf(FILE *fd,CONFcouple *c)
++{
++ if(!c) return;
++        
++    uint32_t n=c-&gt;getSize();
++    for(int j=0;j&lt;n;j++)
++    {
++        char *name,*value;
++        c-&gt;getInternalName(j,&amp;name,&amp;value);
++        qfprintf(fd,&quot;,\&quot;%s=%s\&quot;&quot;,name,value);
++    }
++    delete c;
++    c=NULL;
++}
++/**
+     \fn        saveAsScript
+     \brief     Save the project as a script
+ */
+@@ -127,19 +144,7 @@
+     
+         qfprintf(fd, &quot;app.video.codec(\&quot;%s\&quot;&quot;, videoEncoder6_GetCurrentEncoderName());
+         videoEncoder6_GetConfiguration(&amp;couples);
+-        if(couples)
+-        {
+-            uint32_t n=couples-&gt;getSize();
+-        
+-            for(int i=0;i&lt;n;i++)
+-            {
+-                char *name,*value;
+-                couples-&gt;getInternalName(i,&amp;name,&amp;value);
+-                qfprintf(fd,&quot;,\&quot;%s=%s\&quot;&quot;,name,value);
+-            }
+-            delete couples;
+-            couples=NULL;
+-        }
++        dumpConf(fd,couples);
+         qfprintf(fd,&quot;);\n&quot;);
+ 
+ // Video filters....
+@@ -154,18 +159,7 @@
+         // Now get the filter settings (if any)
+         CONFcouple *c=NULL;
+         ADM_vf_getConfigurationFromIndex(i,&amp;c);
+-        if(c)
+-        {
+-            uint32_t n=c-&gt;getSize();
+-            for(int j=0;j&lt;n;j++)
+-            {
+-                char *name,*value;
+-                c-&gt;getInternalName(j,&amp;name,&amp;value);
+-                qfprintf(fd,&quot;,\&quot;%s=%s\&quot;&quot;,name,value);
+-            }
+-            delete c;
+-            c=NULL;
+-        }
++        dumpConf(fd,c);
+         qfprintf(fd, &quot;);\n&quot;);
+     }
+ 
+@@ -206,19 +200,7 @@
+    couples=NULL;
+    getAudioExtraConf(&amp;bitrate,&amp;couples);
+     qfprintf(fd,&quot;app.audio.codec(\&quot;%s\&quot;,%d&quot;,audioCodecGetName(),bitrate); 
+-   if(couples)
+-    {
+-        uint32_t n=couples-&gt;getSize();
+-        
+-        for(int i=0;i&lt;n;i++)
+-        {
+-            char *name,*value;
+-            couples-&gt;getInternalName(i,&amp;name,&amp;value);
+-            qfprintf(fd,&quot;,\&quot;%s=%s\&quot;&quot;,name,value);
+-        }
+-        delete couples;
+-        couples=NULL;
+-    }
++    dumpConf(fd,couples);
+     qfprintf(fd,&quot;);\n&quot;);
+ 
+ 
+@@ -255,20 +237,7 @@
+         ADM_mx_getExtraConf( index,&amp;containerConf);
+         
+         qfprintf(fd,&quot;app.setContainer(\&quot;%s\&quot;&quot;,containerName); 
+-        if(containerConf)
+-        {
+-            uint32_t n=containerConf-&gt;getSize();
+-            
+-            for(int i=0;i&lt;n;i++)
+-            {
+-                char *name,*value;
+-                containerConf-&gt;getInternalName(i,&amp;name,&amp;value);
+-                qfprintf(fd,&quot;,\&quot;%s=%s\&quot;&quot;,name,value);
+-            }
+-         
+-            delete couples;
+-            couples=NULL;
+-        }
++        dumpConf(fd,containerConf);
+         qfprintf(fd,&quot;);\n&quot;);
+   // -------- /Muxer -----------------------
+   if(outputname)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002779.html">[Avidemux-svn-commit] r5571 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_videoFilter2/include ADM_videoFilter2/src
+</A></li>
+	<LI>Next message: <A HREF="002786.html">[Avidemux-svn-commit] r5573 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2780">[ date ]</a>
+              <a href="thread.html#2780">[ thread ]</a>
+              <a href="subject.html#2780">[ subject ]</a>
+              <a href="author.html#2780">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

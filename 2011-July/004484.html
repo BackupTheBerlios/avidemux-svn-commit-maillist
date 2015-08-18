@@ -1,0 +1,271 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7330 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7330%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate&In-Reply-To=%3C20110723155710.C5ACD480EC9%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004483.html">
+   <LINK REL="Next"  HREF="004485.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7330 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7330%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate&In-Reply-To=%3C20110723155710.C5ACD480EC9%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7330 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jul 23 17:57:10 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004483.html">[Avidemux-svn-commit] r7329 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate
+</A></li>
+        <LI>Next message: <A HREF="004485.html">[Avidemux-svn-commit] r7331 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4484">[ date ]</a>
+              <a href="thread.html#4484">[ thread ]</a>
+              <a href="subject.html#4484">[ subject ]</a>
+              <a href="author.html#4484">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-07-23 17:57:10 +0200 (Sat, 23 Jul 2011)
+New Revision: 7330
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate/decimate_util.cpp
+Log:
+[decimate] Optimize + SSE version
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate/decimate_util.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate/decimate_util.cpp	2011-07-23 15:57:09 UTC (rev 7329)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate/decimate_util.cpp	2011-07-23 15:57:10 UTC (rev 7330)
+@@ -43,7 +43,114 @@
+ 
+ #include &quot;ADM_default.h&quot;
+ #include &quot;decimate.h&quot;
++//#define BENCH 1
++typedef uint32_t decimateDeltaLine(uint8_t *ptr1,uint8_t *ptr2,int size,int inc,unsigned int *sums);
+ /**
++    \fn decimateDeltaLineC
++    \brief C version
++*/
++static inline uint32_t decimateDeltaLineC(uint8_t *ptr1,uint8_t *ptr2,int size,int inc,unsigned int *sums)
++{
++        uint32_t total=0;
++        for (int x = 0; x &lt; size;)
++        {
++            unsigned int quadsum=0;
++            quadsum += abs((int)ptr1[x+0] - (int)ptr2[x+0]);
++            quadsum += abs((int)ptr1[x+1] - (int)ptr2[x+1]);
++            quadsum += abs((int)ptr1[x+2] - (int)ptr2[x+2]);
++            quadsum += abs((int)ptr1[x+3] - (int)ptr2[x+3]);
++            sums[(x+0)/BLKSIZE]+=quadsum; // 4 increment , BLKSIZE=32 =&gt; they are all in the same block
++#ifdef BENCH
++            total+=quadsum;
++#endif
++            x+=inc;
++        }
++        return total;
++}
++#ifdef ADM_CPU_X86
++/**
++    \fn decimateDeltaLineSSE
++    \brief SSE/MMX version
++ Only works for inc=4, BLKSIZE=32
++*/
++static inline uint32_t decimateDeltaLineSSE(uint8_t *ptr1,uint8_t *ptr2,int size,int inc,unsigned int *sums)
++{
++        uint32_t total1=0,total2=0;
++#ifdef BENCH
++        total2=decimateDeltaLineC(ptr1,ptr2,size,inc,sums);
++#endif
++        int size32=size&gt;&gt;5;
++        int left=(size &amp; 31);
++        ADM_assert(inc==4);
++        ADM_assert(BLKSIZE==32);
++        uint64_t out;
++        uint64_t sum;
++        for(int i=0;i&lt;size32;i++)
++        {
++            
++            __asm__(
++                    &quot;xor            %3,%3       \n&quot;
++                    &quot;xor            %0,%0       \n&quot;
++                    &quot;movq           (%1),%%mm0  \n&quot;
++                    &quot;movq           (%2),%%mm1  \n&quot;
++                    &quot;psadbw         %%mm1,%%mm0 \n&quot;
++                    &quot;movq           %%mm0,%3    \n&quot;
++                    &quot;add            %3,%0       \n&quot;
++                    &quot;add           $8,%1        \n&quot;
++                    &quot;add           $8,%2        \n&quot;
++                    &quot;movq           (%1),%%mm0  \n&quot;
++                    &quot;movq           (%2),%%mm1  \n&quot;
++                    &quot;psadbw         %%mm1,%%mm0 \n&quot;
++                    &quot;movq           %%mm0,%3    \n&quot;
++                    &quot;add            %3,%0       \n&quot;
++                    &quot;add           $8,%1        \n&quot;
++                    &quot;add           $8,%2        \n&quot;
++                    &quot;movq           (%1),%%mm0  \n&quot;
++                    &quot;movq           (%2),%%mm1  \n&quot;
++                    &quot;psadbw         %%mm1,%%mm0 \n&quot;
++                    &quot;movq           %%mm0,%3    \n&quot;
++                    &quot;add            %3,%0       \n&quot;
++                    &quot;add           $8,%1        \n&quot;
++                    &quot;add           $8,%2        \n&quot;
++                    &quot;movq           (%1),%%mm0  \n&quot;
++                    &quot;movq           (%2),%%mm1  \n&quot;
++                    &quot;psadbw         %%mm1,%%mm0 \n&quot;
++                    &quot;movq           %%mm0,%3    \n&quot;
++                    &quot;add            %3,%0       \n&quot;
++            : &quot;=r&quot;(sum):  &quot;r&quot; (ptr1),&quot;r&quot; (ptr2),&quot;r&quot;(out));
++            sums[i]+=sum;
++            total1+=sum;
++          //  printf(&quot;Sum : %d\n&quot;,(int)sum);
++            ptr1+=32;
++            ptr2+=32;
++        }
++        // collect leftover
++        for(int x=0;x&lt;left;)
++        {
++            unsigned int quadsum=0;
++            quadsum += abs((int)ptr1[x+0] - (int)ptr2[x+0]);
++            quadsum += abs((int)ptr1[x+1] - (int)ptr2[x+1]);
++            quadsum += abs((int)ptr1[x+2] - (int)ptr2[x+2]);
++            quadsum += abs((int)ptr1[x+3] - (int)ptr2[x+3]);
++            sums[size32+(x+0)/BLKSIZE]+=quadsum; // 4 increment , BLKSIZE=32 =&gt; they are all in the same block
++            x+=inc;
++            total1+=quadsum;
++        }
++
++        __asm__(
++                    &quot;emms\n&quot;
++                ::
++                );
++#ifdef BENCH
++        if(total1!=total2)
++        {
++            ADM_error(&quot;SSE version does not match %d(C) vs %d(SSE)\n&quot;,(int)total2,(int)total1);
++        }
++#endif
++        return total1;
++}
++#endif
++/**
+     \fn computeDiff
+     \brief compute difference between image and its predecessor
+ */
+@@ -55,37 +162,41 @@
+     uint32_t curPitch=current-&gt;GetPitch(PLANAR_Y);
+     deciMate *_param=&configuration;
+     // Zero
+-    for (int y = 0; y &lt; yblocks; y++)
+-    {
+-        for (int x = 0; x &lt; xblocks; x++)
+-        {
+-            sum[y*xblocks+x] = 0;
+-        }
+-    }
++    memset(sum,0,sizeof(unsigned int)*xblocks*yblocks);
+     // Raw diff
+     int height=info.height;
+     int width=info.width;
+-    int inc=1;
+     
+-    for (int y = 0; y &lt; height; y++)
++    if (_param-&gt;quality == 0 || _param-&gt;quality == 1) // subsampled
+     {
+-        for (int x = 0; x &lt; width;)
++        for (int y = 0; y &lt; height; y++)
+         {
+-            sum[(y/BLKSIZE)*xblocks+x/BLKSIZE] += abs((int)currY[x] - (int)prevY[x]);
+-            x++;
+-            if(!(x&amp;3))
+-                if (_param-&gt;quality == 0 || _param-&gt;quality == 1)
+-                {
+-                    x+=12;
+-                }
++            unsigned int *xsum=sum+((y/BLKSIZE)*xblocks);
++            decimateDeltaLineC(currY,prevY,width,4+12,xsum);
++            prevY += prevPitch;
++            currY += curPitch;
+         }
+-        prevY += prevPitch;
+-        currY += curPitch;
++    }else   
++    {
++        int inc=4;
++        decimateDeltaLine *func=decimateDeltaLineC;
++#ifdef ADM_CPU_X86
++         if(CpuCaps::hasSSE())
++            func=decimateDeltaLineSSE;
++#endif
++
++        for (int y = 0; y &lt; height; y++)
++        {
++            unsigned int *xsum=sum+((y/BLKSIZE)*xblocks);
++            func(currY,prevY,width,4,xsum);
++            prevY += prevPitch;
++            currY += curPitch;
++        }
+     }
++#warning DO CHROMA SAMPLING
++#if 0
+     if (_param-&gt;quality == 1 || _param-&gt;quality == 3)
+     {
+-#warning DO CHROMA SAMPLING
+-#if 0
+         // also do u &amp; v
+         prevU = storepU[f-1];
+         prevV = storepV[f-1];
+@@ -109,8 +220,8 @@
+             currV += pitchUV;
+ 
+         }
++    }
+ #endif
+-    }
+     uint32_t highest_sum = 0;
+     for (int y = 0; y &lt; yblocks; y++)
+     {
+@@ -231,6 +342,7 @@
+ }
+ /**
+     \fn FindDuplicate2
++    \brief only used for anime mode (find longest dupe sequence)
+ */
+ void Decimate::FindDuplicate2(int frame, int *chosen, bool *forced)
+ {
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004483.html">[Avidemux-svn-commit] r7329 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate
+</A></li>
+	<LI>Next message: <A HREF="004485.html">[Avidemux-svn-commit] r7331 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/decimate
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4484">[ date ]</a>
+              <a href="thread.html#4484">[ thread ]</a>
+              <a href="subject.html#4484">[ subject ]</a>
+              <a href="author.html#4484">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

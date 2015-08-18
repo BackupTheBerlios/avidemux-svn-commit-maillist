@@ -1,0 +1,140 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3499 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libMpeg2Dec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3499%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libMpeg2Dec&In-Reply-To=%3C200708131004.l7DA4sID019931%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000772.html">
+   <LINK REL="Next"  HREF="000774.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3499 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libMpeg2Dec</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3499%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libMpeg2Dec&In-Reply-To=%3C200708131004.l7DA4sID019931%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3499 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libMpeg2Dec">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Aug 13 12:04:54 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000772.html">[Avidemux-svn-commit] r3498 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities
+</A></li>
+        <LI>Next message: <A HREF="000774.html">[Avidemux-svn-commit] r3500 -	branches/avidemux_2.4_branch/avidemux/ADM_encoder
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#773">[ date ]</a>
+              <a href="thread.html#773">[ thread ]</a>
+              <a href="subject.html#773">[ subject ]</a>
+              <a href="author.html#773">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-08-13 12:04:54 +0200 (Mon, 13 Aug 2007)
+New Revision: 3499
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libMpeg2Dec/cpu_accel.c
+Log:
+[mpeg2dec] Fix for amd64/cpu detect
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libMpeg2Dec/cpu_accel.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libMpeg2Dec/cpu_accel.c	2007-08-13 10:04:22 UTC (rev 3498)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_libMpeg2Dec/cpu_accel.c	2007-08-13 10:04:54 UTC (rev 3499)
+@@ -29,7 +29,7 @@
+ #include &quot;attributes.h&quot;
+ #include &quot;mpeg2_internal.h&quot;
+ 
+-
++#include &quot;admmangle.h&quot;
+ typedef void (*sighandler_t)(int); // MEANX RETSIGTYPE
+  
+ #ifdef ACCEL_DETECT
+@@ -39,48 +39,15 @@
+     uint32_t eax, ebx, ecx, edx;
+     int AMD;
+     uint32_t caps;
++#define cpuid(index,eax,ebx,ecx,edx)\
++    __asm __volatile (&quot;mov %%&quot;REG_b&quot;, %%&quot;REG_S&quot;\n\t&quot;\
++         &quot;cpuid\n\t&quot;\
++         &quot;xchg %%&quot;REG_b&quot;, %%&quot;REG_S\
++         : &quot;=a&quot; (eax), &quot;=S&quot; (ebx),\
++           &quot;=c&quot; (ecx), &quot;=d&quot; (edx)\
++         : &quot;0&quot; (index));
+ 
+-#if !defined(PIC) &amp;&amp; !defined(__PIC__)
+-#define cpuid(op,eax,ebx,ecx,edx)	\
+-    __asm__ (&quot;cpuid&quot;			\
+-	     : &quot;=a&quot; (eax),		\
+-	       &quot;=b&quot; (ebx),		\
+-	       &quot;=c&quot; (ecx),		\
+-	       &quot;=d&quot; (edx)		\
+-	     : &quot;a&quot; (op)			\
+-	     : &quot;cc&quot;)
+-#else	/* PIC version : save ebx */
+-#define cpuid(op,eax,ebx,ecx,edx)	\
+-    __asm__ (&quot;push %%ebx\n\t&quot;		\
+-	     &quot;cpuid\n\t&quot;		\
+-	     &quot;movl %%ebx,%1\n\t&quot;	\
+-	     &quot;pop %%ebx&quot;		\
+-	     : &quot;=a&quot; (eax),		\
+-	       &quot;=r&quot; (ebx),		\
+-	       &quot;=c&quot; (ecx),		\
+-	       &quot;=d&quot; (edx)		\
+-	     : &quot;a&quot; (op)			\
+-	     : &quot;cc&quot;)
+-#endif
+ 
+-    __asm__ (&quot;pushf\n\t&quot;
+-	     &quot;pushf\n\t&quot;
+-	     &quot;pop %0\n\t&quot;
+-	     &quot;movl %0,%1\n\t&quot;
+-	     &quot;xorl $0x200000,%0\n\t&quot;
+-	     &quot;push %0\n\t&quot;
+-	     &quot;popf\n\t&quot;
+-	     &quot;pushf\n\t&quot;
+-	     &quot;pop %0\n\t&quot;
+-	     &quot;popf&quot;
+-	     : &quot;=r&quot; (eax),
+-	       &quot;=r&quot; (ebx)
+-	     :
+-	     : &quot;cc&quot;);
+-
+-    if (eax == ebx)		/* no cpuid */
+-	return 0;
+-
+     cpuid (0x00000000, eax, ebx, ecx, edx);
+     if (!eax)			/* vendor string only */
+ 	return 0;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000772.html">[Avidemux-svn-commit] r3498 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities
+</A></li>
+	<LI>Next message: <A HREF="000774.html">[Avidemux-svn-commit] r3500 -	branches/avidemux_2.4_branch/avidemux/ADM_encoder
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#773">[ date ]</a>
+              <a href="thread.html#773">[ thread ]</a>
+              <a href="subject.html#773">[ subject ]</a>
+              <a href="author.html#773">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

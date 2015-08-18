@@ -1,0 +1,300 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6061 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6061%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc&In-Reply-To=%3C201004052107.o35L7EnU016304%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003264.html">
+   <LINK REL="Next"  HREF="003266.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6061 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6061%20-%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc&In-Reply-To=%3C201004052107.o35L7EnU016304%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6061 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Mon Apr  5 23:07:14 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003264.html">[Avidemux-svn-commit] r6060 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec
+</A></li>
+        <LI>Next message: <A HREF="003266.html">[Avidemux-svn-commit] r6062 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3265">[ date ]</a>
+              <a href="thread.html#3265">[ thread ]</a>
+              <a href="subject.html#3265">[ subject ]</a>
+              <a href="author.html#3265">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2010-04-05 23:07:07 +0200 (Mon, 05 Apr 2010)
+New Revision: 6061
+
+Added:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg1Encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg1Encoder.h
+Modified:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/CMakeLists.txt
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/interface.c
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.h
+Log:
+[mpeg2enc] port mpeg2enc logic for MPEG-1 to plugin
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/CMakeLists.txt	2010-04-05 18:44:30 UTC (rev 6060)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/CMakeLists.txt	2010-04-05 21:07:07 UTC (rev 6061)
+@@ -2,7 +2,7 @@
+ INCLUDE(admPluginVideoEncoder)
+ 
+ add_subdirectory(mpeg2enc)
+-SET(ADM_vidEnc_mpeg2enc_SRCS  interface.c  encoder.cpp  mpeg2Encoder.cpp  mpeg2Options.cpp)
++SET(ADM_vidEnc_mpeg2enc_SRCS  interface.c  encoder.cpp  mpeg1Encoder.cpp  mpeg2Encoder.cpp  mpeg2Options.cpp)
+ 
+ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR} ${LIBXML2_INCLUDE_DIR} ../common/pluginOptions ../common/xvidRateCtl mpeg2enc)
+ ADD_DEFINITIONS(${LIBXML2_DEFINITIONS} -DMPEG2_PLUGIN_CONFIG_DIR=&quot;mpegenc&quot;)
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/encoder.cpp	2010-04-05 18:44:30 UTC (rev 6060)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/encoder.cpp	2010-04-05 21:07:07 UTC (rev 6061)
+@@ -17,16 +17,18 @@
+ #include &lt;libxml/tree.h&gt;
+ 
+ #include &quot;encoder.h&quot;
++#include &quot;mpeg1Encoder.h&quot;
+ #include &quot;mpeg2Encoder.h&quot;
+ #include &quot;ADM_inttype.h&quot;
+ #include &quot;mpeg2enc.h&quot;
+ 
+ int uiType;
+ 
++static Mpeg1Encoder mpeg1;
+ static Mpeg2Encoder mpeg2;
+ 
+-static int encoderIds[] = { 0 };
+-static Mpeg2encEncoder* encoders[] = {&amp;mpeg2};
++static int encoderIds[] = { 0, 1 };
++static Mpeg2encEncoder* encoders[] = {&amp;mpeg1, &amp;mpeg2};
+ static int supportedCsps[] = { ADM_CSP_YV12 };
+ 
+ extern int mpegenc_encode(char *in, char *out, int *size, int *flags, int *quant);
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/interface.c
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/interface.c	2010-04-05 18:44:30 UTC (rev 6060)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/interface.c	2010-04-05 21:07:07 UTC (rev 6061)
+@@ -71,7 +71,7 @@
+ void vidEncGetEncoderVersion(int encoderId, int* major, int* minor, int* patch)
+ {
+ 	*major = 1;
+-	*minor = 5;
++	*minor = 0;
+ 	*patch = 0;
+ }
+ 
+
+Added: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg1Encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg1Encoder.cpp	2010-04-05 18:44:30 UTC (rev 6060)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg1Encoder.cpp	2010-04-05 21:07:07 UTC (rev 6061)
+@@ -0,0 +1,81 @@
++ /***************************************************************************
++                               mpeg1Encoder.cpp
++
++    begin                : Mon Apr 5 2010
++    copyright            : (C) 2010 by gruntster
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &lt;math.h&gt;
++#include &lt;libxml/tree.h&gt;
++
++#include &quot;ADM_inttype.h&quot;
++#include &quot;mpeg1Encoder.h&quot;
++#include &quot;format_codes.h&quot;
++
++extern int _uiType;
++static bool changedConfig(const char* fileName, ConfigMenuType configType);
++
++#ifdef __WIN32
++extern void convertPathToAnsi(const char *path, char **ansiPath);
++#endif
++
++Mpeg1Encoder::Mpeg1Encoder(void)
++{
++	_passCount = 1;
++	_encodeOptions.encodeMode == ADM_VIDENC_MODE_CBR;
++}
++
++const char* Mpeg1Encoder::getEncoderType(void)
++{
++	return &quot;MPEG-1&quot;;
++}
++
++const char* Mpeg1Encoder::getEncoderDescription(void)
++{
++	return &quot;MPEG-1 video encoder plugin for Avidemux (c) Mean/Gruntster&quot;;
++}
++
++const char* Mpeg1Encoder::getFourCC(void)
++{
++	return &quot;mpg1&quot;;
++}
++
++const char* Mpeg1Encoder::getEncoderGuid(void)
++{
++	return &quot;056FE919-C1D3-4450-A812-A767EAB07786&quot;;
++}
++
++int Mpeg1Encoder::getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize)
++{
++	if (encodeOptions)
++	{
++		encodeOptions-&gt;encodeMode = ADM_VIDENC_MODE_CBR;
++		encodeOptions-&gt;encodeModeParameter = 1000;
++	}
++
++	return 0;
++}
++
++int Mpeg1Encoder::setOptions(vidEncOptions *encodeOptions, const char *pluginOptions)
++{
++	return ADM_VIDENC_ERR_SUCCESS;
++}
++
++int Mpeg1Encoder::initParameters(int *encodeModeParameter, int *maxBitrate, int *vbv)
++{
++	_param.fieldenc = 0;
++	_param.format = MPEG_FORMAT_VCD;
++	_param.aspect_ratio = 2;
++	_param.min_GOP_size = _param.max_GOP_size = 18;
++	*encodeModeParameter = 1000;
++	*maxBitrate = 9216000;
++	*vbv = 0;
++}
+
+Added: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg1Encoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg1Encoder.h	2010-04-05 18:44:30 UTC (rev 6060)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg1Encoder.h	2010-04-05 21:07:07 UTC (rev 6061)
+@@ -0,0 +1,49 @@
++ /***************************************************************************
++                                mpeg1Encoder.h
++
++    begin                : Mon Apr 5 2010
++    copyright            : (C) 2010 by gruntster
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#ifndef mpeg1Encoder_h
++#define mpeg1Encoder_h
++
++extern &quot;C&quot;
++{
++	#include &quot;ADM_vidEnc_plugin.h&quot;
++}
++
++#include &lt;limits.h&gt;
++
++#include &quot;encoder.h&quot;
++#include &quot;DIA_factory.h&quot;
++
++class Mpeg1Encoder : public Mpeg2encEncoder
++{
++	private:
++		vidEncVideoProperties _properties;
++
++		int _bufferSize;
++		uint8_t *_buffer;
++
++		int initParameters(int *encodeModeParameter, int *maxBitrate, int *vbv);
++
++	public:
++		Mpeg1Encoder(void);
++		const char* getEncoderType(void);
++		const char* getEncoderDescription(void);
++		const char* getFourCC(void);
++		const char* getEncoderGuid(void);
++		int getOptions(vidEncOptions *encodeOptions, char *pluginOptions, int bufferSize);
++		int setOptions(vidEncOptions *encodeOptions, const char *pluginOptions);
++};
++#endif	// mpeg1Encoder_h
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.cpp	2010-04-05 18:44:30 UTC (rev 6060)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.cpp	2010-04-05 21:07:07 UTC (rev 6061)
+@@ -51,7 +51,7 @@
+ 
+ const char* Mpeg2Encoder::getEncoderDescription(void)
+ {
+-	return &quot;mpeg2enc video encoder plugin for Avidemux (c) Mean/Gruntster&quot;;
++	return &quot;MPEG-2 video encoder plugin for Avidemux (c) Mean/Gruntster&quot;;
+ }
+ 
+ const char* Mpeg2Encoder::getFourCC(void)
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.h	2010-04-05 18:44:30 UTC (rev 6060)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_mpeg2enc/mpeg2Encoder.h	2010-04-05 21:07:07 UTC (rev 6061)
+@@ -27,7 +27,6 @@
+ #include &quot;encoder.h&quot;
+ #include &quot;mpeg2Options.h&quot;
+ #include &quot;DIA_factory.h&quot;
+-#include &quot;xvidRateCtlVbv.h&quot;
+ 
+ class Mpeg2Encoder : public Mpeg2encEncoder
+ {
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003264.html">[Avidemux-svn-commit] r6060 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec
+</A></li>
+	<LI>Next message: <A HREF="003266.html">[Avidemux-svn-commit] r6062 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3265">[ date ]</a>
+              <a href="thread.html#3265">[ thread ]</a>
+              <a href="subject.html#3265">[ subject ]</a>
+              <a href="author.html#3265">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

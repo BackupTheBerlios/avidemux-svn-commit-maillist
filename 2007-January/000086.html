@@ -1,0 +1,457 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2760 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2760%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200701211846.l0LIk9Yh022376%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000085.html">
+   <LINK REL="Next"  HREF="000087.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2760 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2760%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200701211846.l0LIk9Yh022376%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2760 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jan 21 19:46:09 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000085.html">[Avidemux-svn-commit] r2759 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+        <LI>Next message: <A HREF="000087.html">[Avidemux-svn-commit] r2761 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#86">[ date ]</a>
+              <a href="thread.html#86">[ thread ]</a>
+              <a href="subject.html#86">[ subject ]</a>
+              <a href="author.html#86">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-01-21 19:46:01 +0100 (Sun, 21 Jan 2007)
+New Revision: 2760
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/opt.c
+Log:
+new files
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/opt.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/opt.c	2007-01-21 18:45:20 UTC (rev 2759)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/opt.c	2007-01-21 18:46:01 UTC (rev 2760)
+@@ -0,0 +1,381 @@
++/*
++ * AVOptions
++ * Copyright (c) 2005 Michael Niedermayer &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">michaelni at gmx.at</A>&gt;
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ *
++ */
++
++/**
++ * @file opt.c
++ * AVOptions
++ * @author Michael Niedermayer &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">michaelni at gmx.at</A>&gt;
++ */
++
++#include &quot;avcodec.h&quot;
++#include &quot;opt.h&quot;
++#include &quot;eval.h&quot;
++
++//FIXME order them and do a bin search
++static AVOption *find_opt(void *v, const char *name, const char *unit){
++    AVClass *c= *(AVClass**)v; //FIXME silly way of storing AVClass
++    AVOption *o= c-&gt;option;
++
++    for(;o &amp;&amp; o-&gt;name; o++){
++        if(!strcmp(o-&gt;name, name) &amp;&amp; (!unit || !strcmp(o-&gt;unit, unit)) )
++            return o;
++    }
++    return NULL;
++}
++
++AVOption *av_next_option(void *obj, AVOption *last){
++    if(last &amp;&amp; last[1].name) return ++last;
++    else if(last)            return NULL;
++    else                     return (*(AVClass**)obj)-&gt;option;
++}
++
++static AVOption *av_set_number(void *obj, const char *name, double num, int den, int64_t intnum){
++    AVOption *o= find_opt(obj, name, NULL);
++    void *dst;
++    if(!o || o-&gt;offset&lt;=0)
++        return NULL;
++
++    if(o-&gt;max*den &lt; num*intnum || o-&gt;min*den &gt; num*intnum) {
++        av_log(NULL, AV_LOG_ERROR, &quot;Value %lf for parameter '%s' out of range.\n&quot;, num, name);
++        return NULL;
++    }
++
++    dst= ((uint8_t*)obj) + o-&gt;offset;
++
++    switch(o-&gt;type){
++    case FF_OPT_TYPE_FLAGS:
++    case FF_OPT_TYPE_INT:   *(int       *)dst= lrintf(num/den)*intnum; break;
++    case FF_OPT_TYPE_INT64: *(int64_t   *)dst= lrintf(num/den)*intnum; break;
++    case FF_OPT_TYPE_FLOAT: *(float     *)dst= num*intnum/den;         break;
++    case FF_OPT_TYPE_DOUBLE:*(double    *)dst= num*intnum/den;         break;
++    case FF_OPT_TYPE_RATIONAL:
++        if((int)num == num) *(AVRational*)dst= (AVRational){num*intnum, den};
++        else                *(AVRational*)dst= av_d2q(num*intnum/den, 1&lt;&lt;24);
++    default:
++        return NULL;
++    }
++    return o;
++}
++
++static AVOption *set_all_opt(void *v, const char *unit, double d){
++    AVClass *c= *(AVClass**)v; //FIXME silly way of storing AVClass
++    AVOption *o= c-&gt;option;
++    AVOption *ret=NULL;
++
++    for(;o &amp;&amp; o-&gt;name; o++){
++        if(o-&gt;type != FF_OPT_TYPE_CONST &amp;&amp; o-&gt;unit &amp;&amp; !strcmp(o-&gt;unit, unit)){
++            double tmp= d;
++            if(o-&gt;type == FF_OPT_TYPE_FLAGS)
++                tmp= av_get_int(v, o-&gt;name, NULL) | (int64_t)d;
++
++            av_set_number(v, o-&gt;name, tmp, 1, 1);
++            ret= o;
++        }
++    }
++    return ret;
++}
++
++static double const_values[]={
++    M_PI,
++    M_E,
++    FF_QP2LAMBDA,
++    0
++};
++
++static const char *const_names[]={
++    &quot;PI&quot;,
++    &quot;E&quot;,
++    &quot;QP2LAMBDA&quot;,
++    0
++};
++
++AVOption *av_set_string(void *obj, const char *name, const char *val){
++    AVOption *o= find_opt(obj, name, NULL);
++    if(o &amp;&amp; o-&gt;offset==0 &amp;&amp; o-&gt;type == FF_OPT_TYPE_CONST &amp;&amp; o-&gt;unit){
++        return set_all_opt(obj, o-&gt;unit, o-&gt;default_val);
++    }
++    if(!o || !val || o-&gt;offset&lt;=0)
++        return NULL;
++    if(o-&gt;type != FF_OPT_TYPE_STRING){
++        for(;;){
++            int i;
++            char buf[256];
++            int cmd=0;
++            double d;
++            char *error = NULL;
++
++            if(*val == '+' || *val == '-')
++                cmd= *(val++);
++
++            for(i=0; i&lt;sizeof(buf)-1 &amp;&amp; val[i] &amp;&amp; val[i]!='+' &amp;&amp; val[i]!='-'; i++)
++                buf[i]= val[i];
++            buf[i]=0;
++            val+= i;
++
++            d = ff_eval2(buf, const_values, const_names, NULL, NULL, NULL, NULL, NULL, &amp;error);
++            if(isnan(d)) {
++                AVOption *o_named= find_opt(obj, buf, o-&gt;unit);
++                if(o_named &amp;&amp; o_named-&gt;type == FF_OPT_TYPE_CONST)
++                    d= o_named-&gt;default_val;
++                else if(!strcmp(buf, &quot;default&quot;)) d= o-&gt;default_val;
++                else if(!strcmp(buf, &quot;max&quot;    )) d= o-&gt;max;
++                else if(!strcmp(buf, &quot;min&quot;    )) d= o-&gt;min;
++                else {
++                    if (!error)
++                        av_log(NULL, AV_LOG_ERROR, &quot;Unable to parse option value \&quot;%s\&quot;: %s\n&quot;, val, error);
++                    return NULL;
++                }
++            }
++            if(o-&gt;type == FF_OPT_TYPE_FLAGS){
++                if     (cmd=='+') d= av_get_int(obj, name, NULL) | (int64_t)d;
++                else if(cmd=='-') d= av_get_int(obj, name, NULL) &amp;~(int64_t)d;
++            }else if(cmd=='-')
++                d= -d;
++
++            av_set_number(obj, name, d, 1, 1);
++            if(!*val)
++                return o;
++        }
++        return NULL;
++    }
++
++    memcpy(((uint8_t*)obj) + o-&gt;offset, val, sizeof(val));
++    return o;
++}
++
++AVOption *av_set_double(void *obj, const char *name, double n){
++    return av_set_number(obj, name, n, 1, 1);
++}
++
++AVOption *av_set_q(void *obj, const char *name, AVRational n){
++    return av_set_number(obj, name, n.num, n.den, 1);
++}
++
++AVOption *av_set_int(void *obj, const char *name, int64_t n){
++    return av_set_number(obj, name, 1, 1, n);
++}
++
++/**
++ *
++ * @param buf a buffer which is used for returning non string values as strings, can be NULL
++ * @param buf_len allocated length in bytes of buf
++ */
++const char *av_get_string(void *obj, const char *name, AVOption **o_out, char *buf, int buf_len){
++    AVOption *o= find_opt(obj, name, NULL);
++    void *dst;
++    if(!o || o-&gt;offset&lt;=0)
++        return NULL;
++    if(o-&gt;type != FF_OPT_TYPE_STRING &amp;&amp; (!buf || !buf_len))
++        return NULL;
++
++    dst= ((uint8_t*)obj) + o-&gt;offset;
++    if(o_out) *o_out= o;
++
++    if(o-&gt;type == FF_OPT_TYPE_STRING)
++        return dst;
++
++    switch(o-&gt;type){
++    case FF_OPT_TYPE_FLAGS:     snprintf(buf, buf_len, &quot;0x%08X&quot;,*(int    *)dst);break;
++    case FF_OPT_TYPE_INT:       snprintf(buf, buf_len, &quot;%d&quot; , *(int    *)dst);break;
++    case FF_OPT_TYPE_INT64:     snprintf(buf, buf_len, &quot;%&quot;PRId64, *(int64_t*)dst);break;
++    case FF_OPT_TYPE_FLOAT:     snprintf(buf, buf_len, &quot;%f&quot; , *(float  *)dst);break;
++    case FF_OPT_TYPE_DOUBLE:    snprintf(buf, buf_len, &quot;%f&quot; , *(double *)dst);break;
++    case FF_OPT_TYPE_RATIONAL:  snprintf(buf, buf_len, &quot;%d/%d&quot;, ((AVRational*)dst)-&gt;num, ((AVRational*)dst)-&gt;den);break;
++    default: return NULL;
++    }
++    return buf;
++}
++
++static int av_get_number(void *obj, const char *name, AVOption **o_out, double *num, int *den, int64_t *intnum){
++    AVOption *o= find_opt(obj, name, NULL);
++    void *dst;
++    if(!o || o-&gt;offset&lt;=0)
++        goto error;
++
++    dst= ((uint8_t*)obj) + o-&gt;offset;
++
++    if(o_out) *o_out= o;
++
++    switch(o-&gt;type){
++    case FF_OPT_TYPE_FLAGS:
++    case FF_OPT_TYPE_INT:       *intnum= *(int    *)dst;return 0;
++    case FF_OPT_TYPE_INT64:     *intnum= *(int64_t*)dst;return 0;
++    case FF_OPT_TYPE_FLOAT:     *num=    *(float  *)dst;return 0;
++    case FF_OPT_TYPE_DOUBLE:    *num=    *(double *)dst;return 0;
++    case FF_OPT_TYPE_RATIONAL:  *intnum= ((AVRational*)dst)-&gt;num;
++                                *den   = ((AVRational*)dst)-&gt;den;
++                                                        return 0;
++    }
++error:
++    *den=*intnum=0;
++    return -1;
++}
++
++double av_get_double(void *obj, const char *name, AVOption **o_out){
++    int64_t intnum=1;
++    double num=1;
++    int den=1;
++
++    av_get_number(obj, name, o_out, &amp;num, &amp;den, &amp;intnum);
++    return num*intnum/den;
++}
++
++AVRational av_get_q(void *obj, const char *name, AVOption **o_out){
++    int64_t intnum=1;
++    double num=1;
++    int den=1;
++
++    av_get_number(obj, name, o_out, &amp;num, &amp;den, &amp;intnum);
++    if(num == 1.0 &amp;&amp; (int)intnum == intnum)
++        return (AVRational){intnum, den};
++    else
++        return av_d2q(num*intnum/den, 1&lt;&lt;24);
++}
++
++int64_t av_get_int(void *obj, const char *name, AVOption **o_out){
++    int64_t intnum=1;
++    double num=1;
++    int den=1;
++
++    av_get_number(obj, name, o_out, &amp;num, &amp;den, &amp;intnum);
++    return num*intnum/den;
++}
++
++static void opt_list(void *obj, void *av_log_obj, char *unit)
++{
++    AVOption *opt=NULL;
++
++    while((opt= av_next_option(obj, opt))){
++        if(!(opt-&gt;flags &amp; (AV_OPT_FLAG_ENCODING_PARAM|AV_OPT_FLAG_DECODING_PARAM)))
++            continue;
++
++        /* Don't print CONST's on level one.
++         * Don't print anything but CONST's on level two.
++         * Only print items from the requested unit.
++         */
++        if (!unit &amp;&amp; opt-&gt;type==FF_OPT_TYPE_CONST)
++            continue;
++        else if (unit &amp;&amp; opt-&gt;type!=FF_OPT_TYPE_CONST)
++            continue;
++        else if (unit &amp;&amp; opt-&gt;type==FF_OPT_TYPE_CONST &amp;&amp; strcmp(unit, opt-&gt;unit))
++            continue;
++        else if (unit &amp;&amp; opt-&gt;type == FF_OPT_TYPE_CONST)
++            av_log(av_log_obj, AV_LOG_INFO, &quot;   %-15s &quot;, opt-&gt;name);
++        else
++            av_log(av_log_obj, AV_LOG_INFO, &quot;-%-17s &quot;, opt-&gt;name);
++
++        switch( opt-&gt;type )
++        {
++            case FF_OPT_TYPE_FLAGS:
++                av_log( av_log_obj, AV_LOG_INFO, &quot;%-7s &quot;, &quot;&lt;flags&gt;&quot; );
++                break;
++            case FF_OPT_TYPE_INT:
++                av_log( av_log_obj, AV_LOG_INFO, &quot;%-7s &quot;, &quot;&lt;int&gt;&quot; );
++                break;
++            case FF_OPT_TYPE_INT64:
++                av_log( av_log_obj, AV_LOG_INFO, &quot;%-7s &quot;, &quot;&lt;int64&gt;&quot; );
++                break;
++            case FF_OPT_TYPE_DOUBLE:
++                av_log( av_log_obj, AV_LOG_INFO, &quot;%-7s &quot;, &quot;&lt;double&gt;&quot; );
++                break;
++            case FF_OPT_TYPE_FLOAT:
++                av_log( av_log_obj, AV_LOG_INFO, &quot;%-7s &quot;, &quot;&lt;float&gt;&quot; );
++                break;
++            case FF_OPT_TYPE_STRING:
++                av_log( av_log_obj, AV_LOG_INFO, &quot;%-7s &quot;, &quot;&lt;string&gt;&quot; );
++                break;
++            case FF_OPT_TYPE_RATIONAL:
++                av_log( av_log_obj, AV_LOG_INFO, &quot;%-7s &quot;, &quot;&lt;rational&gt;&quot; );
++                break;
++            case FF_OPT_TYPE_CONST:
++            default:
++                av_log( av_log_obj, AV_LOG_INFO, &quot;%-7s &quot;, &quot;&quot; );
++                break;
++        }
++        av_log(av_log_obj, AV_LOG_INFO, &quot;%c&quot;, (opt-&gt;flags &amp; AV_OPT_FLAG_ENCODING_PARAM) ? 'E' : '.');
++        av_log(av_log_obj, AV_LOG_INFO, &quot;%c&quot;, (opt-&gt;flags &amp; AV_OPT_FLAG_DECODING_PARAM) ? 'D' : '.');
++        av_log(av_log_obj, AV_LOG_INFO, &quot;%c&quot;, (opt-&gt;flags &amp; AV_OPT_FLAG_VIDEO_PARAM   ) ? 'V' : '.');
++        av_log(av_log_obj, AV_LOG_INFO, &quot;%c&quot;, (opt-&gt;flags &amp; AV_OPT_FLAG_AUDIO_PARAM   ) ? 'A' : '.');
++        av_log(av_log_obj, AV_LOG_INFO, &quot;%c&quot;, (opt-&gt;flags &amp; AV_OPT_FLAG_SUBTITLE_PARAM) ? 'S' : '.');
++
++        if(opt-&gt;help)
++            av_log(av_log_obj, AV_LOG_INFO, &quot; %s&quot;, opt-&gt;help);
++        av_log(av_log_obj, AV_LOG_INFO, &quot;\n&quot;);
++        if (opt-&gt;unit &amp;&amp; opt-&gt;type != FF_OPT_TYPE_CONST) {
++            opt_list(obj, av_log_obj, opt-&gt;unit);
++        }
++    }
++}
++
++int av_opt_show(void *obj, void *av_log_obj){
++    if(!obj)
++        return -1;
++
++    av_log(av_log_obj, AV_LOG_INFO, &quot;%s AVOptions:\n&quot;, (*(AVClass**)obj)-&gt;class_name);
++
++    opt_list(obj, av_log_obj, NULL);
++
++    return 0;
++}
++
++/** Set the values of the AVCodecContext or AVFormatContext structure.
++ * They are set to the defaults specified in the according AVOption options
++ * array default_val field.
++ *
++ * @param s AVCodecContext or AVFormatContext for which the defaults will be set
++ */
++void av_opt_set_defaults(void *s)
++{
++    AVOption *opt = NULL;
++    while ((opt = av_next_option(s, opt)) != NULL) {
++        switch(opt-&gt;type) {
++            case FF_OPT_TYPE_CONST:
++                /* Nothing to be done here */
++            break;
++            case FF_OPT_TYPE_FLAGS:
++            case FF_OPT_TYPE_INT: {
++                int val;
++                val = opt-&gt;default_val;
++                av_set_int(s, opt-&gt;name, val);
++            }
++            break;
++            case FF_OPT_TYPE_FLOAT: {
++                double val;
++                val = opt-&gt;default_val;
++                av_set_double(s, opt-&gt;name, val);
++            }
++            break;
++            case FF_OPT_TYPE_RATIONAL: {
++                AVRational val;
++                val = av_d2q(opt-&gt;default_val, INT_MAX);
++                av_set_q(s, opt-&gt;name, val);
++            }
++            break;
++            case FF_OPT_TYPE_STRING:
++                /* Cannot set default for string as default_val is of type * double */
++            break;
++            default:
++                av_log(s, AV_LOG_DEBUG, &quot;AVOption type %d of option %s not implemented yet\n&quot;, opt-&gt;type, opt-&gt;name);
++        }
++    }
++}
++
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000085.html">[Avidemux-svn-commit] r2759 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+	<LI>Next message: <A HREF="000087.html">[Avidemux-svn-commit] r2761 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#86">[ date ]</a>
+              <a href="thread.html#86">[ thread ]</a>
+              <a href="subject.html#86">[ subject ]</a>
+              <a href="author.html#86">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

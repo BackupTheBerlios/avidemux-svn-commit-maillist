@@ -1,0 +1,121 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5161 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudio/src	avidemux_plugins/ADM_audioEncoders/lame
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5161%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreAudio/src%0A%09avidemux_plugins/ADM_audioEncoders/lame&In-Reply-To=%3C200907271743.n6RHh5Ab023382%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002375.html">
+   <LINK REL="Next"  HREF="002377.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5161 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudio/src	avidemux_plugins/ADM_audioEncoders/lame</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5161%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreAudio/src%0A%09avidemux_plugins/ADM_audioEncoders/lame&In-Reply-To=%3C200907271743.n6RHh5Ab023382%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5161 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudio/src	avidemux_plugins/ADM_audioEncoders/lame">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Jul 27 19:43:05 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002375.html">[Avidemux-svn-commit] r5160 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreMuxer/include avidemux_core/ADM_coreMuxer/src	avidemux_plugins/ADM_muxers/muxerAvi	avidemux_plugins/ADM_muxers/muxerFlv	avidemux_plugins/ADM_muxers/muxerRaw
+</A></li>
+        <LI>Next message: <A HREF="002377.html">[Avidemux-svn-commit] r5162 - in	branches/avidemux_2.5_branch_gruntster: cmake	plugins/ADM_audioDecoders
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2376">[ date ]</a>
+              <a href="thread.html#2376">[ thread ]</a>
+              <a href="subject.html#2376">[ subject ]</a>
+              <a href="author.html#2376">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-07-27 19:43:04 +0200 (Mon, 27 Jul 2009)
+New Revision: 5161
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src/ADM_audioStreamBuffered.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders/lame/audioencoder_lame.cpp
+Log:
+[Mp3/Lame] Accept mp3 packet spawning across several read (fixes #1) + cosmetic on lame
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src/ADM_audioStreamBuffered.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src/ADM_audioStreamBuffered.cpp	2009-07-26 18:38:44 UTC (rev 5160)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudio/src/ADM_audioStreamBuffered.cpp	2009-07-27 17:43:04 UTC (rev 5161)
+@@ -120,11 +120,11 @@
+ */
+ bool      ADM_audioStreamBuffered::needBytes(uint32_t nbBytes)
+ {
+-    if((limit-start)&gt;=nbBytes) return true;
+-    refill();
+-    if((limit-start)&gt;=nbBytes) return true;
+-    return false;
+-
++    while(1)
++    {
++        if((limit-start)&gt;=nbBytes) return true;
++        if(false==refill()) return false;
++    }
+ }
+ /**
+     \fn skipBytes
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders/lame/audioencoder_lame.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders/lame/audioencoder_lame.cpp	2009-07-26 18:38:44 UTC (rev 5160)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioEncoders/lame/audioencoder_lame.cpp	2009-07-27 17:43:04 UTC (rev 5161)
+@@ -220,17 +220,19 @@
+     }
+   dither16 (&amp;(tmpbuffer[tmphead]), _chunk, wavheader.channels);
+   ADM_assert (tmptail &gt;= tmphead);
++  int16_t *sample16=(int16_t *)&amp; (tmpbuffer[tmphead]);
+   if (wavheader.channels == 1)
+     {
+-      nbout =	lame_encode_buffer (MYFLAGS, (int16_t *) &amp; (tmpbuffer[tmphead]),
+-			    (int16_t *) &amp; (tmpbuffer[tmphead]), _chunk, dest,
++      nbout =	lame_encode_buffer (MYFLAGS, 
++                sample16,
++			    sample16, _chunk, dest,
+ 			    16 * 1024);
+ 
+     }
+   else
+     {
+       nbout =	lame_encode_buffer_interleaved (MYFLAGS,
+-					(int16_t *) &amp; (tmpbuffer[tmphead]),
++					sample16,
+ 					_chunk / 2, dest, 16 * 1024);
+     }
+   tmphead += _chunk;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002375.html">[Avidemux-svn-commit] r5160 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreMuxer/include avidemux_core/ADM_coreMuxer/src	avidemux_plugins/ADM_muxers/muxerAvi	avidemux_plugins/ADM_muxers/muxerFlv	avidemux_plugins/ADM_muxers/muxerRaw
+</A></li>
+	<LI>Next message: <A HREF="002377.html">[Avidemux-svn-commit] r5162 - in	branches/avidemux_2.5_branch_gruntster: cmake	plugins/ADM_audioDecoders
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2376">[ date ]</a>
+              <a href="thread.html#2376">[ thread ]</a>
+              <a href="subject.html#2376">[ subject ]</a>
+              <a href="author.html#2376">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,274 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4753 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4753%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904211804.n3LI4PJA031353%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001980.html">
+   <LINK REL="Next"  HREF="001982.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4753 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4753%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904211804.n3LI4PJA031353%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4753 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Apr 21 20:04:25 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001980.html">[Avidemux-svn-commit] r4752 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="001982.html">[Avidemux-svn-commit] r4754 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1981">[ date ]</a>
+              <a href="thread.html#1981">[ thread ]</a>
+              <a href="subject.html#1981">[ subject ]</a>
+              <a href="author.html#1981">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-04-21 20:04:25 +0200 (Tue, 21 Apr 2009)
+New Revision: 4753
+
+Modified:
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+Log:
+[MpegTs] Correctly index audio. code a bit on the ugly side
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-21 18:04:23 UTC (rev 4752)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-21 18:04:25 UTC (rev 4753)
+@@ -348,22 +348,24 @@
+     {
+         if(data-&gt;frameType==1)
+         {
+-#if 0
++
+             // If audio, also dump audio
+             if(audioTracks)
+             {
+ 
+                 qfprintf(index,&quot;\nAudio bf:%08&quot;LLX&quot; &quot;,data-&gt;startAt);
+-                for(int i=0;i&lt;audioTracks-&gt;size();i++)
+-                {
+-                    uint8_t e=(*audioTracks)[i]-&gt;esID;
+-                    packetStats *s=pkt-&gt;getStat(e);
+-                    
+-                    qfprintf(index,&quot;Pes:%x:%08&quot;LLX&quot;:%&quot;LD&quot;:%&quot;LLD&quot; &quot;,e,s-&gt;startAt,s-&gt;startSize,s-&gt;startDts);
++                packetTSStats *s;
++                uint32_t na;
++                pkt-&gt;getStats(&amp;na,&amp;s);      
++                ADM_assert(na==audioTracks-&gt;size());
++                for(int i=0;i&lt;na;i++)
++                {   
++                    packetTSStats *current=s+i;
++                    qfprintf(index,&quot;Pes:%x:%08&quot;LLX&quot;:%&quot;LD&quot;:%&quot;LLD&quot; &quot;,
++                                current-&gt;pid,current-&gt;startAt,current-&gt;startSize,current-&gt;startDts);
+                 }
+                 
+             }
+-#endif
+             // start a new line
+             qfprintf(index,&quot;\nVideo at:%08&quot;LLX&quot;:%04&quot;LX&quot; Pts:%08&quot;LLD&quot;:%08&quot;LLD&quot; &quot;,data-&gt;startAt,data-&gt;offset,info-&gt;pts,info-&gt;dts);
+             data-&gt;nextOffset=-2;
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-21 18:04:23 UTC (rev 4752)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-21 18:04:25 UTC (rev 4753)
+@@ -738,21 +738,36 @@
+ /**
+     \fn tsPacketLinearTracker
+ */
+-bool    tsPacketLinearTracker::getStats(uint32_t *nb,packetTSStats *stats)
++bool    tsPacketLinearTracker::getStats(uint32_t *nb,packetTSStats **stats)
+ {
+     *nb=totalTracks;
+-    stats=this-&gt;stats;
++    *stats=this-&gt;stats;
+     return true;
+ }
++/**
++        \fn updateStats
++        \brief Decode a bit of PES header, just enough to get PTS or DTS
++            if only PTS is there we assume PTS=DTS
++*/
+ bool tsPacketLinearTracker::updateStats(uint8_t *scratch)
+ {
+     uint32_t id=scratch[1]+((scratch[0]&amp;0x1F)&lt;&lt;8);
++    int found=-1;
++    // Look if it is a pid we are interested in
++    for(int i=0;i&lt;totalTracks;i++)
++        if(id==stats[i].pid) found=i;
++    if(found==-1) return false;
++
++    
+     int payloadUnitStart=scratch[0]&amp;0x40;
+     int fieldControl=(scratch[2]&gt;&gt;4)&amp;3;
+     int continuity=(scratch[2]&amp;0xf);
+-    int len=TS_PACKET_LEN-4; // useful datas
+ 
++
+     if(!payloadUnitStart) return false; // no PES start in here...
++
++
++
+     // Adaptation field
+     // 11 Adapt+payload
+     // 10 Adapt only
+@@ -781,14 +796,102 @@
+ #ifdef TS_DEBUG2
+         printf(&quot;[Demuxer] size=%d\n&quot;,size);
+ #endif        
+-
+         return true;
+     }
+     // Look into pes packet starting at &quot;start&quot;
+     otherPes-&gt;payloadSize=size;
+     uint64_t pos;
+     _file-&gt;getpos(&amp;pos);
++
++    //*************************
++    // ENTER PES
++    //*************************
++
+     otherPes-&gt;startAt=pos-extraCrap-TS_PACKET_LEN;
++    // PES startcode ?
++    if( start[0] || start[1] || start[2]!=1) return false; 
++    int stream=start[3];
++    // Skip startcode + length
++    start+=6;
++    // Update our stats
++    stats[found].startAt=otherPes-&gt;startAt;
++    stats[found].count++;
++    //stats[found].startDts=ADM_NO_PTS;
++    
++    // Get PTS, DTS
++#define LEFT (int)(end-start)
++    int c,available;
++    if(LEFT&lt;(4+2+1+2)) return false;
++    
++    while(*start==0xff &amp;&amp; start&lt;end) start++; // Padding
++    if(LEFT&lt;5) fail(&quot;Not enough data in OES&quot;);
++
++    c=*start++;
++    if((c&amp;0xc0)!=0x80) 
++    {
++        printf(&quot;[TS Demuxer] stream=0x%x pid=%d PES header :0x%x no mpeg2 PES marker\n&quot;,stream,id,c);
++        return false;
++    }
++    
++        uint32_t ptsdts,len;
++        c=*start++;     // PTS/DTS
++        //printf(&quot;%x ptsdts\n&quot;,c
++        ptsdts=c&gt;&gt;6;
++        // header len
++        len=*start++;
++        available=LEFT;
++        if(len&gt;available) fail(&quot;Not enough data for PES header&quot;);
++    
++        switch(ptsdts)
++        {
++                case 2: // PTS=1 DTS=0
++                       
++                        {
++                                if(available&lt;5) return false;
++                                uint64_t pts1,pts2,pts0;
++                                //      printf(&quot;\n PTS10\n&quot;);
++                                        pts0=start[0];  
++                                        pts1=(start[1]&lt;&lt;8)+start[2]; 
++                                        pts2=(start[3]&lt;&lt;8)+start[4]; 
++                                        start+=5;
++                                        stats[found].startDts=(pts1&gt;&gt;1)&lt;&lt;15;
++                                        stats[found].startDts+=pts2&gt;&gt;1;
++                                        stats[found].startDts+=(((pts0&amp;6)&gt;&gt;1)&lt;&lt;30);
++                        }
++                        break;
++                case 3: // PTS=1 DTS=1
++                                if(available&lt;10) return false;
++                                #define PTS11_ADV 10 // nut monkey
++                                if(len&gt;=PTS11_ADV)
++                                {
++                                        uint32_t skip=PTS11_ADV;
++                                        uint64_t pts1,pts2,dts,pts0;
++                                                //      printf(&quot;\n PTS10\n&quot;);
++                                                pts0=start[0];  
++                                                pts1=(start[1]&lt;&lt;8)+start[2]; 
++                                                pts2=(start[3]&lt;&lt;8)+start[4]; 
++                                                start+=5;
++                                                                        
++                                                // Assume PTS=DTS
++                                                pts0=*start++;  
++                                                pts1=(start[0]&lt;&lt;8)+start[1]; 
++                                                pts2=(start[2]&lt;&lt;8)+start[3];       
++                                                start+=5;
++                                                stats[found].startDts=(pts1&gt;&gt;1)&lt;&lt;15;
++                                                stats[found].startDts+=pts2&gt;&gt;1;
++                                                stats[found].startDts+=(((pts0&amp;6)&gt;&gt;1)&lt;&lt;30);
++                                   }
++                                   break;               
++                case 1:
++                                fail(&quot;unvalid pts/dts&quot;);
++                                break;
++                case 0: 
++                                // printf(&quot;\n PTS00\n&quot;);
++                                break; // no pts nor dts
++                                                                
++        }  
++       
++
+     return true;
+ }
+ // EOF
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-21 18:04:23 UTC (rev 4752)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-21 18:04:25 UTC (rev 4753)
+@@ -179,7 +179,7 @@
+ public:
+                 tsPacketLinearTracker(uint32_t videoPid,listOfTsAudioTracks *audioTracks);
+                 ~tsPacketLinearTracker();
+-        bool    getStats(uint32_t *nb,packetTSStats *stats);
++        bool    getStats(uint32_t *nb,packetTSStats **stats);
+ virtual bool    updateStats(uint8_t *data);
+ };
+ #endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001980.html">[Avidemux-svn-commit] r4752 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="001982.html">[Avidemux-svn-commit] r4754 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1981">[ date ]</a>
+              <a href="thread.html#1981">[ thread ]</a>
+              <a href="subject.html#1981">[ subject ]</a>
+              <a href="author.html#1981">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

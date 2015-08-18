@@ -1,0 +1,274 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5031 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_plugin plugins/ADM_videoEncoder/ADM_vidEnc_avcodec	plugins/ADM_videoEncoder/ADM_vidEnc_x264	plugins/ADM_videoEncoder/ADM_vidEnc_xvid
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5031%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09avidemux/ADM_plugin%20plugins/ADM_videoEncoder/ADM_vidEnc_avcodec%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_x264%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_xvid&In-Reply-To=%3C200907101617.n6AGHB0i000811%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002245.html">
+   <LINK REL="Next"  HREF="002247.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5031 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_plugin plugins/ADM_videoEncoder/ADM_vidEnc_avcodec	plugins/ADM_videoEncoder/ADM_vidEnc_x264	plugins/ADM_videoEncoder/ADM_vidEnc_xvid</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5031%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09avidemux/ADM_plugin%20plugins/ADM_videoEncoder/ADM_vidEnc_avcodec%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_x264%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_xvid&In-Reply-To=%3C200907101617.n6AGHB0i000811%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5031 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_plugin plugins/ADM_videoEncoder/ADM_vidEnc_avcodec	plugins/ADM_videoEncoder/ADM_vidEnc_x264	plugins/ADM_videoEncoder/ADM_vidEnc_xvid">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Fri Jul 10 18:17:11 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002245.html">[Avidemux-svn-commit] r5030 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec
+</A></li>
+        <LI>Next message: <A HREF="002247.html">[Avidemux-svn-commit] r5032 - in	branches/avidemux_2.5_branch_gruntster: .	avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog	avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui	avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2246">[ date ]</a>
+              <a href="thread.html#2246">[ thread ]</a>
+              <a href="subject.html#2246">[ subject ]</a>
+              <a href="author.html#2246">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-07-10 18:17:04 +0200 (Fri, 10 Jul 2009)
+New Revision: 5031
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp
+Log:
+[vidEnc] change video encoder API to include planes and strides of source frame (so each plugin doesn't need to calculate them)
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp	2009-07-10 13:52:18 UTC (rev 5030)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp	2009-07-10 16:17:04 UTC (rev 5031)
+@@ -20,6 +20,11 @@
+ #include &quot;ADM_externalEncoder.h&quot;
+ #include &quot;ADM_plugin/ADM_vidEnc_plugin.h&quot;
+ 
++extern &quot;C&quot;
++{
++#include &quot;libavcodec/avcodec.h&quot;
++}
++
+ externalEncoder::externalEncoder(COMPRES_PARAMS *params, bool globalHeader)
+ {
+ 	_plugin = getVideoEncoderPlugin(params-&gt;extra_param);
+@@ -90,13 +95,19 @@
+ 
+ 	if (frame == UINT32_MAX)
+ 	{
+-		params.frameData = NULL;
++		memset(&amp;params.frameData, 0, sizeof(params.frameData));
++		memset(&amp;params.frameLineSize, 0, sizeof(params.frameLineSize));
++
+ 		params.frameDataSize = 0;
+ 	}
+ 	else
+ 	{
+-		params.frameData = _vbuffer-&gt;data;
+-		params.frameDataSize = ((_w + 15) &amp; 0xffffff0) * ((_h + 15) &amp; 0xfffffff0) * 2;
++		AVPicture sourcePicture;
++
++		params.frameDataSize = avpicture_fill(&amp;sourcePicture, _vbuffer-&gt;data, PIX_FMT_YUV420P, _w, _h);
++
++		memcpy(&amp;params.frameLineSize, sourcePicture.linesize, sizeof(params.frameLineSize));
++		memcpy(&amp;params.frameData, sourcePicture.data, sizeof(params.frameData));
+ 	}
+ 
+ 	params.encodedData = NULL;
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h	2009-07-10 13:52:18 UTC (rev 5030)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h	2009-07-10 16:17:04 UTC (rev 5031)
+@@ -17,7 +17,7 @@
+ #ifndef ADM_vidEnc_plugin_h
+ #define ADM_vidEnc_plugin_h
+ 
+-#define ADM_VIDENC_API_VERSION 1
++#define ADM_VIDENC_API_VERSION 2
+ 
+ #define ADM_VIDENC_ERR_SUCCESS 1
+ #define ADM_VIDENC_ERR_FAILED 0
+@@ -50,7 +50,8 @@
+ typedef struct
+ {
+ 	int structSize;
+-	uint8_t *frameData;
++	uint8_t *frameData[4];
++	int frameLineSize[4];
+ 	int frameDataSize;
+ 	uint8_t *encodedData;
+ 	int encodedDataSize;
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp	2009-07-10 13:52:18 UTC (rev 5030)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec/encoder.cpp	2009-07-10 16:17:04 UTC (rev 5031)
+@@ -315,19 +315,14 @@
+ 	_frame.key_frame = 0;
+ 	_frame.pict_type = 0;
+ 
+-	if (encodeParams-&gt;frameData)
++	if (encodeParams-&gt;frameData[0])
+ 	{
+-		AVPicture sourcePicture, *inputPicture;
++		// Swap planes since input is YV12 (not YUV420P)
++		uint8_t *tmpPlane = encodeParams-&gt;frameData[1];
+ 
+-		avpicture_fill(
+-			&amp;sourcePicture, encodeParams-&gt;frameData, PIX_FMT_YUV420P, _context-&gt;width, _context-&gt;height);
++		encodeParams-&gt;frameData[1] = encodeParams-&gt;frameData[2];
++		encodeParams-&gt;frameData[2] = tmpPlane;
+ 
+-		// Swap planes to make YV12 look like YUV420P
+-		uint8_t *tmpPlane = sourcePicture.data[1];
+-
+-		sourcePicture.data[1] = sourcePicture.data[2];
+-		sourcePicture.data[2] = tmpPlane;
+-
+ 		if (_swsContext)
+ 		{
+ 			AVPicture resamplePicture;
+@@ -335,18 +330,23 @@
+ 			avpicture_fill(
+ 				&amp;resamplePicture, _resampleBuffer, _context-&gt;pix_fmt, _context-&gt;width, _context-&gt;height);
+ 
+-			inputPicture = &resamplePicture;
++			sws_scale(
++				_swsContext, encodeParams-&gt;frameData, encodeParams-&gt;frameLineSize, 0,
++				_context-&gt;height, resamplePicture.data, resamplePicture.linesize);
+ 
+-			sws_scale(
+-				_swsContext, sourcePicture.data, sourcePicture.linesize, 0,
+-				_context-&gt;height, inputPicture-&gt;data, inputPicture-&gt;linesize);
++			memcpy(&amp;_frame.linesize, resamplePicture.linesize, sizeof(resamplePicture.linesize));
++			memcpy(&amp;_frame.data, resamplePicture.data, sizeof(resamplePicture.data));
+ 		}
+ 		else
+-			inputPicture = &sourcePicture;
++		{
++			_frame.data[0] = encodeParams-&gt;frameData[0];
++			_frame.data[1] = encodeParams-&gt;frameData[1];
++			_frame.data[2] = encodeParams-&gt;frameData[2];
++			_frame.linesize[0] = encodeParams-&gt;frameLineSize[0];
++			_frame.linesize[1] = encodeParams-&gt;frameLineSize[1];
++			_frame.linesize[2] = encodeParams-&gt;frameLineSize[2];
++		}
+ 
+-		memcpy(&amp;_frame.linesize, inputPicture-&gt;linesize, sizeof(_frame.linesize));
+-		memcpy(&amp;_frame.data, inputPicture-&gt;data, sizeof(_frame.data));
+-
+ 		int size = avcodec_encode_video(_context, _buffer, _bufferSize, &amp;_frame);
+ 
+ 		if (size &lt; 0)
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-07-10 13:52:18 UTC (rev 5030)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-07-10 16:17:04 UTC (rev 5031)
+@@ -312,21 +312,21 @@
+ 
+ 	memset(&amp;_picture, 0, sizeof(x264_picture_t));
+ 
+-	if (encodeParams-&gt;frameData)
++	if (encodeParams-&gt;frameData[0])
+ 	{
+-		_picture.img.plane[0] = encodeParams-&gt;frameData;	// Y
+-		_picture.img.plane[2] = encodeParams-&gt;frameData + _param.i_width * _param.i_height;	// U
+-		_picture.img.plane[1] = encodeParams-&gt;frameData + ((_param.i_width * _param.i_height * 5) &gt;&gt; 2);	// V
+-		_picture.img.i_stride[0] = _param.i_width;
+-		_picture.img.i_stride[1] = _param.i_width &gt;&gt; 1;
+-		_picture.img.i_stride[2] = _param.i_width &gt;&gt; 1;
++		_picture.img.plane[0] = encodeParams-&gt;frameData[0];
++		_picture.img.plane[1] = encodeParams-&gt;frameData[1];
++		_picture.img.plane[2] = encodeParams-&gt;frameData[2];
++		_picture.img.i_stride[0] = encodeParams-&gt;frameLineSize[0];
++		_picture.img.i_stride[1] = encodeParams-&gt;frameLineSize[1];
++		_picture.img.i_stride[2] = encodeParams-&gt;frameLineSize[2];
+ 		_picture.i_type = X264_TYPE_AUTO;
+ 		_picture.i_pts = _currentFrame;
+-		_picture.img.i_csp = X264_CSP_I420;
++		_picture.img.i_csp = X264_CSP_YV12;
+ 		_picture.img.i_plane = 3;
+ 	}
+ 
+-	if (x264_encoder_encode(_handle, &amp;nal, &amp;nalCount, encodeParams-&gt;frameData ? &amp;_picture : NULL, &amp;picture_out) &lt; 0)
++	if (x264_encoder_encode(_handle, &amp;nal, &amp;nalCount, encodeParams-&gt;frameData[0] ? &amp;_picture : NULL, &amp;picture_out) &lt; 0)
+ 	{
+ 		printf(&quot;[x264] Error encoding\n&quot;);
+ 		return ADM_VIDENC_ERR_FAILED;
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp	2009-07-10 13:52:18 UTC (rev 5030)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp	2009-07-10 16:17:04 UTC (rev 5031)
+@@ -220,7 +220,7 @@
+ 
+ 	_opened = true;
+ 	_currentPass = 0;
+-	_bufferSize = properties-&gt;width * properties-&gt;height * 3;
++	_bufferSize = (properties-&gt;width * properties-&gt;height) + 2 * ((properties-&gt;width + 1 &gt;&gt; 1) * (properties-&gt;height + 1 &gt;&gt; 1));
+ 	_buffer = new uint8_t[_bufferSize];
+ 
+ 	memcpy(&amp;_properties, properties, sizeof(vidEncVideoProperties));
+@@ -335,16 +335,16 @@
+ 	xvid_enc_stats.version = XVID_VERSION;
+ 	_xvid_enc_frame.bitstream = _buffer;
+ 
+-	if (encodeParams-&gt;frameData)
++	if (encodeParams-&gt;frameData[0])
+ 	{
+ 		_xvid_enc_frame.length = 0;
+ 		_xvid_enc_frame.input.csp = XVID_CSP_YV12;
+-		_xvid_enc_frame.input.stride[0] = _xvid_enc_create.width;
+-		_xvid_enc_frame.input.stride[1] = _xvid_enc_create.width &gt;&gt; 1;
+-		_xvid_enc_frame.input.stride[2] = _xvid_enc_create.width &gt;&gt; 1;
+-		_xvid_enc_frame.input.plane[0] = encodeParams-&gt;frameData;
+-		_xvid_enc_frame.input.plane[1] = encodeParams-&gt;frameData + (_xvid_enc_create.width * _xvid_enc_create.height);
+-		_xvid_enc_frame.input.plane[2] = encodeParams-&gt;frameData + ((_xvid_enc_create.width * _xvid_enc_create.height * 5) &gt;&gt; 2);
++		_xvid_enc_frame.input.stride[0] = encodeParams-&gt;frameLineSize[0];
++		_xvid_enc_frame.input.stride[1] = encodeParams-&gt;frameLineSize[1];
++		_xvid_enc_frame.input.stride[2] = encodeParams-&gt;frameLineSize[2];
++		_xvid_enc_frame.input.plane[0] = encodeParams-&gt;frameData[0];
++		_xvid_enc_frame.input.plane[1] = encodeParams-&gt;frameData[1];
++		_xvid_enc_frame.input.plane[2] = encodeParams-&gt;frameData[2];
+ 	}
+ 	else
+ 	{
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002245.html">[Avidemux-svn-commit] r5030 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_avcodec
+</A></li>
+	<LI>Next message: <A HREF="002247.html">[Avidemux-svn-commit] r5032 - in	branches/avidemux_2.5_branch_gruntster: .	avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog	avidemux/ADM_userInterfaces/ADM_QT4/ADM_gui	avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2246">[ date ]</a>
+              <a href="thread.html#2246">[ thread ]</a>
+              <a href="subject.html#2246">[ subject ]</a>
+              <a href="author.html#2246">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

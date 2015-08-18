@@ -1,0 +1,478 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4735 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4735%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904141743.n3EHhFpx026603%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001962.html">
+   <LINK REL="Next"  HREF="001964.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4735 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4735%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904141743.n3EHhFpx026603%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4735 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Apr 14 19:43:15 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001962.html">[Avidemux-svn-commit] r4734 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="001964.html">[Avidemux-svn-commit] r4736 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1963">[ date ]</a>
+              <a href="thread.html#1963">[ thread ]</a>
+              <a href="subject.html#1963">[ subject ]</a>
+              <a href="author.html#1963">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-04-14 19:43:15 +0200 (Tue, 14 Apr 2009)
+New Revision: 4735
+
+Modified:
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.h
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+Log:
+[Ts Demuxer] Extract PES packet
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp	2009-04-14 17:43:13 UTC (rev 4734)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.cpp	2009-04-14 17:43:15 UTC (rev 4735)
+@@ -19,7 +19,16 @@
+ #include &quot;ADM_ts.h&quot;
+ #include &quot;ADM_demuxerInternal.h&quot;
+ #include &quot;ADM_tsPatPmt.h&quot;
++
++typedef vector &lt;ADM_TS_TRACK&gt; listOfTsTracks;
++
+ /**
++    \fn scanPmt
++*/
++static bool TS_scanPmt(tsPacket *t,uint32_t pid,listOfTsTracks *list);
++
++
++/**
+     \class TrackTypeDescriptor
+ */
+ class TrackTypeDescriptor
+@@ -40,6 +49,9 @@
+     {0x006,ADM_TS_UNKNOWN,   &quot;Private Stream&quot;},
+     {0xfff,ADM_TS_UNKNOWN,   &quot;Unknown&quot;}   // Last one must be &quot;unknown!&quot;
+ };
++
++
++
+ /**
+     \fn find
+ */
+@@ -57,13 +69,16 @@
+     \fn scanForPrograms
+     \brief Lookup PAT &amp; PMT to get tracks
+ */
+-bool TS_scanForPrograms(const char *file,uint32_t *nbTracks, ADM_TS_TRACK *tracks)
++bool TS_scanForPrograms(const char *file,uint32_t *nbTracks, ADM_TS_TRACK **outTracks)
+ {
+-    
+     uint32_t len;
+     TS_PSIpacketInfo psi;
+-
++    listOfTsTracks   list;
+     vector &lt;uint32_t&gt;listOfPmt;
++    ADM_TS_TRACK *tracks=NULL;
++    *outTracks=NULL;
++    *nbTracks=0;
++    uint32_t nb=0;
+ 
+     tsPacket *t=new tsPacket();
+     t-&gt;open(file,FP_PROBE);
+@@ -89,29 +104,100 @@
+             {
+                 printf(&quot;&lt;&lt;&lt; PMT : %d/%d&gt;&gt;&gt;\n&quot;,i,size);
+                 uint32_t pid=listOfPmt[i];
+-                TS_scanPmt(t,pid,NULL,NULL);
++                t-&gt;setPos(0); // Make sure we can have the very first one
++                TS_scanPmt(t,pid,&amp;list);
+             }
+ 
+         }
+     }
++    // List now contains a list of elementary tracks
++
++    // TODO: Look deeper to see if there is actual content
++    // Some channels advertsise languages that they may have
++    // but dont actually exists in the file
++    // Allocate output files, max size=list.size
++    
++    printf(&quot;[TS Demuxer] Found %u interesting tracks\n&quot;,(unsigned int)list.size());
++    
++    // Search the video track...
++    bool result=false;
++    int videoIndex=-1;
++    for(int i=0;i&lt;list.size();i++)
++    {
++        ADM_TS_TRACK_TYPE type=list[i].trackType;
++        if(type==ADM_TS_MPEG2 || type==ADM_TS_H264)
++        {
++            videoIndex=i;
++            break;
++        }
++    }
++    if(videoIndex==-1)
++    {
++        printf(&quot;[Ts Demuxer] Cannot find a video track\n&quot;);
++        goto _failTs;
++    }
++    //
++#if 1 // TO REMOVE
++    TS_PESpacket pes;
++    t-&gt;getNextPES(list[videoIndex].trackPid,&amp;pes);
++    t-&gt;getNextPES(list[videoIndex].trackPid,&amp;pes);
++    t-&gt;getNextPES(list[videoIndex].trackPid,&amp;pes);
++    t-&gt;getNextPES(list[videoIndex].trackPid,&amp;pes);
++#endif
++    // After here we cannot fail (normally...)
++    tracks=new ADM_TS_TRACK[list.size()];
++    *outTracks=tracks;
++    // Copy video track
++    tracks[0]=list[videoIndex];
++    // and remove it from the list
++    list.erase(list.begin()+videoIndex);
++    nb++;
++    // Also add audio tracks we know of
++     for(int i=0;i&lt;list.size();i++)
++    {
++        ADM_TS_TRACK_TYPE type=list[i].trackType;
++        if(type==ADM_TS_MPEG_AUDIO || type==ADM_TS_AC3 || type==ADM_TS_AAC)
++        {
++            TSpacketInfo pkt;
++            t-&gt;setPos(0);
++            if(true==t-&gt;getNextPacket_NoHeader(list[i].trackPid,&amp;pkt,false))
++                tracks[nb++]=list[i];
++            else        
++                printf(&quot;[TS Demuxer] Track %i pid 0x%x does not seem to be there\n&quot;,i,list[i].trackPid);
++        }
++    }
++    *nbTracks=nb;
++    result=true;
++    
++_failTs:
+     delete t;
++    // Delete the list
++    list.erase(list.begin(),list.end()-1);
++    if(result==true)
++    {
++        printf(&quot;[T Demuxer] Kept %d tracks\n&quot;,*nbTracks);
++    }
+     printf(&quot;[TS Demuxer] Probed...\n&quot;);
+-    return 0;
++    
++    return result;
+ }
+ /**
+     \fn TS_scanPmt
+     \brief Lookup one PMT and returns content
+ */
+-bool TS_scanPmt(tsPacket *t,uint32_t pid,uint32_t *nbTracks, ADM_TS_TRACK *tracks)
++bool TS_scanPmt(tsPacket *t,uint32_t pid,listOfTsTracks *list)
+ {
+-
++    ADM_TS_TRACK trk;
+     uint32_t len;
+     TS_PSIpacketInfo psi;
+     uint8_t *r=psi.payload;
+-
++    trk.trackType=ADM_TS_UNKNOWN;
++    trk.trackPid=pid;
+     printf(&quot;[TsDemuxer] Looking for PMT : 0x%x\n&quot;,pid);
+     if(t-&gt;getNextPSI(pid,&amp;psi)==true)
+      {
++        
++        
+         len=psi.payloadSize;
+         // We should be protected by CRC here
+         int packLen=len;
+@@ -135,6 +221,9 @@
+                 printf(&quot;[PMT] PMT :%02x StreamType: 0x%x,&lt;&lt;%s&gt;&gt;\n&quot;,pid,streamType,td-&gt;desc);    
+                 printf(&quot;[PMT]           Pid:        0x%x\n&quot;,streamPid);
+                 printf(&quot;[PMT]           Es Info Length: %d (0x%x)\n&quot;,esInfoLength,esInfoLength);
++                
++                trk.trackType=td-&gt;trackType;
++                trk.trackPid=streamPid;
+                 uint8_t *p=r,*pend=r+esInfoLength;
+                 r+=esInfoLength;
+                 while(p&lt;pend)
+@@ -149,7 +238,7 @@
+                         case 0x05: printf(&quot;Registration Descriptor :%c%c%c%c&quot;,p[2],p[3],p[4],p[5]);break;
+                         case 0x0a: printf(&quot;Language descriptor :%c%c%c&quot;,p[2],p[3],p[4]);break;
+                         case 0x11: printf(&quot;STD\n&quot;);break;
+-                        case 0x1e: printf(&quot;SL descriptor (H264 AAC ????)&quot;);break;
++                        case 0x1e: printf(&quot;SL descriptor (H264 AAC ?)&quot;);break;
+                         case 0x45: printf(&quot;VBI data\n&quot;);break;
+                         case 0x52: printf(&quot;Stream identifier&quot;);break;
+                         case 0x56: printf(&quot;Teletext&quot;);break;
+@@ -157,14 +246,13 @@
+                         case 0x7b: printf(&quot;DTS Descriptor&quot;);break;
+                         case 0x7a:
+                         case 0x6a: printf(&quot;AC3 Descriptor&quot;);break;
+-                        
+-                                                break;
+-                        
+                         default : printf(&quot;unknown&quot;);break;
+                     }
+                     printf(&quot;\n&quot;);
+                     p+=2+taglen;
+                 }
++                // 
++                if(trk.trackType!=ADM_TS_UNKNOWN) list-&gt;push_back(trk);
+         }
+         return true;
+      }
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.h	2009-04-14 17:43:13 UTC (rev 4734)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPatPmt.h	2009-04-14 17:43:15 UTC (rev 4735)
+@@ -51,11 +51,7 @@
+     @param out:tracks, to be freed by delete [] by the caller
+ */
+ 
+-bool TS_scanForPrograms(const char *file,uint32_t *nbTracks, ADM_TS_TRACK *tracks);
++bool TS_scanForPrograms(const char *file,uint32_t *nbTracks, ADM_TS_TRACK **tracks);
+ 
+-/**
+-    \fn scanPmt
+-*/
+-bool TS_scanPmt(tsPacket *t,uint32_t pid,uint32_t *nbTracks, ADM_TS_TRACK *tracks);
+ #endif
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp	2009-04-14 17:43:13 UTC (rev 4734)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp	2009-04-14 17:43:15 UTC (rev 4735)
+@@ -59,8 +59,15 @@
+     if(count) return false;
+     printf(&quot;[TSDemuxer] Analyzing file..\n&quot;);
+     count++;
+-    if(TS_scanForPrograms(fileName,NULL,NULL)==false) return 0;
+-    if(true==tsIndexer(fileName)) goto again;
++
++    ADM_TS_TRACK *tracks;
++    uint32_t nbTracks;
++
++    if(TS_scanForPrograms(fileName,&amp;nbTracks,&amp;tracks)==false) return 0;
++    ADM_assert(tracks);
++    ADM_assert(nbTracks);
++    delete [] tracks;
++    //if(true==tsIndexer(fileName)) goto again;
+     printf(&quot;[TSDemuxer] Failed..\n&quot;);
+    return 0;
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-14 17:43:13 UTC (rev 4734)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-14 17:43:15 UTC (rev 4735)
+@@ -43,6 +43,11 @@
+ tsPacket::tsPacket(void) 
+ {
+     extraCrap=0; // =4 for ts2
++    internalPesBuffer=(uint8_t *)ADM_alloc(2048);
++    internalPesBufferSize=0;
++    internalPesBufferLimit=2048;
++    internalBufferOffset=0;
++
+ }
+ /**
+     \fn tsPacket
+@@ -80,9 +85,28 @@
+         delete _file;
+         _file=NULL;
+     }
++    if(internalPesBuffer)
++    {
++        ADM_dealloc(internalPesBuffer);
++        internalPesBuffer=NULL;
++    }
+     return true;
+ }
+ /**
++    \fn PesAddData
++*/
++bool tsPacket::PesAddData(uint32_t len,uint8_t *data)
++{
++    if(internalPesBufferSize+len&gt;internalPesBufferLimit)
++    {
++        internalPesBufferLimit*=2;
++        internalPesBuffer=(uint8_t *)ADM_realloc(internalPesBuffer,internalPesBufferLimit);
++    }
++    memcpy(internalPesBuffer+internalPesBufferSize,data,len);
++    internalPesBufferSize+=len;
++    return true;
++}
++/**
+     \fn getPos
+ */
+ uint64_t    tsPacket::getPos(void)
+@@ -289,6 +313,62 @@
+     return true;
+ }
+ /**
++        \fn getNextPES
++        \brief Returns the next PES packet
++        Warning : Does not work with unbound packet!
++*/
++extern void mixDump(uint8_t *ptr, uint32_t len);
++bool        tsPacket::getNextPES(uint32_t pid,TS_PESpacket *pes)
++{
++#define zprintf printf
++    TSpacketInfo pkt;
++nextPack3:
++    // Sync at source
++    if(false==getNextPacket_NoHeader(pid,&amp;pkt,false)) return false;    
++    // If it does not contain a payload strat continue
++    if(!pkt.payloadStart)
++    {
++        printf(&quot;[Ts Demuxer] Pes for Pid =0x%d does not contain payload start\n&quot;,pid);
++        goto nextPack3;
++    }
++    //____________________
++    //____________________
++    // 1- Start Headers
++    //____________________
++    //____________________
++    uint32_t code=(pkt.payload[0]&lt;&lt;24)+(pkt.payload[1]&lt;&lt;16)+(pkt.payload[2]&lt;&lt;8)+pkt.payload[3];
++    zprintf(&quot;[TS Demuxer] Code=0x%x pid=0x%x\n&quot;,code,pid);
++    if((code&amp;0xffffff00)!=0x100)
++    {
++        printf(&quot;[Ts Demuxer] No PES startcode\n&quot;);
++        goto nextPack3;
++    }
++    mixDump(pkt.payload,pkt.payloadSize);
++    uint32_t pesPacketLen=(pkt.payload[4]&lt;&lt;8)+(pkt.payload[5]);
++    zprintf(&quot;[TS Demuxer] Pes Packet Len=%d\n&quot;,pesPacketLen);
++    
++    internalPesBufferSize=0;
++    PesAddData(pkt.payloadSize,pkt.payload);
++    while(1)
++    {
++        uint64_t pos;
++        _file-&gt;getpos(&amp;pos);
++        if(false==getNextPacket_NoHeader(pid,&amp;pkt,false)) return false;    
++        if(!pkt.payloadStart)
++         {
++                PesAddData(pkt.payloadSize,pkt.payload);
++         }else  
++         {
++                _file-&gt;setpos(pos);
++                break;
++         }
++    }
++    // Now decode PES header (extra memcpy)
++    printf(&quot;[Ts Demuxer] Found PES of len %d\n&quot;,internalPesBufferSize);
++    return true;
++}
++
++/**
+     \fn getPacket
+ */      
+ bool        tsPacket::getPacket(uint32_t maxSize, uint8_t *pid, uint32_t *packetSize,uint64_t *opts,uint64_t *odts,uint8_t *buffer,uint64_t *startAt)
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-14 17:43:13 UTC (rev 4734)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-14 17:43:15 UTC (rev 4735)
+@@ -14,6 +14,7 @@
+ #define TS_MARKER       0x47
+ #define TS_PACKET_LEN   188
+ #define TS_PSI_MAX_LEN  1024
++#define TS_PES_MAX_LEN  (10*1024)
+ /**
+     \class TSpacketInfo
+ */
+@@ -42,11 +43,31 @@
+ };
+ 
+ /**
++    \class TS_PESpacket
++*/
++class TS_PESpacket
++{
++public:
++    uint32_t    pid;
++    uint32_t    payloadSize;
++    uint8_t     payload[TS_PES_MAX_LEN];
++    uint64_t    pts;
++    uint64_t    dts;
++};
++
++/**
+     \class tsPacket
+ */
+ class tsPacket : public ADMMpegPacket
+ {
+ protected:
++    uint8_t             *internalPesBuffer;
++    uint32_t            internalPesBufferSize;
++    uint32_t            internalPesBufferLimit;
++    uint32_t            internalBufferOffset;
++    bool                PesAddData(uint32_t len,uint8_t *data);
++
++
+     uint32_t            extraCrap;
+     uint8_t             getPacketInfo(uint8_t stream,uint8_t *substream,uint32_t *olen,uint64_t *opts,uint64_t *odts);
+ public:
+@@ -58,10 +79,13 @@
+     virtual uint64_t    getPos(void);
+     virtual bool        setPos(uint64_t pos);
+ protected:
+-    bool                getNextPacket_NoHeader(uint32_t pid,TSpacketInfo *pkt,bool psi);
++    
+     bool                getSinglePacket(uint8_t *buffer);
+ public:
++    bool                getNextPacket_NoHeader(uint32_t pid,TSpacketInfo *pkt,bool psi);
++
+     bool                getNextPSI(uint32_t pid,TS_PSIpacketInfo *psi);
++    bool                getNextPES(uint32_t pid,TS_PESpacket *pes);
+ 
+ };
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001962.html">[Avidemux-svn-commit] r4734 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="001964.html">[Avidemux-svn-commit] r4736 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1963">[ date ]</a>
+              <a href="thread.html#1963">[ thread ]</a>
+              <a href="subject.html#1963">[ subject ]</a>
+              <a href="author.html#1963">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

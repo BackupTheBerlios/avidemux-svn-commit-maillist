@@ -1,0 +1,368 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4086 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4086%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200806072024.m57KOG20019919%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001341.html">
+   <LINK REL="Next"  HREF="001343.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4086 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4086%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200806072024.m57KOG20019919%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4086 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jun  7 22:24:16 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001341.html">[Avidemux-svn-commit] r4085 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+        <LI>Next message: <A HREF="001343.html">[Avidemux-svn-commit] r4087 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1342">[ date ]</a>
+              <a href="thread.html#1342">[ thread ]</a>
+              <a href="subject.html#1342">[ subject ]</a>
+              <a href="author.html#1342">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-06-07 22:24:16 +0200 (Sat, 07 Jun 2008)
+New Revision: 4086
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+Log:
+[MKV] Keep track of the # of audio packets
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2008-06-07 20:23:26 UTC (rev 4085)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2008-06-07 20:24:16 UTC (rev 4086)
+@@ -44,7 +44,7 @@
+   uint64_t id;
+   ADM_MKV_TYPE type;
+   const char *ss;
+-  
++
+    parser-&gt;seek(0);
+    DIA_working *work=new DIA_working(&quot;Matroska Images&quot;);
+    // Start with a small index, it will grow automatically afterward
+@@ -73,8 +73,8 @@
+       //printf(&quot;\t\tFound %s\n&quot;,ss);
+       switch(id)
+       {
+-                default: 
+-                case MKV_TIMECODE: 
++                default:
++                case MKV_TIMECODE:
+                   //printf(&quot;Skipping %s\n&quot;,ss);
+                   cluster.skip(len);
+                   break;
+@@ -101,7 +101,7 @@
+                                 switch(id)
+                                 {
+                                   default: blockGroup.skip(len);
+-                                  case MKV_BLOCK : 
++                                  case MKV_BLOCK :
+                                   case MKV_SIMPLE_BLOCK:
+                                   {
+                                     indexBlock(&amp;blockGroup,len,_clusters[clusters].timeCode);
+@@ -111,7 +111,7 @@
+                           }
+                           thiscluster++;
+             }
+-            
++
+             break; // Block Group
+        }
+      }
+@@ -130,19 +130,19 @@
+   int lacing,nbLaces,entryFlags=0;
+   //
+   uint64_t tail=parser-&gt;tell()+len;
+-  // Read Track id 
++  // Read Track id
+   uint32_t tid=parser-&gt;readEBMCode();
+   int track=searchTrackFromTid(tid);
+-  
++
+       //printf(&quot;Wanted %u got %u\n&quot;,_tracks[0].streamIndex,tid);
+       if(track==-1) //dont care track
+       {
+-        
++
+         parser-&gt;seek(tail);
+         return 1; // we do only video here...
+       }
+       // Skip timecode
+-      int16_t timecode=parser-&gt;readSignedInt(2); 
++      int16_t timecode=parser-&gt;readSignedInt(2);
+       //if(!track) printf(&quot;TC: %d\n&quot;,timecode);
+       uint8_t flags=parser-&gt;readu8();
+       uint32_t remaining=tail-parser-&gt;tell();
+@@ -153,12 +153,13 @@
+       {
+         case 0: // No lacing
+               if(!track) // Video
+-              {    
++              {
+                   addIndexEntry(track,parser-&gt;tell(),remaining,entryFlags,clusterTimeCodeMs+timecode);
+               }
+               else
+               {
+-                _tracks[track]._sizeInBytes+=remaining; // keep some stat, useful for audio 
++                _tracks[track]._sizeInBytes+=remaining; // keep some stat, useful for audio
++                _tracks[track].nbPackets++;
+               }
+               break;
+         case 2 : // Constant size lacing
+@@ -166,14 +167,14 @@
+                     nbLaces=parser-&gt;readu8()+1;
+                     remaining--;
+                     // Only mp3/Ac3 supported, ignore lacing FIXME : Vorbis or AAC will not work
+-                    
+-                    
++
++
+                     int bsize=remaining/nbLaces;
+                     if(bsize*nbLaces!=remaining)
+                     {
+                       printf(&quot;Warning not multiple bsize=%d total=%u  nbLaces=%u\n&quot;,bsize,remaining,nbLaces);
+                     }
+-                    if(!track) 
++                    if(!track)
+                     {
+                       addIndexEntry(track,parser-&gt;tell(),remaining,0,clusterTimeCodeMs+timecode);
+                       printf(&quot;Warning lacing on video track\n&quot;);
+@@ -181,6 +182,7 @@
+                     else
+                     {
+                        _tracks[track]._sizeInBytes+=remaining;
++                       _tracks[track].nbPackets++;
+                     }
+                     //printf(&quot;tid:%u track %u Remaining : %llu laces %u blksize %d er%d\n&quot;,tid,track,remaining,nbLaces,remaining/nbLaces,remaining-(remaining/nbLaces)*nbLaces);
+             }
+@@ -188,7 +190,7 @@
+ #if 1
+         case 3: // Ebml lacing
+           {
+-                                
++
+                                 int nbLaces=parser-&gt;readu8();
+                                 for(int i=1;i&lt;nbLaces;i++)
+                                 {
+@@ -197,13 +199,14 @@
+                                 ADM_assert(track); // Not video!
+                                 if(parser-&gt;tell()&gt;=tail)
+                                 {
+-                                  printf(&quot;[MKVINDEXER]OOps overflow for EBML(track %u tid%u) at 0x%llx\n&quot;,track,tid,parser-&gt;tell()); 
++                                  printf(&quot;[MKVINDEXER]OOps overflow for EBML(track %u tid%u) at 0x%llx\n&quot;,track,tid,parser-&gt;tell());
+                                   break;
+                                 }else
+                                 {
+                                     _tracks[track]._sizeInBytes+=tail-parser-&gt;tell();
++                                    _tracks[track].nbPackets++;
+                                 }
+-                                
++
+                               }
+             break;
+ #endif
+@@ -217,16 +220,17 @@
+                                 }
+                                 if(parser-&gt;tell()&gt;=tail)
+                                 {
+-                                  printf(&quot;[MKVINDEXER]OOps overflow for XIPH(track %u tid%u) at 0x%llx\n&quot;,track,tid,parser-&gt;tell()); 
++                                  printf(&quot;[MKVINDEXER]OOps overflow for XIPH(track %u tid%u) at 0x%llx\n&quot;,track,tid,parser-&gt;tell());
+                                   break;
+                                 }
+                                 ADM_assert(track); // Not video!
+                                 _tracks[track]._sizeInBytes+=(tail-parser-&gt;tell());
++                                _tracks[track].nbPackets++;
+                                 //printf(&quot;This round %lld total:%lld\n&quot;,tail-parser-&gt;tell(),    _tracks[track]._sizeInBytes);
+                                 break;
+-          
++
+         }
+-        default: 
++        default:
+             printf(&quot;unsupported lacing Track:%d (%d)\n&quot;,track,lacing);
+             break;
+       }
+@@ -246,21 +250,21 @@
+   // Need to grow index ?
+   if(Track-&gt;_nbIndex==Track-&gt;_indexMax-1)
+   {
+-    // Realloc 
++    // Realloc
+     mkvIndex *dx=new mkvIndex[Track-&gt;_indexMax*2];
+     memcpy(dx, Track-&gt;_index,sizeof(mkvIndex)*Track-&gt;_nbIndex);
+     Track-&gt;_indexMax*=2;
+     delete [] Track-&gt;_index;
+     Track-&gt;_index=dx;
+   }
+-  
++
+   mkvIndex *index=Track-&gt;_index;
+   int x=Track-&gt;_nbIndex;
+   index[x].pos=where;
+   index[x].size=size;
+   index[x].flags=AVI_KEY_FRAME;
+   index[x].timeCode=0;
+-  
++
+   float f=timecodeMS;
+   uint32_t delta;
+   f*=_videostream.dwRate;
+@@ -270,14 +274,14 @@
+   //printf(&quot;Frame :%u rawTimeCode:%u convertedtoframe:%u \n&quot;,Track-&gt;_nbIndex,timecodeMS,delta);
+   if(delta+2&lt;Track-&gt;_nbIndex)
+   {
+-    printf(&quot;[MKV] WARNING DELTA PTS/DTS is negative for frame %u (delta:%u, raw value %u,dwrate=%u)\n&quot;,Track-&gt;_nbIndex,delta,timecodeMS,_videostream.dwRate); 
++    printf(&quot;[MKV] WARNING DELTA PTS/DTS is negative for frame %u (delta:%u, raw value %u,dwrate=%u)\n&quot;,Track-&gt;_nbIndex,delta,timecodeMS,_videostream.dwRate);
+     index[x].timeCode=0;
+   }else
+   {
+     index[x].timeCode=delta+1-Track-&gt;_nbIndex;
+   }
+   Track-&gt;_nbIndex++;
+-  
++
+  // printf(&quot;++\n&quot;);
+   return 1;
+ }
+@@ -310,9 +314,9 @@
+   const char *ss;
+   uint64_t time;
+   uint64_t segmentPos;
+-  
++
+    parser-&gt;seek(0);
+-   
++
+    if(!parser-&gt;simplefind(MKV_SEGMENT,&amp;vlen,1))
+    {
+      printf(&quot;[MKV] Cannot find CLUSTER atom\n&quot;);
+@@ -320,7 +324,7 @@
+    }
+    ADM_ebml_file segment(parser,vlen);
+    segmentPos=segment.tell();
+-   
++
+    while(segment.simplefind(MKV_CUES,&amp;alen,0))
+   {
+    ADM_ebml_file cues(&amp;segment,alen);
+@@ -335,7 +339,7 @@
+       }
+       if(id!=MKV_CUE_POINT)
+       {
+-        printf(&quot;Found %s in CUES, ignored \n&quot;,ss); 
++        printf(&quot;Found %s in CUES, ignored \n&quot;,ss);
+         cues.skip(len);
+         continue;
+       }
+@@ -350,8 +354,8 @@
+           continue;
+        }
+        time=cue.readUnsignedInt(len);
+-       
+-       
++
++
+        cue.readElemId(&amp;id,&amp;len);
+        if(id!=MKV_CUE_TRACK_POSITION)
+        {
+@@ -370,7 +374,7 @@
+          {
+            case MKV_CUE_TRACK: tid=trackPos.readUnsignedInt(len);break;
+            case MKV_CUE_CLUSTER_POSITION: cluster_position=trackPos.readUnsignedInt(len);break;
+-           default: 
++           default:
+                  ADM_searchMkvTag( (MKV_ELEM_ID)id,&amp;ss,&amp;type);
+                  printf(&quot;[MKV] in cluster position found tag %s (0x%x)\n&quot;,ss,id);
+                  trackPos.skip(len);
+@@ -382,7 +386,7 @@
+      }
+    }
+    printf(&quot;[MKV] Cues updated\n&quot;);
+-   return 1;  
++   return 1;
+ }
+ /**
+         \fn indexClusters
+@@ -403,7 +407,7 @@
+   _clusters=new mkvIndex[NB_DEFAULT_CLUSTERS];
+   _clustersCeil=NB_DEFAULT_CLUSTERS;
+   _nbClusters=0;
+-  
++
+   // Search segment
+    fileSize=parser-&gt;getFileSize();
+    if(!parser-&gt;simplefind(MKV_SEGMENT,&amp;vlen,1))
+@@ -413,9 +417,9 @@
+    }
+    ADM_ebml_file segment(parser,vlen);
+    DIA_working *work=new DIA_working(&quot;Matroska clusters&quot;);
+-   while(segment.simplefind(MKV_CLUSTER,&amp;alen,0)) 
++   while(segment.simplefind(MKV_CLUSTER,&amp;alen,0))
+    {
+-     
++
+      // UI update
+      work-&gt;update(segment.tell()&gt;&gt;10,fileSize&gt;&gt;10);
+      // Grow clusters index if needed
+@@ -429,8 +433,8 @@
+      }
+      _clusters[_nbClusters].pos=segment.tell();
+      _clusters[_nbClusters].size=alen;
+-     
+-     // Normally the timecode is the 1st one following 
++
++     // Normally the timecode is the 1st one following
+        segment.readElemId(&amp;id,&amp;len);
+        int seekme=_nbClusters;
+        if(id!=MKV_TIMECODE)
+@@ -438,7 +442,7 @@
+           ADM_searchMkvTag( (MKV_ELEM_ID)id,&amp;ss,&amp;type);
+           printf(&quot;[MKV] Cluster : no time code Found %s(0x%x), expected MKV_TIMECODE  (0x%x)\n&quot;,
+                   ss,id,MKV_TIMECODE);
+-       } 
++       }
+        else
+        {
+            uint64_t timecode=segment.readUnsignedInt(len);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001341.html">[Avidemux-svn-commit] r4085 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+	<LI>Next message: <A HREF="001343.html">[Avidemux-svn-commit] r4087 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1342">[ date ]</a>
+              <a href="thread.html#1342">[ thread ]</a>
+              <a href="subject.html#1342">[ subject ]</a>
+              <a href="author.html#1342">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

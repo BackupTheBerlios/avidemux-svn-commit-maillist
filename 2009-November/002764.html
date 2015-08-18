@@ -1,0 +1,148 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5555 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audio
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5555%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audio&In-Reply-To=%3C200911240625.nAO6PpRI003371%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002763.html">
+   <LINK REL="Next"  HREF="002765.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5555 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audio</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5555%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audio&In-Reply-To=%3C200911240625.nAO6PpRI003371%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5555 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audio">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Nov 24 07:25:51 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002763.html">[Avidemux-svn-commit] r5554 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+        <LI>Next message: <A HREF="002765.html">[Avidemux-svn-commit] r5556 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audio
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2764">[ date ]</a>
+              <a href="thread.html#2764">[ thread ]</a>
+              <a href="subject.html#2764">[ subject ]</a>
+              <a href="author.html#2764">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-11-24 07:25:50 +0100 (Tue, 24 Nov 2009)
+New Revision: 5555
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audio/ADM_a52info.cpp
+Log:
+[A52] Use ffmpeg ac3 parser to correctly parse eac3
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audio/ADM_a52info.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audio/ADM_a52info.cpp	2009-11-24 06:25:20 UTC (rev 5554)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audio/ADM_a52info.cpp	2009-11-24 06:25:50 UTC (rev 5555)
+@@ -15,7 +15,15 @@
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_assert.h&quot;
+ #include &quot;ADM_audio/ADM_a52info.h&quot;
++extern &quot;C&quot;
++{
++#define ADM_NO_CONFIG_H
++#define sign_extend
++#include &quot;libavcodec/internal.h&quot;
++#include &quot;libavcodec/ac3_parser.h&quot;
+ 
++};
++
+ #define A52_CHANNEL 0
+ #define A52_MONO 1
+ #define A52_STEREO 2
+@@ -90,6 +98,50 @@
+ uint32_t l;
+ int ibr,ifq,flags;
+ uint32_t of=0;
++
++	*syncoff=of=0;
++ //    	printf(&quot;\n Syncing on %d \n&quot;,len);
++	// Search for startcode
++	// 0x0b 0x77
++	while(1)
++	{
++		 if(len&lt;7)
++		 {
++		 	printf(&quot;Not enough info to find a52 syncword\n&quot;);
++		 	return 0;
++		 }
++		 if( *buf!=0x0b || *(buf+1)!=0x77)
++		 {
++		 	len--;
++			buf++;
++			of++;
++			continue;
++		 }
++            AC3HeaderInfo hdr;
++            GetBitContext gb;
++            init_get_bits(&amp;gb,buf,len*8);
++            if(ff_ac3_parse_header(&amp;gb, &amp;hdr))
++            {
++                len--;
++                buf++;
++                of++;
++                printf(&quot;Sync failed..continuing\n&quot;);
++                continue;
++            }
++//            printf(&quot;Sync found at offset %&quot;LU&quot;\n&quot;,of);
++            *syncoff=of;
++            *fq=(uint32_t)hdr.sample_rate;
++            *br=(uint32_t)hdr.bit_rate&gt;&gt;3;
++            *chan=hdr.channels;
++            //info-&gt;frameSizeInBytes=hdr.frame_size;
++            //info-&gt;samples=265*6; // ??
++            return 1;
++		}
++		return 1;
++#if 0
++uint32_t l;
++int ibr,ifq,flags;
++uint32_t of=0;
+ 		
+ 	*syncoff=of=0;
+      	printf(&quot;\n Syncing on %d \n&quot;,len);
+@@ -150,4 +202,5 @@
+ 		return 1;
+ 	}
+ 	return 0;
++#endif
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002763.html">[Avidemux-svn-commit] r5554 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+	<LI>Next message: <A HREF="002765.html">[Avidemux-svn-commit] r5556 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_audio
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2764">[ date ]</a>
+              <a href="thread.html#2764">[ thread ]</a>
+              <a href="subject.html#2764">[ subject ]</a>
+              <a href="author.html#2764">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,146 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5375 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5375%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa&In-Reply-To=%3C200910100940.n9A9eFDf004505%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002586.html">
+   <LINK REL="Next"  HREF="002587.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5375 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5375%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa&In-Reply-To=%3C200910100940.n9A9eFDf004505%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5375 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Oct 10 11:40:15 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002586.html">[Avidemux-svn-commit] r5374 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_editor ADM_script
+</A></li>
+        <LI>Next message: <A HREF="002587.html">[Avidemux-svn-commit] r5376 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2585">[ date ]</a>
+              <a href="thread.html#2585">[ thread ]</a>
+              <a href="subject.html#2585">[ subject ]</a>
+              <a href="author.html#2585">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-10-10 11:40:15 +0200 (Sat, 10 Oct 2009)
+New Revision: 5375
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa/ADM_deviceALSA.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa/CMakeLists.txt
+Log:
+[Alsa] Add default as alsa audio device
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa/ADM_deviceALSA.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa/ADM_deviceALSA.cpp	2009-10-10 09:40:12 UTC (rev 5374)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa/ADM_deviceALSA.cpp	2009-10-10 09:40:15 UTC (rev 5375)
+@@ -39,16 +39,22 @@
+ #define ADEVICE &quot;dmix&quot;
+ #endif
+ 
+-#if ADM_ADEVICE_HW
++#ifdef ADM_ADEVICE_HW
+ #define alsaAudioDevice alsaAudioDeviceHw0
+ #include  &quot;ADM_deviceALSA.h&quot;
+-
+ ADM_DECLARE_AUDIODEVICE(AlsaHw0,alsaAudioDevice,1,0,0,&quot;Alsa Audio Device (hw:0) (c) Mean 2008&quot;);
+ #define ADEVICE &quot;hw:0&quot;
+ #endif
+ 
++#ifdef ADM_ADEVICE_DEFAULT
++#define alsaAudioDevice alsaAudioDeviceDefault
++#include  &quot;ADM_deviceALSA.h&quot;
++ADM_DECLARE_AUDIODEVICE(AlsaDefault,alsaAudioDevice,1,0,0,&quot;Alsa Audio Device (default) (c) Mean 2009&quot;);
++#define ADEVICE &quot;default&quot;
++#endif
+ 
+ 
++
+ /* Handle for the PCM device */
+ snd_pcm_t *pcm_handle;
+ 
+@@ -152,7 +158,7 @@
+     }
+ #else
+ 
+- 	unsigned int buffer_time = 800000;
++ 	unsigned int buffer_time = 100LL*1000LL; // 800 Ms ?
+ 	int er;
+ 	unsigned int buff;
+ 	dir=0;
+@@ -332,7 +338,7 @@
+ 		snd_mixer_close(mixer_handle);
+ 		ADM_dealloc(pcm_name);
+ 		return 0;
+-	}
++}
+ 	ADM_dealloc(pcm_name);
+ 	if( (rc=snd_mixer_selem_register(mixer_handle,NULL,NULL)) &lt; 0 ){
+ 		printf(&quot;[Alsa]: snd_mixer_selem_register failed: %d\n&quot;,rc);
+@@ -342,8 +348,7 @@
+ 	if( (rc=snd_mixer_load(mixer_handle)) &lt; 0 ){
+ 		printf(&quot;[Alsa]: snd_mixer_load failed: %d\n&quot;,rc);
+ 		snd_mixer_close(mixer_handle);
+-		return 0;
+-	}
++		return 0;}
+ 	{ snd_mixer_elem_t *elem;
+ 	  snd_mixer_selem_id_t *sid;
+ 	  const char *str;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa/CMakeLists.txt	2009-10-10 09:40:12 UTC (rev 5374)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDevices/Alsa/CMakeLists.txt	2009-10-10 09:40:15 UTC (rev 5375)
+@@ -16,3 +16,11 @@
+ 
+ INIT_AUDIO_DEVICE(ADM_av_alsaHw)
+ INSTALL_AUDIODEVICE(ADM_av_alsaHw)
++
++
++ADD_LIBRARY(ADM_av_alsaDefault SHARED ${ADM_av_alsa_SRCS})
++ADD_TARGET_CFLAGS(ADM_av_alsaDefault -DADM_ADEVICE_DEFAULT)
++TARGET_LINK_LIBRARIES(ADM_av_alsaDefault ${ASOUND_LIBRARY})
++
++INIT_AUDIO_DEVICE(ADM_av_alsaDefault)
++INSTALL_AUDIODEVICE(ADM_av_alsaDefault)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002586.html">[Avidemux-svn-commit] r5374 - in	branches/avidemux_2.6_branch_mean/avidemux/common: .	ADM_editor ADM_script
+</A></li>
+	<LI>Next message: <A HREF="002587.html">[Avidemux-svn-commit] r5376 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2585">[ date ]</a>
+              <a href="thread.html#2585">[ thread ]</a>
+              <a href="subject.html#2585">[ subject ]</a>
+              <a href="author.html#2585">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

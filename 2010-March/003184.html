@@ -1,0 +1,189 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5979 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	crop resize yadif
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5979%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6%3A%0A%09crop%20resize%20yadif&In-Reply-To=%3C201003050619.o256JQvO014906%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003183.html">
+   <LINK REL="Next"  HREF="003185.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5979 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	crop resize yadif</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5979%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6%3A%0A%09crop%20resize%20yadif&In-Reply-To=%3C201003050619.o256JQvO014906%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5979 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	crop resize yadif">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Mar  5 07:19:26 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003183.html">[Avidemux-svn-commit] r5978 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter:	include src
+</A></li>
+        <LI>Next message: <A HREF="003185.html">[Avidemux-svn-commit] r5980 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/common avidemux_core/ADM_coreAudio/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3184">[ date ]</a>
+              <a href="thread.html#3184">[ thread ]</a>
+              <a href="subject.html#3184">[ subject ]</a>
+              <a href="author.html#3184">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-03-05 07:19:24 +0100 (Fri, 05 Mar 2010)
+New Revision: 5979
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/crop/ADM_vidCrop.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resize/swScaleResize.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif/ADM_vidYadif.cpp
+Log:
+[filter] update qt4/... filter to new scheme + fix yadif pts a bit
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/crop/ADM_vidCrop.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/crop/ADM_vidCrop.cpp	2010-03-05 06:19:18 UTC (rev 5978)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/crop/ADM_vidCrop.cpp	2010-03-05 06:19:24 UTC (rev 5979)
+@@ -38,7 +38,7 @@
+         virtual                 ~CropFilter();
+ 
+        virtual const char   *getConfiguration(void);          /// Return  current configuration as a human readable string
+-       virtual bool         getNextFrame(ADMImage *image);    /// Return the next image
++       virtual bool         getNextFrame(uint32_t *fn,ADMImage *image);    /// Return the next image
+        //virtual FilterInfo  *getInfo(void);                    /// Return picture parameters after this filter
+ 	   virtual bool         getCoupledConf(CONFcouple **couples) ;   /// Return the current filter configuration
+        virtual bool         configure(void) ;                 /// Start graphical user interface
+@@ -100,11 +100,11 @@
+     \fn getNextFrame
+ 
+ */
+-bool         CropFilter::getNextFrame(ADMImage *image)
++bool         CropFilter::getNextFrame(uint32_t *fn,ADMImage *image)
+ {
+ FilterInfo  *prevInfo=previousFilter-&gt;getInfo();
+ 			// read uncompressed frame
+-       		if(!previousFilter-&gt;getNextFrame(original)) return false;
++       		if(!previousFilter-&gt;getNextFrame(fn,original)) return false;
+        		
+        		// Crop Y luma
+        		uint32_t y,x,line;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resize/swScaleResize.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resize/swScaleResize.cpp	2010-03-05 06:19:18 UTC (rev 5978)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/resize/swScaleResize.cpp	2010-03-05 06:19:24 UTC (rev 5979)
+@@ -62,7 +62,7 @@
+                     ~swScaleResizeFilter();
+ 
+        virtual const char   *getConfiguration(void);                   /// Return  current configuration as a human readable string
+-       virtual bool         getNextFrame(ADMImage *image);    /// Return the next image
++       virtual bool         getNextFrame(uint32_t *fn,ADMImage *image);    /// Return the next image
+        virtual FilterInfo  *getInfo(void);                             /// Return picture parameters after this filter
+ 	   virtual bool         getCoupledConf(CONFcouple **couples) ;   /// Return the current filter configuration
+        virtual bool         configure(void) ;             /// Start graphical user interface
+@@ -117,10 +117,10 @@
+     \fn getFrame
+     \brief Get a processed frame
+ */
+-bool swScaleResizeFilter::getNextFrame(ADMImage *image)
++bool swScaleResizeFilter::getNextFrame(uint32_t *fn,ADMImage *image)
+ {
+     // since we do nothing, just get the output of previous filter
+-    if(false==previousFilter-&gt;getNextFrame(original))
++    if(false==previousFilter-&gt;getNextFrame(fn,original))
+     {
+         ADM_warning(&quot;swResize : Cannot get frame\n&quot;);
+         return false;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif/ADM_vidYadif.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif/ADM_vidYadif.cpp	2010-03-05 06:19:18 UTC (rev 5978)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif/ADM_vidYadif.cpp	2010-03-05 06:19:24 UTC (rev 5979)
+@@ -185,28 +185,35 @@
+         int cpu;
+         int n;
+         ADMImage *src, *dst, * prev, *next;
+-
++        
+     
+         mode = configuration.mode;
+ 
+         if (mode &amp; 1) 
++        {
+                 n = (nextFrame&gt;&gt;1); // bob
++        }
+         else
+                 n = nextFrame;
+ 
+         src = vidCache-&gt;getImage(n);
+-  // Request frame 'n' from the child (source) clip.
+-
++        if(!src) return false;
++        
++  
++        // If possible get previous image...
+         if (n&gt;0)
+                 prev =  vidCache-&gt;getImage( n-1); // get previous frame
+         else
+                 prev= src; // get very first frame
+ 
++        ADM_assert(prev);
+         next=vidCache-&gt;getImage(n+1);
+         if(!next) next=src;
++        ADM_assert(next);
++        
++        dst = image;
++        dst-&gt;copyInfo(src);
+ 
+-        dst = image;
+-        
+         if(!prev || !src || !next)
+         {
+             printf(&quot;Failed to read frame for frame %u\n&quot;,nextFrame);
+@@ -288,7 +295,15 @@
+                         ADM_dealloc(nextp);
+         }
+       vidCache-&gt;unlockAll();
++      
++      if (mode &amp; 1) 
++      {
++            if(nextFrame&amp;1)
++                image-&gt;Pts+= info.frameIncrement;
++      }
++      //printf(&quot;out PTs=%&quot;LLU&quot;, nextFrame=%d,inc=%d\n&quot;,image-&gt;Pts,(int)nextFrame,(int)info.frameIncrement);
+       nextFrame++;
++      
+       return 1;
+ }
+ //****************
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003183.html">[Avidemux-svn-commit] r5978 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter:	include src
+</A></li>
+	<LI>Next message: <A HREF="003185.html">[Avidemux-svn-commit] r5980 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/common avidemux_core/ADM_coreAudio/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3184">[ date ]</a>
+              <a href="thread.html#3184">[ thread ]</a>
+              <a href="subject.html#3184">[ subject ]</a>
+              <a href="author.html#3184">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

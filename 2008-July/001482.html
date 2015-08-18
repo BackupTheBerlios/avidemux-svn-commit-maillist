@@ -1,0 +1,563 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4236 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders:	aften pcm vorbis
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4236%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders%3A%0A%09aften%20pcm%20vorbis&In-Reply-To=%3C200807161741.m6GHf16a021404%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001480.html">
+   <LINK REL="Next"  HREF="001483.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4236 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders:	aften pcm vorbis</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4236%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders%3A%0A%09aften%20pcm%20vorbis&In-Reply-To=%3C200807161741.m6GHf16a021404%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4236 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders:	aften pcm vorbis">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Jul 16 19:41:01 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001480.html">[Avidemux-svn-commit] r4235 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis
+</A></li>
+        <LI>Next message: <A HREF="001483.html">[Avidemux-svn-commit] r4237 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders:	. faac
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1482">[ date ]</a>
+              <a href="thread.html#1482">[ thread ]</a>
+              <a href="subject.html#1482">[ subject ]</a>
+              <a href="author.html#1482">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-07-16 19:41:00 +0200 (Wed, 16 Jul 2008)
+New Revision: 4236
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften_param.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/pcm/audioencoder_pcm.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis/audioencoder_vorbis.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis/audioencoder_vorbis.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis/audioencoder_vorbis_param.h
+Log:
+[AudioEncoder] Aften+pcm+vorbis
+
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften.cpp	2008-07-16 17:40:59 UTC (rev 4235)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften.cpp	2008-07-16 17:41:00 UTC (rev 4236)
+@@ -15,20 +15,13 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
+-#include &quot;config.h&quot;
+-#ifdef USE_AFTEN
+-#include &quot;config.h&quot;
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+-#include &lt;string.h&gt;
+ #include &lt;math.h&gt;
+-
+-
+ #include &quot;ADM_default.h&quot;
++#include &quot;DIA_factory.h&quot;
++#include &quot;DIA_coreToolkit.h&quot;
++#include &quot;audioencoder.h&quot;
++#include &quot;audioencoderInternal.h&quot;
+ 
+-#include &quot;audioprocess.hxx&quot;
+-#include &quot;audioeng_process.h&quot;
+-#include &quot;audioencoder.h&quot;
+ //
+ extern &quot;C&quot;
+ {
+@@ -42,6 +35,47 @@
+ #include &quot;audioencoder_aften.h&quot;
+ 
+ #define _HANDLE ((AftenContext *)_handle)
++
++static AFTEN_encoderParam aftenParam= {
++  128
++  
++};
++static uint8_t configure (void);
++/********************* Declare Plugin *****************************************************/
++ADM_DECLARE_AUDIO_ENCODER_PREAMBLE(AUDMEncoder_Aften);
++
++static ADM_audioEncoder encoderDesc = { 
++  ADM_AUDIO_ENCODER_API_VERSION,
++  create,			// Defined by macro automatically
++  destroy,			// Defined by macro automatically
++  configure,		//** put your own function here**
++  &quot;Aften&quot;,            
++  &quot;AC3 (Aften)&quot;,      
++  &quot;Aften AC3 encoder plugin Mean/Gruntster 2008&quot;,             
++  6,                    // Max channels
++  1,0,0,                // Version
++  WAV_AC3,
++  200,                  // Priority
++  getConfigurationData,  // Defined by macro automatically
++  setConfigurationData,  // Defined by macro automatically
++
++  getBitrate,           // Defined by macro automatically
++  setBitrate,            // Defined by macro automatically 
++
++  NULL,         //** put your own function here**
++
++  NULL
++};
++ADM_DECLARE_AUDIO_ENCODER_CONFIG(aftenParam);
++
++/******************* / Declare plugin*******************************************************/
++
++
++/**
++    \fn AUDMEncoder_Aften
++
++*/
++
+ AUDMEncoder_Aften::AUDMEncoder_Aften(AUDMAudioFilter * instream)  :AUDMEncoder    (instream)
+ {
+   uint32_t channels;
+@@ -58,7 +92,11 @@
+ #endif
+ };
+ 
++/**
++    \fn ~AUDMEncoder_Aften
+ 
++*/
++
+ AUDMEncoder_Aften::~AUDMEncoder_Aften()
+ {
+     if(_handle)
+@@ -71,15 +109,11 @@
+ };
+ 
+ 
+-//________________________________________________
+-//   Init lame encoder
+-// frequence    : Impose frequency , 0 means reuse the incoming fq
+-// mode                         : ADM_STEREO etc...
+-// bitrate              : Bitrate in kbps (96,192...)
+-// return 0 : init failed
+-//                              1 : init succeeded
+-//_______________________________________________
+-uint8_t AUDMEncoder_Aften::init(ADM_audioEncoderDescriptor *config)
++/**
++    \fn initialize
++
++*/
++uint8_t AUDMEncoder_Aften::initialize(void)
+ {
+ 
+ 
+@@ -91,12 +125,12 @@
+ unsigned int mask;
+ #endif
+ 
+-    _wavheader-&gt;byterate=(config-&gt;bitrate*1000)/8;
++    _wavheader-&gt;byterate=(aftenParam.bitrate*1000)/8;
+     _HANDLE-&gt;sample_format=A52_SAMPLE_FMT_FLT;
+     _HANDLE-&gt;channels=_wavheader-&gt;channels;
+     _HANDLE-&gt;samplerate=_wavheader-&gt;frequency;
+     
+-    _HANDLE-&gt;params.bitrate=config-&gt;bitrate;
++    _HANDLE-&gt;params.bitrate=aftenParam.bitrate;
+     switch(_wavheader-&gt;channels)
+     {
+         case 1: mask = 0x04;  break;
+@@ -127,7 +161,9 @@
+ }
+ 
+ 
+-//______________________________________________
++/**
++        \fn getPacket
++*/
+ uint8_t	AUDMEncoder_Aften::getPacket(uint8_t *dest, uint32_t *len, uint32_t *samples)
+ {
+   uint32_t count=0;
+@@ -162,5 +198,32 @@
+         return 1;
+ }
+ 
+-#endif		
++/**
++    \fn configure
++*/
++uint8_t configure (void)
++{
++ int ret=0;
++
++    diaMenuEntry bitrateM[]={
++                              BITRATE(56),
++                              BITRATE(64),
++                              BITRATE(80),
++                              BITRATE(96),
++                              BITRATE(112),
++                              BITRATE(128),
++                              BITRATE(160),
++                              BITRATE(192),
++                              BITRATE(224),
++                              BITRATE(384)
++                          };
++    diaElemMenu bitrate(&amp;(aftenParam.bitrate),   QT_TR_NOOP(&quot;_Bitrate:&quot;), SZT(bitrateM),bitrateM);
++  
++    
++
++    diaElem *elems[]={&amp;bitrate};
++    
++    return ( diaFactoryRun(QT_TR_NOOP(&quot;Aften Configuration&quot;),1,elems));
++    
++}
+ // EOF
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften.h	2008-07-16 17:40:59 UTC (rev 4235)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften.h	2008-07-16 17:41:00 UTC (rev 4236)
+@@ -14,7 +14,7 @@
+  ***************************************************************************/
+ #ifndef AUDMaudioAften
+ #define AUDMaudioAften
+-#ifdef USE_AFTEN
++
+  //_____________________________________________
+ class AUDMEncoder_Aften : public AUDMEncoder
+ {
+@@ -22,10 +22,10 @@
+          void           *_handle;
+          
+ public:
+-                        uint8_t init(ADM_audioEncoderDescriptor *config);
++                uint8_t initialize(void);
+                 virtual ~AUDMEncoder_Aften();
+                         AUDMEncoder_Aften(AUDMAudioFilter *instream);	
+-                virtual uint8_t	getPacket(uint8_t *dest, uint32_t *len, uint32_t *samples);
++        virtual uint8_t	getPacket(uint8_t *dest, uint32_t *len, uint32_t *samples);
+ };
+ #endif
+-#endif
++
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften_param.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften_param.h	2008-07-16 17:40:59 UTC (rev 4235)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/aften/audioencoder_aften_param.h	2008-07-16 17:41:00 UTC (rev 4236)
+@@ -1,10 +1,11 @@
+ #ifndef AUDM_AFTEN_PARAM_H
+ #define AUDM_AFTEN_PARAM_H
+-#ifdef USE_AFTEN
+ 
++
+ typedef struct AFTEN_encoderParam
+ {
++  uint32_t        bitrate;
+   ADM_mode        mode;
+ };
++
+ #endif
+-#endif
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/pcm/audioencoder_pcm.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/pcm/audioencoder_pcm.cpp	2008-07-16 17:40:59 UTC (rev 4235)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/pcm/audioencoder_pcm.cpp	2008-07-16 17:41:00 UTC (rev 4236)
+@@ -12,9 +12,6 @@
+  *                                                                         *
+  ***************************************************************************/
+ 
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+-#include &lt;string.h&gt;
+ #include &lt;math.h&gt;
+ 
+ #include &quot;ADM_default.h&quot;
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis/audioencoder_vorbis.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis/audioencoder_vorbis.cpp	2008-07-16 17:40:59 UTC (rev 4235)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis/audioencoder_vorbis.cpp	2008-07-16 17:41:00 UTC (rev 4236)
+@@ -11,27 +11,22 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
+-#include &quot;config.h&quot;
+-#ifdef USE_VORBIS
+-#include &lt;stdio.h&gt;
+-#include &lt;stdlib.h&gt;
+-#include &lt;string.h&gt;
+ #include &lt;math.h&gt;
+ 
++#include &lt;math.h&gt;
++
+ #include &quot;ADM_default.h&quot;
++#include &quot;DIA_factory.h&quot;
++#include &quot;DIA_coreToolkit.h&quot;
+ 
+ #include &quot;audioencoder.h&quot;
+-//
++#include &quot;audioencoderInternal.h&quot;
+ #include &quot;audioencoder_vorbis_param.h&quot;
+ #include &quot;audioencoder_vorbis.h&quot;
+ 
+ 
+ #include &quot;vorbis/vorbisenc.h&quot;
+-#include &quot;ADM_osSupport/ADM_debugID.h&quot;
+-#define MODULE_NAME MODULE_AUDIO_FILTER
+-#include &quot;ADM_osSupport/ADM_debug.h&quot;
+ 
+-
+ #define OPTIONS (twolame_options_struct *)_twolameOptions
+ 
+ #define VD (((vorbisStruct *)_handle)-&gt;vd)
+@@ -45,6 +40,45 @@
+ 	vorbis_block     vb ;
+ 	vorbis_comment   vc ;
+ }vorbisStruct;
++//___________
++static VORBIS_encoderParam vorbisParam=
++{
++    128,
++    ADM_VORBIS_VBR,
++    9
++};
++
++static uint8_t configure(void);
++/********************* Declare Plugin *****************************************************/
++ADM_DECLARE_AUDIO_ENCODER_PREAMBLE(AUDMEncoder_Vorbis);
++
++static ADM_audioEncoder encoderDesc = { 
++  ADM_AUDIO_ENCODER_API_VERSION,
++  create,			// Defined by macro automatically
++  destroy,			// Defined by macro automatically
++  configure,		//** put your own function here**
++  &quot;Vorbis&quot;,            
++  &quot;Vorbis&quot;,      
++  &quot;Vorbis encoder plugin Mean 2008&quot;,             
++  6,                    // Max channels
++  1,0,0,                // Version
++  WAV_OGG,
++  200,                  // Priority
++  getConfigurationData,  // Defined by macro automatically
++  setConfigurationData,  // Defined by macro automatically
++
++  getBitrate,           // Defined by macro automatically
++  setBitrate,            // Defined by macro automatically 
++
++  NULL,         //** put your own function here**
++
++  NULL
++};
++ADM_DECLARE_AUDIO_ENCODER_CONFIG(vorbisParam);
++
++/******************* / Declare plugin*******************************************************/
++
++
+ //__________
+ 
+ AUDMEncoder_Vorbis::AUDMEncoder_Vorbis(AUDMAudioFilter * instream)  :AUDMEncoder    (instream)
+@@ -62,7 +96,9 @@
+   outputChannelMapping[5] = CH_LFE;
+ };
+ 
++/**
+ 
++*/
+ AUDMEncoder_Vorbis::~AUDMEncoder_Vorbis()
+ {
+   printf(&quot;[Vorbis] Deleting Vorbis\n&quot;);
+@@ -78,19 +114,15 @@
+   cleanup();
+ };
+ 
+-//________________________________________________
+-//   Init lame encoder
+-// frequence    : Impose frequency , 0 means reuse the incoming fq
+-// mode                         : ADM_STEREO etc...
+-// bitrate              : Bitrate in kbps (96,192...)
+-// return 0 : init failed
+-//                              1 : init succeeded
+-//_______________________________________________
+-uint8_t AUDMEncoder_Vorbis::init(ADM_audioEncoderDescriptor *config)
++/**
++    \fn initialize
++
++*/
++uint8_t AUDMEncoder_Vorbis::initialize(void)
+ {
+   int ret;
+-  VORBIS_encoderParam *vorbisConf=(VORBIS_encoderParam *)config-&gt;param;
+-  ADM_assert(config-&gt;paramSize==sizeof(VORBIS_encoderParam));
++  VORBIS_encoderParam *vorbisConf=&vorbisParam;
++  
+ 
+   ogg_packet header1,header2,header3;
+   int err;
+@@ -107,7 +139,7 @@
+                               _wavheader-&gt;channels,
+                               _wavheader-&gt;frequency,
+                               -1, // Max bitrate      
+-                              config-&gt;bitrate*1000, //long nominal_bitrate,
++                              vorbisConf-&gt;bitrate*1000, //long nominal_bitrate,
+                               -1 //long min_bitrate))
+                             );
+                       break;
+@@ -163,7 +195,7 @@
+   switch(vorbisConf-&gt;mode)
+   {
+     case ADM_VORBIS_VBR:
+-      printf(&quot;[Vorbis]CBR Bitrate:%lu\n&quot;,config-&gt;bitrate);
++      printf(&quot;[Vorbis]CBR Bitrate:%lu\n&quot;,vorbisConf-&gt;bitrate);
+       break;
+     case ADM_VORBIS_QUALITY: //FIXME FIXME FIXME
+       printf(&quot;[Vorbis]VBR Quality:%.1f\n&quot;,vorbisConf-&gt;quality);
+@@ -178,7 +210,10 @@
+ }
+ 
+ #define ROUNDMAX 3000
++/**
++    \fn getPacket
+ 
++*/
+ uint8_t	AUDMEncoder_Vorbis::getPacket(uint8_t *dest, uint32_t *len, uint32_t *samples)
+ {
+   uint32_t nbout;
+@@ -240,29 +275,27 @@
+   return 0;
+ 	
+ }
++#define SZT(x) sizeof(x)/sizeof(diaMenuEntry )
++#define PX(x) &amp;(lameParam-&gt;x)
++#define BITRATE(x) {x,QT_TR_NOOP(#x)}
+ /**
+-      \fn DIA_getLameSettings
+-      \brief Dialog to set lame settings
++      \fn configure
++      \brief Dialog to set vorbis settings
+       @return 1 on success, 0 on failure
+ 
+ */
+-#include &quot;DIA_factory.h&quot;
+-int DIA_getVorbisSettings(ADM_audioEncoderDescriptor *descriptor)
+-  {
+-    int ret=0;
+-    char string[400];
++
++uint8_t configure(void)
++{
++    
+     uint32_t mmode,ppreset;
+     ELEM_TYPE_FLOAT qqual;
+-#define SZT(x) sizeof(x)/sizeof(diaMenuEntry )
+-#define PX(x) &amp;(lameParam-&gt;x)
+     
+     
+-   VORBIS_encoderParam *vorbisParam;
+-  ADM_assert(sizeof(VORBIS_encoderParam)==descriptor-&gt;paramSize);
+-  vorbisParam=(VORBIS_encoderParam*)descriptor-&gt;param;
++   VORBIS_encoderParam *vParam=&vorbisParam;
+   
+-    mmode=vorbisParam-&gt;mode;
+-    qqual=(ELEM_TYPE_FLOAT)vorbisParam-&gt;quality;
++    mmode=vParam-&gt;mode;
++    qqual=(ELEM_TYPE_FLOAT)vParam-&gt;quality;
+     
+     diaMenuEntry channelMode[]={
+                              {ADM_VORBIS_VBR,      QT_TR_NOOP(&quot;VBR&quot;),NULL},
+@@ -270,7 +303,7 @@
+           
+     diaElemMenu menuMode(&amp;mmode,   QT_TR_NOOP(&quot;_Mode:&quot;), SZT(channelMode),channelMode);
+     
+-#define BITRATE(x) {x,QT_TR_NOOP(#x)}
++
+     diaMenuEntry bitrateM[]={
+                               BITRATE(56),
+                               BITRATE(64),
+@@ -282,7 +315,7 @@
+                               BITRATE(192),
+                               BITRATE(224)
+                           };
+-    diaElemMenu bitrate(&amp;(descriptor-&gt;bitrate),   QT_TR_NOOP(&quot;_Bitrate:&quot;), SZT(bitrateM),bitrateM);
++    diaElemMenu bitrate(&amp;(vParam-&gt;bitrate),   QT_TR_NOOP(&quot;_Bitrate:&quot;), SZT(bitrateM),bitrateM);
+     
+     diaElemFloat quality(&amp;qqual,QT_TR_NOOP(&quot;_Quality:&quot;),-1.,10.);
+     
+@@ -293,13 +326,11 @@
+     
+   if( diaFactoryRun(QT_TR_NOOP(&quot;Vorbis Configuration&quot;),3,elems))
+   {
+-    vorbisParam-&gt;mode=(ADM_VORBIS_MODE)mmode;
+-    vorbisParam-&gt;quality=(float)qqual;
+-    
++    vParam-&gt;mode=(ADM_VORBIS_MODE)mmode;
++    vParam-&gt;quality=(float)qqual;
+     return 1;
+   }
+   return 0;
+ }  
+ 
+-#endif		
+ // EOF
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis/audioencoder_vorbis.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis/audioencoder_vorbis.h	2008-07-16 17:40:59 UTC (rev 4235)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis/audioencoder_vorbis.h	2008-07-16 17:41:00 UTC (rev 4236)
+@@ -25,7 +25,7 @@
+ 
+          
+   public:
+-//            uint8_t     init(ADM_audioEncoderDescriptor *config);
++            uint8_t     initialize(void);
+             virtual     ~AUDMEncoder_Vorbis();
+                         AUDMEncoder_Vorbis(AUDMAudioFilter *instream);	
+             
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis/audioencoder_vorbis_param.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis/audioencoder_vorbis_param.h	2008-07-16 17:40:59 UTC (rev 4235)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis/audioencoder_vorbis_param.h	2008-07-16 17:41:00 UTC (rev 4236)
+@@ -11,6 +11,7 @@
+ 
+ typedef struct 
+ {
++  uint32_t           bitrate;
+   ADM_VORBIS_MODE    mode;   // 0 cbr 1 vbr 2 quality
+   float              quality;
+ }VORBIS_encoderParam;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001480.html">[Avidemux-svn-commit] r4235 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders/vorbis
+</A></li>
+	<LI>Next message: <A HREF="001483.html">[Avidemux-svn-commit] r4237 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_audioEncoders:	. faac
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1482">[ date ]</a>
+              <a href="thread.html#1482">[ thread ]</a>
+              <a href="subject.html#1482">[ subject ]</a>
+              <a href="author.html#1482">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,183 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7212 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7212%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec%3A%0A%09include%20src&In-Reply-To=%3C20110518054504.EB6714813CD%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004366.html">
+   <LINK REL="Next"  HREF="004368.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7212 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec:	include src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7212%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec%3A%0A%09include%20src&In-Reply-To=%3C20110518054504.EB6714813CD%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7212 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed May 18 07:45:04 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004366.html">[Avidemux-svn-commit] r7211 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS
+</A></li>
+        <LI>Next message: <A HREF="004368.html">[Avidemux-svn-commit] r7213 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4367">[ date ]</a>
+              <a href="thread.html#4367">[ thread ]</a>
+              <a href="subject.html#4367">[ subject ]</a>
+              <a href="author.html#4367">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-05-18 07:45:04 +0200 (Wed, 18 May 2011)
+New Revision: 7212
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/include/ADM_rgb16.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/src/ADM_rgb16.cpp
+Log:
+[decoder/rgb] set correct stride for rgb32 (fixes #121)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/include/ADM_rgb16.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/include/ADM_rgb16.h	2011-05-18 05:27:21 UTC (rev 7211)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/include/ADM_rgb16.h	2011-05-18 05:45:04 UTC (rev 7212)
+@@ -26,6 +26,7 @@
+ 		ADMColorScalerSimple *converter;
+ 		bool          isRgb; // Else BGR
+ 		uint32_t      _bpp;
++        uint32_t      bytePerPixel;
+ 		uint8_t       *decoded;
+ 
+ 	public:
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/src/ADM_rgb16.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/src/ADM_rgb16.cpp	2011-05-18 05:27:21 UTC (rev 7211)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/src/ADM_rgb16.cpp	2011-05-18 05:45:04 UTC (rev 7212)
+@@ -18,30 +18,38 @@
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_codec.h&quot;
+ #include &quot;ADM_rgb16.h&quot;
++/**
++    \fn ctor
++*/
+ 
+ decoderRGB16::decoderRGB16(uint32_t w, uint32_t h,uint32_t fcc, uint32_t extraDataLen, uint8_t *extraData,uint32_t bpp)
+     : decoders (  w,   h,  fcc,   extraDataLen,   extraData,  bpp)
+ {
+ 	isRgb = true;
+ 	_bpp = bpp;
+-
+-	decoded = new uint8_t[_bpp * w * h];
++    bytePerPixel=_bpp&gt;&gt;3;
++	decoded = new uint8_t[2*bytePerPixel * w * h];
+ }
+-
++/**
++    \fn dtor
++*/
+ decoderRGB16::~decoderRGB16()
+ {
+ 	delete[] decoded;
++    decoded=NULL;
+ }
+-
++/**
++    \fn uncompress
++*/
+ bool decoderRGB16::uncompress(ADMCompressedImage * in, ADMImage * out)
+ {
+ 	int xx = _w * _h;
+-	int lineSize = (_w * (_bpp / 8) + 3) &amp; ~3;
++	int lineSize = (_w *bytePerPixel + 3) &amp; ~3; // 4 bytes aligned ?
+ 	ADM_colorspace colorspace;
+ 	int i, j;
+ 	uint8_t *src = in-&gt;data;
+ 	uint8_t *dst = decoded;
+-
++    int      outBytePerPixel=bytePerPixel;
+ 	switch (_bpp)
+ 	{
+ 		case 16:
+@@ -58,11 +66,12 @@
+ 			break;
+ 		default:
+ 			printf(&quot;bpp %d not supported\n&quot;, _bpp);
+-			return 0;
++			return false;
+ 	}
+-
+-	if (_bpp == 32)
++    // Pack...
++	if (_bpp == 32) // 32 -&gt; 24
+ 	{
++        outBytePerPixel=3;
+ 		for(i = 0; i &lt; _h; i++)
+ 		{
+ 			uint8_t *buf = src;
+@@ -76,7 +85,6 @@
+ 				ptr += 3;
+ 				buf += 4;
+ 			}
+-
+ 			src += lineSize;
+ 			dst += _w * 3;
+ 		}
+@@ -95,9 +103,9 @@
+ 			// strip extra junk from scanlines (due to 4 byte alignment)
+ 			for(i = 0; i &lt; _h; i++)
+ 			{
+-				memcpy(dst, src, _w * (_bpp / 8));
++				memcpy(dst, src, _w * bytePerPixel);
+ 				src += lineSize;
+-				dst += _w * (_bpp / 8);
++				dst += _w * bytePerPixel;
+ 			}
+ 		}
+ 	}
+@@ -111,10 +119,10 @@
+ 	ref-&gt;_planes[1] = NULL;
+ 	ref-&gt;_planes[2] = NULL;
+ 
+-	ref-&gt;_planeStride[0] = (_bpp / 8) * _w;
++	ref-&gt;_planeStride[0] = outBytePerPixel * _w;
+ 	ref-&gt;_planeStride[1] = 0;
+ 	ref-&gt;_planeStride[2] = 0;
+     out-&gt;Pts=in-&gt;demuxerPts;
+-	return 1;
++	return true;
+ }
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004366.html">[Avidemux-svn-commit] r7211 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerffTS
+</A></li>
+	<LI>Next message: <A HREF="004368.html">[Avidemux-svn-commit] r7213 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoCodec/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4367">[ date ]</a>
+              <a href="thread.html#4367">[ thread ]</a>
+              <a href="subject.html#4367">[ subject ]</a>
+              <a href="author.html#4367">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,133 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6503 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6503%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C20100806180936.2B3CF480F0E%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003689.html">
+   <LINK REL="Next"  HREF="003691.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6503 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6503%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C20100806180936.2B3CF480F0E%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6503 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Aug  6 20:09:36 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003689.html">[Avidemux-svn-commit] r6502 - in	branches/avidemux_2.5_branch_gruntster: avidemux cmake	platforms/windows/installer
+</A></li>
+        <LI>Next message: <A HREF="003691.html">[Avidemux-svn-commit] r6504 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3690">[ date ]</a>
+              <a href="thread.html#3690">[ thread ]</a>
+              <a href="subject.html#3690">[ subject ]</a>
+              <a href="author.html#3690">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-08-06 20:09:35 +0200 (Fri, 06 Aug 2010)
+New Revision: 6503
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp
+Log:
+[PSIndexer] Give more info when dts reset happens
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp	2010-08-03 19:48:37 UTC (rev 6502)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psIndex.cpp	2010-08-06 18:09:35 UTC (rev 6503)
+@@ -27,6 +27,7 @@
+ #include &quot;ADM_psAudioProbe.h&quot;
+ #include &quot;DIA_working.h&quot;
+ #include &quot;ADM_indexFile.h&quot;
++#include &quot;ADM_vidMisc.h&quot;
+ 
+ static const char Type[5]={'X','I','P','B','P'};  // Frame type
+ static const char Structure[4]={'X','T','B','F'}; // X Top Bottom Frame
+@@ -105,6 +106,7 @@
+         DIA_workingBase  *ui;
+         bool             headerDumped;
+         uint64_t         lastValidVideoDts;
++       
+ public:
+                 PsIndexer(void);
+                 ~PsIndexer();
+@@ -113,7 +115,13 @@
+         bool    writeAudio(void);
+         bool    writeSystem(const char *filename,bool append);
+         bool    Mark(indexerData *data,dmxPacketInfo *s,markType update);
+-
++        uint64_t timeConvert(uint64_t x) // 90 kHz tick -&gt; us
++                    {
++                         if(x==ADM_NO_PTS) return ADM_NO_PTS;
++                            x=x*1000;
++                            x/=90;
++                            return x;
++                    }
+ };
+ /**
+       \fn psIndexer 
+@@ -139,6 +147,7 @@
+     ui=createWorking (&quot;Indexing&quot;);
+     headerDumped=false;
+     lastValidVideoDts=ADM_NO_PTS;
++    
+ }
+ 
+ /**
+@@ -210,6 +219,9 @@
+ 
+           switch(startCode)
+                   {
++                  
++
++                            ;
+                   case 0xB3: // sequence start
+                           Mark(&amp;data,&amp;info,markStart);
+                           data.state=idx_startAtGopOrSeq;
+@@ -327,6 +339,8 @@
+                                     if(lastValidVideoDts&gt;info.dts)
+                                     {
+                                             ADM_warning(&quot;DTS are going back, aborting, maybe several video appended ?&quot;);
++                                            ADM_warning(&quot;last Valid Dts %s\n&quot;,ADM_us2plain(timeConvert(lastValidVideoDts)));
++                                            ADM_warning(&quot;current    Dts %s\n&quot;,ADM_us2plain(timeConvert(info.dts)));
+                                             goto theEnd;
+                                      }
+                             }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003689.html">[Avidemux-svn-commit] r6502 - in	branches/avidemux_2.5_branch_gruntster: avidemux cmake	platforms/windows/installer
+</A></li>
+	<LI>Next message: <A HREF="003691.html">[Avidemux-svn-commit] r6504 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreDemuxerMpeg/include	avidemux_core/ADM_coreDemuxerMpeg/src	avidemux_plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3690">[ date ]</a>
+              <a href="thread.html#3690">[ thread ]</a>
+              <a href="subject.html#3690">[ subject ]</a>
+              <a href="author.html#3690">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

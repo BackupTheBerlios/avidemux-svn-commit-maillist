@@ -1,0 +1,185 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6439 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6439%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog&In-Reply-To=%3C20100706182449.7F25C480C24%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003626.html">
+   <LINK REL="Next"  HREF="003628.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6439 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6439%20-%0A%09branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog&In-Reply-To=%3C20100706182449.7F25C480C24%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6439 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Jul  6 20:24:49 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003626.html">[Avidemux-svn-commit] r6438 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/ffmpeg_config
+</A></li>
+        <LI>Next message: <A HREF="003628.html">[Avidemux-svn-commit] r6440 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_encoder	ADM_userInterfaces/ADM_QT4/ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3627">[ date ]</a>
+              <a href="thread.html#3627">[ thread ]</a>
+              <a href="subject.html#3627">[ subject ]</a>
+              <a href="author.html#3627">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2010-07-06 20:24:49 +0200 (Tue, 06 Jul 2010)
+New Revision: 6439
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog/Q_pluginManager.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog/Q_pluginManager.h
+Log:
+[plugmgr] clear default when plugin is disabled
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog/Q_pluginManager.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog/Q_pluginManager.cpp	2010-07-05 05:13:55 UTC (rev 6438)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog/Q_pluginManager.cpp	2010-07-06 18:24:49 UTC (rev 6439)
+@@ -65,6 +65,11 @@
+ 
+ 	fillVideoEncoderList(manager);
+ 	ui.pluginTableView-&gt;resizeColumnsToContents();
++
++	connect(
++		ui.pluginTableView-&gt;model(),
++		SIGNAL(itemChanged(QStandardItem*)), this,
++		SLOT(pluginTableView_itemChanged(QStandardItem*)));
+ }
+ 
+ void Ui_pluginManagerWindow::fillVideoEncoderList(UiPluginManager manager)
+@@ -113,7 +118,7 @@
+ 			QString(id.c_str()), QString(itPlugin-&gt;second.name.c_str()), QString(itPlugin-&gt;second.version.c_str()),
+ 			QString(itPlugin-&gt;second.description.c_str()), itRankedPlugin-&gt;enabled, itRankedPlugin-&gt;isDefault);
+ 
+-		if (itRankedPlugin-&gt;isDefault)
++		if (!defaultSet &amp;&amp; itRankedPlugin-&gt;isDefault)
+ 			defaultSet = true;
+ 	}
+ 
+@@ -122,7 +127,7 @@
+ 		ui.pluginTableView-&gt;selectRow(0);
+ 
+ 		if (!defaultSet)
+-			setDefault(0);
++			setDefaultRow(0);
+ 	}
+ 
+ }
+@@ -133,11 +138,17 @@
+ 	ui.moveDownButton-&gt;setEnabled((current.row() + 1) != ui.pluginTableView-&gt;model()-&gt;rowCount());
+ }
+ 
++void Ui_pluginManagerWindow::pluginTableView_itemChanged(QStandardItem* item)
++{
++	if (item-&gt;column() == 0 &amp;&amp; item-&gt;checkState() == Qt::Unchecked)
++		clearDefaultRow(item-&gt;row());
++}
++
+ void Ui_pluginManagerWindow::setDefaultButton_clicked(bool)
+ {
+ 	QStandardItemModel *model = (QStandardItemModel*)ui.pluginTableView-&gt;model();
+ 	
+-	setDefault(ui.pluginTableView-&gt;selectionModel()-&gt;currentIndex().row());
++	setDefaultRow(ui.pluginTableView-&gt;selectionModel()-&gt;currentIndex().row());
+ }
+ 
+ void Ui_pluginManagerWindow::enableAllButton_clicked(bool)
+@@ -180,10 +191,10 @@
+ 	model-&gt;setItem(row, 2, descItem);
+ 
+ 	if (isDefault)
+-		setDefault(row);
++		setDefaultRow(row);
+ }
+ 
+-void Ui_pluginManagerWindow::setDefault(int defaultRow)
++void Ui_pluginManagerWindow::setDefaultRow(int defaultRow)
+ {
+ 	QStandardItemModel *model = (QStandardItemModel*)ui.pluginTableView-&gt;model();
+ 
+@@ -204,6 +215,23 @@
+ 	}
+ }
+ 
++void Ui_pluginManagerWindow::clearDefaultRow(int defaultRow)
++{
++	QStandardItemModel *model = (QStandardItemModel*)ui.pluginTableView-&gt;model();
++	QStandardItem *item = model-&gt;item(defaultRow, 0);
++
++	item-&gt;setData(false, PLUGIN_IS_DEFAULT);
++
++	for (int column = 0; column &lt; model-&gt;columnCount(); column++)
++	{
++		QStandardItem *item = model-&gt;item(defaultRow, column);
++		QFont font = item-&gt;font();
++
++		font.setBold(false);
++		item-&gt;setFont(font);
++	}
++}
++
+ void Ui_pluginManagerWindow::checkAllItems(bool checked)
+ {
+ 	for (int i = 0; i &lt; ui.pluginTableView-&gt;model()-&gt;rowCount(); i++)
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog/Q_pluginManager.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog/Q_pluginManager.h	2010-07-05 05:13:55 UTC (rev 6438)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog/Q_pluginManager.h	2010-07-06 18:24:49 UTC (rev 6439)
+@@ -24,7 +24,8 @@
+ 	void fillVideoEncoderList(UiPluginManager manager);
+ 	void addRow(QString id, QString name, QString version, QString desc, bool enabled, bool isDefault);
+ 	void checkAllItems(bool check);
+-	void setDefault(int defaultRow);
++	void setDefaultRow(int defaultRow);
++	void clearDefaultRow(int defaultRow);
+ 	void moveSelectedItem(bool up);
+ 
+ public:
+@@ -33,6 +34,7 @@
+ 
+ private slots:
+ 	void pluginTableView_rowChanged(const QModelIndex current, const QModelIndex previous);
++	void pluginTableView_itemChanged(QStandardItem *item);
+ 	void setDefaultButton_clicked(bool);
+ 	void enableAllButton_clicked(bool);
+ 	void disableAllButton_clicked(bool);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003626.html">[Avidemux-svn-commit] r6438 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/ffmpeg_config
+</A></li>
+	<LI>Next message: <A HREF="003628.html">[Avidemux-svn-commit] r6440 - in	branches/avidemux_2.5_branch_gruntster/avidemux: ADM_encoder	ADM_userInterfaces/ADM_QT4/ADM_gui
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3627">[ date ]</a>
+              <a href="thread.html#3627">[ thread ]</a>
+              <a href="subject.html#3627">[ subject ]</a>
+              <a href="author.html#3627">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

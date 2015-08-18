@@ -1,0 +1,188 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2960 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2960%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200704232025.l3NKPUuS028583%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000277.html">
+   <LINK REL="Next"  HREF="000279.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2960 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2960%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200704232025.l3NKPUuS028583%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2960 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Apr 23 22:25:30 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000277.html">[Avidemux-svn-commit] r2959 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+        <LI>Next message: <A HREF="000279.html">[Avidemux-svn-commit] r2961 - branches/avidemux_2.4_branch/po
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#278">[ date ]</a>
+              <a href="thread.html#278">[ thread ]</a>
+              <a href="subject.html#278">[ subject ]</a>
+              <a href="author.html#278">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-04-23 22:25:29 +0200 (Mon, 23 Apr 2007)
+New Revision: 2960
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_ebml.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ebml.cpp
+Log:
+grab all clusters, update flags
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_ebml.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_ebml.h	2007-04-23 19:21:00 UTC (rev 2959)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_ebml.h	2007-04-23 20:25:29 UTC (rev 2960)
+@@ -61,8 +61,8 @@
+                     uint8_t   seek(uint64_t pos);
+                     uint8_t   finished(void);
+                     uint8_t   find(ADM_MKV_SEARCHTYPE search,
+-                                        MKV_ELEM_ID  prim,MKV_ELEM_ID second,uint32_t *len);
+-                    uint8_t   simplefind(MKV_ELEM_ID  prim,uint32_t *len);
++                                        MKV_ELEM_ID  prim,MKV_ELEM_ID second,uint32_t *len,uint32_t rewind=1);
++                    uint8_t   simplefind(MKV_ELEM_ID  prim,uint32_t *len,uint32_t rewind=1);
+                     uint64_t remaining(void);
+ };
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2007-04-23 19:21:00 UTC (rev 2959)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2007-04-23 20:25:29 UTC (rev 2960)
+@@ -267,7 +267,9 @@
+ 
+   uint8_t  mkvHeader::setFlag(uint32_t frame,uint32_t flags)
+ {
+-  return 0; 
++  if(frame&gt;=_tracks[0]._nbIndex) return 0;
++  _tracks[0]._index[frame].flags=flags;
++  return 1; 
+ }
+ /*
+     __________________________________________________________
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-04-23 19:21:00 UTC (rev 2959)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvIndexer.cpp	2007-04-23 20:25:29 UTC (rev 2960)
+@@ -60,9 +60,9 @@
+   printf(&quot;[MKV] Segment found at %llx (size %llx)\n&quot;,segment.tell(),vlen);
+   
+   //while FIXME LOOP ON ALL CLUSTER!
+-  if(segment.find(ADM_MKV_PRIMARY,MKV_CLUSTER,MKV_CLUSTER,&amp;alen))
++  while(segment.find(ADM_MKV_PRIMARY,MKV_CLUSTER,MKV_CLUSTER,&amp;alen,0))
+   {
+-    printf(&quot;[MKV] Beginning new cluster at 0x%llx\n&quot;,segment.tell());
++  //  printf(&quot;[MKV] Beginning new cluster at 0x%llx\n&quot;,segment.tell());
+    ADM_ebml_file cluster(&amp;segment,alen);
+    while(!cluster.finished())
+    {
+@@ -122,7 +122,7 @@
+             break; // Block Group
+        }
+      }
+-    
++   // printf(&quot;[MKV] ending cluster at 0x%llx\n&quot;,segment.tell());
+   }
+      printf(&quot;Found %lu images in this cluster\n&quot;,VIDEO._nbIndex);
+      return 1;
+@@ -151,6 +151,6 @@
+   index[x].flags=0;
+   index[x].timeCode=0;
+   VIDEO._nbIndex++;
+-  printf(&quot;++\n&quot;);
++ // printf(&quot;++\n&quot;);
+   return 1;
+ }
+\ No newline at end of file
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ebml.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ebml.cpp	2007-04-23 19:21:00 UTC (rev 2959)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ebml.cpp	2007-04-23 20:25:29 UTC (rev 2960)
+@@ -240,20 +240,20 @@
+   \fn find
+   \brief Search for the tag given and returns the corresponding atom
+ */
+- uint8_t ADM_ebml_file::find(ADM_MKV_SEARCHTYPE search,MKV_ELEM_ID  prim,MKV_ELEM_ID second,uint32_t *len)
++ uint8_t ADM_ebml_file::find(ADM_MKV_SEARCHTYPE search,MKV_ELEM_ID  prim,MKV_ELEM_ID second,uint32_t *len,uint32_t rewind)
+ {
+   uint64_t id,pos;
+   ADM_MKV_TYPE type;
+   const char *ss;
+ 
+     vprintf(&quot;[MKV]Searching for tag %llx %llx\n&quot;,prim,second);
+-    seek(_begin);
++    if(rewind) seek(_begin);
+     if(search==ADM_MKV_PRIMARY)
+     {
+-          return simplefind(prim,len);
++          return simplefind(prim,len,rewind);
+       }
+     vprintf(&quot;[MKV]Searching primary : %llx\n&quot;,prim);
+-    if(!simplefind(prim,len))
++    if(!simplefind(prim,len,rewind))
+     {
+       vprintf(&quot;[MKV] Primary find failed for %llx\n&quot;,prim);
+       return 0; 
+@@ -277,7 +277,7 @@
+   \fn find
+   \brief Search for the tag given and returns the corresponding atom
+ */
+-uint8_t ADM_ebml_file::simplefind(MKV_ELEM_ID  prim,uint32_t *len)
++uint8_t ADM_ebml_file::simplefind(MKV_ELEM_ID  prim,uint32_t *len,uint32_t rewind)
+ {
+   uint64_t id,alen;
+   ADM_MKV_TYPE type;
+@@ -285,7 +285,7 @@
+   uint64_t pos;
+ 
+     vprintf(&quot;[MKV] Simple Searching for tag %llx\n&quot;,prim);
+-    seek(_begin);
++    if(rewind) seek(_begin);
+    
+       while(!finished())
+       {
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000277.html">[Avidemux-svn-commit] r2959 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+	<LI>Next message: <A HREF="000279.html">[Avidemux-svn-commit] r2961 - branches/avidemux_2.4_branch/po
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#278">[ date ]</a>
+              <a href="thread.html#278">[ thread ]</a>
+              <a href="subject.html#278">[ subject ]</a>
+              <a href="author.html#278">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

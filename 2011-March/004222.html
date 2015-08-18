@@ -1,0 +1,252 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7056 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7056%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C20110308190847.C9F41481120%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004221.html">
+   <LINK REL="Next"  HREF="004223.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7056 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7056%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C20110308190847.C9F41481120%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7056 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Mar  8 20:08:47 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004221.html">[Avidemux-svn-commit] r7055 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="004223.html">[Avidemux-svn-commit] r7057 - in	branches/avidemux_2.6_branch_mean/avidemux:	cli/ADM_userInterfaces/ADM_dialog gtk/ADM_userInterfaces/ADM_gui2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4222">[ date ]</a>
+              <a href="thread.html#4222">[ thread ]</a>
+              <a href="subject.html#4222">[ subject ]</a>
+              <a href="author.html#4222">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-03-08 20:08:47 +0100 (Tue, 08 Mar 2011)
+New Revision: 7056
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp
+Log:
+[editor/h264] Try to guess missing PTS by using hole in present PTS. Really crude but good enough to fix slightly damaged stream
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp	2011-03-07 18:44:10 UTC (rev 7055)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPtsDts.cpp	2011-03-08 19:08:47 UTC (rev 7056)
+@@ -30,6 +30,122 @@
+ static bool setPtsFromDts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay);
+ static bool updatePtsAndDts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay);
+ /**
++    \fn countMissingPts
++*/
++int countMissingPts(vidHeader *hdr)
++{
++        int nbMissing=0;
++        aviInfo info;
++        hdr-&gt;getVideoInfo(&amp;info);
++        uint32_t nbFrames=0;
++        nbFrames=info.nb_frames;
++        for(int i=0;i&lt;nbFrames;i++)
++        {
++            uint64_t pts,dts;
++            hdr-&gt;getPtsDts(i,&amp;pts,&amp;dts);
++            if(pts==ADM_NO_PTS)
++                {
++                    nbMissing++;
++                }
++        }
++        return nbMissing;
++}
++/**
++    \fn guessH264
++    \brief  Try to guess missing PTS at index missingIndex by searching for a hole.
++            It is really crude and seldom works.
++            The main objective is to avoid stoping when using copy/copy due to missing PTS
++            (corrupted stream...)
++*/
++bool guessH264(vidHeader *hdr,uint64_t timeIncrementUs,int missingIndex)
++{
++#define LOOKUP_RANGE 10
++        int start=0,end=0;
++        aviInfo info;
++        hdr-&gt;getVideoInfo(&amp;info);
++        uint32_t nbFrames=0;
++        nbFrames=info.nb_frames;
++
++        if(missingIndex&lt;LOOKUP_RANGE) start=0;
++                else start=missingIndex-LOOKUP_RANGE;
++        if(missingIndex+LOOKUP_RANGE&gt;=nbFrames) end=nbFrames;
++                    else end=missingIndex+LOOKUP_RANGE;
++
++        if(end-start&lt;4)
++        {
++            ADM_warning(&quot;Not enough samples to guess missing pts\n&quot;);
++            return false;
++        }
++
++        int nbMissing=0;
++        vector&lt;uint64_t&gt; neighbour;
++        for(int i=start;i&lt;end;i++)
++        {
++            uint64_t pts,dts;
++            hdr-&gt;getPtsDts(i,&amp;pts,&amp;dts);
++            if(pts==ADM_NO_PTS)
++                {
++                    nbMissing++;
++                    continue;
++                }
++            neighbour.push_back(pts);
++        }
++        // We can use a hole in the PTS if there are several missing PTS...
++        if(nbMissing&gt;1)
++        {
++            ADM_warning(&quot;Too much unknown PTS (%d), aborting\n&quot;,nbMissing);
++            return false;
++        }
++        // Sort the list
++        int n=neighbour.size();
++        for(int i=0;i&lt;n;i++)
++            for(int j=i+1;j&lt;n;j++)
++            {
++                uint64_t pts1=neighbour[i];
++                uint64_t pts2=neighbour[j];
++                if(pts1&gt;pts2)
++                    {
++                        neighbour[i]=pts2;
++                        neighbour[j]=pts1;
++                    }
++            }
++        //for(int i=0;i&lt;n;i++) ADM_info(&quot;%d: %&quot;LLU&quot;\n&quot;,i,neighbour[i]);
++        // Now look for the biggest hole in the sorted list
++        uint64_t maxDelta=0;
++        int maxIndex=-1;
++        for(int i=0;i&lt;n-1;i++)
++        {
++            uint64_t d=neighbour[i+1]-neighbour[i];
++            if(d&gt;maxDelta) 
++            {
++                maxDelta=d;
++                maxIndex=i;
++            }
++            //ADM_info(&quot;%d Delta=%&quot;LLU&quot;\n&quot;,i,d);
++        }
++        if(maxIndex==-1) 
++        {
++            ADM_error(&quot;Oops, no gap detected\n&quot;);
++            return false;
++        }
++        if(maxDelta&gt;=2*timeIncrementUs)
++        {
++            ADM_info(&quot;Our best guess is at %&quot;LLU&quot;\n&quot;,neighbour[maxIndex]);
++            uint64_t pts,dts,pts2;
++            pts2=neighbour[maxIndex]+timeIncrementUs;
++            hdr-&gt;getPtsDts(missingIndex,&amp;pts,&amp;dts); 
++            if(pts2&gt;dts)
++            {
++                ADM_error(&quot;Our guessed PTS is too early, aborting (%&quot;LLU&quot;/%&quot;LLU&quot;)\n&quot;,pts2,dts);
++            }else
++                hdr-&gt;setPtsDts(missingIndex,pts2,dts);   
++        }else   
++            ADM_info(&quot;Gap found but too small\n&quot;);
++        //for(int i=0;i&lt;n;i++) ADM_info(&quot;%d: %&quot;LLU&quot;\n&quot;,i,neighbour[i]);
++    return true;
++}
++
++/**
+     \fn ADM_setH264MissingPts(vidHeader *hdr,uint64_t timeIncrementUs,uint64_t *delay)
+     \brief look for AVC case where 1 field has PTS, the 2nd one is Bottom without PTS
+             in such a case PTS (2nd field)=PTS (First field)+timeincrement
+@@ -47,16 +163,7 @@
+     // Scan if it is the scheme we support
+     // i.t. interlaced with Top =&gt; PTS, Bottom =&gt; No Pts
+     // Check we have all PTS...
+-    fail=0;
+-    for(int i=0;i&lt;nbFrames;i++)
+-    {
+-          hdr-&gt;getPtsDts(i,&amp;pts,&amp;dts);
+-          if(pts==ADM_NO_PTS) 
+-            {
+-                fail++;
+-              //  ADM_info(&quot;Pts for frame %&quot;LLU&quot;/%&quot;LLU&quot;is missing\n&quot;,i,nbFrames);
+-            }
+-    }
++    fail=countMissingPts(hdr);
+     ADM_info(&quot;We have %d missing PTS\n&quot;,fail);
+     if(!fail) return true; // Have all PTS, ok...
+     ADM_info(&quot;Some PTS are missing, try to guess them...\n&quot;);
+@@ -100,6 +207,8 @@
+     ADM_info(&quot;Fixed %d PTS\n&quot;,fixed);
+     }
+ nextScheme:
++    // Try to guess random missing PTS
++    // Really guess job
+     fail=0;
+     vector &lt;int&gt; listOfMissingPts;
+     for(int i=0;i&lt;nbFrames;i++)
+@@ -111,12 +220,24 @@
+                 listOfMissingPts.push_back(i);
+             }
+     }
+-    // 2nd part: Try to really guess the missing ones by spotting holes...
++    // 2nd part: Try to really guess the missing ones by spotting gaps...
+     int n=listOfMissingPts.size();
+     if(n)
+     {
+-        ADM_info(&quot;We still have %d missing PTS\n&quot;,n);
++        if(n&gt;nbFrames/100)
++        {
++            ADM_warning(&quot;There is more than 1% unavailable PTS, wont even try...\n&quot;);
++            goto theEnd;
++        }
++        for(int i=0;i&lt;n;i++)
++        {
++              guessH264(hdr,timeIncrementUs,listOfMissingPts[i]);
++        }
++        
+     }
++theEnd:
++    fail=countMissingPts(hdr);
++    ADM_info(&quot;End of game, we have %d missing PTS\n&quot;,fail);
+     return true;
+ }
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004221.html">[Avidemux-svn-commit] r7055 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="004223.html">[Avidemux-svn-commit] r7057 - in	branches/avidemux_2.6_branch_mean/avidemux:	cli/ADM_userInterfaces/ADM_dialog gtk/ADM_userInterfaces/ADM_gui2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4222">[ date ]</a>
+              <a href="thread.html#4222">[ thread ]</a>
+              <a href="subject.html#4222">[ subject ]</a>
+              <a href="author.html#4222">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

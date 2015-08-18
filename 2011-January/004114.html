@@ -1,0 +1,155 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6940 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6940%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2&In-Reply-To=%3C20110117184927.2474F48129C%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004113.html">
+   <LINK REL="Next"  HREF="004115.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6940 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6940%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2&In-Reply-To=%3C20110117184927.2474F48129C%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6940 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Jan 17 19:49:27 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004113.html">[Avidemux-svn-commit] r6939 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+</A></li>
+        <LI>Next message: <A HREF="004115.html">[Avidemux-svn-commit] r6941 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_faad
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4114">[ date ]</a>
+              <a href="thread.html#4114">[ thread ]</a>
+              <a href="subject.html#4114">[ subject ]</a>
+              <a href="author.html#4114">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-01-17 19:49:26 +0100 (Mon, 17 Jan 2011)
+New Revision: 6940
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp
+Log:
+[mp4v2] Add progress bar + fix video not starting at dts=0
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp	2011-01-17 18:49:25 UTC (rev 6939)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp	2011-01-17 18:49:26 UTC (rev 6940)
+@@ -138,13 +138,14 @@
+ bool muxerMp4v2::save(void)
+ {
+     bool result=true;
++    int nbFrame=0;
+     printf(&quot;[Mp4v2Muxer] Saving\n&quot;);
+    
+ 
+     initUI(&quot;Saving MP4V2&quot;);
+     encoding-&gt;setContainer(&quot;MP4&quot;);
+-    uint32_t nbFrame=0;
+     
++    
+     while(vStream-&gt;getPacket(&amp;(in[nextWrite]))) 
+     {
+         bool kf=false;
+@@ -153,8 +154,16 @@
+         uint64_t newDts=in[nextWrite].dts-in[other].dts;
+         uint64_t duration=timeScale(newDts);
+         uint64_t delta=in[other].pts-in[other].dts;
+-            delta=timeScale(delta);
+-   
++
++        encoding-&gt;pushVideoFrame(in[other].len,in[other].out_quantizer,in[other].dts);
++        // Special case : First frame
++        if(!nbFrame)
++        {
++            delta+=in[other].dts;
++            ADM_info(&quot;Video does not start at 0, adding %d ms\n&quot;,(int)in[other].dts/1000);
++        }
++        delta=timeScale(delta);
++        nbFrame++;
+         if(false==MP4WriteSample(handle,videoTrackId,in[other].data,in[other].len,
+                         duration, // duration
+                         delta, // pts/dts offset
+@@ -171,6 +180,11 @@
+         fillAudio(nextDts);
+         // toggle
+         nextWrite=other;
++        if(updateUI()==false)
++            {  
++                result=false;
++                break;
++            }
+     }
+     // Write last frame
+     nextWrite=!nextWrite;
+@@ -180,6 +194,7 @@
+                         0 // Sync Sample
+                         );
+ theEnd:
++    closeUI();
+     close();
+     return result;
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp	2011-01-17 18:49:25 UTC (rev 6939)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp	2011-01-17 18:49:26 UTC (rev 6940)
+@@ -172,7 +172,9 @@
+                     ADM_error(&quot;Cannot create audio track of type 0x%x\n&quot;,header-&gt;encoding);
+                     return false;
+         }
+-       
++         MP4SetTrackBytesProperty(handle,audioTrackIds[i],&quot;udta.name.value&quot;,
++                    (const uint8_t*)&quot;Stereo&quot;, strlen(&quot;Stereo&quot;));
++
+     }
+     if(nbAStreams)
+          MP4SetTrackIntegerProperty(handle, audioTrackIds[0], &quot;tkhd.flags&quot;, 3);
+@@ -213,6 +215,7 @@
+                             block-&gt;sizeInBytes,
+                             nbSamples,
+                             0,1);
++    encoding-&gt;pushAudioFrame(block-&gt;sizeInBytes);
+     if(false==r)
+                         {
+                             ADM_error(&quot;Cannot write audio sample for track %d\n&quot;,index);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004113.html">[Avidemux-svn-commit] r6939 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+</A></li>
+	<LI>Next message: <A HREF="004115.html">[Avidemux-svn-commit] r6941 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_audioDecoders/ADM_ad_faad
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4114">[ date ]</a>
+              <a href="thread.html#4114">[ thread ]</a>
+              <a href="subject.html#4114">[ subject ]</a>
+              <a href="author.html#4114">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,454 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4653 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_plugin plugins/ADM_videoEncoder/ADM_vidEnc_x264	plugins/ADM_videoEncoder/ADM_vidEnc_xvid
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4653%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09avidemux/ADM_plugin%20plugins/ADM_videoEncoder/ADM_vidEnc_x264%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_xvid&In-Reply-To=%3C200903040918.n249IQlf012668%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001882.html">
+   <LINK REL="Next"  HREF="001884.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4653 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_plugin plugins/ADM_videoEncoder/ADM_vidEnc_x264	plugins/ADM_videoEncoder/ADM_vidEnc_xvid</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4653%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster%3A%20avidemux/ADM_encoder%0A%09avidemux/ADM_plugin%20plugins/ADM_videoEncoder/ADM_vidEnc_x264%0A%09plugins/ADM_videoEncoder/ADM_vidEnc_xvid&In-Reply-To=%3C200903040918.n249IQlf012668%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4653 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_encoder	avidemux/ADM_plugin plugins/ADM_videoEncoder/ADM_vidEnc_x264	plugins/ADM_videoEncoder/ADM_vidEnc_xvid">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Wed Mar  4 10:18:26 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001882.html">[Avidemux-svn-commit] r4652 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+        <LI>Next message: <A HREF="001884.html">[Avidemux-svn-commit] r4654 - in	branches/avidemux_2.5_branch_gruntster/platforms/windows:	build_scripts/avidemux installer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1883">[ date ]</a>
+              <a href="thread.html#1883">[ thread ]</a>
+              <a href="subject.html#1883">[ subject ]</a>
+              <a href="author.html#1883">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-03-04 10:18:19 +0100 (Wed, 04 Mar 2009)
+New Revision: 4653
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.h
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp
+   branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.h
+Log:
+[videnc] tweak video encoder plugin api to make things cleaner
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp	2009-03-03 21:18:00 UTC (rev 4652)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.cpp	2009-03-04 09:18:19 UTC (rev 4653)
+@@ -24,6 +24,7 @@
+ {
+ 	_plugin = getVideoEncoderPlugin(params-&gt;extra_param);
+ 	_openPass = false;
++	_useExistingLogFile = false;
+ 	_logFileName = NULL;
+ 	_globalHeader = globalHeader;
+ }
+@@ -48,6 +49,7 @@
+ 	ADM_assert(_vbuffer);
+ 
+ 	_in = instream;
++	_useExistingLogFile = useExistingLogFile;
+ 
+ 	vidEncVideoProperties properties;
+ 
+@@ -59,9 +61,8 @@
+ 	properties.parWidth = instream-&gt;getPARWidth();
+ 	properties.parHeight = instream-&gt;getPARHeight();
+ 	properties.frameCount = info-&gt;nb_frames;
+-	properties.fps1000 = info-&gt;fps1000;
+-	properties.logFileName = _logFileName;
+-	properties.useExistingLogFile = useExistingLogFile;
++	properties.fpsNum = info-&gt;fps1000;
++	properties.fpsDen = 1000;
+ 
+ 	if (_globalHeader)
+ 		properties.flags |= ADM_VIDENC_FLAG_GLOBAL_HEADER;
+@@ -167,6 +168,8 @@
+ 
+ 	memset(&amp;passParameters, 0, sizeof(vidEncPassParameters));
+ 	passParameters.structSize = sizeof(vidEncPassParameters);
++	passParameters.logFileName = _logFileName;
++	passParameters.useExistingLogFile = _useExistingLogFile;
+ 
+ 	_openPass = (_plugin-&gt;beginPass(_plugin-&gt;encoderId, &amp;passParameters) == ADM_VIDENC_ERR_SUCCESS);
+ 
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.h	2009-03-03 21:18:00 UTC (rev 4652)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/ADM_externalEncoder.h	2009-03-04 09:18:19 UTC (rev 4653)
+@@ -28,6 +28,7 @@
+ private:
+ 	ADM_vidEnc_plugin *_plugin;
+ 	bool _openPass;
++	bool _useExistingLogFile;
+ 	char* _logFileName;
+ 	bool _globalHeader;
+ 	uint8_t *_extraData;
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp	2009-03-03 21:18:00 UTC (rev 4652)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_encoder/adm_encConfig.cpp	2009-03-04 09:18:19 UTC (rev 4653)
+@@ -486,7 +486,8 @@
+ 			properties.parWidth = video_body-&gt;getPARWidth();
+ 			properties.parHeight = video_body-&gt;getPARHeight();
+ 			properties.frameCount = info.nb_frames;
+-			properties.fps1000 = info.fps1000;
++			properties.fpsNum = info.fps1000;
++			properties.fpsDen = 1000;
+ 		}
+ 
+ 		configParameters.structSize = sizeof(vidEncConfigParameters);
+
+Modified: branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h	2009-03-03 21:18:00 UTC (rev 4652)
++++ branches/avidemux_2.5_branch_gruntster/avidemux/ADM_plugin/ADM_vidEnc_plugin.h	2009-03-04 09:18:19 UTC (rev 4653)
+@@ -65,9 +65,8 @@
+ 	unsigned int parWidth;
+ 	unsigned int parHeight;
+ 	unsigned int frameCount;
+-	unsigned int fps1000;
+-	const char* logFileName;
+-	int useExistingLogFile;
++	unsigned int fpsNum;
++	unsigned int fpsDen;
+ 	unsigned int flags;
+ } vidEncVideoProperties;
+ 
+@@ -83,6 +82,8 @@
+ 	int structSize;
+ 	uint8_t *extraData;
+ 	int extraDataSize;
++	const char* logFileName;
++	int useExistingLogFile;
+ } vidEncPassParameters;
+ 
+ typedef struct
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-03-03 21:18:00 UTC (rev 4652)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.cpp	2009-03-04 09:18:19 UTC (rev 4653)
+@@ -55,9 +55,7 @@
+ 	_currentPass = 0;
+ 	_openPass = false;
+ 
+-	_logFileName = NULL;
+ 	_buffer = NULL;
+-
+ 	_extraData = NULL;
+ 	_extraDataSize = 0;
+ 
+@@ -78,9 +76,6 @@
+ 	if (_loader)
+ 		delete _loader;
+ 
+-	if (_logFileName)
+-		delete [] _logFileName;
+-
+ 	if (_buffer)
+ 		delete [] _buffer;
+ 
+@@ -189,24 +184,12 @@
+ 	_buffer = new uint8_t[_bufferSize];
+ 
+ 	memcpy(&amp;_properties, properties, sizeof(vidEncVideoProperties));
+-	_properties.logFileName = NULL;
+-
+-	if (_logFileName)
+-		delete [] _logFileName;
+-
+-#ifdef __WIN32
+-	convertPathToAnsi(properties-&gt;logFileName, &amp;_logFileName);
+-#else
+-	_logFileName = new char[strlen(properties-&gt;logFileName) + 1];
+-	strcpy(_logFileName, properties-&gt;logFileName);
+-#endif
+-
+ 	updateEncodeParameters(&amp;_properties);
+ 
+ 	_param.i_width = _properties.width;
+ 	_param.i_height = _properties.height;
+-	_param.i_fps_num = _properties.fps1000;
+-	_param.i_fps_den = 1000;
++	_param.i_fps_num = _properties.fpsNum;
++	_param.i_fps_den = _properties.fpsDen;
+ 
+ 	if (_options.getSarAsInput())
+ 	{
+@@ -219,9 +202,6 @@
+ 	else
+ 		_param.b_repeat_headers = 1;
+ 
+-	if (_passCount &gt; 1 &amp;&amp; properties-&gt;useExistingLogFile)
+-		_currentPass++;
+-
+ 	printParam(&amp;_param);
+ 
+ 	return ADM_VIDENC_ERR_SUCCESS;
+@@ -242,25 +222,37 @@
+ 	_currentPass++;
+ 	_currentFrame = 0;
+ 
++	char *logFileName = NULL;
++
+ 	printf(&quot;[x264] begin pass %d/%d\n&quot;, _currentPass, _passCount);
+ 
+ 	if (_passCount &gt; 1)
+ 	{
++#ifdef __WIN32
++		convertPathToAnsi(passParameters-&gt;logFileName, &amp;logFileName);
++#else
++		logFileName = new char[strlen(passParameters-&gt;logFileName) + 1];
++		strcpy(logFileName, passParameters-&gt;logFileName);
++#endif
++
++		if (passParameters-&gt;useExistingLogFile)
++			_currentPass++;
++
+ 		if (_currentPass == 1)
+ 		{
+ 			_param.rc.b_stat_write = 1;
+ 			_param.rc.b_stat_read = 0;
+-			_param.rc.psz_stat_out = _logFileName;
++			_param.rc.psz_stat_out = logFileName;
+ 
+-			printf(&quot;[x264] writing to %s\n&quot;, _logFileName);
++			printf(&quot;[x264] writing to %s\n&quot;, logFileName);
+ 		}
+ 		else
+ 		{
+ 			_param.rc.b_stat_write = 0;
+ 			_param.rc.b_stat_read = 1;
+-			_param.rc.psz_stat_in = _logFileName;
++			_param.rc.psz_stat_in = logFileName;
+ 
+-			printf(&quot;[x264] reading from %s\n&quot;, _logFileName);
++			printf(&quot;[x264] reading from %s\n&quot;, logFileName);
+ 		}
+ 	}
+ 	else
+@@ -271,6 +263,9 @@
+ 
+ 	_handle = x264_encoder_open(&amp;_param);
+ 
++	if (logFileName)
++		delete logFileName;
++
+ 	if (_handle)
+ 	{
+ 		if (!_param.b_repeat_headers)
+@@ -537,6 +532,8 @@
+ 		finishPass();
+ 
+ 	_opened = false;
++	_passCount = 0;
++	_currentPass = 0;
+ 
+ 	if (_buffer)
+ 	{
+@@ -683,7 +680,7 @@
+ 		case ADM_VIDENC_MODE_2PASS_SIZE:
+ 			_passCount = 2;
+ 			_param.rc.i_rc_method = X264_RC_ABR;
+-			_param.rc.i_bitrate = calculateBitrate(properties-&gt;fps1000, properties-&gt;frameCount, _encodeOptions.encodeModeParameter) / 1000;
++			_param.rc.i_bitrate = calculateBitrate(properties-&gt;fpsNum, properties-&gt;fpsDen, properties-&gt;frameCount, _encodeOptions.encodeModeParameter) / 1000;
+ 			break;
+ 		case ADM_VIDENC_MODE_2PASS_ABR:
+ 			_passCount = 2;
+@@ -693,7 +690,7 @@
+ 	}
+ }
+ 
+-unsigned int x264Encoder::calculateBitrate(unsigned int fps1000, unsigned int frameCount, unsigned int sizeInMb)
++unsigned int x264Encoder::calculateBitrate(unsigned int fpsNum, unsigned int fpsDen, unsigned int frameCount, unsigned int sizeInMb)
+ {
+ 	double db, ti;
+ 
+@@ -703,8 +700,8 @@
+ 
+ 	// compute duration
+ 	ti = frameCount;
+-	ti *= 1000;
+-	ti /= fps1000;	// nb sec
++	ti *= fpsDen;
++	ti /= fpsNum;	// nb sec
+ 	db = db / ti;
+ 
+ 	return (unsigned int)floor(db);
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.h	2009-03-03 21:18:00 UTC (rev 4652)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/encoder.h	2009-03-04 09:18:19 UTC (rev 4653)
+@@ -41,7 +41,6 @@
+ 		x264Options _options;
+ 		vidEncOptions _encodeOptions;
+ 		vidEncVideoProperties _properties;
+-		char *_logFileName;
+ 
+ 		x264_t *_handle;
+ 		x264_param_t _param;
+@@ -62,7 +61,7 @@
+ 		void printParam(x264_param_t* x264Param);
+ 		void printCqm(const uint8_t cqm[], int size);
+ 		void updateEncodeParameters(vidEncVideoProperties *properties);
+-		unsigned int calculateBitrate(unsigned int fps1000, unsigned int frameCount, unsigned int sizeInMb);
++		unsigned int calculateBitrate(unsigned int fpsNum, unsigned int fpsDen, unsigned int frameCount, unsigned int sizeInMb);
+ 		int createHeader(void);
+ 
+ 	public:
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp	2009-03-03 21:18:00 UTC (rev 4652)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.cpp	2009-03-04 09:18:19 UTC (rev 4653)
+@@ -212,18 +212,7 @@
+ 	_buffer = new uint8_t[_bufferSize];
+ 
+ 	memcpy(&amp;_properties, properties, sizeof(vidEncVideoProperties));
+-	_properties.logFileName = NULL;
+ 
+-	if (_logFileName)
+-		delete [] _logFileName;
+-
+-#ifdef __WIN32
+-	convertPathToAnsi(properties-&gt;logFileName, &amp;_logFileName);
+-#else
+-	_logFileName = new char[strlen(properties-&gt;logFileName) + 1];
+-	strcpy(_logFileName, properties-&gt;logFileName);
+-#endif
+-
+ 	if (_options.getParAsInput())
+ 		_options.setPar(_properties.parWidth, _properties.parHeight);
+ 
+@@ -231,8 +220,8 @@
+ 
+ 	_xvid_enc_create.width = _properties.width;
+ 	_xvid_enc_create.height = _properties.height;
+-	_xvid_enc_create.fincr = 1000;
+-	_xvid_enc_create.fbase = _properties.fps1000;
++	_xvid_enc_create.fincr = _properties.fpsDen;
++	_xvid_enc_create.fbase = _properties.fpsNum;
+ 
+ 	if (_options.getThreads() == 0)
+ 		_xvid_enc_create.num_threads = _processors;
+@@ -259,6 +248,19 @@
+ 
+ 	if (_passCount &gt; 1)
+ 	{
++		if (_logFileName)
++			delete [] _logFileName;
++
++#ifdef __WIN32
++		convertPathToAnsi(passParameters-&gt;logFileName, &amp;_logFileName);
++#else
++		_logFileName = new char[strlen(passParameters-&gt;logFileName) + 1];
++		strcpy(_logFileName, passParameters-&gt;logFileName);
++#endif
++
++		if (passParameters-&gt;useExistingLogFile)
++			_currentPass++;
++
+ 		if (_currentPass == 1)
+ 		{
+ 			_xvid_plugin_2pass1.filename = _logFileName;
+@@ -374,6 +376,8 @@
+ 		finishPass();
+ 
+ 	_opened = false;
++	_passCount = 0;
++	_currentPass = 0;
+ 
+ 	if (_xvid_enc_create.handle)
+ 	{
+@@ -440,7 +444,7 @@
+ 			break;
+ 		case ADM_VIDENC_MODE_2PASS_SIZE:
+ 			_passCount = 2;
+-			_xvid_plugin_2pass2.bitrate = calculateBitrate(properties-&gt;fps1000, properties-&gt;frameCount, _encodeOptions.encodeModeParameter);
++			_xvid_plugin_2pass2.bitrate = calculateBitrate(properties-&gt;fpsNum, properties-&gt;fpsDen, properties-&gt;frameCount, _encodeOptions.encodeModeParameter);
+ 
+ 			break;
+ 		case ADM_VIDENC_MODE_2PASS_ABR:
+@@ -451,7 +455,7 @@
+ 	}
+ }
+ 
+-unsigned int XvidEncoder::calculateBitrate(unsigned int fps1000, unsigned int frameCount, unsigned int sizeInMb)
++unsigned int XvidEncoder::calculateBitrate(unsigned int fpsNum, unsigned int fpsDen, unsigned int frameCount, unsigned int sizeInMb)
+ {
+ 	double db, ti;
+ 
+@@ -461,8 +465,8 @@
+ 
+ 	// compute duration
+ 	ti = frameCount;
+-	ti *= 1000;
+-	ti /= fps1000;	// nb sec
++	ti *= fpsDen;
++	ti /= fpsNum;	// nb sec
+ 	db = db / ti;
+ 
+ 	return (unsigned int)floor(db);
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.h	2009-03-03 21:18:00 UTC (rev 4652)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/encoder.h	2009-03-04 09:18:19 UTC (rev 4653)
+@@ -56,7 +56,7 @@
+ 		bool _opened, _openPass;
+ 
+ 		void updateEncodeParameters(vidEncVideoProperties *properties);
+-		unsigned int calculateBitrate(unsigned int fps1000, unsigned int frameCount, unsigned int sizeInMb);
++		unsigned int calculateBitrate(unsigned int fpsNum, unsigned int fpsDen, unsigned int frameCount, unsigned int sizeInMb);
+ 
+ 		void printEncCreate(xvid_enc_create_t *xvid_enc_create);
+ 		void printEncFrame(xvid_enc_frame_t *xvid_enc_frame);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001882.html">[Avidemux-svn-commit] r4652 -	branches/avidemux_2.5_branch_gruntster/cmake
+</A></li>
+	<LI>Next message: <A HREF="001884.html">[Avidemux-svn-commit] r4654 - in	branches/avidemux_2.5_branch_gruntster/platforms/windows:	build_scripts/avidemux installer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1883">[ date ]</a>
+              <a href="thread.html#1883">[ thread ]</a>
+              <a href="subject.html#1883">[ subject ]</a>
+              <a href="author.html#1883">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

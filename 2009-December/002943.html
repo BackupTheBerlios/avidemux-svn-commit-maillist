@@ -1,0 +1,157 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5736 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5736%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src&In-Reply-To=%3C200912271734.nBRHYfmS031812%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002942.html">
+   <LINK REL="Next"  HREF="002944.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5736 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5736%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src&In-Reply-To=%3C200912271734.nBRHYfmS031812%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5736 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Dec 27 18:34:41 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002942.html">[Avidemux-svn-commit] r5735 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264
+</A></li>
+        <LI>Next message: <A HREF="002944.html">[Avidemux-svn-commit] r5737 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2943">[ date ]</a>
+              <a href="thread.html#2943">[ thread ]</a>
+              <a href="subject.html#2943">[ subject ]</a>
+              <a href="author.html#2943">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-12-27 18:34:34 +0100 (Sun, 27 Dec 2009)
+New Revision: 5736
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audioDeviceThreaded.cpp
+Log:
+[audioDevice] Wait for the device to be destroyed before releasing buffers
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audioDeviceThreaded.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audioDeviceThreaded.cpp	2009-12-23 20:07:00 UTC (rev 5735)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioDevice/src/ADM_audioDeviceThreaded.cpp	2009-12-27 17:34:34 UTC (rev 5736)
+@@ -83,8 +83,8 @@
+     // Spawn
+     stopRequest=AUDIO_DEVICE_STARTED;
+     ADM_assert(!pthread_create(&amp;myThread,NULL,bouncer,this));
+-    
+ 
++
+     return 1;
+ }
+ /**
+@@ -106,12 +106,8 @@
+ */
+ uint8_t audioDeviceThreaded::stop()
+ {
+-    if(audioBuffer)
+-    {
+-        delete [] audioBuffer;
+-        audioBuffer=NULL;
+-    }
+ 
++
+     if(stopRequest==AUDIO_DEVICE_STARTED)
+     {
+         stopRequest=AUDIO_DEVICE_STOP_REQ;
+@@ -120,7 +116,13 @@
+             ADM_usleep(1000);
+         }
+     }
++
+     localStop();
++    if(audioBuffer)
++    {
++        delete [] audioBuffer;
++        audioBuffer=NULL;
++    }
+     if(silence) delete [] silence;
+     silence=NULL;
+     stopRequest=AUDIO_DEVICE_STOPPED;
+@@ -146,7 +148,7 @@
+         mutex.unlock();
+         return false;
+     }
+-    
++
+     memcpy(audioBuffer+wrIndex,data,lenInByte);
+     // Reorder channels if needed...
+     uint32_t samples=lenInByte;
+@@ -204,7 +206,7 @@
+     if(samples*_channels*2 &gt; (wrIndex-rdIndex))
+             samples=(wrIndex-rdIndex)/(2*_channels);
+     for(int i=0;i&lt;6;i++) f[i]=0;
+-    if(!samples) 
++    if(!samples)
+     {
+         mutex.unlock();
+         return true;
+@@ -215,7 +217,7 @@
+         for(int chan=0;chan&lt;_channels;chan++)
+         {
+                 f[chan]+=abs(*base++);
+-                
++
+         }
+     mutex.unlock();
+     // Normalize
+@@ -236,7 +238,7 @@
+         CHANNEL_TYPE wanted=output[i];
+         for(int j=0;j&lt;_channels;j++)
+         {
+-            if(chans[j]==wanted) 
++            if(chans[j]==wanted)
+             {
+                 vol[i]=raw[j];
+                 break;
+@@ -244,6 +246,6 @@
+         }
+     }
+     return true;
+-    
++
+ }
+ //**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002942.html">[Avidemux-svn-commit] r5735 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264
+</A></li>
+	<LI>Next message: <A HREF="002944.html">[Avidemux-svn-commit] r5737 -	branches/avidemux_2.6_branch_mean/avidemux/common
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2943">[ date ]</a>
+              <a href="thread.html#2943">[ thread ]</a>
+              <a href="subject.html#2943">[ subject ]</a>
+              <a href="author.html#2943">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,506 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7619 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7619%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062854.A6088481404%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004763.html">
+   <LINK REL="Next"  HREF="004765.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7619 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7619%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf&In-Reply-To=%3C20111028062854.A6088481404%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7619 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Oct 28 08:28:54 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004763.html">[Avidemux-svn-commit] r7618 -	branches/avidemux_2.6_branch_mean/avidemux/gtk
+</A></li>
+        <LI>Next message: <A HREF="004765.html">[Avidemux-svn-commit] r7620 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4764">[ date ]</a>
+              <a href="thread.html#4764">[ thread ]</a>
+              <a href="subject.html#4764">[ subject ]</a>
+              <a href="author.html#4764">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-10-28 08:28:54 +0200 (Fri, 28 Oct 2011)
+New Revision: 7619
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+Log:
+[Asf] Cleanup
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-28 06:28:53 UTC (rev 7618)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfHeaders.cpp	2011-10-28 06:28:54 UTC (rev 7619)
+@@ -23,6 +23,7 @@
+ #include &quot;ADM_asf.h&quot;
+ #include &quot;ADM_asfPacket.h&quot;
+ #include &quot;DIA_working.h&quot;
++#include &quot;ADM_vidMisc.h&quot;
+ 
+ #if 0
+ #define aprintf printf
+@@ -393,7 +394,6 @@
+   _dataStartOffset=ftello(_fd);
+   
+   // Here we go
+-  //DIA_working *working=new DIA_working(&quot;indexing asf&quot;);
+   asfPacket *aPacket=new asfPacket(_fd,_nbPackets,_packetSize,
+                                    &amp;readQueue,_dataStartOffset);
+   uint32_t packet=1;
+@@ -414,13 +414,18 @@
+     while(!readQueue.isEmpty())
+     {
+       asfBit *bit=NULL;
++
++      // update UI
+       uint32_t curPos=(uint32_t)(ftello(_fd)&gt;&gt;10);
+       progressBar-&gt;update(curPos,fileSizeMB);
+       ADM_assert(readQueue.pop((void**)&amp;bit));
++      // --
+       uint64_t dts=bit-&gt;dts;
+       if(bit-&gt;stream==_videoStreamId)
+       {
+-          aprintf(&quot;&gt;found packet of size %d seq %d, while curseq =%d\n&quot;,bit-&gt;len,bit-&gt;sequence,curSeq);
++          printf(&quot;&gt;found packet of size=%d off=%d seq %d, while curseq =%d, dts=%s\n&quot;,
++                        bit-&gt;len,bit-&gt;offset,  bit-&gt;sequence,curSeq,
++                        ADM_us2plain(dts));
+           if(bit-&gt;sequence!=sequence || first==true)
+           {
+             if(first==false)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2011-10-28 06:28:53 UTC (rev 7618)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf/ADM_asfPacket.cpp	2011-10-28 06:28:54 UTC (rev 7619)
+@@ -23,8 +23,8 @@
+ #include &quot;ADM_Video.h&quot;
+ 
+ #include &quot;fourcc.h&quot;
++#include &quot;ADM_vidMisc.h&quot;
+ 
+-
+ #include &quot;ADM_asfPacket.h&quot;
+ 
+ #if 0
+@@ -69,8 +69,9 @@
+    purge();
+    return 1;
+  }
+- /*
+-      Read ASF packet &amp; segments 
++ /**
++    \fn     nextPacket
++    \brief  Read ASF packet &amp; segments 
+  
+     Flags are bitwise OR of:
+    
+@@ -92,25 +93,17 @@
+  */
+ uint8_t   asfPacket::nextPacket(uint8_t streamWanted)
+ {
+-   uint64_t atime;
+-   uint32_t aduration,nbSeg,segType=0x80;
++   uint64_t sendTime;
++   uint32_t aduration,nbSeg,payloadLengthType=0x80;
+    uint32_t sequenceLen,len,streamId;
+    int32_t   packetLen=0;
+    uint32_t  paddingLen;
+-   uint8_t   flags;
++   int   lengthTypeFlags,propertyFlags,multiplePayloadPresent;
++   int sequenceType,sequence,offsetLenType,replicaLenType,streamNumberLenType,mediaObjectNumberLenType;
++   
++
+     
+    packetStart=ftello(_fd);
+-#ifdef ASF_VERBOSE
+-   uint32_t round=packetStart-_startDataOffset;
+-   if(round % pakSize)
+-   {
+-     printf(&quot;[ASF PACKET] we are starting a new packet at 0x%x\n&quot;,packetStart); 
+-     printf(&quot;[ASF PACKET]but data starts at  0x%x\n&quot;,_startDataOffset);
+-     printf(&quot;[ASF PACKET]and offset is not a multiple of length = %d\n&quot;,pakSize);
+-     ADM_assert(0);
+-     
+-   }
+-#endif
+    _offset=0;
+    int r82=read8();
+    if(r82!=0x82) 
+@@ -122,190 +115,139 @@
+    
+    aprintf(&quot;============== New packet ===============\n&quot;);
+    read16();          // Always 0 ????
+-   flags=read8();
+-   segmentId=read8();
++
++    // / end of error correction
++    // Payload parsing information
+    packetLen=0;
+    paddingLen=0;
+-   
+-
++   sequenceType=0;
++   sequenceLen=0;
++   sequence=0;
++   offsetLenType=0;
++   replicaLenType=0;
++   streamNumberLenType=0;
++   mediaObjectNumberLenType=0;
++   lengthTypeFlags=read8();
++   propertyFlags=read8();
++   multiplePayloadPresent=lengthTypeFlags&amp;1;
+    // Read packetLen
+-   packetLen=readVCL(flags&gt;&gt;5,pakSize);
++   packetLen=readVCL(lengthTypeFlags&gt;&gt;5,pakSize);
+    // Sequence len
+-   sequenceLen=readVCL(flags&gt;&gt;1,0);
++   sequenceLen=readVCL(lengthTypeFlags&gt;&gt;1,0);
+    // Read padding size (padding):
+-   paddingLen=readVCL(flags&gt;&gt;3,0);
++   paddingLen=readVCL(lengthTypeFlags&gt;&gt;3,0);
++   //
++   replicaLenType=(propertyFlags&gt;&gt;0)&amp;3;
++   offsetLenType=(propertyFlags&gt;&gt;2)&amp;3;
++   mediaObjectNumberLenType=(propertyFlags&gt;&gt;4)&amp;3;
++   streamNumberLenType=(propertyFlags&gt;&gt;6)&amp;3;
+    
+-   aprintf(&quot;paddingLen :         %d\n&quot;,paddingLen);
+-   
+-// Explicit (absolute) packet size	    
+-   if(((flags&gt;&gt;5)&amp;3))
+-   {
+-     //printf(&quot;## Explicit packet size %d\n&quot;,packetLen);
+-     if(packetLen&gt;pakSize) printf(&quot;**************Len &gt; packet size!! (%d /%d)\n&quot;,packetLen,pakSize);
+-   } 
++   // Send time
++   sendTime=1000*read32(); // Send time (ms)
++   aduration=read16(); // Duration (ms)
++   printf(&quot;:: Time 1 %s\n&quot;,ADM_us2plain(sendTime));
+    if(!packetLen)
+    {
+      // Padding (relative) size
+      packetLen=pakSize-_offset;
+      packetLen=packetLen-paddingLen;
+    }
+-
+-   
+-  
+-   atime=1000*read32(); // Send time (ms)
+-   aduration=read16(); // Duration (ms)
+-   
+-   if(flags &amp;1) // Multiseg
+-   {
+-     uint8_t r=read8();
+-     nbSeg=r&amp;0x3f;
+-     segType=r&gt;&gt;6;
+-   }
+-   else
+-   {
+-     nbSeg=1; 
+-   }
+-#ifdef ASF_VERBOSE   
+-   printf(&quot;-----------------------\n&quot;);
+-   printf(&quot;Flags     :           0X%x&quot;,flags);
+-   
+-   if(flags &amp; 0x40) printf(&quot; Packet Len Specified  &quot;);
+-   if(flags &amp; 0x10) printf(&quot; Padding 16bits &quot;);
+-   if(flags &amp; 0x8) printf(&quot; Padding 8bits &quot;);
+-   if(flags &amp; 0x1) printf(&quot; Multiseg &quot;);
+-   printf(&quot;\n&quot;);
+-   printf(&quot;SegmentId :           %d\n&quot;,segmentId);
+-   printf(&quot;sequenceLen :         %d\n&quot;,sequenceLen);
+-   
+-   
+-   printf(&quot;packetLen :           %d\n&quot;,packetLen);
+-   printf(&quot;Send      :           %d\n&quot;,atime/1000);
+-   printf(&quot;Duration  :           %d\n&quot;,aduration);
+-   printf(&quot;# of seg  :           %d %x\n&quot;,nbSeg,segType);
+-#endif
+-   // Now read Segments....
+-   //
+-   uint32_t sequence, offset,replica,r;
++   int mediaObjectNumber, offset,replica,r;
+    int32_t remaining;
+    uint32_t payloadLen;
+    uint32_t keyframe;
+-   for(int seg=0;seg&lt;nbSeg;seg++)
+-   {
+-     r=read8(); // Read stream Id
+-     if(r&amp;0x80) keyframe=AVI_KEY_FRAME;
+-     else       keyframe=0;
+-     streamId=r&amp;0x7f;
+-     //printf(&quot;&gt;&gt;&gt;&gt;&gt;Stream Id : %x, duration %d ms, send time:%d ms &lt;&lt;&lt;&lt;&lt;\n&quot;,streamId,aduration,atime);
+-     if(r&amp;0x80) 
+-     {
+-       aprintf(&quot;KeyFrame\n&quot;);
+-     }
+-     sequence=readVCL(segmentId&gt;&gt;4,0);
+-     offset=readVCL(segmentId&gt;&gt;2,0);
+-     replica=readVCL(segmentId,0);
+-     aprintf(&quot;replica                %d\n&quot;,replica);
+-     // Skip replica data_len
+-     if(replica&gt;=8) // Grab timestamp
+-     {
+-        uint32_t time1=read32();
+-        
+-        //printf(&quot;Time 1 : %&quot;LU&quot;\n&quot;,time1);
+-         if(replica &gt;= 8+38+4)
+-         {
+-            uint64_t time2;
+-            uint32_t a,b;
+-            skip(10);
+-            a=read32();
+-            b=read32();
+-            time2=b;
+-            time2=a+(time2&lt;&lt;32);
+-            skip(8); 
+-            skip(12);
+-            skip(4);
+-            skip(replica - 8 - 38 - 4);
+-            printf(&quot;Time 2 : %&quot;LLU&quot;\n&quot;,time2);
+-            }else
+-            skip(replica-4);
+-     }
+-      else 
+-        skip(replica);
+-     
+-     payloadLen=0;
+-     if(flags &amp;1)  // multi seg
+-     {
+-       payloadLen=readVCL(segType,0);
+-       if(payloadLen)
+-        aprintf(&quot;##len                    %d\n&quot;,payloadLen);
+-       
+-     }
+-     remaining=pakSize-_offset;
+-     remaining=remaining-paddingLen;
+-     aprintf(&quot;Remaining %d asked %d\n&quot;,remaining,payloadLen);
+-     if(remaining&lt;=0) 
+-     {
+-       printf(&quot;** Err: No data left (%d)\n&quot;,remaining); 
+-     }
+-     if(!payloadLen)
+-     {
+-       payloadLen=remaining;
+-     }
+-     if(remaining&lt;payloadLen)
+-     {
+-       printf(&quot;** WARNING too big %d %d\n&quot;, remaining,packetLen);
+-       payloadLen=remaining;
+-     }
+-#ifdef ASF_VERBOSE     
+-//    if(streamId==1)
++   // Multi payload
++   if(multiplePayloadPresent)
+     {
+-     printf(&quot;StreamId               %d\n&quot;,streamId);
+-     printf(&quot;This segment %d bytes, %d /%d\n&quot;,packetLen,seg,nbSeg);
+-     printf(&quot;Offset                 %d\n&quot;,offset);
+-     printf(&quot;sequence               %d\n&quot;,sequence);
+-     printf(&quot;Grouping               %d\n&quot;,replica==1);
+-     printf(&quot;payloadLen             %d\n&quot;,payloadLen);
+-    }
+-#endif
+-     // Frag
+-     if(replica==1) // Grouping
+-     {
+-       // Each tiny packet starts with 
+-       // 1 byte = packet Len
+-       // Data and we read them until &quot;payloadLen&quot; is comsumed
+-       while(payloadLen&gt;0)
++        uint8_t r=read8();
++        nbSeg=r&amp;0x3f;
++        payloadLengthType=r&gt;&gt;6;
++        printf(&quot;Multiple Payload :%d\n&quot;,(int)nbSeg);
++       // Now read Segments....
++       //
++       for(int seg=0;seg&lt;nbSeg;seg++)
+        {
+-         uint8_t l=read8();
+-         payloadLen--;
+-         if(l&gt;payloadLen)
++         r=read8(); // Read stream Id
++         if(r&amp;0x80) 
+          {
+-           
+-           printf(&quot;oops exceeding %d/%d\n&quot;,l,payloadLen);
+-           if(streamId==streamWanted || streamWanted==0xff)
++            keyframe=AVI_KEY_FRAME;
++            aprintf(&quot;KeyFrame\n&quot;);
++         }
++         else       keyframe=0;
++         streamId=r&amp;0x7f;
++         //printf(&quot;&gt;&gt;&gt;&gt;&gt;Stream Id : %x, duration %d ms, send time:%d ms &lt;&lt;&lt;&lt;&lt;\n&quot;,streamId,aduration,sendTime);
++         mediaObjectNumber=readVCL(mediaObjectNumberLenType,0); // Media object number
++         offset=readVCL(offsetLenType,0);
++         replica=readVCL(replicaLenType,0);
++         if(replica==1) ADM_error(&quot;Replica==1 : Compressed data!\n&quot;);
++         printf(&quot;replica                %d\n&quot;,replica);
++         skip(replica);
++         payloadLen=readVCL(payloadLengthType,0);
++         remaining=pakSize-_offset;
++         remaining=remaining-paddingLen;
++         if(remaining&lt;=0) 
++         {
++           printf(&quot;** Err: No data left (%d)\n&quot;,remaining); 
++         }
++         if(!payloadLen)
++         {
++           payloadLen=remaining;
++         }
++         if(remaining&lt;payloadLen)
++         {
++           printf(&quot;** WARNING too big %d %d\n&quot;, remaining,packetLen);
++           payloadLen=remaining;
++         }
++           // else we read &quot;payloadLen&quot; bytes and put them at offset &quot;offset&quot;
++           if(streamId==streamWanted|| streamWanted==0xff)
+            {
+-             pushPacket(keyframe,currentPacket,offset,sequence,payloadLen,streamId,atime);
+-             atime=ADM_NO_PTS;
+-             
++             pushPacket(keyframe,currentPacket,offset,mediaObjectNumber,payloadLen,streamId,sendTime);   
++             sendTime=ADM_NO_PTS;
+            }else
+-           {
+             skip(payloadLen);
+-           }
+-           break;
++        }
++    }
++   else
++    {  // single payload
++         int r;
++         r=read8(); // Read stream Id
++         if(r&amp;0x80) 
++         {
++            keyframe=AVI_KEY_FRAME;
++            aprintf(&quot;KeyFrame\n&quot;);
+          }
+-         skip(l);
+-         payloadLen-=l;
+-       }
+-       
+-     }else
+-     { // else we read &quot;payloadLen&quot; bytes and put them at offset &quot;offset&quot;
+-       if(streamId==streamWanted|| streamWanted==0xff)
+-       {
+-         pushPacket(keyframe,currentPacket,offset,sequence,payloadLen,streamId,atime);   
+-         atime=ADM_NO_PTS;
+-       }else
+-        skip(payloadLen);
+-       aprintf(&quot;Reading %d bytes\n&quot;,payloadLen);
+-     }
+-     
+-   }
++         else       
++            keyframe=0;
++         streamId=r&amp;0x7f;
++         //printf(&quot;&gt;&gt;&gt;&gt;&gt;Stream Id : %x, duration %d ms, send time:%d ms &lt;&lt;&lt;&lt;&lt;\n&quot;,streamId,aduration,sendTime);
++         mediaObjectNumber=readVCL(mediaObjectNumberLenType,0); // Media object number
++         offset=readVCL(offsetLenType,0);
++         replica=readVCL(replicaLenType,0);
++         printf(&quot;replica                %d\n&quot;,replica);
++         skip(replica);
++         remaining=pakSize-_offset;
++         remaining=remaining-paddingLen;
++         if(remaining&lt;=0) 
++         {
++           printf(&quot;** Err: No data left (%d)\n&quot;,remaining); 
++         }
++         if(!payloadLen)
++         {
++           payloadLen=remaining;
++         }
++         if(remaining&lt;payloadLen)
++         {
++           printf(&quot;** WARNING too big %d %d\n&quot;, remaining,packetLen);
++           payloadLen=remaining;
++         }
++           // else we read &quot;payloadLen&quot; bytes and put them at offset &quot;offset&quot;
++           if(streamId==streamWanted|| streamWanted==0xff)
++           {
++             pushPacket(keyframe,currentPacket,offset,mediaObjectNumber,payloadLen,streamId,sendTime);   
++             sendTime=ADM_NO_PTS;
++           }else
++            skip(payloadLen);
++    }
+    // Do some sanity check
+    if(_offset+paddingLen!=pakSize)
+    {
+@@ -319,8 +261,9 @@
+    return 1;
+   
+  }
+- /*
+-    Push a packet down the queue
++ /**
++    \fn pushPacket
++    \brief     Push a packet down the queue
+     The packet could be a complete one or a fragement
+     To know that, either look at the offset field which will be != for fragements
+     Or look if the sequence number is increasing
+@@ -330,7 +273,8 @@
+  uint8_t asfPacket::pushPacket(uint32_t keyframe,uint32_t packetnb,uint32_t offset,uint32_t sequence,uint32_t payloadLen,uint32_t stream,uint64_t dts)
+  {
+    asfBit *bit=new asfBit;
+-   printf(&quot;Pushing packet stream=%d len=%d seq=%d dts=%d ms\n&quot;,stream,payloadLen,sequence,dts/1000);
++   printf(&quot;Pushing packet stream=%d len=%d offset=%d seq=%d packet=%d dts=%s \n&quot;,
++                stream,payloadLen,offset,sequence,packetnb,ADM_us2plain(dts));
+    bit-&gt;sequence=sequence;
+    bit-&gt;offset=offset;
+    bit-&gt;len=payloadLen;
+@@ -363,7 +307,9 @@
+    }
+    return r;
+  }
+-
++/**
++   \fn skipPacket
++*/
+  uint8_t   asfPacket::skipPacket(void)
+  {
+    uint32_t go;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004763.html">[Avidemux-svn-commit] r7618 -	branches/avidemux_2.6_branch_mean/avidemux/gtk
+</A></li>
+	<LI>Next message: <A HREF="004765.html">[Avidemux-svn-commit] r7620 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Asf
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4764">[ date ]</a>
+              <a href="thread.html#4764">[ thread ]</a>
+              <a href="subject.html#4764">[ subject ]</a>
+              <a href="author.html#4764">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

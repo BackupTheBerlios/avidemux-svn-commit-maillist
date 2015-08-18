@@ -1,0 +1,557 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2956 - in	branches/avidemux_2.4_branch/addons: . mkvscan
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2956%20-%20in%0A%09branches/avidemux_2.4_branch/addons%3A%20.%20mkvscan&In-Reply-To=%3C200704231719.l3NHJjDP016947%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000273.html">
+   <LINK REL="Next"  HREF="000275.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2956 - in	branches/avidemux_2.4_branch/addons: . mkvscan</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2956%20-%20in%0A%09branches/avidemux_2.4_branch/addons%3A%20.%20mkvscan&In-Reply-To=%3C200704231719.l3NHJjDP016947%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2956 - in	branches/avidemux_2.4_branch/addons: . mkvscan">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Apr 23 19:19:45 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000273.html">[Avidemux-svn-commit] r2955 - branches/avidemux_2.4_branch/po
+</A></li>
+        <LI>Next message: <A HREF="000275.html">[Avidemux-svn-commit] r2957 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#274">[ date ]</a>
+              <a href="thread.html#274">[ thread ]</a>
+              <a href="subject.html#274">[ subject ]</a>
+              <a href="author.html#274">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-04-23 19:19:44 +0200 (Mon, 23 Apr 2007)
+New Revision: 2956
+
+Added:
+   branches/avidemux_2.4_branch/addons/mkvscan/
+   branches/avidemux_2.4_branch/addons/mkvscan/Makefile
+   branches/avidemux_2.4_branch/addons/mkvscan/ebml.cpp
+   branches/avidemux_2.4_branch/addons/mkvscan/mkv_c.cpp
+   branches/avidemux_2.4_branch/addons/mkvscan/mkv_tags.cpp
+Log:
+new utility to scan mkv files
+
+Added: branches/avidemux_2.4_branch/addons/mkvscan/Makefile
+===================================================================
+--- branches/avidemux_2.4_branch/addons/mkvscan/Makefile	2007-04-20 20:50:28 UTC (rev 2955)
++++ branches/avidemux_2.4_branch/addons/mkvscan/Makefile	2007-04-23 17:19:44 UTC (rev 2956)
+@@ -0,0 +1,9 @@
++CFLAGS=-g3 -I../../avidemux/ADM_inputs/ADM_matroska
++LDFLAGS=-g
++OBJS=ebml.o mkv_c.o mkv_tags.o
++%.o:%.cpp 
++	$(CXX) -o $@  $&lt; -c $(CFLAGS)
++mkv: $(OBJS)
++	$(CXX) -o $@ $(OBJS) $(LDFLAGS)
++clean:
++	rm $(OBJS) mkv
+
+Added: branches/avidemux_2.4_branch/addons/mkvscan/ebml.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/addons/mkvscan/ebml.cpp	2007-04-20 20:50:28 UTC (rev 2955)
++++ branches/avidemux_2.4_branch/addons/mkvscan/ebml.cpp	2007-04-23 17:19:44 UTC (rev 2956)
+@@ -0,0 +1,231 @@
++/***************************************************************************
++ *   Copyright (C) 2007 by mean,    *
++ *   <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>   *
++ *                                                                         *
++ *        EBML Handling code                                               *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ *   This program is distributed in the hope that it will be useful,       *
++ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
++ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
++ *   GNU General Public License for more details.                          *
++ *                                                                         *
++ *   You should have received a copy of the GNU General Public License     *
++ *   along with this program; if not, write to the                         *
++ *   Free Software Foundation, Inc.,                                       *
++ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
++ ***************************************************************************/
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++#include &lt;stdint.h&gt;
++#include &lt;assert.h&gt;
++#define ADM_assert assert
++#include &quot;ADM_ebml.h&quot;
++#define aprintf(...) {}
++
++/*
++  It is slow , optimize later
++*/  
++
++uint8_t    ADM_ebml::readElemId(uint64_t *code,uint64_t *len)
++{
++  *code=readEBMCode_Full(); // Keep the length-bits, easier to match with documentation
++  *len=readEBMCode();
++  return 1;
++}
++
++/**
++      \fn       readEBMCode
++      \brief    Returns unsigned integer
++*/
++
++uint64_t    ADM_ebml::readEBMCode(void)
++{
++ uint64_t start=readu8();
++  uint64_t val;      
++  uint32_t mask=0x80,outmask=0x7F,more=0;
++  
++  aprintf(&quot;Start :%x at %llx\n&quot;,start,tell()-1);
++  
++  while(!(mask&amp;start))
++  {
++    mask&gt;&gt;=1;
++    ADM_assert(mask);
++    more++; 
++  }
++  outmask=mask-1;
++  start=start&outmask;
++  for(int i=0;i&lt;more;i++)
++  {
++    start=(start&lt;&lt;8)+readu8(); 
++  }
++  aprintf(&quot;End at %llx\n&quot;,tell());
++  return start;
++}
++/**
++      \fn       readEBMCode
++      \brief    Returns unsigned integer
++*/
++
++int64_t    ADM_ebml::readEBMCode_Signed(void)
++{
++  uint8_t start=readu8();
++  int64_t val;      
++  uint32_t mask=0x80,outmask=0x7F,more=0;
++  
++  while(!(mask&amp;start))
++  {
++    mask&gt;&gt;=1;
++    ADM_assert(mask);
++    more++; 
++  }
++  outmask=mask-1;
++  val=start&outmask;
++  for(int i=0;i&lt;more;i++)
++  {
++    val=(val&lt;&lt;8)+readu8(); 
++  }
++  // Signed !
++  //FIXME
++  return val;
++}
++/**
++      \fn       readEBMCode_Full
++      \brief    Returns complete code, including size-bits (used only for EBML_ID)
++*/
++uint64_t    ADM_ebml::readEBMCode_Full(void)
++{
++  uint64_t start=readu8();
++  uint32_t mask=0x80,more=0;
++  aprintf(&quot;&gt;&gt;StartFull :%x at %llx\n&quot;,start,tell()-1);
++  while(!(mask&amp;start))
++  {
++    mask&gt;&gt;=1;
++    ADM_assert(mask);
++    more++; 
++  }
++  for(int i=0;i&lt;more;i++)
++  {
++    start=(start&lt;&lt;8)+readu8(); 
++  }
++  return start;
++}
++
++uint64_t    ADM_ebml::readUnsignedInt(uint32_t nb) 
++{
++  uint64_t val=0;
++  for(int i=0;i&lt;nb;i++)
++  {
++    val=(val&lt;&lt;8)+readu8(); 
++  }
++  return val;
++}
++int64_t    ADM_ebml::readSignedInt(uint32_t nb) 
++{
++  return 0;
++}
++uint8_t     ADM_ebml::readString(char *string, uint32_t maxLen)
++{
++  uint8_t v;
++  while(maxLen--)
++  {
++    v=*string++=readu8();
++    if(!v) return 1;
++  }
++  *string=0;
++  return 1;  
++}
++/******************
++  Low level read
++**********************/
++
++
++uint8_t ADM_ebml::readu8(void)
++{
++  uint8_t v;
++    readBin(&amp;v,1);
++    return v;
++}
++uint16_t ADM_ebml::readu16(void)
++{
++  uint8_t v[2];
++    readBin(v,2);
++    return (uint16_t)(v[0]&lt;&lt;8)+v[1];
++}
++ADM_ebml::ADM_ebml(void)
++{
++  
++}
++ADM_ebml::~ADM_ebml()
++{
++  
++}
++
++
++//*******************************************
++//***********FILE IO PART *******************
++//*******************************************
++ADM_ebml_file::ADM_ebml_file(ADM_ebml_file *father,uint32_t size)
++{
++  _close=0;
++  _size=size;
++  fp=father-&gt;fp;
++   _begin=ftello(fp);
++}
++ADM_ebml_file::ADM_ebml_file(void) : ADM_ebml()
++{
++  
++}
++ADM_ebml_file::~ADM_ebml_file()
++{
++  ADM_assert(fp);
++  if(_close) fclose(fp);
++  else fseeko(fp,_begin+_size,SEEK_SET);
++  fp=NULL; 
++}
++uint8_t ADM_ebml_file::open(const char *name)
++{
++  _close=1;
++  fp=fopen(name,&quot;rb&quot;);
++  if(!fp) 
++  {
++    aprintf(&quot;[EBML FILE] Failed to open &lt;%s&gt;\n&quot;,name);
++    return 0;
++  }
++  fseeko(fp,0,SEEK_END);
++  _begin=0;
++  _size=ftello(fp);
++  fseeko(fp,0,SEEK_SET);
++  return 1;
++}
++uint8_t  ADM_ebml_file::readBin(uint8_t *whereto,uint32_t len)
++{
++  ADM_assert(fp);
++  if(!fread(whereto,len,1,fp)) return 0;
++  return 1;
++}
++
++uint8_t ADM_ebml_file::skip(uint32_t vv)
++{
++  fseeko(fp,vv,SEEK_CUR);
++  return 1; 
++}
++uint64_t ADM_ebml_file::tell(void)
++{
++  return ftello(fp);
++}
++uint8_t ADM_ebml_file::seek(uint64_t pos)
++{
++  fseeko(fp,pos,SEEK_SET);
++  return 1;
++}
++uint8_t ADM_ebml_file::finished(void)
++{
++  if(tell()&gt;(_begin+_size-4)) return 1;
++  return 0; 
++}
++//EOF
+
+Added: branches/avidemux_2.4_branch/addons/mkvscan/mkv_c.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/addons/mkvscan/mkv_c.cpp	2007-04-20 20:50:28 UTC (rev 2955)
++++ branches/avidemux_2.4_branch/addons/mkvscan/mkv_c.cpp	2007-04-23 17:19:44 UTC (rev 2956)
+@@ -0,0 +1,139 @@
++/***************************************************************************
++ *   Copyright (C) 2007 by fx   *
++ *   <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fx at debian64</A>   *
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ *   This program is distributed in the hope that it will be useful,       *
++ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
++ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
++ *   GNU General Public License for more details.                          *
++ *                                                                         *
++ *   You should have received a copy of the GNU General Public License     *
++ *   along with this program; if not, write to the                         *
++ *   Free Software Foundation, Inc.,                                       *
++ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
++ ***************************************************************************/
++
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++#include &lt;stdint.h&gt;
++#include &lt;assert.h&gt;
++#define ADM_assert assert
++#include &quot;ADM_ebml.h&quot;
++#include &quot;mkv_tags.h&quot;
++
++void ADM_mkvWalk(ADM_ebml_file *working, uint32_t size);
++
++int main(int argc, char *argv[])
++{
++  ADM_ebml_file ebml;
++  uint64_t id,len;
++  ADM_MKV_TYPE type;
++  const char *ss;
++  
++  if(!ebml.open(argv[1])) ADM_assert(0);
++  
++  // Read level 1 stuff
++  while(!ebml.finished())
++  {
++      ebml.readElemId(&amp;id,&amp;len);
++      if(!ADM_searchMkvTag( (MKV_ELEM_ID)id,&amp;ss,&amp;type))
++      {
++        printf(&quot;[MKV] Tag 0x%x not found\n&quot;,id);
++        ebml.skip(len);
++        continue;
++      }
++      printf(&quot;Found Tag : %x (%s)\n&quot;,id,ss);
++      if(type==ADM_MKV_TYPE_CONTAINER)
++      {
++        uint64_t w=ebml.tell();
++        ADM_mkvWalk(&amp;ebml,len);
++        ebml.seek(w+len);
++      }else
++        ebml.skip(len);
++  }
++  return 0;
++}
++/**
++
++*/
++#define recTab() for(int pretty=0;pretty&lt;recurse;pretty++) printf(&quot;\t&quot;);
++void ADM_mkvWalk(ADM_ebml_file *working, uint32_t size)
++{
++  uint64_t id,len;
++  ADM_MKV_TYPE type;
++  const char *ss;
++  static int recurse=0;
++  uint64_t pos; 
++  
++  recurse++;
++   ADM_ebml_file son(working,size);
++   while(!son.finished())
++   {
++      pos=son.tell();
++      son.readElemId(&amp;id,&amp;len);
++      if(!ADM_searchMkvTag( (MKV_ELEM_ID)id,&amp;ss,&amp;type))
++      {
++        recTab();printf(&quot;[MKV] Tag 0x%x not found\n&quot;,id);
++        son.skip(len);
++        continue;
++      }
++      recTab();printf(&quot;at 0x%llx, Found Tag : %x (%s) type %d (%s) size %d\n&quot;,pos,id,ss,type,ADM_mkvTypeAsString(type),len);
++      uint32_t val;
++      switch(type)
++      {
++        case ADM_MKV_TYPE_CONTAINER:
++                  //if(id!=MKV_CLUSTER)
++                    ADM_mkvWalk(&amp;son,len);
++                  //else
++                  //    son.skip(len);
++                  break;
++        case ADM_MKV_TYPE_UINTEGER:
++                  val=son.readUnsignedInt(len);
++                  recTab();printf(&quot;\tval uint: %llu (0x%llx) \n&quot;,val,val);
++                  break;
++        case ADM_MKV_TYPE_INTEGER:
++                  recTab();printf(&quot;\tval int: %lld \n&quot;,son.readSignedInt(len));
++                  break;
++        case ADM_MKV_TYPE_STRING:
++        {
++                  char string[len+1];
++                  string[0]=0;
++                  son.readString(string,len);
++                  recTab();printf(&quot;\tval string: &lt;%s&gt; \n&quot;,string);
++                  break;
++        }
++        default:
++                son.skip(len);
++                break;
++      }
++   }
++   recurse--;
++}
++
++void bigHexPrint(uint64_t v)
++{
++  int s=56;
++  int n=0,z;
++  
++  for(int i=0;i&lt;8;i++)
++  {
++    z=(v&gt;&gt;s)&amp;0xff;
++    if(!z &amp;&amp; !n) 
++    {
++      
++    }else
++    {
++      printf(&quot;[%02x]&quot;, (v&gt;&gt;s)&amp;0xff);
++      n=1;
++    }
++    s-=8;
++  }
++  printf(&quot;\n&quot;); 
++}
++//EOF
+
+Added: branches/avidemux_2.4_branch/addons/mkvscan/mkv_tags.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/addons/mkvscan/mkv_tags.cpp	2007-04-20 20:50:28 UTC (rev 2955)
++++ branches/avidemux_2.4_branch/addons/mkvscan/mkv_tags.cpp	2007-04-23 17:19:44 UTC (rev 2956)
+@@ -0,0 +1,80 @@
++/***************************************************************************
++ *   Copyright (C) 2007 by mean,    *
++ *   <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>   *
++ *                                                                         *
++ *        EBML Handling code                                               *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ *   This program is distributed in the hope that it will be useful,       *
++ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
++ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
++ *   GNU General Public License for more details.                          *
++ *                                                                         *
++ *   You should have received a copy of the GNU General Public License     *
++ *   along with this program; if not, write to the                         *
++ *   Free Software Foundation, Inc.,                                       *
++ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
++ ***************************************************************************/
++
++#include &lt;stdio.h&gt;
++#include &lt;stdlib.h&gt;
++#include &lt;stdint.h&gt;
++#include &quot;ADM_ebml.h&quot;
++#include &quot;mkv_tags.h&quot;
++
++
++typedef struct ADM_mkvTagEnum
++{
++    MKV_ELEM_ID   id;
++    ADM_MKV_TYPE  type;
++    const char    *name;
++}ADM_mkvTagEnum;
++#define ADM_BUILD_TAG
++static const ADM_mkvTagEnum mkvTags[]={
++#include &quot;mkv_tagenum.h&quot;
++};
++
++/**
++    \fn ADM_searchMkvTag
++    \brief Search the payload of this ELEM_ID
++*/
++uint8_t ADM_searchMkvTag(MKV_ELEM_ID tag,const char **asString,ADM_MKV_TYPE *type)
++{
++  int full=sizeof(mkvTags)/sizeof(ADM_mkvTagEnum);
++  
++  for(int i=0;i&lt;full;i++)
++  {
++    if(mkvTags[i].id==tag)
++    {
++      *asString=mkvTags[i].name;
++      *type  =mkvTags[i].type;
++      return 1;
++    }
++    
++  }
++  return 0;
++}
++/**
++    \fn ADM_mkvTypeAsString
++    \brief Returns the type as a string
++*/
++const char *ADM_mkvTypeAsString(ADM_MKV_TYPE type)
++{
++#define CONV(x) if(type==x) return #x;
++    CONV(ADM_MKV_TYPE_UNKNOWN)
++    CONV(ADM_MKV_TYPE_CONTAINER)
++    CONV(ADM_MKV_TYPE_STRING)
++    CONV(ADM_MKV_TYPE_UTF8)
++    CONV(ADM_MKV_TYPE_DATE)
++    CONV(ADM_MKV_TYPE_FLOAT)
++    CONV(ADM_MKV_TYPE_UINTEGER)
++    CONV(ADM_MKV_TYPE_INTEGER)
++    CONV(ADM_MKV_TYPE_BINARY)
++        return &quot;unknown type ???&quot;;
++ 
++  
++}
++// EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000273.html">[Avidemux-svn-commit] r2955 - branches/avidemux_2.4_branch/po
+</A></li>
+	<LI>Next message: <A HREF="000275.html">[Avidemux-svn-commit] r2957 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#274">[ date ]</a>
+              <a href="thread.html#274">[ thread ]</a>
+              <a href="subject.html#274">[ subject ]</a>
+              <a href="author.html#274">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

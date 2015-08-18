@@ -1,0 +1,413 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2791 - in	branches/avidemux_2.4_branch/avidemux: . ADM_filter	ADM_userInterfaces/ADM_NONE/ADM_gui2 ADM_userInterfaces/ADM_commonUI
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2791%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%20ADM_filter%0A%09ADM_userInterfaces/ADM_NONE/ADM_gui2%20ADM_userInterfaces/ADM_commonUI&In-Reply-To=%3C200702021929.l12JTIUU008201%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000115.html">
+   <LINK REL="Next"  HREF="000117.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2791 - in	branches/avidemux_2.4_branch/avidemux: . ADM_filter	ADM_userInterfaces/ADM_NONE/ADM_gui2 ADM_userInterfaces/ADM_commonUI</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2791%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%20ADM_filter%0A%09ADM_userInterfaces/ADM_NONE/ADM_gui2%20ADM_userInterfaces/ADM_commonUI&In-Reply-To=%3C200702021929.l12JTIUU008201%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2791 - in	branches/avidemux_2.4_branch/avidemux: . ADM_filter	ADM_userInterfaces/ADM_NONE/ADM_gui2 ADM_userInterfaces/ADM_commonUI">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Feb  2 20:29:18 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000115.html">[Avidemux-svn-commit] r2790 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_NONE/ADM_gui2	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI
+</A></li>
+        <LI>Next message: <A HREF="000117.html">[Avidemux-svn-commit] r2792 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_gui2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#116">[ date ]</a>
+              <a href="thread.html#116">[ thread ]</a>
+              <a href="subject.html#116">[ subject ]</a>
+              <a href="author.html#116">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-02-02 20:29:16 +0100 (Fri, 02 Feb 2007)
+New Revision: 2791
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_filter/filter.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_preview.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_NONE/ADM_gui2/preview_none.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/GUI_render.h
+   branches/avidemux_2.4_branch/avidemux/guiplay.cpp
+Log:
+fix unaccelerated playback
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_filter/filter.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_filter/filter.cpp	2007-02-02 07:57:40 UTC (rev 2790)
++++ branches/avidemux_2.4_branch/avidemux/ADM_filter/filter.cpp	2007-02-02 19:29:16 UTC (rev 2791)
+@@ -29,8 +29,8 @@
+ #include &quot;ADM_video/ADM_genvideo.hxx&quot;
+ #include &quot;ADM_filter/video_filters.h&quot;
+ #include &quot;ADM_video/ADM_vidPartial.h&quot;
++#include &quot;ADM_userInterfaces/ADM_commonUI/GUI_render.h&quot;
+ 
+-
+ #include &quot;ADM_osSupport/ADM_debugID.h&quot;
+ #define MODULE_NAME MODULE_PREVIEW
+ #include &quot;ADM_osSupport/ADM_debug.h&quot;
+@@ -243,23 +243,25 @@
+   		{
+   		 	nb_active_filter=1;
+ 			aprintf(&quot;--preview filter %d\n&quot;,nb_active_filter-1);
++                        admPreview::updateFilters(videofilters[0].filter,videofilters[nb_active_filter-1].filter);
+   		 	return;
+   		}
+   		// Rebuild other filters
+-  		    for(uint32_t i=1;i&lt;nb_active_filter;i++)
+-						{
+-                   		VF_FILTERS tag;
+-                    		AVDMGenericVideoStream *old;
+-                   			old= videofilters[i].filter;
+-                  			tag=videofilters[i].tag;
+-
+-                      	videofilters[i].filter=filterCreateFromTag(tag,
+-                            			videofilters[i].conf,
+-                               			videofilters[i-1].filter);
+-
++                for(uint32_t i=1;i&lt;nb_active_filter;i++)
++                {
++                    VF_FILTERS tag;
++                    AVDMGenericVideoStream *old;
++                            old= videofilters[i].filter;
++                            tag=videofilters[i].tag;
++  
++                            videofilters[i].filter=filterCreateFromTag(tag,
++                                                videofilters[i].conf,
++                                                videofilters[i-1].filter);
+                           delete old;
+-            	}
++                }
+ 		aprintf(&quot;--preview filter %d\n&quot;,nb_active_filter-1);
++                ADM_assert(nb_active_filter);
++                admPreview::updateFilters(videofilters[0].filter,videofilters[nb_active_filter-1].filter);
+ }
+ //
+ //	Create a filter from : its tag, its config and an input stream
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_preview.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_preview.cpp	2007-02-02 07:57:40 UTC (rev 2790)
++++ branches/avidemux_2.4_branch/avidemux/ADM_preview.cpp	2007-02-02 19:29:16 UTC (rev 2791)
+@@ -64,6 +64,7 @@
+ static ADM_PREVIEW_MODE previewMode=ADM_PREVIEW_NONE;
+ static uint32_t _mainW=0,_mainH=0;
+ static uint32_t _displayW=0,_displayH=0;
++static uint32_t defered_display=0;
+ /**
+       \fn getPreviewMode
+       \brief returns current preview mode
+@@ -75,6 +76,9 @@
+ {
+   return previewMode; 
+ }
++
++
++
+ /**
+       \fn setPreviewMode
+       \brief set current preview mode an update UI
+@@ -87,8 +91,16 @@
+   previewMode=mode; 
+   UI_setCurrentPreview( (int)mode);
+ }
++/**
++      \fn deferDisplay
++      \brief Enable or disable defered display
+ 
+-
++*/
++void admPreview::deferDisplay(uint32_t onoff)
++{
++      defered_display=onoff;
++  
++}
+ /**
+       \fn admPreview::start
+       \brief start preview
+@@ -163,6 +175,43 @@
+       }
+ }
+ /**
++      \fn admPreview::updateFilters
++      \brief Signal from filter that the filter chain has been updated
++      @param w : width
++      @param h : height
++*/
++
++void admPreview::updateFilters(AVDMGenericVideoStream *first,AVDMGenericVideoStream *last)
++{
++   switch(previewMode)
++            {
++              case  ADM_PREVIEW_SEPARATE:
++                  preview=last;
++                  break;
++                  /* no break here, not a mistake */
++              case  ADM_PREVIEW_NONE:
++                  break;
++              case  ADM_PREVIEW_OUTPUT:
++                preview=last;
++                break;
++              case  ADM_PREVIEW_SIDE:
++              {
++                  
++                  preview=last;
++                  break;
++              }
++              case  ADM_PREVIEW_TOP:
++              {
++                  
++                  preview=last;
++                  break;
++              }
++              default: ADM_assert(0);
++            }
++  
++}
++
++/**
+       \fn admPreview::setMainDimension
+       \brief Update width &amp; height of input video
+       @param w : width
+@@ -192,27 +241,27 @@
+     switch(previewMode)
+     {
+       case ADM_PREVIEW_NONE:
+-        if(image) renderUpdateImage(image-&gt;data);
++        if(image &amp;&amp; !defered_display) renderUpdateImage(image-&gt;data);
+         break;
+       case ADM_PREVIEW_OUTPUT:
+             if(framenum&lt;=preview-&gt;getInfo()-&gt;nb_frames-1)
+                   {
+                           preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
+-                          renderUpdateImage(previewImage-&gt;data);
++                          if(!defered_display) renderUpdateImage(previewImage-&gt;data);
+                   }
+             break;
+       case ADM_PREVIEW_SEPARATE:
+             ADM_assert(preview);
+             ADM_assert(previewImage);
+ 
+-          if(image) renderUpdateImage(image-&gt;data);
++          if(image &amp;&amp; !defered_display) renderUpdateImage(image-&gt;data);
+           if( GUI_PreviewStillAlive())
+           {
+                   aprintf(&quot;Preview: Ask for frame %lu\n&quot;,framenum);
+                   if(framenum&lt;=preview-&gt;getInfo()-&gt;nb_frames-1)
+                   {
+                           preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
+-                          GUI_PreviewUpdate(previewImage-&gt;data);
++                          if(!defered_display) GUI_PreviewUpdate(previewImage-&gt;data);
+                   }
+           }
+           break;
+@@ -220,8 +269,52 @@
+               ADM_assert(preview);
+               ADM_assert(previewImage);
+   
++              if(!defered_display) renderUpdateImageBlit(image-&gt;data,0,0,_mainW,_mainH,0); // Main
++              preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
++              if(!defered_display) 
++                  renderUpdateImageBlit(previewImage-&gt;data,_mainW,0,previewImage-&gt;_width,previewImage-&gt;_height,1);
++              break;
++        
++      case ADM_PREVIEW_TOP:
++              ADM_assert(preview);
++              ADM_assert(previewImage);
++  
++              if(!defered_display) renderUpdateImageBlit(image-&gt;data,0,0,_mainW,_mainH,0); // Main
++              preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
++              if(!defered_display)
++                  renderUpdateImageBlit(previewImage-&gt;data,0,_mainH,previewImage-&gt;_width,previewImage-&gt;_height,1);
++              break;
++      default: ADM_assert(0);
++    }
++}
++/**
++      \fn displayNow
++      \brief display on screen immediately
++*/
++
++void admPreview::displayNow(uint32_t framenum,ADMImage *image)
++{
++    uint32_t fl,len;	
++
++    switch(previewMode)
++    {
++      case ADM_PREVIEW_NONE:
++        if(image ) renderUpdateImage(image-&gt;data);
++        break;
++      case ADM_PREVIEW_OUTPUT:
++            renderUpdateImage(previewImage-&gt;data);
++            break;
++      case ADM_PREVIEW_SEPARATE:
++          if(image) renderUpdateImage(image-&gt;data);
++          if( GUI_PreviewStillAlive())
++          {
++              GUI_PreviewUpdate(previewImage-&gt;data);
++          }
++          break;
++      case ADM_PREVIEW_SIDE:
++              ADM_assert(preview);
++              ADM_assert(previewImage);
+               renderUpdateImageBlit(image-&gt;data,0,0,_mainW,_mainH,0); // Main
+-              preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
+               renderUpdateImageBlit(previewImage-&gt;data,_mainW,0,previewImage-&gt;_width,previewImage-&gt;_height,1);
+               break;
+         
+@@ -230,7 +323,6 @@
+               ADM_assert(previewImage);
+   
+               renderUpdateImageBlit(image-&gt;data,0,0,_mainW,_mainH,0); // Main
+-              preview-&gt;getFrameNumberNoAlloc(framenum,&amp;len,previewImage,&amp;fl);
+               renderUpdateImageBlit(previewImage-&gt;data,0,_mainH,previewImage-&gt;_width,previewImage-&gt;_height,1);
+               break;
+       default: ADM_assert(0);
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_NONE/ADM_gui2/preview_none.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_NONE/ADM_gui2/preview_none.cpp	2007-02-02 07:57:40 UTC (rev 2790)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_NONE/ADM_gui2/preview_none.cpp	2007-02-02 19:29:16 UTC (rev 2791)
+@@ -7,13 +7,16 @@
+ #include &lt;time.h&gt;
+ #include &lt;sys/time.h&gt;
+ 
+-#include &quot;config.h&quot;
++#include &lt;ADM_assert.h&gt;
+ #include &quot;fourcc.h&quot;
+ #include &quot;avio.hxx&quot;
++#include &quot;ADM_editor/ADM_edit.hxx&quot;
++#include &quot;ADM_video/ADM_genvideo.hxx&quot;
+ 
+-#include &lt;ADM_assert.h&gt;
+ #include &quot;GUI_render.h&quot;
+ 
++
++
+ void GUI_PreviewInit(uint32_t w , uint32_t h, uint32_t modal)
+ {}
+ uint8_t 	GUI_PreviewUpdate(uint8_t *data)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/GUI_render.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/GUI_render.h	2007-02-02 07:57:40 UTC (rev 2790)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/GUI_render.h	2007-02-02 19:29:16 UTC (rev 2791)
+@@ -19,6 +19,8 @@
+ 
+ #include &quot;ADM_image.h&quot;
+ 
++class AVDMGenericVideoStream;
++
+ typedef enum ADM_PREVIEW_MODE
+ {
+     ADM_PREVIEW_NONE, 
+@@ -38,6 +40,9 @@
+       static void start(void);
+       static void stop(void);
+       static void setMainDimension(uint32_t, uint32_t );
++      static void updateFilters(AVDMGenericVideoStream *first,AVDMGenericVideoStream *last);
++      static void deferDisplay(uint32_t onoff);
++      static void displayNow(uint32_t framenum,ADMImage *image);
+   
+ };
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/guiplay.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/guiplay.cpp	2007-02-02 07:57:40 UTC (rev 2790)
++++ branches/avidemux_2.4_branch/avidemux/guiplay.cpp	2007-02-02 19:29:16 UTC (rev 2791)
+@@ -108,8 +108,6 @@
+   uint32_t played_frame=0;
+   uint32_t remaining=avifileinfo-&gt;nb_frames-curframe;
+ 
+-    admPreview::stop();
+-    admPreview::start();
+     
+     if(getPreviewMode()==ADM_PREVIEW_OUTPUT)
+     {
+@@ -119,6 +117,7 @@
+     {
+             filter=getFirstVideoFilter(curframe,remaining );
+     }
++    
+     max=filter-&gt;getInfo()-&gt;nb_frames;
+ 
+     // compute how much a frame lasts in ms
+@@ -149,10 +148,11 @@
+      //renderStartPlaying();
+ // reset timer reference
+     resetTime();
++    admPreview::deferDisplay(1);
+     do
+     {
+         vids++;
+-        admPreview::update(played_frame,buffer);;
++        admPreview::displayNow(played_frame,buffer);;
+         update_status_bar(buffer);
+         if (time_a == 0)
+             time_a = getTime(0);
+@@ -170,6 +170,7 @@
+             printf(&quot;\n cannot read frame!\n&quot;);
+             goto abort_play;
+         }
++        admPreview::update(played_frame+1,buffer);;
+ 	curframe++;
+ 	played_frame++;
+ 
+@@ -221,13 +222,10 @@
+     //____________________________________
+     playing = 0;
+ 	  delete  buffer;
+-
+-	  // renderStopPlaying();
+-	     admPreview::stop();
+-             admPreview::start();
++          
+ 	   getFirstVideoFilter( );
+-	   //video_body-&gt;getUncompressedFrame(curframe, rdr_decomp_buffer,&amp;flags);
+ 	   GUI_getFrame(curframe, rdr_decomp_buffer, &amp;flags);
++           admPreview::deferDisplay(0);
+            admPreview::update(curframe,rdr_decomp_buffer);
+      	   update_status_bar(rdr_decomp_buffer);
+ #ifdef HAVE_AUDIO
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000115.html">[Avidemux-svn-commit] r2790 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_NONE/ADM_gui2	ADM_userInterfaces/ADM_QT4/ADM_gui ADM_userInterfaces/ADM_commonUI
+</A></li>
+	<LI>Next message: <A HREF="000117.html">[Avidemux-svn-commit] r2792 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_gui2
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#116">[ date ]</a>
+              <a href="thread.html#116">[ thread ]</a>
+              <a href="subject.html#116">[ subject ]</a>
+              <a href="author.html#116">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

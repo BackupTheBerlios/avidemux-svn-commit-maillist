@@ -1,0 +1,434 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5432 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5432%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200910301913.n9UJDFEV009698%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002642.html">
+   
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5432 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5432%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor&In-Reply-To=%3C200910301913.n9UJDFEV009698%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5432 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Oct 30 20:13:15 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002642.html">[Avidemux-svn-commit] r5431 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_muxerGate/src
+</A></li>
+        
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2643">[ date ]</a>
+              <a href="thread.html#2643">[ thread ]</a>
+              <a href="subject.html#2643">[ subject ]</a>
+              <a href="author.html#2643">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-10-30 20:13:14 +0100 (Fri, 30 Oct 2009)
+New Revision: 5432
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADMedAVIAUD.cpp
+Log:
+[Editor] Better handling of audio segment switching in copy mode, still no perfect
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-10-29 18:57:56 UTC (rev 5431)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRender.cpp	2009-10-30 19:13:14 UTC (rev 5432)
+@@ -230,8 +230,8 @@
+     vid-&gt;lastSentFrame++;
+     // Need to switch seg ?
+     tail=seg-&gt;_refStartTimeUs+seg-&gt;_durationUs;
+-    if(img-&gt;demuxerDts!= ADM_NO_PTS &amp;&amp; img-&gt;demuxerDts&gt;tail) goto nextSeg;
+-    if(img-&gt;demuxerPts!= ADM_NO_PTS &amp;&amp; img-&gt;demuxerPts&gt;tail) goto nextSeg;
++    if(img-&gt;demuxerDts!= ADM_NO_PTS &amp;&amp; img-&gt;demuxerDts&gt;=tail) goto nextSeg;
++    if(img-&gt;demuxerPts!= ADM_NO_PTS &amp;&amp; img-&gt;demuxerPts&gt;=tail) goto nextSeg;
+     {
+     // Recalibrate PTS &amp; DTS...
+     int64_t offset=seg-&gt;_refStartTimeUs;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2009-10-29 18:57:56 UTC (rev 5431)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edRenderInternal.cpp	2009-10-30 19:13:14 UTC (rev 5432)
+@@ -583,288 +583,4 @@
+     currentFrame=frame;
+     return true;
+ }
+-
+-#if 0
+-
+-/**
+-    \fn decodeCache
+-    \brief Decode an image an update cache
+-    @param ref:index of reference video
+-    @param frame:Frame to decode
+-    @param image where to put the decoded image
+-    @return true if a frame is available
+-*/
+-
+- bool		ADM_Composer::decodeCache(uint32_t ref, uint32_t frame,ADMImage *image)
+-{
+-
+-uint32_t sumit;
+-float	 sum;
+-
+-_VIDEOS *v=_segments.getRefVideo(ref); // FIXME!!!!
+-EditorCache *cache=v-&gt;_videoCache;
+-ADMImage *tmpImage=NULL;
+-uint8_t refOnly=0;
+-uint32_t left,ww;
+-ADMCompressedImage img;
+-
+-        aprintf(&quot;decodeCache : original :%&quot;LD&quot; Frame in ref %&quot;LD&quot;\n&quot;,frame,refOffset);
+-        img.data=compBuffer;
+-        img.cleanup(frame);
+-        // Step 1, retrieve the compressed datas, including PTS &amp; DTS infos
+-         if (!v-&gt;_aviheader-&gt;getFrame (frame,&amp;img))
+-        {
+-          ADM_warning (&quot;Editor: last decoding failed.%&quot;LD&quot;)\n&quot;,   frame );
+-          return 0;
+-        }
+-        ADM_assert(_imageBuffer);
+-
+-        // if len is 0 then take the previous image
+-        //
+-
+-        refOnly=v-&gt;decoder-&gt;dontcopy(); // can we skip one memcpy ?
+-
+-        if(!img.dataLength &amp; refOnly &amp; !frame)      // Size is null = no image and we only got a pointer
+-                                // copy the previous one
+-        {
+-                // First image
+-
+-                uint32_t page=_imageBuffer-&gt;_width*_imageBuffer-&gt;_height;
+-                        memset(YPLANE(image),0,page);
+-                        memset(UPLANE(image),128,page&gt;&gt;2);
+-                        memset(VPLANE(image),128,page&gt;&gt;2);
+-                        if(!frame)
+-                                image-&gt;flags=AVI_KEY_FRAME;
+-                        else
+-                                image-&gt;flags=AVI_P_FRAME;
+-                        image-&gt;_Qp=2;
+-                        image-&gt;_qStride=0;
+-                        return 1;
+-        }
+-
+-        if(refOnly)
+-        {       // This is only an empty Shell
+-                uint32_t w,h;
+-                if(_scratch) // Can we reuse the old scratch memory ?
+-                {
+-                    _scratch-&gt;getWidthHeight(&amp;w,&amp;h);
+-                    if(w!=_imageBuffer-&gt;_width || _imageBuffer-&gt;_height!=h)
+-                    {
+-                        delete _scratch;
+-                        _scratch=NULL;
+-                    }
+-                }
+-                if(!_scratch)
+-                {
+-                  _scratch=new ADMImage(_imageBuffer-&gt;_width,_imageBuffer-&gt;_height,1);
+-                }
+-                tmpImage=_scratch;
+-                ww=_imageBuffer-&gt;_width &amp; 0xfffff0;
+-                left=_imageBuffer-&gt;_width &amp; 0xf;
+-
+-        }
+-        else
+-        {
+-                tmpImage=_imageBuffer;
+-                ww=_imageBuffer-&gt;_width;
+-                left=0;
+-       }
+-	tmpImage-&gt;_colorspace=ADM_COLOR_YV12;
+-	// Do pp, and use imageBuffer as intermediate buffer
+-	if (!v-&gt;decoder-&gt;uncompress (&amp;img, tmpImage))
+-	    {
+-	      ADM_warning (&quot; Last Decoding2 failed for frame %&quot;LU&quot;\n&quot;,frame);
+-	       // Try to dupe previous frame
+-                if(frame)
+-                {
+-                        ADMImage *prev;
+-                        prev=cache-&gt;getImage(frame-1);
+-                        if(prev)
+-                        {
+-                                image-&gt;duplicate(prev);
+-                                cache-&gt;updateFrameNum(image,frame);
+-                                return 1;
+-                        }
+-                }
+-                goto _next;
+-           }
+-
+-        //
+-        if(tmpImage-&gt;_noPicture &amp;&amp; refOnly &amp;&amp; frame)
+-        {
+-                cache-&gt;updateFrameNum(image,0xffffffffU);
+-                return 0;
+-        }
+-	// If not quant and it is already YV12, we can stop here
+-	if((!tmpImage-&gt;quant || !tmpImage-&gt;_qStride) &amp;&amp; tmpImage-&gt;_colorspace==ADM_COLOR_YV12)
+-	{
+-		image-&gt;_Qp=2;
+-		image-&gt;duplicate(tmpImage);
+-		cache-&gt;updateFrameNum(image,frame);
+-          //      if(refOnly) delete tmpImage;
+-		aprintf(&quot;EdCache: No quant avail\n&quot;);
+-		return 1;
+-	}
+-	// We got everything, let's go
+-	// 1 compute average quant
+-	int qz;
+-	sumit=0;
+-        // Dupe infos
+-        image-&gt;copyInfo(tmpImage);
+-
+-
+-        // Do postprocessing if any
+-	for(uint32_t z=0;z&lt;tmpImage-&gt;_qSize;z++)
+-	{
+-            qz=(int)tmpImage-&gt;quant[z];
+-			sumit+=qz;
+-	}
+-	sumit+=(tmpImage-&gt;_qSize-1);
+-//	sumit*=2;
+-	sum=(float)sumit;
+-	sum/=tmpImage-&gt;_qSize;
+-	if(sum&gt;31) sum=31;
+-	if(sum&lt;1) sum=1;
+-
+-        // update average Q
+-	tmpImage-&gt;_Qp=image-&gt;_Qp=(uint32_t)floor(sum);
+-
+-	// Pp deactivated ?
+-	if(!_pp.postProcType || !_pp.postProcStrength || tmpImage-&gt;_colorspace!=ADM_COLOR_YV12)
+-     {
+-        dupe(tmpImage,image,v);
+-		cache-&gt;updateFrameNum(image,frame);
+-               // if(refOnly) delete tmpImage;
+-		aprintf(&quot;EdCache: Postproc disabled\n&quot;);
+-		return 1;
+-	}
+-
+-	int type;
+-	#warning FIXME should be FF_I_TYPE/B/P
+-	if(tmpImage-&gt;flags &amp; AVI_KEY_FRAME) type=1;
+-		else if(tmpImage-&gt;flags &amp; AVI_B_FRAME) type=3;
+-			else type=2;
+-
+-        ADM_assert(tmpImage-&gt;_colorspace==ADM_COLOR_YV12);
+-
+-	// we do postproc !
+-	// keep
+-	uint8_t *oBuff[3];
+-	const uint8_t *iBuff[3];
+-	int	strideTab[3];
+-	int	strideTab2[3];
+-	aviInfo _info;
+-
+-		getVideoInfo(&amp;_info);
+-                if(refOnly)
+-                {
+-                        iBuff[0]= tmpImage-&gt;_planes[0];
+-                        iBuff[1]= tmpImage-&gt;_planes[1];
+-                        iBuff[2]= tmpImage-&gt;_planes[2];
+-
+-                        strideTab2[0]=_info.width;
+-                        strideTab2[1]=_info.width&gt;&gt;1;
+-                        strideTab2[2]=_info.width&gt;&gt;1;
+-
+-                        strideTab[0]=tmpImage-&gt;_planeStride[0];
+-                        strideTab[1]=tmpImage-&gt;_planeStride[1];
+-                        strideTab[2]=tmpImage-&gt;_planeStride[2];
+-
+-                }
+-                else
+-                {
+-		        iBuff[0]= YPLANE((tmpImage));
+-                iBuff[1]= UPLANE((tmpImage));
+-                iBuff[2]= VPLANE((tmpImage));
+-
+-
+-
+-                        strideTab[0]=strideTab2[0]=_info.width;
+-                        strideTab[1]=strideTab2[1]=_info.width&gt;&gt;1;
+-                        strideTab[2]=strideTab2[2]=_info.width&gt;&gt;1;
+-                }
+-                if(_pp.swapuv)
+-                {
+-        	        oBuff[0]= YPLANE(image);
+-                        oBuff[1]= VPLANE(image);
+-                        oBuff[2]= UPLANE(image);
+-                }else
+-                {
+-
+-                        oBuff[0]= YPLANE(image);
+-                        oBuff[1]= UPLANE(image);
+-                        oBuff[2]= VPLANE(image);
+-                }
+-		 pp_postprocess(
+-		 		iBuff,
+-		 		strideTab,
+-		 		oBuff,
+-		 		strideTab2,
+-		 		ww,
+-		        	_info.height,
+-		          	(int8_t *)(tmpImage-&gt;quant),
+-		          	tmpImage-&gt;_qStride,
+-		         	_pp.ppMode,
+-		          	_pp.ppContext,
+-		          	type);			// img type
+-                /*
+-                        If there is a chroma block that needs padding
+-                        (width not multiple of 16) while postprocessing,
+-                        we process up to the nearest 16 multiple and
+-                        just copy luma &amp; chroma info that was left over
+-                */
+-                if(refOnly &amp;&amp; left)
+-                {
+-                        uint8_t *src,*dst;
+-                        uint32_t stridein,strideout,right;
+-                        right=_info.width-left;
+-                        // Luma
+-                        dst=YPLANE(image)+right;
+-                        src=tmpImage-&gt;_planes[0]+right;
+-                        stridein=tmpImage-&gt;_planeStride[0];
+-                        strideout=_info.width;
+-                        for(uint32_t y=_info.height;y&gt;0;y--)
+-                        {
+-                                memcpy(dst,src,left);
+-                                dst+=strideout;
+-                                src+=stridein;
+-                        }
+-                        // Chroma
+-                        left&gt;&gt;=1;
+-                        right&gt;&gt;=1;
+-                        //
+-                        dst=UPLANE(image)+right;
+-                        src=tmpImage-&gt;_planes[1]+right;
+-                        stridein=tmpImage-&gt;_planeStride[1];
+-                        strideout=_info.width&gt;&gt;1;
+-                        for(uint32_t y=_info.height&gt;&gt;1;y&gt;0;y--)
+-                        {
+-                                memcpy(dst,src,left);
+-                                dst+=strideout;
+-                                src+=stridein;
+-                        }
+-                        //
+-                        dst=VPLANE(image)+right;
+-                        src=tmpImage-&gt;_planes[2]+right;
+-                        stridein=tmpImage-&gt;_planeStride[2];
+-                        strideout=_info.width&gt;&gt;1;
+-                        for(uint32_t y=_info.height&gt;&gt;1;y&gt;0;y--)
+-                        {
+-                                memcpy(dst,src,left);
+-                                dst+=strideout;
+-                                src+=stridein;
+-                        }
+-
+-
+-                }
+-_next:
+-        // update some infos
+-        //   if(refOnly) delete tmpImage;
+-		cache-&gt;updateFrameNum(image,frame);
+-		aprintf(&quot;EdCache: Postproc done\n&quot;);
+-		return 1;
+-}
+-#endif
+-
+-
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADMedAVIAUD.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADMedAVIAUD.cpp	2009-10-29 18:57:56 UTC (rev 5431)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADMedAVIAUD.cpp	2009-10-30 19:13:14 UTC (rev 5432)
+@@ -234,11 +234,44 @@
+ */
+ uint8_t ADM_Composer::getPacket(uint8_t  *dest, uint32_t *len,uint32_t sizeMax, uint32_t *samples,uint64_t *odts)
+ {
+-     ADM_audioStreamTrack *trk=getTrack(0);
++        
++    _SEGMENT *seg=_segments.getSegment(_audioSeg);
++    ADM_audioStreamTrack *trk=getTrack(seg-&gt;_reference);
+     if(!trk) return 0;
+-    // Read a packet from stream 0
+-     return trk-&gt;stream-&gt;getPacket(dest,len,sizeMax,samples,odts);
+-    
++    uint64_t off=lastDts-seg-&gt;_startTimeUs;
++   
++    // Read a packet
++zgain:
++    bool r=trk-&gt;stream-&gt;getPacket(dest,len,sizeMax,samples,odts);
++    if(r==false) return false;
++    //
++
++
++    // Rescale odts
++    if(*odts!=ADM_NO_PTS)
++    {
++        if(*odts&lt;seg-&gt;_refStartTimeUs)
++        {
++            ADM_warning(&quot;Audio packet is too early %&quot;LLU&quot; ms, this segment starts at %&quot;LLU&quot;ms\n&quot;,*odts,seg-&gt;_refStartTimeUs);
++            goto zgain;
++        }
++        
++        *odts-=seg-&gt;_refStartTimeUs;
++        if(*odts&gt;seg-&gt;_durationUs)
++        {
++            if(switchToNextAudioSegment()==false)
++            {
++                return false;
++            }
++            goto zgain;
++        }
++        *odts+=seg-&gt;_startTimeUs;
++    }else
++    {
++        *odts=ADM_NO_PTS;
++    }
++    //advanceDtsBySample(*samples);
++    return true;
+ }
+ /**
+     \fn goToTime
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002642.html">[Avidemux-svn-commit] r5431 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_muxerGate/src
+</A></li>
+	
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2643">[ date ]</a>
+              <a href="thread.html#2643">[ thread ]</a>
+              <a href="subject.html#2643">[ subject ]</a>
+              <a href="author.html#2643">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,181 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5510 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5510%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20ADM_editor%0A%09ADM_script&In-Reply-To=%3C200911161906.nAGJ6f12020142%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002720.html">
+   <LINK REL="Next"  HREF="002721.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5510 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5510%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20ADM_editor%0A%09ADM_script&In-Reply-To=%3C200911161906.nAGJ6f12020142%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5510 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Nov 16 20:06:41 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002720.html">[Avidemux-svn-commit] r5509 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+        <LI>Next message: <A HREF="002721.html">[Avidemux-svn-commit] r5511 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2722">[ date ]</a>
+              <a href="thread.html#2722">[ thread ]</a>
+              <a href="subject.html#2722">[ subject ]</a>
+              <a href="author.html#2722">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-11-16 20:06:40 +0100 (Mon, 16 Nov 2009)
+New Revision: 5510
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.h
+Log:
+[JS] Add dumptiming debug helper
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2009-11-16 06:11:58 UTC (rev 5509)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.cpp	2009-11-16 19:06:40 UTC (rev 5510)
+@@ -38,6 +38,7 @@
+ 
+ //#include &quot;ADM_outputfmt.h&quot;
+ #include &quot;ADM_edPtsDts.h&quot;
++#include &quot;ADM_vidMisc.h&quot;
+ 
+ vidHeader *ADM_demuxerSpawn(uint32_t magic,const char *name);
+ 
+@@ -584,6 +585,29 @@
+     _segments.dump();
+     return true;
+ }
++/**
++    \fn dumpTiming
++*/
++bool               ADM_Composer::dumpTiming(void)
++{
++    if(!_segments.getNbRefVideos()) return true;
++    _VIDEOS *v=_segments.getRefVideo(0);
++   
++    aviInfo info;
++    v-&gt;_aviheader-&gt;getVideoInfo(&amp;info);
++    int nb=info.nb_frames;
++    for(int i=0;i&lt;nb;i++)
++    {
++        uint64_t pts,dts;
++        uint32_t flags;
+ 
++            v-&gt;_aviheader-&gt;getFlags(i,&amp;flags);
++            v-&gt;_aviheader-&gt;getPtsDts(i,&amp;pts,&amp;dts);
++            printf(&quot;%&quot;LU&quot; flags:%04&quot;LX&quot; &quot;,i,flags);
++            printf(&quot;pts :%s &quot;,ADM_us2plain(pts));
++            printf(&quot;dts :%s \n&quot;,ADM_us2plain(dts));
++    }
++    return true;
++}
+ //
+ //
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-11-16 06:11:58 UTC (rev 5509)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2009-11-16 19:06:40 UTC (rev 5510)
+@@ -209,6 +209,7 @@
+                     bool                addSegment(uint32_t ref, uint64_t startRef, uint64_t duration);
+                     bool                clearSegment(void);
+                     bool                dumpEditing(void);
++                    bool                dumpTiming(void);
+ /******************************* /Editing **********************************/										
+ /******************************* Misc ************************************/				
+                     uint8_t             setEnv(_ENV_EDITOR_FLAGS newflag);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.cpp	2009-11-16 06:11:58 UTC (rev 5509)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.cpp	2009-11-16 19:06:40 UTC (rev 5510)
+@@ -68,6 +68,7 @@
+ 
+ 
+     { &quot;dumpEditing&quot;, dumpEditing,0,0,0},
++    { &quot;dumpTiming&quot;, dumpTiming,0,0,0},
+ 	{ 0 }
+ };
+ /*********************************/
+@@ -570,6 +571,25 @@
+         return JS_TRUE;
+ }// end PostProcess
+ /**
++    \fn dumpTiming
++    \brief dump segment, video &amp; all
++*/
++JSBool ADM_JSAvidemuxVideo::dumpTiming(JSContext *cx, JSObject *obj, uintN argc, 
++                                       jsval *argv, jsval *rval)
++{// begin PostProcess
++uint32_t info;
++uint32_t frame;
++uint32_t sz;
++        if(argc != 0)
++          return JS_FALSE;
++  
++        enterLock();
++        video_body-&gt;dumpTiming();
++        leaveLock(); 
++        
++        return JS_TRUE;
++}// end PostProcess
++/**
+     \fn A_setVideoCodec
+ */
+ bool A_setVideoCodec(const char *nm)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.h	2009-11-16 06:11:58 UTC (rev 5509)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.h	2009-11-16 19:06:40 UTC (rev 5510)
+@@ -46,6 +46,7 @@
+         static JSBool getFrameSize(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+ 	static JSBool getFrameType(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+ 	static JSBool dumpEditing(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
++	static JSBool dumpTiming(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+ 
+ 
+ 	static JSPropertySpec avidemuxvideo_properties[];
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002720.html">[Avidemux-svn-commit] r5509 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor
+</A></li>
+	<LI>Next message: <A HREF="002721.html">[Avidemux-svn-commit] r5511 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2722">[ date ]</a>
+              <a href="thread.html#2722">[ thread ]</a>
+              <a href="subject.html#2722">[ subject ]</a>
+              <a href="author.html#2722">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

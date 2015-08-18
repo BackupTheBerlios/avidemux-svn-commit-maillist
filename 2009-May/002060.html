@@ -1,0 +1,134 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4837 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4837%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200905161248.n4GCmQpK006073%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002059.html">
+   <LINK REL="Next"  HREF="002061.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4837 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4837%20-%0A%09branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200905161248.n4GCmQpK006073%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4837 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat May 16 14:48:26 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002059.html">[Avidemux-svn-commit] r4836 - in	branches/avidemux_2.6_branch_mean/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_GTK/glade/main
+</A></li>
+        <LI>Next message: <A HREF="002061.html">[Avidemux-svn-commit] r4838 - in	branches/avidemux_2.6_branch_mean/plugins/ADM_muxers: . muxerRaw
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2060">[ date ]</a>
+              <a href="thread.html#2060">[ thread ]</a>
+              <a href="subject.html#2060">[ subject ]</a>
+              <a href="author.html#2060">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-05-16 14:48:26 +0200 (Sat, 16 May 2009)
+New Revision: 4837
+
+Modified:
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+Log:
+[TsIndexer] Add some debug statements
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-05-16 12:48:22 UTC (rev 4836)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-05-16 12:48:26 UTC (rev 4837)
+@@ -42,6 +42,7 @@
+ }
+ #endif
+ 
++#define zprintf(...) {}
+ 
+ static const char Type[5]={'X','I','P','B','D'};
+ 
+@@ -277,7 +278,7 @@
+     pkt-&gt;open(file,append);
+     data.pkt=pkt;
+     fullSize=pkt-&gt;getSize();
+-
++    int lastRefIdc=0;
+     //******************
+     // 1 search SPS
+     //******************
+@@ -329,10 +330,20 @@
+         if(!pkt-&gt;stillOk()) break;
+         uint8_t startCode=pkt-&gt;readi8(); // Read 5 bytes so far
+ //  1:0 2:Nal ref idc 5:Nal Type
+-        if(startCode&amp;0x80) continue; // Marker missing
+-        startCode&amp;=0x1f;
++        if(startCode&amp;0x80) 
++        {
++            printf(&quot;[Ts] Nal Marker missing:%x\n&quot;,startCode);
++            continue; // Marker missing
++        }
++        int fullStartCode=startCode;
++        int ref=(startCode&gt;&gt;5)&amp;3;
++
++        startCode&amp;=0x1f; // Ignore nal ref IDR
++        
++        zprintf(&quot;[%02x] Nal :0x%x,ref=%d,lastRef=%d at : %d \n&quot;,fullStartCode,startCode,ref,lastRefIdc,pkt-&gt;getConsumed()-beginConsuming);
++        
+           // Ignore multiple chunk of the same pic
+-          if((startCode==NAL_NON_IDR || startCode==NAL_IDR)&amp;&amp;pic_started) 
++          if((startCode==NAL_NON_IDR || startCode==NAL_IDR)&amp;&amp;pic_started )  //&amp;&amp; ref==lastRefIdc) 
+           {
+            // aprintf(&quot;Still capturing, ignore\n&quot;);
+             continue;
+@@ -341,6 +352,7 @@
+           switch(startCode)
+                   {
+                   case NAL_SEI:
++                            break;
+                   case NAL_AU_DELIMITER:
+                           pic_started = false;
+                           break;
+@@ -359,6 +371,9 @@
+                   case NAL_NON_IDR:
+                     {
+ #define NON_IDR_PRE_READ 8
++                      zprintf(&quot;Pic start last ref:%d cur ref:%d nb=%d\n&quot;,lastRefIdc,ref,data.nbPics);
++                      lastRefIdc=ref;
++                        
+                       uint8_t bufr[NON_IDR_PRE_READ+4];
+                       uint8_t header[NON_IDR_PRE_READ+4];
+                       GetBitContext s;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002059.html">[Avidemux-svn-commit] r4836 - in	branches/avidemux_2.6_branch_mean/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_gui2	ADM_userInterfaces/ADM_GTK/glade/main
+</A></li>
+	<LI>Next message: <A HREF="002061.html">[Avidemux-svn-commit] r4838 - in	branches/avidemux_2.6_branch_mean/plugins/ADM_muxers: . muxerRaw
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2060">[ date ]</a>
+              <a href="thread.html#2060">[ thread ]</a>
+              <a href="subject.html#2060">[ subject ]</a>
+              <a href="author.html#2060">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

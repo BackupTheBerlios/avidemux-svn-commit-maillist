@@ -1,0 +1,239 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7102 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264:	. qt4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7102%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264%3A%0A%09.%20qt4&In-Reply-To=%3C20110402193013.72467480BED%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004261.html">
+   <LINK REL="Next"  HREF="004263.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7102 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264:	. qt4</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7102%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264%3A%0A%09.%20qt4&In-Reply-To=%3C20110402193013.72467480BED%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7102 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264:	. qt4">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Apr  2 21:30:13 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004261.html">[Avidemux-svn-commit] r7101 -	branches/avidemux_2.6_branch_mean/cmake
+</A></li>
+        <LI>Next message: <A HREF="004263.html">[Avidemux-svn-commit] r7103 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreJson:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4262">[ date ]</a>
+              <a href="thread.html#4262">[ thread ]</a>
+              <a href="subject.html#4262">[ subject ]</a>
+              <a href="author.html#4262">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-04-02 21:30:13 +0200 (Sat, 02 Apr 2011)
+New Revision: 7102
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_json.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4/Q_x264.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp
+Log:
+[x264] Add json support
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp	2011-04-02 19:30:11 UTC (rev 7101)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp	2011-04-02 19:30:13 UTC (rev 7102)
+@@ -31,6 +31,8 @@
+ 
+ #define MMSET(x) memset(&amp;(x),0,sizeof(x))
+ 
++bool  x264_encoder_jserialize(const char *file, const x264_encoder *key);
++
+ x264_encoder x264Settings=
+ {
+    { // General
+@@ -336,7 +338,9 @@
+ extern bool x264_ui(x264_encoder *settings);
+ bool         x264Configure(void)
+ {
+-    return x264_ui(&amp;x264Settings);
++bool r;
++    r=x264_ui(&amp;x264Settings);
++    return r;
+ }
+ // EOF
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/CMakeLists.txt	2011-04-02 19:30:11 UTC (rev 7101)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/CMakeLists.txt	2011-04-02 19:30:13 UTC (rev 7102)
+@@ -5,6 +5,7 @@
+         ADM_x264.cpp
+         ADM_x264Plugin.cpp
+         ADM_x264Setup.cpp
++        x264_encoder_json.cpp
+ )
+ include(admCheckX264)
+ checkX264()
+@@ -19,7 +20,7 @@
+     SET(ADM_ve_x264_QT4_Headers qt4/Q_x264.h)
+     SET(ADM_ve_x264_QT4_UI      qt4/x264ConfigDialog)
+     ADD_VIDEO_ENCODER_QT4(ADM_ve_x264_qt4   ${ADM_ve_x264_QT4_SRCS} ${ADM_ve_x264_QT4_Headers} ${ADM_ve_x264_QT4_UI} ${x264_SRCS})
+-    TARGET_LINK_LIBRARIES(ADM_ve_x264_qt4 x264 )
++    TARGET_LINK_LIBRARIES(ADM_ve_x264_qt4 x264 ADM_coreJSON6)
+     INIT_VIDEO_ENCODER(ADM_ve_x264_qt4)
+     INSTALL_VIDEO_ENCODER(ADM_ve_x264_qt4)
+   endif(DO_QT4)
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4/Q_x264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4/Q_x264.cpp	2011-04-02 19:30:11 UTC (rev 7101)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/qt4/Q_x264.cpp	2011-04-02 19:30:13 UTC (rev 7102)
+@@ -14,6 +14,7 @@
+ #include &quot;Q_x264.h&quot;
+ 
+ static x264_encoder myCopy; // ugly...
++extern bool  x264_encoder_jserialize(const char *file, const x264_encoder *key);
+ 
+ /**
+     \fn x264_ui
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.h	2011-04-02 19:30:11 UTC (rev 7101)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.h	2011-04-02 19:30:13 UTC (rev 7102)
+@@ -1,4 +1,3 @@
+-// automatically generated by admSerialization.py, do not edit!
+ // automatically generated by admSerialization.py do not edit
+ #ifndef ADM_x264_encoder_CONF_H
+ #define ADM_x264_encoder_CONF_H
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp	2011-04-02 19:30:11 UTC (rev 7101)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp	2011-04-02 19:30:13 UTC (rev 7102)
+@@ -1,3 +1,4 @@
++// automatically generated by admSerialization.py, do not edit!
+ const ADM_paramList x264_encoder_param[]={
+  {&quot;general.params&quot;,offsetof(x264_encoder,general.params),&quot;COMPRES_PARAMS&quot;,ADM_param_video_encode},
+  {&quot;general.threads&quot;,offsetof(x264_encoder,general.threads),&quot;uint32_t&quot;,ADM_param_uint32_t},
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_json.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_json.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_json.cpp	2011-04-02 19:30:13 UTC (rev 7102)
+@@ -0,0 +1,77 @@
++// automatically generated by admSerialization.py, do not edit!
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_paramList.h&quot;
++#include &quot;ADM_coreJson/include/ADM_coreJson.h&quot;
++#include &quot;x264_encoder.h&quot;
++extern const ADM_paramList x264_encoder_param[];
++bool  x264_encoder_jserialize(const char *file, const x264_encoder *key){
++admJson json;
++json.addNode(&quot;general&quot;);
++json.addCompressParam(&quot;params&quot;,key-&gt;general.params);
++json.addUint32(&quot;threads&quot;,key-&gt;general.threads);
++json.endNode();
++json.addUint32(&quot;level&quot;,key-&gt;level);
++json.addNode(&quot;vui&quot;);
++json.addUint32(&quot;sar_height&quot;,key-&gt;vui.sar_height);
++json.addUint32(&quot;sar_width&quot;,key-&gt;vui.sar_width);
++json.endNode();
++json.addUint32(&quot;MaxRefFrames&quot;,key-&gt;MaxRefFrames);
++json.addUint32(&quot;MinIdr&quot;,key-&gt;MinIdr);
++json.addUint32(&quot;MaxIdr&quot;,key-&gt;MaxIdr);
++json.addUint32(&quot;MaxBFrame&quot;,key-&gt;MaxBFrame);
++json.addUint32(&quot;i_bframe_adaptative&quot;,key-&gt;i_bframe_adaptative);
++json.addUint32(&quot;i_bframe_bias&quot;,key-&gt;i_bframe_bias);
++json.addUint32(&quot;i_bframe_pyramid&quot;,key-&gt;i_bframe_pyramid);
++json.addBool(&quot;b_deblocking_filter&quot;,key-&gt;b_deblocking_filter);
++json.addInt32(&quot;i_deblocking_filter_alphac0&quot;,key-&gt;i_deblocking_filter_alphac0);
++json.addInt32(&quot;i_deblocking_filter_beta&quot;,key-&gt;i_deblocking_filter_beta);
++json.addBool(&quot;cabac&quot;,key-&gt;cabac);
++json.addBool(&quot;interlaced&quot;,key-&gt;interlaced);
++json.addNode(&quot;analyze&quot;);
++json.addBool(&quot;b_8x8&quot;,key-&gt;analyze.b_8x8);
++json.addBool(&quot;b_i4x4&quot;,key-&gt;analyze.b_i4x4);
++json.addBool(&quot;b_i8x8&quot;,key-&gt;analyze.b_i8x8);
++json.addBool(&quot;b_p8x8&quot;,key-&gt;analyze.b_p8x8);
++json.addBool(&quot;b_p16x16&quot;,key-&gt;analyze.b_p16x16);
++json.addBool(&quot;b_b16x16&quot;,key-&gt;analyze.b_b16x16);
++json.addUint32(&quot;weighted_pred&quot;,key-&gt;analyze.weighted_pred);
++json.addBool(&quot;weighted_bipred&quot;,key-&gt;analyze.weighted_bipred);
++json.addUint32(&quot;direct_mv_pred&quot;,key-&gt;analyze.direct_mv_pred);
++json.addUint32(&quot;chroma_offset&quot;,key-&gt;analyze.chroma_offset);
++json.addUint32(&quot;me_method&quot;,key-&gt;analyze.me_method);
++json.addUint32(&quot;subpel_refine&quot;,key-&gt;analyze.subpel_refine);
++json.addBool(&quot;chroma_me&quot;,key-&gt;analyze.chroma_me);
++json.addBool(&quot;mixed_references&quot;,key-&gt;analyze.mixed_references);
++json.addUint32(&quot;trellis&quot;,key-&gt;analyze.trellis);
++json.addBool(&quot;fast_pskip&quot;,key-&gt;analyze.fast_pskip);
++json.addBool(&quot;dct_decimate&quot;,key-&gt;analyze.dct_decimate);
++json.addUint32(&quot;noise_reduction&quot;,key-&gt;analyze.noise_reduction);
++json.addBool(&quot;psy&quot;,key-&gt;analyze.psy);
++json.endNode();
++json.addNode(&quot;ratecontrol&quot;);
++json.addUint32(&quot;rc_method&quot;,key-&gt;ratecontrol.rc_method);
++json.addUint32(&quot;qp_constant&quot;,key-&gt;ratecontrol.qp_constant);
++json.addUint32(&quot;qp_min&quot;,key-&gt;ratecontrol.qp_min);
++json.addUint32(&quot;qp_max&quot;,key-&gt;ratecontrol.qp_max);
++json.addUint32(&quot;qp_step&quot;,key-&gt;ratecontrol.qp_step);
++json.addUint32(&quot;bitrate&quot;,key-&gt;ratecontrol.bitrate);
++json.addUint32(&quot;vbv_max_bitrate&quot;,key-&gt;ratecontrol.vbv_max_bitrate);
++json.addUint32(&quot;vbv_buffer_size&quot;,key-&gt;ratecontrol.vbv_buffer_size);
++json.addUint32(&quot;vbv_buffer_init&quot;,key-&gt;ratecontrol.vbv_buffer_init);
++json.addFloat(&quot;ip_factor&quot;,key-&gt;ratecontrol.ip_factor);
++json.addFloat(&quot;pb_factor&quot;,key-&gt;ratecontrol.pb_factor);
++json.addUint32(&quot;aq_mode&quot;,key-&gt;ratecontrol.aq_mode);
++json.addFloat(&quot;aq_strength&quot;,key-&gt;ratecontrol.aq_strength);
++json.addBool(&quot;mb_tree&quot;,key-&gt;ratecontrol.mb_tree);
++json.addUint32(&quot;lookahead&quot;,key-&gt;ratecontrol.lookahead);
++json.endNode();
++return json.dumpToFile(file);
++};
++bool  x264_encoder_jdeserialize(const char *file, ADM_paramList *tmpl,x264_encoder *key){
++admJson json;
++CONFcouple *c=json.readFromFile(file);
++if(!c) {ADM_error(&quot;Cannot read json file&quot;);return false;}
++bool r= ADM_paramLoadPartial(c,tmpl,key);
++delete c;
++return r;
++};
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004261.html">[Avidemux-svn-commit] r7101 -	branches/avidemux_2.6_branch_mean/cmake
+</A></li>
+	<LI>Next message: <A HREF="004263.html">[Avidemux-svn-commit] r7103 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreJson:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4262">[ date ]</a>
+              <a href="thread.html#4262">[ thread ]</a>
+              <a href="subject.html#4262">[ subject ]</a>
+              <a href="author.html#4262">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

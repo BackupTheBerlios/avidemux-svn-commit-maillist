@@ -1,0 +1,547 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3401 - in	branches/avidemux_2.4_branch/avidemux: . ADM_audiodevice
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3401%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%20ADM_audiodevice&In-Reply-To=%3C200707170224.l6H2OqbF024593%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000676.html">
+   <LINK REL="Next"  HREF="000678.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3401 - in	branches/avidemux_2.4_branch/avidemux: . ADM_audiodevice</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3401%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%20ADM_audiodevice&In-Reply-To=%3C200707170224.l6H2OqbF024593%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3401 - in	branches/avidemux_2.4_branch/avidemux: . ADM_audiodevice">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Jul 17 04:24:52 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000676.html">[Avidemux-svn-commit] r3400 - in	branches/avidemux_2.4_branch/avidemux/ADM_libraries:	ADM_lavcodec ADM_lavutil
+</A></li>
+        <LI>Next message: <A HREF="000678.html">[Avidemux-svn-commit] r3402 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#677">[ date ]</a>
+              <a href="thread.html#677">[ thread ]</a>
+              <a href="subject.html#677">[ subject ]</a>
+              <a href="author.html#677">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2007-07-17 04:24:45 +0200 (Tue, 17 Jul 2007)
+New Revision: 3401
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceWin32.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceWin32.h
+   branches/avidemux_2.4_branch/avidemux/guiplay.cpp
+Log:
+re-engineer Win32 audio device to fix memory leak (large leak every time audio was played)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceWin32.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceWin32.cpp	2007-07-16 21:44:22 UTC (rev 3400)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceWin32.cpp	2007-07-17 02:24:45 UTC (rev 3401)
+@@ -2,283 +2,180 @@
+ // C++ Implementation: ADM_deviceWin32
+ //
+ // Description: 
+-//
+-//
+-// Author: mean &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>&gt;, (C) 2004
+-//
+-// Copyright: See COPYING file that comes with this distribution
+-//
+-//
+-//
+ // C++ Implementation: ADM_deviceWin32
+ // Use MM layer to output sound
+ //
+-// Description: 
+-//
+-//
+ // Author: mean &lt;<A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>&gt;, (C) 2004
+ //
+ // Copyright: See COPYING file that comes with this distribution
+ //
+-//
+ 
+ #include &quot;config.h&quot;
+-#ifdef ADM_WIN32
+ 
++#ifdef ADM_WIN32
+ #include &lt;stdio.h&gt;
+ #include &lt;stdlib.h&gt;
+-#include &lt;string.h&gt;
+-
+ #include &lt;errno.h&gt;
++#include &lt;windows.h&gt;
+ 
+-
+-
+-  
+ #include &quot;fourcc.h&quot; 
+- 
+-
+-#include &quot;windows.h&quot;
+-#include &quot;winbase.h&quot;
+-
+-
+-#include &quot;ADM_toolkit/toolkit.hxx&quot;
+-#include &lt;ADM_assert.h&gt;
++#include &quot;ADM_assert.h&quot;
+ #include &quot;ADM_audiodevice.h&quot;
+ #include &quot;ADM_audiodevice/ADM_deviceWin32.h&quot;
+-#include &quot;ADM_osSupport/ADM_debugID.h&quot;
++
+ #define MODULE_NAME  MODULE_ADEVICE
++#include &quot;ADM_osSupport/ADM_debugID.h&quot;
+ #include &quot;ADM_osSupport/ADM_debug.h&quot;
+ 
+-#define BUCKET_SIZE 25000*4   // 1 sec
+-#define NB_BUCKET 30
++#define BUCKET_SIZE 16384
++#define NB_BUCKET 8
+ 
+-typedef struct audioBucket
+-{
+-    int         fre;
+-    WAVEHDR     hdr;
+-}audioBucket;
+-static void CALLBACK waveOutProc(
+-  HWAVEOUT hwo,      
+-  UINT uMsg,         
+-  DWORD_PTR dwInstance,  
+-  DWORD dwParam1,    
+-  DWORD dwParam2     
+-);
+-static HWAVEOUT  myDevice;
+-static MMRESULT    myError;
+-static void 	handleMM(MMRESULT  err);
+-static int      first=0;
++static HWAVEOUT myDevice;
++static MMRESULT myError;
+ 
+-audioBucket buckets[NB_BUCKET];	
+-//_______________________________________________
+-//
+-//_______________________________________________
++static void handleMM(MMRESULT err);
+ 
++WAVEHDR waveHdr[NB_BUCKET];	
+ 
+-//_______________________________________________
+-//
+-//_______________________________________________
+-
+ win32AudioDevice::win32AudioDevice(void) 
+ {
+-	printf(&quot;Creating SDL Audio device\n&quot;);
++	printf(&quot;[Win32] Creating audio device\n&quot;);
+ 	_inUse=0;
+-	first=0;
+-	memset(buckets,0,sizeof(buckets));
+-	
+ }
+-//_______________________________________________
+-//
+-//_______________________________________________
+-uint8_t  win32AudioDevice::stop(void) 
++
++uint8_t win32AudioDevice::stop(void) 
+ {
+-    if(!_inUse) return 0;  	
+-	printf(&quot;Closing win32 audio\n&quot;);
+-	 waveOutPause(  myDevice);
+-	 myError=waveOutClose(myDevice);
+-	 first=0;
+-	 if(MMSYSERR_NOERROR!= myError)
+-	 {
+-	 	printf(&quot;Close failed\n&quot;);
+-	 	handleMM(myError);
++	if (!_inUse)
+ 		return 0;
+-	 }
+-	
+-	_inUse=0;    	
+-	for(uint32_t i=0;i&lt;NB_BUCKET;i++)
++
++	printf(&quot;[Win32] Closing audio\n&quot;);
++
++	waveOutReset(myDevice);		
++
++	for (uint32_t i = 0; i &lt; NB_BUCKET; i++)
++		waveOutUnprepareHeader(myDevice, &amp;waveHdr[i], sizeof(WAVEHDR));
++
++	myError = waveOutClose(myDevice);
++
++	if (myError != MMSYSERR_NOERROR)
+ 	{
+-		 delete []    buckets[i].hdr.lpData;
++		printf(&quot;[Win32] Close failed %d\n&quot;, myError);
++		handleMM(myError);
++		return 0;
+ 	}
++
++	for (uint32_t i = 0; i &lt; NB_BUCKET; i++)
++		delete[] waveHdr[i].lpData;
++
++	_inUse=0;
++	myDevice = NULL;
++
+ 	return 1;
+ }
+ 
+-//_______________________________________________
+-//
+-//
+-//_______________________________________________
+ uint8_t win32AudioDevice::init(uint8_t channels, uint32_t fq) 
+ {
+-WAVEFORMATEX wav;
+-		
++	printf(&quot;[Win32] Opening Audio, fq=%d\n&quot;,fq);
++
++	if (_inUse) 
++	{
++		printf(&quot;[Win32] Already running?\n&quot;);
++		return 0;
++	}
++
++	_inUse = 1;
+ 	_channels = channels;
+ 
+-		printf(&quot;Opening Win32 Audio, fq=%d\n&quot;,fq);
++	WAVEFORMATEX wav;
+ 
+-		if(_inUse) 
+-		{
+-			printf(&quot;Already running ?\n&quot;);
+-			return 1; // ???
+-		}
+-		first=0;
+-/*
+-	WORD wFormatTag;
+-	WORD nChannels;
+-	DWORD nSamplesPerSec;
+-	DWORD nAvgBytesPerSec;
+-	WORD nBlockAlign;
+-	WORD wBitsPerSample;
+-	WORD cbSize;
+-*/		
+-		memset(&amp;wav,0,sizeof(wav));
+-		
+-		wav.wFormatTag=WAVE_FORMAT_PCM;
+-		wav.nSamplesPerSec=fq;
+-		wav.nChannels=channels;
+-		wav.nBlockAlign=2*channels;
+-		wav.nAvgBytesPerSec=2*channels*fq;		
+-		wav.wBitsPerSample=16;
+-		
+-		myError=waveOutOpen(&amp;myDevice,WAVE_MAPPER,
+-  
+-  				&amp;wav,	//L pwfx,      
+-  				(DWORD_PTR)waveOutProc , //0, //DWORD_PTR      dwCallback,
+-  				0,	//DWORD_PTR      dwCallbackInstance,
+-  				CALLBACK_FUNCTION //CALLBACK_NULL //WAVE_MAPPED //DWORD          fdwOpen    
+-			);
+-		if(MMSYSERR_NOERROR!=myError )
+-			{
+-				printf(&quot;WavoutOpen failed\n&quot;);
+-			 	handleMM(myError);
+-				return 0;
+-			}
+-    WAVEHDR *hdr;
+-			
+-	for(uint32_t i=0;i&lt;NB_BUCKET;i++)
++	memset(&amp;wav, 0, sizeof(WAVEFORMATEX));
++
++	wav.wFormatTag = WAVE_FORMAT_PCM;
++	wav.nSamplesPerSec = fq;
++	wav.nChannels = channels;
++	wav.nBlockAlign = 2 * channels;
++	wav.nAvgBytesPerSec = 2 * channels * fq;
++	wav.wBitsPerSample = 16;
++
++	myError = waveOutOpen(&amp;myDevice, WAVE_MAPPER, &amp;wav, NULL, NULL, CALLBACK_NULL);
++
++	if (MMSYSERR_NOERROR != myError)
+ 	{
+-		 buckets[i].fre=1;
+-		 hdr=&amp;(buckets[i].hdr);
+-		 waveOutPrepareHeader(myDevice,hdr,sizeof(*hdr));	
+-         hdr-&gt;lpData=(CHAR *)new uint8_t [BUCKET_SIZE];
+-         hdr-&gt;dwBufferLength=0;
++		printf(&quot;[Win32] waveOutOpen failed\n&quot;);
++		handleMM(myError);
++		return 0;
+ 	}
+ 
+-	
+-    return 1;
++	for (uint32_t i = 0; i &lt; NB_BUCKET; i++)
++	{
++		memset(&amp;waveHdr[i], 0, sizeof(WAVEHDR));
++
++		waveHdr[i].lpData = (char*)new uint8_t[BUCKET_SIZE];
++
++		if (waveOutPrepareHeader(myDevice, &amp;waveHdr[i], sizeof(WAVEHDR)) != MMSYSERR_NOERROR)
++			printf(&quot;[Win32] waveOutPrepareHeader error\n&quot;);
++
++		if (waveOutWrite(myDevice, &amp;waveHdr[i], sizeof(WAVEHDR)) != MMSYSERR_NOERROR)
++			printf(&quot;[Win32] waveOutWrite error\n&quot;);
++	}
++
++	return 1;
+ }
+ 
+ uint8_t  win32AudioDevice::setVolume(int volume) 
+ {
+-    DWORD value;
++	uint32_t value;
+ 
+-    value = (0xffff * volume) / 100;
+-    value = value + (value &lt;&lt; 16);
++	value = (0xffff * volume) / 100;
++	value = value + (value &lt;&lt; 16);
+ 
+-    waveOutSetVolume(myDevice, value);
++	waveOutSetVolume(myDevice, value);
+ 
+ 	return 1;
+ }
+-//_______________________________________________
+-//
+-//
+-//_______________________________________________
+-uint8_t win32AudioDevice::play(uint32_t len, float *data)
+- {
+- uint32_t av=0;
+-	WAVEHDR *hdr;
+ 
+-	dither16(data, len, _channels);
+-	len = len * 2;
+-   ADM_assert(len&lt;BUCKET_SIZE);
+-   // First do clean up
+-#if 0   
+-      for(uint32_t i=0;i&lt;NB_BUCKET;i++)
+-      {
+-            if(!buckets[i].fre)
+-            {
+-                        if(buckets[i].hdr.dwFlags &amp; WHDR_DONE)
+-                        {
+-                                                buckets[i].fre=1;
+-                                                buckets[i].hdr.dwFlags=0; 
+-                                                printf(&quot;Freeing buffer %d  \n&quot;,i);   
+-                                                av++;                                            
+-                        }            
+-            }
+-            else
+-                        av++;
+-      }
+-      printf(&quot;Free buffer:%d %d\n&quot;,av,NB_BUCKET);
+-#endif      
+-      // look up a free buffer
+-      
+-   for(uint32_t i=0;i&lt;NB_BUCKET;i++)
+-   {
+-      if(buckets[i].fre)
+-      {
+-            memcpy(buckets[i].hdr.lpData,data,len);
+-            buckets[i].hdr.dwBufferLength=len;
+-            buckets[i].fre=0;
+-            hdr=&amp;(buckets[i].hdr);
+-            myError=waveOutWrite(
+-  					myDevice, //HWAVEOUT hwo,  
+-  					hdr, //LPWAVEHDR pwh, 
+-  					sizeof(*hdr) //UINT cbwh      
+-			  					);
+-			if( MMSYSERR_NOERROR!=myError)
+-			{
+-			    handleMM(myError);
+-			    return 0;
+-			}
+-			return 1;
+-      }
+-      
+-   
+-   }
+-    printf(&quot;All buckets full !\n&quot;);
+-	return 0;
+-}
+-void CALLBACK waveOutProc(
+-  HWAVEOUT hwo,      
+-  UINT uMsg,         
+-  DWORD_PTR dwInstance,  
+-  DWORD dwParam1,    
+-  DWORD dwParam2     
+-)
++uint8_t win32AudioDevice::play(uint32_t len, float *data)
+ {
+-    if(uMsg==WOM_DONE)
+-    {
++	dither16(data, len, _channels);
++	len *= 2;
++	uint8_t success = 0;
+ 
+-        audioBucket *bucket;
+-                        bucket=(audioBucket *)(dwParam1-sizeof(int));
+-                        bucket-&gt;fre=1;
+-    }
++	for (uint32_t i = 0; i &lt; NB_BUCKET; i++)
++	{
++		if (waveHdr[i].dwFlags &amp; WHDR_DONE)
++		{
++			waveHdr[i].dwFlags &amp;= ~WHDR_DONE;
+ 
++			if (len &gt; BUCKET_SIZE)
++				waveHdr[i].dwBufferLength = BUCKET_SIZE;
++			else
++				waveHdr[i].dwBufferLength = len;
++
++			memcpy(waveHdr[i].lpData, data, waveHdr[i].dwBufferLength);
++			data += waveHdr[i].dwBufferLength;
++			len -= waveHdr[i].dwBufferLength;
++
++			if (waveOutWrite(myDevice, &amp;waveHdr[i], sizeof(WAVEHDR)) == MMSYSERR_NOERROR)
++				success = 1;
++			else
++				break;
++		}
++
++		if (len == 0)
++			break;
++	}
++
++	return success;
+ }
+-void 	handleMM(MMRESULT  err)
++
++void handleMM(MMRESULT err)
+ {
+- #define ERMM(x) if(err==x) printf(#x&quot;\n&quot;);
+-    ERMM(MMSYSERR_ALLOCATED);
+-    ERMM(MMSYSERR_BADDEVICEID);
+-    ERMM(MMSYSERR_NODRIVER);
+-    ERMM(WAVERR_BADFORMAT);
+-    ERMM(WAVERR_SYNC);
+-    
++#define ERMM(x) if(err==x) printf(&quot;[Win32] &quot;#x&quot;\n&quot;);
+ 
++	ERMM(MMSYSERR_ALLOCATED);
++	ERMM(MMSYSERR_BADDEVICEID);
++	ERMM(MMSYSERR_NODRIVER);
++	ERMM(WAVERR_BADFORMAT);
++	ERMM(WAVERR_SYNC);
+ }
+-#else
+-void dummy_as_funcZ( void);
+-void dummy_as_funcY( void)
+- {
+-}
+-
+ #endif
+-
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceWin32.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceWin32.h	2007-07-16 21:44:22 UTC (rev 3400)
++++ branches/avidemux_2.4_branch/avidemux/ADM_audiodevice/ADM_deviceWin32.h	2007-07-17 02:24:45 UTC (rev 3401)
+@@ -10,16 +10,17 @@
+ //
+ //
+ #ifdef ADM_WIN32
+-	        class win32AudioDevice : public audioDevice
+-	 {
+-		 protected :
+-					uint8_t				_inUse;
+-		  public:
+-		  				win32AudioDevice(void);
+-		     		virtual uint8_t init(uint8_t channels, uint32_t fq);
+-	    			virtual uint8_t play(uint32_t len, float *data);
+-		      		virtual uint8_t stop(void);
+-		      		virtual uint8_t setVolume(int volume);
+-		 }     ;
+ 
++class win32AudioDevice : public audioDevice
++{
++protected:
++	uint8_t	_inUse;
++public:
++	win32AudioDevice(void);
++	virtual uint8_t init(uint8_t channels, uint32_t fq);
++	virtual uint8_t play(uint32_t len, float *data);
++	virtual uint8_t stop(void);
++	virtual uint8_t setVolume(int volume);
++};
++
+ #endif
+
+Modified: branches/avidemux_2.4_branch/avidemux/guiplay.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/guiplay.cpp	2007-07-16 21:44:22 UTC (rev 3400)
++++ branches/avidemux_2.4_branch/avidemux/guiplay.cpp	2007-07-17 02:24:45 UTC (rev 3401)
+@@ -60,9 +60,6 @@
+ extern void UI_purge(void);
+ #define EVEN(x) (x&amp;0xffffffe)
+ 
+- 
+-
+- extern uint8_t GUI_getFrame(uint32_t frameno,  uint32_t *flags);
+ //___________________________________
+ uint8_t stop_req;
+ static int called = 0;
+@@ -217,10 +214,9 @@
+     // go back to normal display mode
+     //____________________________________
+     playing = 0;
+-    uint32_t f;
+           
+ 	   getFirstVideoFilter( );
+-	   //GUI_getFrame(curframe,&amp;f);
++
+            admPreview::deferDisplay(0,0);
+            UI_purge();
+            // Updated by expose ? 
+@@ -351,7 +347,7 @@
+     channels= playback-&gt;getInfo()-&gt;channels;
+     one_audio_frame = (one_frame * wavinfo-&gt;frequency * channels);	// 1000 *nb audio bytes per ms
+     one_audio_frame /= 1000; // In elemtary info (float)
+-    printf(&quot;\n 1 audio frame = %lu bytes (1)&quot;, one_audio_frame);
++    printf(&quot;1 audio frame = %lu bytes\n&quot;, one_audio_frame);
+     // 3 sec buffer..               
+     wavbuf =  (float *)  ADM_alloc((3 *  channels * wavinfo-&gt;frequency*wavinfo-&gt;channels));
+     ADM_assert(wavbuf);
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000676.html">[Avidemux-svn-commit] r3400 - in	branches/avidemux_2.4_branch/avidemux/ADM_libraries:	ADM_lavcodec ADM_lavutil
+</A></li>
+	<LI>Next message: <A HREF="000678.html">[Avidemux-svn-commit] r3402 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#677">[ date ]</a>
+              <a href="thread.html#677">[ thread ]</a>
+              <a href="subject.html#677">[ subject ]</a>
+              <a href="author.html#677">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

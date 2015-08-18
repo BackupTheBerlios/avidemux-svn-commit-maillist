@@ -1,0 +1,342 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6929 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6929%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2&In-Reply-To=%3C20110116082041.C0748481254%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004102.html">
+   <LINK REL="Next"  HREF="004104.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6929 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6929%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2&In-Reply-To=%3C20110116082041.C0748481254%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6929 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jan 16 09:20:41 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004102.html">[Avidemux-svn-commit] r6928 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+</A></li>
+        <LI>Next message: <A HREF="004104.html">[Avidemux-svn-commit] r6930 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4103">[ date ]</a>
+              <a href="thread.html#4103">[ thread ]</a>
+              <a href="subject.html#4103">[ subject ]</a>
+              <a href="author.html#4103">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-01-16 09:20:41 +0100 (Sun, 16 Jan 2011)
+New Revision: 6929
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp
+Log:
+[mp4v2] Write audio, incomplete, only supports mp3
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp	2011-01-16 08:20:40 UTC (rev 6928)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp	2011-01-16 08:20:41 UTC (rev 6929)
+@@ -23,10 +23,13 @@
+ #include &quot;muxerMp4v2.h&quot;
+ #include &quot;ADM_codecType.h&quot;
+ #include &quot;ADM_imageFlags.h&quot;
+-#if 1
++
++#if 0
+ #define aprintf(...) {}
++#define MP4_DEBUG 0
+ #else
+ #define aprintf printf
++#define MP4_DEBUG MP4_DETAILS_ALL
+ #endif
+ 
+ /**
+@@ -35,7 +38,7 @@
+ */
+ uint64_t muxerMp4v2::timeScale(uint64_t timeUs)
+ {
+-    return (uint64_t)(timeUs/90000LL);
++    return (uint64_t)((timeUs*90LL)/1000LL);
+ 
+ }
+ /**
+@@ -83,6 +86,7 @@
+         in[1].bufferSize=videoBufferSize;
+         in[1].data=videoBuffer[1];
+         audioTrackIds=new MP4TrackId[nbAStreams];
++        audioPackets=new mp4v2AudioPacket[nbAStreams];
+ //------Verify everything is ok : Accept Mp4 &amp; H264 for video, AAC for audio ----
+         uint32_t fcc=vStream-&gt;getFCC();
+         if(!isH264Compatible(fcc) &amp;&amp; !isMpeg4Compatible(fcc))
+@@ -108,6 +112,7 @@
+             ADM_error(&quot;[mp4v2]Cannot create output file %s\n&quot;,file);
+             return false;
+         }
++        MP4SetVerbosity(handle,MP4_DEBUG);
+         if (!(MP4SetTimeScale( handle, 90*1000 ))) // 90 kHz tick
+         {
+             ADM_error(&quot;[mp4v2]Cannot set timescale to us\n&quot;);
+@@ -194,6 +199,8 @@
+     handle=NULL;
+     if(audioTrackIds) delete [] audioTrackIds;
+     audioTrackIds=NULL;
++    if(audioPackets) delete [] audioPackets;
++    audioPackets=NULL;
+     for(int i=0;i&lt;2;i++)
+     {
+         if(videoBuffer[i]) delete [] videoBuffer[i];
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h	2011-01-16 08:20:40 UTC (rev 6928)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h	2011-01-16 08:20:41 UTC (rev 6929)
+@@ -19,6 +19,32 @@
+ #include &quot;ADM_audioClock.h&quot;
+ #include &quot;mp4v2/mp4v2.h&quot;
+ /**
++    \class mp4v2AudioPacket
++*/
++#define AUDIO_BUFFER_SIZE 16*1024*2
++class mp4v2AudioPacket
++{
++    public:
++         class mp4v2AudioBlock
++         {
++            public:
++                    uint8_t     *buffer;
++                    uint64_t    dts;
++                    uint32_t    nbSamples;
++                    uint32_t    sizeInBytes;
++                    bool        present;
++            public:
++                  mp4v2AudioBlock() {buffer=new uint8_t[AUDIO_BUFFER_SIZE];present=false;}
++                  ~mp4v2AudioBlock() {delete [] buffer;buffer=NULL;}
++         };
++            bool                eos;
++            mp4v2AudioBlock     blocks[2];
++            int                 nextWrite;
++            mp4v2AudioPacket() {eos=false;nextWrite=0;}
++            ~mp4v2AudioPacket() {}
++
++};
++/**
+     \class muxerMp4v2
+ */
+ class muxerMp4v2 : public ADM_muxer
+@@ -27,6 +53,7 @@
+         MP4FileHandle   handle;
+         MP4TrackId      videoTrackId;
+         MP4TrackId      *audioTrackIds;
++        mp4v2AudioPacket *audioPackets;
+         uint32_t        videoBufferSize;
+         uint8_t         *videoBuffer[2];
+         ADMBitstream    in[2];
+@@ -37,6 +64,8 @@
+         bool            initAudio(void);
+         bool            fillAudio(uint64_t targetDts);
+ static  uint64_t        timeScale(uint64_t timeUs);
++        bool            loadAndToggleAudioSlot(int index);
++        bool            writeAudioBlock(int index,mp4v2AudioPacket::mp4v2AudioBlock *block,uint64_t duration90);
+ 
+ public:
+                 muxerMp4v2();
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp	2011-01-16 08:20:40 UTC (rev 6928)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2Audio.cpp	2011-01-16 08:20:41 UTC (rev 6929)
+@@ -23,10 +23,12 @@
+ #include &quot;muxerMp4v2.h&quot;
+ #include &quot;ADM_codecType.h&quot;
+ #include &quot;ADM_imageFlags.h&quot;
+-#if 1
++#if 0
+ #define aprintf(...) {}
++#define MP4_DEBUG 0
+ #else
+-#define aprintf printf
++#define aprintf ADM_info
++#define MP4_DEBUG MP4_DETAILS_ALL
+ #endif
+ 
+ 
+@@ -35,20 +37,27 @@
+ */
+ bool muxerMp4v2::initAudio(void)
+ {
++    
+     for(int i=0;i&lt;nbAStreams;i++)
+     {
+         WAVHeader *header=aStreams[i]-&gt;getInfo();
++        ADM_audioStream*a=aStreams[i];
+         switch(header-&gt;encoding)
+         {
+             case WAV_MP2:
+             case WAV_MP3:
+                     #warning fixme : Not always 1152 sample per packet
+-                    audioTrackIds[i]=MP4AddAudioTrack(handle,header-&gt;frequency,1152,MP4_MPEG2_AUDIO_TYPE);
++                    
++                    audioTrackIds[i]=MP4AddAudioTrack(handle,
++                                                      header-&gt;frequency,
++                                                      1152,
++                                                      MP4_MPEG2_AUDIO_TYPE);
+                     if(MP4_INVALID_TRACK_ID==audioTrackIds[i])
+                     {
+                         ADM_error(&quot;Error adding audio track %i of type 0x%x\n&quot;,i,header-&gt;encoding);
+                         return false;
+                     }
++                    aprintf(&quot;Add Track %d fq %d\n&quot;,audioTrackIds[i],header-&gt;frequency);
+                     MP4SetAudioProfileLevel(handle,0x0f);
+                     MP4SetTrackIntegerProperty(handle,audioTrackIds[i],&quot;mdia.minf.stbl.stsd.mp4a.channels&quot;,
+                                 header-&gt;channels);
+@@ -57,50 +66,86 @@
+                     ADM_error(&quot;Cannot create audio track of type 0x%x\n&quot;,header-&gt;encoding);
+                     return false;
+         }
++        // Preload this track...
++        loadAndToggleAudioSlot(i); 
+     }
+     if(nbAStreams)
+          MP4SetTrackIntegerProperty(handle, audioTrackIds[0], &quot;tkhd.flags&quot;, 3);
+     return true;
+ }
+ /**
++    \fn loadAndToggleAudioSlot
++*/
++bool muxerMp4v2::loadAndToggleAudioSlot(int index)
++{
++        ADM_audioStream                     *a=aStreams[index];
++        mp4v2AudioPacket                    *pkt=&amp;(audioPackets[index]);
++        mp4v2AudioPacket::mp4v2AudioBlock   *blk=&amp;(pkt-&gt;blocks[pkt-&gt;nextWrite]);
++        if(!a-&gt;getPacket(blk-&gt;buffer,
++                         &amp;(blk-&gt;sizeInBytes),
++                         AUDIO_BUFFER_SIZE,
++                         &amp;(blk-&gt;nbSamples),
++                         &amp;(blk-&gt;dts)))
++        {
++                ADM_warning(&quot;Cannot get audio packet for stream %d\n&quot;,index);
++                pkt-&gt;eos=true;
++                return false;
++        }
++        blk-&gt;present=true;
++        pkt-&gt;nextWrite=!pkt-&gt;nextWrite;
++        return true;
++}
++/**
++    \fn writeAudioBlock
++*/
++bool muxerMp4v2::writeAudioBlock(int index,mp4v2AudioPacket::mp4v2AudioBlock *block,uint64_t nbSamples)
++{
++    ADM_info(&quot;Writting audio block : size=%d, samples=%d nbSamples=%d \n&quot;,block-&gt;sizeInBytes,block-&gt;nbSamples,(int)nbSamples);
++    bool r=MP4WriteSample(handle,audioTrackIds[index],
++                            block-&gt;buffer,
++                            block-&gt;sizeInBytes,
++                            nbSamples,
++                            0,1);
++    if(false==r)
++                        {
++                            ADM_error(&quot;Cannot write audio sample for track %d\n&quot;,index);
++                            //return false;
++                        }
++    return true;
++}
++/**
+     \fn fillAudio
+     \brief push audio packets until nextDts is reached
+ */  
+ bool muxerMp4v2::fillAudio(uint64_t targetDts)
+ {
+-    uint8_t buffer[4*1024];
+-    uint32_t packetLen;
+-    uint32_t nbSample;
+-    uint64_t dts;
+     for(int audioIndex=0;audioIndex&lt;nbAStreams;audioIndex++)
+     {
+-                ADM_audioStream*a=aStreams[audioIndex];
+-                uint32_t fq=a-&gt;getInfo()-&gt;frequency;
+-                int nb=0;
++                ADM_audioStream         *a=aStreams[audioIndex];
++                uint32_t                fq=a-&gt;getInfo()-&gt;frequency;
++                mp4v2AudioPacket       *pkt=&amp;(audioPackets[audioIndex]);
++                if(pkt-&gt;eos)            continue;
++                
+                 while(1)
+                 {
+-                        if(!a-&gt;getPacket(buffer,
+-                                         &amp;(packetLen),
+-                                         4096,
+-                                         &amp;(nbSample),
+-                                         &amp;(dts)))
++                        int current=!pkt-&gt;nextWrite;
++                        int other=pkt-&gt;nextWrite;
++                        mp4v2AudioPacket::mp4v2AudioBlock        *currentBlock=&amp;(pkt-&gt;blocks[current]);
++                        mp4v2AudioPacket::mp4v2AudioBlock        *otherBlock=&amp;(pkt-&gt;blocks[other]);
++                        if(currentBlock-&gt;dts&gt;targetDts) // In the future
++                            break;
++                        if(false==writeAudioBlock(audioIndex,currentBlock,currentBlock-&gt;nbSamples))
+                         {
+-                                ADM_warning(&quot;Cannot get audio packet for stream %d\n&quot;,audioIndex);
+-                                break;
+-                        }
+-                        float duration=nbSample;
+-                        duration/=fq;
+-                        duration*=90000;
+-                        if(!MP4WriteSample(handle,audioTrackIds[audioIndex],buffer,packetLen,
+-                                                            timeScale((uint64_t )duration),
+-                                                            0,1))
+-                        {
+                             ADM_error(&quot;Cannot write audio sample for track %d\n&quot;,audioIndex);
++                            pkt-&gt;eos=true;
+                             return false;
+                         }
+-                    // We now have a packet stored
+-                    if(dts!=ADM_NO_PTS)
+-                        if(dts&gt;targetDts) break; // this one is in the future
++                        // load next
++                        if(false==loadAndToggleAudioSlot(audioIndex))
++                        {
++                            #warning Purge other slot
++                            pkt-&gt;eos=true;
++                        }
+                 }
+     }
+     return true;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004102.html">[Avidemux-svn-commit] r6928 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2
+</A></li>
+	<LI>Next message: <A HREF="004104.html">[Avidemux-svn-commit] r6930 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4103">[ date ]</a>
+              <a href="thread.html#4103">[ thread ]</a>
+              <a href="subject.html#4103">[ subject ]</a>
+              <a href="author.html#4103">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

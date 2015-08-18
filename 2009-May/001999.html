@@ -1,0 +1,473 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4772 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/ADM_coreDemuxerMpeg/src	avidemux/ADM_coreUtils/src avidemux/ADM_editor	plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4772%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux%20avidemux/ADM_coreDemuxerMpeg/src%0A%09avidemux/ADM_coreUtils/src%20avidemux/ADM_editor%0A%09plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200905020802.n4282c24000811%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   
+   <LINK REL="Next"  HREF="002000.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4772 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/ADM_coreDemuxerMpeg/src	avidemux/ADM_coreUtils/src avidemux/ADM_editor	plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4772%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux%20avidemux/ADM_coreDemuxerMpeg/src%0A%09avidemux/ADM_coreUtils/src%20avidemux/ADM_editor%0A%09plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200905020802.n4282c24000811%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4772 - in branches/avidemux_2.6_branch_mean:	avidemux avidemux/ADM_coreDemuxerMpeg/src	avidemux/ADM_coreUtils/src avidemux/ADM_editor	plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat May  2 10:02:38 CEST 2009</I>
+    <P><UL>
+        
+        <LI>Next message: <A HREF="002000.html">[Avidemux-svn-commit] r4773 -	branches/avidemux_2.6_branch_mean/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1999">[ date ]</a>
+              <a href="thread.html#1999">[ thread ]</a>
+              <a href="subject.html#1999">[ subject ]</a>
+              <a href="author.html#1999">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-05-02 10:02:37 +0200 (Sat, 02 May 2009)
+New Revision: 4772
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/src/dmxPSPacket.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_coreUtils/src/ADM_infoExtractor.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/gtk_gui.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+Log:
+[TsDemuxer] Mostly working seeking in TS/H264, still buggy
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/src/dmxPSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/src/dmxPSPacket.cpp	2009-04-30 17:07:07 UTC (rev 4771)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/src/dmxPSPacket.cpp	2009-05-02 08:02:37 UTC (rev 4772)
+@@ -481,6 +481,7 @@
+     }
+     // v&gt;delta
+     v-=delta;
++    consumed+=delta;
+     if(!refill()) return false;
+     goto next;
+ }
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_coreUtils/src/ADM_infoExtractor.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_coreUtils/src/ADM_infoExtractor.cpp	2009-04-30 17:07:07 UTC (rev 4771)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_coreUtils/src/ADM_infoExtractor.cpp	2009-05-02 08:02:37 UTC (rev 4772)
+@@ -321,7 +321,9 @@
+     return outlen;
+     
+ }
+-
++/**
++        \fn extractVUIInfo
++*/
+ static uint8_t extractVUIInfo(GetBitContext *s, uint32_t *fps1000, uint32_t *darNum, uint32_t *darDen)
+ {
+ 	*fps1000 = *darNum = *darDen = 0;
+@@ -470,8 +472,14 @@
+ 		   }
+ 
+ 		   if(get_bits1(&amp;s))
++           {
+ 			   extractVUIInfo(&amp;s, fps1000, darNum, darDen);
+-
++               printf(&quot;[H264] Fps %&quot;LU&quot;, a.r. %&quot;LU&quot;,%&quot;LU&quot;\n&quot;,*fps1000,*darNum,*darDen);
++           }else
++            {
++                printf(&quot;[H264] Unknown FPS, setting 25\n&quot;);
++                *fps1000=25000;
++            }
+            return 1;
+ }
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edRender.cpp	2009-04-30 17:07:07 UTC (rev 4771)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edRender.cpp	2009-05-02 08:02:37 UTC (rev 4772)
+@@ -128,7 +128,7 @@
+     //cache-&gt;flush();
+     // The PTS associated with our frame is the one we are looking for
+     uint64_t wantedPts=vid-&gt;_aviheader-&gt;estimatePts(frame);
+-    uint32_t tries=8;
++    uint32_t tries=16; // Max Ref frames for H264=Max delay
+ 
+     while(found==false &amp;&amp; tries--)
+     {
+@@ -158,6 +158,7 @@
+             {
+                 cache-&gt;updateFrameNum(result,vid-&gt;lastSentFrame);
+                 uint64_t pts=result-&gt;Pts;
++                printf(&quot;[Decoder] Frame %&quot;LU&quot; pts=%&quot;LLU&quot; ms, %&quot;LLU&quot; us\n&quot;,vid-&gt;lastSentFrame,result-&gt;Pts,result-&gt;Pts);
+                 if(pts==ADM_COMPRESSED_NO_PTS) // No PTS available ?
+                 {
+                     // increment it using average fps
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp	2009-04-30 17:07:07 UTC (rev 4771)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADM_edit.cpp	2009-05-02 08:02:37 UTC (rev 4772)
+@@ -423,7 +423,7 @@
+   _videos[_nb_video]._aviheader-&gt;getExtraHeaderData (&amp;l, &amp;d);
+   _videos[_nb_video].decoder = getDecoder (info.fcc,  info.width, info.height, l, d,info.bpp);
+ 
+-  _videos[_nb_video]._videoCache   =   new EditorCache(10,info.width,info.height) ;
++  _videos[_nb_video]._videoCache   =   new EditorCache(32,info.width,info.height) ;
+ 
+   float frameD=info.fps1000;
+   frameD=frameD/1000;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/gtk_gui.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/gtk_gui.cpp	2009-04-30 17:07:07 UTC (rev 4771)
++++ branches/avidemux_2.6_branch_mean/avidemux/gtk_gui.cpp	2009-05-02 08:02:37 UTC (rev 4772)
+@@ -895,7 +895,7 @@
+   /* Zoom out if needed */
+   uint32_t phyW,phyH;
+   UI_getPhysicalScreenSize(NULL, &amp;phyW,&amp;phyH);
+-  if(phyW&lt;avifileinfo-&gt;width || phyH&lt;avifileinfo-&gt;height)
++  if(3*phyW&lt;4*avifileinfo-&gt;width || 3*phyH&lt;4*avifileinfo-&gt;height)
+   {
+       if(phyW&lt;avifileinfo-&gt;width/2 || phyH&lt;avifileinfo-&gt;height/2)
+       {
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-04-30 17:07:07 UTC (rev 4771)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsIndex.cpp	2009-05-02 08:02:37 UTC (rev 4772)
+@@ -76,6 +76,7 @@
+     idx_startAtImage,
+     idx_startAtGopOrSeq
+ }indexerState;
++
+ typedef struct
+ {
+     uint64_t pts,dts; //startAt;
+@@ -110,10 +111,10 @@
+         uint32_t        beginConsuming;
+         indexerState    currentIndexState;
+ protected:
+-        FILE *index;
+-        tsPacketLinearTracker  *pkt;
+-        listOfTsAudioTracks    *audioTracks;
+-        DIA_workingBase  *ui;
++        FILE                    *index;
++        tsPacketLinearTracker   *pkt;
++        listOfTsAudioTracks     *audioTracks;
++        DIA_workingBase         *ui;
+ public:
+                 TsIndexer(listOfTsAudioTracks *tr);
+                 ~TsIndexer();
+@@ -215,6 +216,8 @@
+ uint64_t fullSize;
+ dmxPacketInfo info;
+ 
++bool result=false;
++
+     printf(&quot;Starting H264 indexer\n&quot;);
+     if(!videoTrac) return false;
+     if(videoTrac[0].trackType!=ADM_TS_H264)
+@@ -241,9 +244,13 @@
+     pkt-&gt;open(file,append);
+     data.pkt=pkt;
+     fullSize=pkt-&gt;getSize();
++
++    //******************
++    // 1 search SPS
++    //******************
++#define SPS_READ_AHEAD 32
+       while(1)
+       {
+-
+         uint32_t code=0xffff+0xffff0000;
+         while((code!=1) &amp;&amp; pkt-&gt;stillOk())
+         {
+@@ -251,122 +258,112 @@
+         }
+         if(!pkt-&gt;stillOk()) break;
+         uint8_t startCode=pkt-&gt;readi8(); // Read 5 bytes so far
++        if(startCode&amp;0x80) continue; // Marker missing
++        startCode&amp;=0x1f;
++        if(startCode!=NAL_SPS) continue;
+ 
+-       
++          // Got SPS!
++          uint8_t buffer[60] ; // should be enough
++          uint32_t xA,xR;
++          // Get info
++          pkt-&gt;getInfo(&amp;info);
++          pkt-&gt;read(SPS_READ_AHEAD,buffer);
++          if (extractSPSInfo(buffer, SPS_READ_AHEAD, &amp;video.w,&amp;video.h,&amp;video.fps,&amp;xA,&amp;xR))
++          {
++              
++              printf(&quot;[TsIndexer] Found video %&quot;LU&quot;x%&quot;LU&quot;, fps=%&quot;LU&quot;\n&quot;,video.w,video.h,video.fps);
++              seq_found=1;
++              writeVideo(&amp;video,ADM_TS_H264);
++              writeAudio();
++              qfprintf(index,&quot;[Data]&quot;);
++              // Rewind
++              pkt-&gt;seek(info.startAt,info.offset-5);
++              break;              
++          };
++      }
++        if(!seq_found) goto the_end;
++    //******************
++    // 2 Index
++    //******************
++      while(1)
++      {
+ 
++        uint32_t code=0xffff+0xffff0000;
++        while((code!=1) &amp;&amp; pkt-&gt;stillOk())
++        {
++            code=(code&lt;&lt;8)+pkt-&gt;readi8();
++        }
++        if(!pkt-&gt;stillOk()) break;
++        uint8_t startCode=pkt-&gt;readi8(); // Read 5 bytes so far
+ //  1:0 2:Nal ref idc 5:Nal Type
+         if(startCode&amp;0x80) continue; // Marker missing
+-        
+-
+-#define T(x) case NAL_##x: aprintf(#x&quot; found\n&quot;);break;
+         startCode&amp;=0x1f;
+-#ifdef ADM_H264_VERBOSE
+-        switch(startCode)
+-        {
+-            T(NON_IDR);
+-            T(IDR);
+-            T(SPS);
+-            T(PPS);
+-            T(SEI);
+-            T(AU_DELIMITER);
+-            T(FILLER);
+-          default :aprintf(&quot;0x%02x ?\n&quot;,startCode);
+-        }
+-#endif
+-          
+-              /* Till we have a SPS no need to continue */
+-              if(!seq_found &amp;&amp; startCode!=NAL_SPS) continue;
+-              if(!seq_found) // It is a SPS
+-              {
+-                    // Our firt frame is here
+-                    // Important to initialize the H264 decoder !
+-                      uint8_t buffer[60] ; // should be enough
+-                      uint32_t xA,xR;
+-                      // Get info
+-                      pkt-&gt;read(16,buffer);
+-                      if (extractSPSInfo(buffer, 16, &amp;video.w,&amp;video.h,&amp;video.fps,&amp;xA,&amp;xR))
+-                      {
+-						  
+-                          printf(&quot;[TsIndexer] Found video %&quot;LU&quot;x%&quot;LU&quot;, fps=%&quot;LU&quot;\n&quot;,video.w,video.h,video.fps);
+-                          seq_found=1;
++          // Ignore multiple chunk of the same pic
++          if((startCode==NAL_NON_IDR || startCode==NAL_IDR)&amp;&amp;pic_started) 
++          {
++           // aprintf(&quot;Still capturing, ignore\n&quot;);
++            continue;
++          }
++                     
++          switch(startCode)
++                  {
++                  case NAL_AU_DELIMITER:
++                          pic_started = false;
++                          break;
++
++                  case NAL_SPS:
++                          pic_started = false;
++                          aprintf(&quot;Sps \n&quot;);
++                          pkt-&gt;getInfo(&amp;info);
++                          data.frameType=1;
++                          Mark(&amp;data,&amp;info,5);
+                           data.state=idx_startAtGopOrSeq;
+-                          writeVideo(&amp;video,ADM_TS_H264);
+-                          writeAudio();
+-                          qfprintf(index,&quot;[Data]&quot;);
+-                          data.frameType=1; // Force dump
+-                          pkt-&gt;getInfo(&amp;info);                          
+-                          Mark(&amp;data,&amp;info,5+16);
+-                          // Rewind
+-#warning TODO
+-                      }
+-                      continue;
+-              }
+-              
+-              // Ignore multiple chunk of the same pic
+-              if((startCode==NAL_NON_IDR || startCode==NAL_IDR)&amp;&amp;pic_started) 
+-              {
+-                aprintf(&quot;Still capturing, ignore\n&quot;);
+-                continue;
+-              }
+-           
+-              
+-              switch(startCode)
+-                      {
+-                      case NAL_AU_DELIMITER:
+-							  pic_started = false;
+-                              break;
+-#if 0
+-                      case NAL_SPS:
+-                              pic_started = false;
+-                              aprintf(&quot;Sps \n&quot;);
+-                              pkt-&gt;getInfo(&amp;info);
+-                              data.frameType=1;
+-							  Mark(&amp;data,&amp;info,5);
+-                              data.state=idx_startAtGopOrSeq;
+-							  break;
+-#endif
+-                      case NAL_IDR:
+-                      case NAL_NON_IDR:
+-                        {
++                          break;
++
++                  case NAL_IDR:
++                  case NAL_NON_IDR:
++                    {
+ #define NON_IDR_PRE_READ 8
+-                          uint8_t header[NON_IDR_PRE_READ+4];
+-                          GetBitContext s;
+-                       
+-                            pkt-&gt;read(4,header);
+-                            init_get_bits(&amp;s, header, NON_IDR_PRE_READ*8);
+-                            int first_mb_in_slice,slice_type;
++                      uint8_t header[NON_IDR_PRE_READ+4];
++                      GetBitContext s;
++                   
++                        pkt-&gt;read(4,header);
++                        init_get_bits(&amp;s, header, NON_IDR_PRE_READ*8);
++                        int first_mb_in_slice,slice_type;
+ 
+-                            first_mb_in_slice= get_ue_golomb(&amp;s);
+-                            slice_type= get_ue_golomb_31(&amp;s);
+-                            if(slice_type&gt;4) slice_type-=5;
+-                            switch(slice_type)
+-                            {
++                        first_mb_in_slice= get_ue_golomb(&amp;s);
++                        slice_type= get_ue_golomb_31(&amp;s);
++                        if(slice_type&gt;4) slice_type-=5;
++                        switch(slice_type)
++                        {
+ 
+-                                case 0 : data.frameType=2;break; // P
+-                                case 1 : data.frameType=3;break; // B
+-                                case 2 : data.frameType=1;break; // I
+-                                default : data.frameType=2;break; // SP/SI
+-                            }
+-
+-                          if(data.state==idx_startAtGopOrSeq) 
+-                          {
+-                                  currentFrameType=data.frameType;;
+-                                  
+-                          }else
+-                          {
+-                                pkt-&gt;getInfo(&amp;info);
+-                                Mark(&amp;data,&amp;info,5+4);
+-                           }
+-                          data.state=idx_startAtImage;
+-                          data.nbPics++;
+-						  pic_started = true;
++                            case 0 : data.frameType=2;break; // P
++                            case 1 : data.frameType=3;break; // B
++                            case 2 : data.frameType=1;break; // I
++                            default : data.frameType=2;break; // SP/SI
+                         }
+-					  
+-                        break;
+-					  default:
+-						  break;
+-			  }
+-      }
++
++                      if(data.state==idx_startAtGopOrSeq) 
++                      {
++                              currentFrameType=data.frameType;;
++                              
++                      }else
++                      {
++                            pkt-&gt;getInfo(&amp;info);
++                            Mark(&amp;data,&amp;info,5+4);
++                       }
++                      data.state=idx_startAtImage;
++                      data.nbPics++;
++                      pic_started = true;
++                    }
++                  
++                    break;
++                  default:
++                      break;
++          }
++      } // End while
++      result=true;
++the_end:
+         printf(&quot;\n&quot;);
+         Mark(&amp;data,&amp;info,0);
+         qfprintf(index,&quot;\n[End]\n&quot;);
+@@ -375,7 +372,7 @@
+         audioTracks=NULL;
+         delete pkt;
+         pkt=NULL;
+-        return true; 
++        return result; 
+ }
+ //***********************************************************************
+ /**
+@@ -552,8 +549,8 @@
+             beginConsuming=consumed;
+         }else
+         {  // Our first Pic
+-            beginConsuming=overRead;
+-            pkt-&gt;setConsumed(beginConsuming);
++            beginConsuming=0;
++            pkt-&gt;setConsumed(overRead);
+         }
+             
+         // If audio, also dump audio
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-30 17:07:07 UTC (rev 4771)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-05-02 08:02:37 UTC (rev 4772)
+@@ -598,6 +598,7 @@
+     }
+     // v&gt;delta
+     v-=delta;
++    consumed+=delta;
+     if(!refill()) return false;
+     goto next;
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	
+	<LI>Next message: <A HREF="002000.html">[Avidemux-svn-commit] r4773 -	branches/avidemux_2.6_branch_mean/cmake
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1999">[ date ]</a>
+              <a href="thread.html#1999">[ thread ]</a>
+              <a href="subject.html#1999">[ subject ]</a>
+              <a href="author.html#1999">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,859 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4293 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4293%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer&In-Reply-To=%3C200807292155.m6TLteDS002200%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001533.html">
+   <LINK REL="Next"  HREF="001535.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4293 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4293%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer&In-Reply-To=%3C200807292155.m6TLteDS002200%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4293 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Jul 29 23:55:40 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001533.html">[Avidemux-svn-commit] r4292 -	branches/avidemux_2.4_branch/avidemux/ADM_infoExtractor
+</A></li>
+        <LI>Next message: <A HREF="001535.html">[Avidemux-svn-commit] r4294 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1534">[ date ]</a>
+              <a href="thread.html#1534">[ thread ]</a>
+              <a href="subject.html#1534">[ subject ]</a>
+              <a href="author.html#1534">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-07-29 23:55:32 +0200 (Tue, 29 Jul 2008)
+New Revision: 4293
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp
+Log:
+[m2ts] rework parsing of PAT/PMT in m2ts demuxer
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.cpp	2008-07-27 02:54:44 UTC (rev 4292)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.cpp	2008-07-29 21:55:32 UTC (rev 4293)
+@@ -552,8 +552,12 @@
+         pid=parser-&gt;read16i();
+         if((pid&gt;&gt;8) &amp; TS_UNIT_START) payloadunit=1;
+         pid&amp;=0x1fff; // remove flags
++
++#ifdef TS_VERBOSE
+         if(discarded)
+                 printf(&quot;Ts: Discontinuity of %lu at %&quot;LLX&quot; pid:%lx\n&quot;,discarded,abs,pid);
++#endif
++
+         // Start of packet..
+         left=TS_PacketSize-3;
+         if(_probeSize)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.cpp	2008-07-27 02:54:44 UTC (rev 4292)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.cpp	2008-07-29 21:55:32 UTC (rev 4293)
+@@ -26,7 +26,7 @@
+ #include &lt;math.h&gt;
+ 
+ #include &quot;default.h&quot;
+-#include &lt;ADM_assert.h&gt;
++#include &quot;ADM_assert.h&quot;
+ 
+ #include &quot;dmx_io.h&quot;
+ 
+@@ -505,3 +505,40 @@
+         return r;
+ }
+ #endif
++
++void fileParser::hexDump(uint8_t *buf, int size)
++{
++	int len, i, j, c;
++
++	for(i=0;i&lt;size;i+=16)
++	{
++		len = size - i;
++
++		if (len &gt; 16)
++			len = 16;
++
++		printf(&quot;%08x &quot;, i);
++
++		for(j=0;j&lt;16;j++)
++		{
++			if (j &lt; len)
++				printf(&quot; %02x&quot;, buf[i+j]);
++			else
++				printf(&quot;   &quot;);
++		}
++
++		printf(&quot; &quot;);
++
++		for(j=0;j&lt;len;j++)
++		{
++			c = buf[i+j];
++
++			if (c &lt; ' ' || c &gt; '~')
++				c = '.';
++
++			printf(&quot;%c&quot;, c);
++		}
++
++		printf(&quot;\n&quot;);
++	}
++}
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.h	2008-07-27 02:54:44 UTC (rev 4292)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.h	2008-07-29 21:55:32 UTC (rev 4293)
+@@ -58,6 +58,7 @@
+                         uint64_t getSize( void ) ;
+                         uint32_t read32(uint32_t l, uint8_t *buffer);
+                         uint8_t  end(void) { return _off==_size-1;};
++						void hexDump(uint8_t *buf, int size);
+ #ifdef NO_INLINE_FP
+                         uint32_t read32i(void );
+                         uint16_t read16i(void );
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp	2008-07-27 02:54:44 UTC (rev 4292)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp	2008-07-29 21:55:32 UTC (rev 4293)
+@@ -22,7 +22,7 @@
+ #include &lt;math.h&gt;
+ 
+ #include &quot;default.h&quot;
+-#include &lt;ADM_assert.h&gt;
++#include &quot;ADM_assert.h&quot;
+ 
+ 
+ #include &quot;ADM_toolkit/toolkit.hxx&quot;
+@@ -47,51 +47,48 @@
+ 
+ 
+ 
+-#define MAX_PROBE (10*1024*1024LL) // Scans the 4 first meg
++#define MAX_PROBE 2000000 // Scans the first 2 meg
+ #define MIN_DETECT (10*1024) // Need this to say the stream is present
+ #define MAX_NB_PMT 50
++#define MAX_NB_TRACK 50
+ 
+ //#define PROBE_TS_VERBOSE
+ 
+-//****************************************************************************************
+ typedef struct MPEG_PMT
+ {
+-   uint32_t         programNumber;
+-   uint32_t         tid;
+-}MPEG_PMT;
+-//****************************************************************************************
++	uint16_t programNumber;
++	uint16_t tid;
++} MPEG_PMT;
+ 
+ uint8_t dmx_probeTS(const char *file,  uint32_t *nbTracks,MPEG_TRACK **tracks,DMX_TYPE t);
+-//****************************************************************************************
++
+ static uint8_t dmx_probeTSBruteForce(const char *file,  uint32_t *nbTracks,MPEG_TRACK **tracks,DMX_TYPE type);
+-static uint8_t dmx_probeTSPat(const char *file, uint32_t *nbTracks,MPEG_TRACK **tracks,DMX_TYPE type);
+-static uint8_t dmx_probePat(dmx_demuxerTS *demuxer, uint32_t *nbPmt,MPEG_PMT *pmts,uint32_t maxPmt);
+-static uint8_t dmx_probePMT(dmx_demuxerTS *demuxer, uint32_t pmtId,MPEG_TRACK *pmts,uint32_t *cur, uint32_t max);
++static uint8_t dmx_probeTsPatPmt(const char *file, uint32_t *nbTracks, MPEG_TRACK **tracks, DMX_TYPE type);
++static int dmx_parsePat(dmx_demuxerTS *demuxer, int *nbPmt, MPEG_PMT *pmts, int maxPmt);
++static int dmx_parsePmt(dmx_demuxerTS *demuxer, int pid, MPEG_TRACK *pmts, int *cur, int max);
+ 
++static const char *dmx_streamType(uint32_t type,ADM_STREAM_TYPE *streamType);
+ static const char *dmx_streamTypeAsString(ADM_STREAM_TYPE st);
+  
+ extern uint32_t mpegTsCRC(uint8_t *data, uint32_t len);
+-//*********************************************************
++
+ uint8_t runProbe(const char *file)
+ {
+   uint32_t nb;
+   MPEG_TRACK *t;
+-  return  dmx_probeTSPat(file, &amp;nb,&amp;t,DMX_MPG_TS);
+-  
++  return dmx_probeTsPatPmt(file, &amp;nb,&amp;t,DMX_MPG_TS);
+ }
+ 
+ uint8_t dmx_probeTS(const char *file,  uint32_t *nbTracks,MPEG_TRACK **tracks,DMX_TYPE type)
+ {
+-  
+-    // Try through PMT/PAT first
+-      if( type==DMX_MPG_TS2 || !dmx_probeTSPat(file,nbTracks,tracks,type))
+-      //if( !dmx_probeTSPat(file,nbTracks,tracks,type))
+-      {
+-        
+-        printf(&quot;PAT/PMT Failed, using brute force\n&quot;);
+-        return dmx_probeTSBruteForce(file,nbTracks,tracks,type);
+-      }
+-      return 1;
++	// Try through PMT/PAT first
++	if (!dmx_probeTsPatPmt(file, nbTracks, tracks, type))
++	{
++		printf(&quot;PAT/PMT Failed, using brute force\n&quot;);
++		return dmx_probeTSBruteForce(file,nbTracks,tracks,type);
++	}
++
++	return 1;
+ }
+ /**************************************
+ ****************************************************************
+@@ -136,8 +133,8 @@
+         {
+           return 0;
+         }
+-    // Set probe to 10 Meg
+-      demuxer.setProbeSize(10*1024*1024L);
++
++      demuxer.setProbeSize(MAX_PROBE);
+       parser=demuxer.getParser();
+       // And run
+ 
+@@ -264,216 +261,193 @@
+       @param **tracks : contains info about the tracks found (out)
+ 
+ */
+-uint8_t dmx_probeTSPat(const char *file, uint32_t *nbTracks,MPEG_TRACK **tracks,DMX_TYPE type)
++uint8_t dmx_probeTsPatPmt(const char *file, uint32_t *nbTracks, MPEG_TRACK **tracks, DMX_TYPE type)
+ {
+-MPEG_TRACK dummy[TS_ALL_PID];
+-fileParser *parser;
+-uint32_t   foundPid=0;
+-myPid      allPid[MAX_FOUND_PID];
+-uint8_t    buffer[BUFFER_SIZE];
+-MpegAudioInfo mpegInfo; 
+-#define MAX_STREAM 50
+-#define MAX_NB_TRACK 50
+-    dummy[0].pid=0x00; // should no be in use
+-    dummy[0].pes=0xE0;
++	MPEG_TRACK dummy[TS_ALL_PID];
++	fileParser *parser;
++	uint32_t pid, left, cc, isPayloadStart;
++	uint64_t abso;
++	int nbPmt = 0, cur = 0;
++	MPEG_PMT pmts[MAX_NB_PMT];
++	MPEG_TRACK xtracks[MAX_NB_TRACK];
+ 
+-        dmx_demuxerTS demuxer(1,dummy,1,type);
+-        if(!demuxer.open(file))
+-        {
+-          return 0;
+-        }
+-    // Set probe to 10 Meg
+-      demuxer.setProbeSize(10*1024*1024L);
+-      uint32_t nbPmt;
+-      MPEG_PMT pmts[MAX_NB_PMT];
+-      MPEG_TRACK xtracks[MAX_NB_TRACK];
+-      
+-      if(!dmx_probePat(&amp;demuxer,&amp;nbPmt,pmts,MAX_NB_PMT))
+-      {
+-        aprintf(&quot;[PSI Probe]Cannot find Pat\n&quot;); 
+-        parser=NULL;
+-        return 0;
+-      }
+-      printf(&quot;Found %d PMT..\n&quot;,nbPmt);
+-      demuxer.setProbeSize(40*1024*1024L); // We can can increase the probe size
+-      uint32_t cur=0;
+-      for(int i=0;i&lt;nbPmt;i++)
+-      {
+-         dmx_probePMT(&amp;demuxer, pmts[i].tid,xtracks,&amp;cur,MAX_NB_TRACK);
+-      }
+-      printf(&quot;***********************\n&quot;);
+-      printf(&quot;***********************\n&quot;);
+-      printf(&quot;Summary of stream found\n&quot;);
+-      printf(&quot;***********************\n&quot;);
+-      printf(&quot;***********************\n&quot;);
+-      for(int i=0;i&lt;cur;i++)
+-      {
+-        printf(&quot;Tid : %04x Type :%d %s\n&quot;, xtracks[i].pid,xtracks[i].streamType,
+-               dmx_streamTypeAsString(xtracks[i].streamType));
+-      }
+-      printf(&quot;******************************\n&quot;);
+-      printf(&quot;******************************\n&quot;);
+-      printf(&quot;End of summary of stream found\n&quot;);
+-      printf(&quot;******************************\n&quot;);
+-      printf(&quot;******************************\n&quot;);
+-      
+-      if(!cur)        return 0;
+-      
+-      // Search first video track
+-      *tracks=new MPEG_TRACK[cur];
+-      int found=-1;
+-      for(int j=0;j&lt;cur;j++)
+-      {
+-        ADM_STREAM_TYPE type=xtracks[j].streamType;
+-        if(type==ADM_STREAM_MPEG_VIDEO ||  type==ADM_STREAM_MPEG4 || type==ADM_STREAM_H264)
+-        {
+-          found=j;
+-          break;  
+-        }
+-      }
+-      if(found&lt;0)
+-      {
+-        printf(&quot;No video track\n&quot;);
+-        delete [] *tracks;
+-        return 0; 
+-      }
+-      memcpy(*tracks,&amp;(xtracks[found]),sizeof(MPEG_TRACK));
+-      *nbTracks=1;
+-      // Now do audio
+-      for(int j=0;j&lt;cur;j++)
+-      {
+-         MPEG_TRACK *t=&amp;(xtracks[j]);
+-         ADM_STREAM_TYPE type=t-&gt;streamType;
+-          if(type!=ADM_STREAM_MPEG_AUDIO &amp;&amp; type!=ADM_STREAM_AC3
+-            &amp;&amp;type!=ADM_STREAM_AAC) continue; // Only mpega &amp; AC3 for now
+-          switch(type)
+-          {
+-            case ADM_STREAM_AAC:
+-                  t-&gt;pes=0xb0;
+-            case ADM_STREAM_MPEG_AUDIO:
+-            case ADM_STREAM_AC3:
+-            
+-              memcpy(&amp;((*tracks)[*nbTracks]),t,sizeof(MPEG_TRACK));
+-              ADM_assert(*nbTracks&lt;cur);
+-              (*nbTracks)++;
+-              break;
+-            
+-            default: ADM_assert(0); 
+-          }
+-      }
+-      printf(&quot;Found %u tracks\n&quot;,*nbTracks);
+-      //
+-      return 1;
+-      
++	dummy[0].pid=0x00; // should not be in use
++	dummy[0].pes=0xE0;
++
++	dmx_demuxerTS demuxer(TS_ALL_PID, dummy, 1, type);
++
++	if (!demuxer.open(file))
++		return 0;
++
++	demuxer.setProbeSize(MAX_PROBE);
++
++	parser = demuxer.getParser();
++
++	while (demuxer.readPacket(&amp;pid, &amp;left, &amp;isPayloadStart, &amp;abso, &amp;cc))
++	{
++		if (!isPayloadStart || left &lt;= (9 + 4))
++		{
++			parser-&gt;forward(left);
++			continue;
++		}
++
++		if (pid == 0)
++		{
++			aprintf(&quot;[TS] parse PAT: (pid: %d)\n&quot;, pid);
++			dmx_parsePat(&amp;demuxer, &amp;nbPmt, pmts, MAX_NB_PMT);
++		}
++		else
++		{
++			aprintf(&quot;[TS] PMT found (pid: %d)\n&quot;, pid);
++
++			for (int i = 0; i &lt; nbPmt; i++)
++			{
++				if (pmts[i].tid == pid)
++				{
++					aprintf(&quot;[TS] parse PMT (pid: %d)\n&quot;, pid);
++					dmx_parsePmt(&amp;demuxer, pid, xtracks, &amp;cur, MAX_NB_TRACK);
++
++					break;
++				}
++			}
++		}
++	}
++
++	if (!cur)
++		return 0;
++
++	for(int i = 0; i &lt; cur; i++)
++		printf(&quot;Tid: %04x Type: %d (%s)\n&quot;, xtracks[i].pid, xtracks[i].streamType, dmx_streamTypeAsString(xtracks[i].streamType));
++
++	// Search first video track
++	*tracks = new MPEG_TRACK[cur];
++	int found = -1;
++
++	for(int j = 0; j &lt; cur; j++)
++	{
++		ADM_STREAM_TYPE type = xtracks[j].streamType;
++
++		if(type == ADM_STREAM_MPEG_VIDEO || type==ADM_STREAM_MPEG4 || type==ADM_STREAM_H264)
++		{
++			found = j;
++			break;
++		}
++	}
++
++	if (found &lt; 0)
++	{
++		printf(&quot;No video track\n&quot;);
++		delete [] *tracks;
++
++		return 0; 
++	}
++
++	memcpy(*tracks, &amp;(xtracks[found]), sizeof(MPEG_TRACK));
++	*nbTracks = 1;
++
++	// Now do audio
++	for (int j = 0; j &lt; cur; j++)
++	{
++		MPEG_TRACK *t = &amp;(xtracks[j]);
++		ADM_STREAM_TYPE type = t-&gt;streamType;
++
++		if (type != ADM_STREAM_MPEG_AUDIO &amp;&amp; type != ADM_STREAM_AC3 &amp;&amp; type != ADM_STREAM_AAC)
++			continue; // Only mpega &amp; AC3 for now
++
++		switch(type)
++		{
++			case ADM_STREAM_AAC:
++				t-&gt;pes = 0xb0;
++			case ADM_STREAM_MPEG_AUDIO:
++			case ADM_STREAM_AC3:
++				memcpy(&amp;((*tracks)[*nbTracks]), t, sizeof(MPEG_TRACK));
++				ADM_assert(*nbTracks &lt; cur);
++				(*nbTracks)++;
++
++				break;
++			default:
++				ADM_assert(0); 
++		}
++	}
++
++	printf(&quot;Found %u tracks\n&quot;, *nbTracks);
++
++	return 1;
+ }
++
+ /**
+-      \fn     dmx_searchAndSkipHeader
+-      \brief  Search for a given PSI and skip header
++      \fn     dmx_probePat(dmx_demuxerTS *demuxer, uint32_t *nbPmt,MPEG_PMT *pmts,uint32_t maxPMT)
++      \brief  Search for PAT and returns PMT info if found
+       @return 1 on success, 0 on failure
+-      @param myPid : Pid of the looked for psi
+-      @param demuxer: mpegTS demuxer *(input)
+-      @param *currentSec : current section (output)
+-      @param *maxSec : #of sections (output)
+-      @param *leftbyte : Total #of bytes left in the packet
+-      @param *payloadSize : #of bytes of usable payload
++      @param demuxer: mpegTS demuxer (input)
++      @param *nbPmt : number of PMTS found (output)
++      @param *pmts : contains info about the PMT found (out but must be allocated by caller)
++      @param maxPMT : Maximum # of PMT we accept in pmts (in)
+ 
+ */
+-uint8_t dmx_searchAndSkipHeader(uint32_t myPid,dmx_demuxerTS *demuxer,uint32_t *currentSec, uint32_t *maxSec,
+-                                    uint32_t *leftbyte,uint32_t *payloadSize)
++int dmx_parsePat(dmx_demuxerTS *demuxer, int *nbPmt, MPEG_PMT *pmts, int maxPmt)
+ {
+-  
+-  uint8_t packet[TS_PACKET_SIZE*2];
+-  uint32_t tableId;
+-  uint32_t misc;
+-  uint32_t sectionLength;
+-  uint32_t tId,pid,left,cc,nbPmt;
+-  uint32_t version,isPayloadStart;
+-  uint32_t sectionNumber;
+-  uint32_t lastSectionNumber;
+-  uint32_t programInfoLength;
+-  uint32_t crc,crccomputed;
+-  uint64_t startPos,endPos,abso;
+-  fileParser *parser;
+-      demuxer-&gt;changePid(myPid,myPid); // Search PAT
+-      parser=demuxer-&gt;getParser();
+-      
+-        while(demuxer-&gt;readPacket(&amp;pid,&amp;left, &amp;isPayloadStart,&amp;abso,&amp;cc))
+-        {
+-          if(pid!=myPid)
+-          {
+-            printf(&quot;Wrong Pid %x/%x\n&quot;,pid,myPid);
+-            parser-&gt;forward(left);
+-            continue;
+-          }
+-          if(!isPayloadStart || left &lt;= (9+4))
+-          {
+-            parser-&gt;forward(left);
+-            continue;
+-          }
++	uint8_t tableId, sectionNumber, lastSectionNumber;
++	uint16_t sectionLength, progId;
++	uint64_t startPos;
++	fileParser *parser = demuxer-&gt;getParser();
++	int entries;
+ 
+-          /* Found something that looks good...*/
+-            
+-            /* Decode PSI header */
+-            parser-&gt;read8i(); /* Pointer field, can be ignored (?) */
+-              
+-              parser-&gt;getpos(&amp;startPos); /* Memorize beginning */
+-              tableId=parser-&gt;read8i();
+-              misc=parser-&gt;read16i(); // +3
+-              tId=parser-&gt;read16i();  
+-              version=parser-&gt;read8i(); // +6
+-              sectionNumber=parser-&gt;read8i();
+-              lastSectionNumber=parser-&gt;read8i(); // +8
+-              
+-              sectionLength=misc&amp;0xFFF;
+-              
+-              if(sectionLength&lt;=9 || sectionLength &gt; (left-4) || left&lt;9)
+-              {
+-                printf(&quot;SectionLength too short :%d,left %d\n&quot;, sectionLength,left);
+-                 parser-&gt;setpos(startPos-1+left); // skip packet
+-                 continue;
+-              }
+-              
+-#ifdef PROBE_TS_VERBOSE
+-              printf(&quot;******************************************\n&quot;);
+-              printf(&quot;tableId        : %d\n&quot;,tableId);
+-              
+-              printf(&quot;sectionLength  : %d\n&quot;,sectionLength);
+-              printf(&quot;0              : %x\n&quot;,misc&amp;0x40);
+-              printf(&quot;section syntax : %x\n&quot;,misc&amp;0x80);
+-              printf(&quot;Transport ID   : 0x%x\n&quot;,tId);
+-              printf(&quot;Version Number : 0x%x\n&quot;,(version&gt;&gt;1)&amp;0x1F);
+-              printf(&quot;CurrentNext    : 0x%x\n&quot;,version&amp;1);
+-              
+-              printf(&quot;Section        : %d\n&quot;,sectionNumber);
+-              printf(&quot;LastSection    : %d\n&quot;,lastSectionNumber);
+-              
+-#endif
+-              // Check for error FIXME TODO
+-              
+-              // Check CRC
+-              parser-&gt;getpos(&amp;endPos); // Here payload begins
+-              parser-&gt;setpos(startPos);
+-              parser-&gt;read32(sectionLength-1,packet); // Go back &amp; Read Whole packet +3 for header -4 CRC
+-              crc=parser-&gt;read32i();
+-              crccomputed=mpegTsCRC(packet,sectionLength-1);
+-              if(crc!=crccomputed) // Bad CRC, skip packet
+-              {
+-                aprintf(&quot;Bad CRC\n&quot;);
+-                parser-&gt;setpos( startPos+left-1); // skip
+-                continue;
+-              }
+-              // CRC is ok, go back to interesting place
+-              aprintf(&quot;CRC OK\n&quot;);
+-              parser-&gt;setpos(endPos);
+-              *currentSec=sectionNumber;
+-              *maxSec=lastSectionNumber;
+-              
+-              *leftbyte=left-9;               // Total bytes left in packet
+-              *payloadSize=sectionLength-9; // No CRC, No header
+-              return 1;
+-          } // /while
+-      return 0;
++	parser-&gt;getpos(&amp;startPos);
++
++	// Decode PSI header
++	parser-&gt;read8i();	// Pointer field, can be ignored (?)
++
++	tableId = parser-&gt;read8i();	// 0
++
++	if (tableId != 0)
++	{
++		parser-&gt;setpos(startPos);
++		return 0;
++	}
++
++	sectionLength = ((parser-&gt;read8i() &amp; 0x03) &lt;&lt; 8 ) | parser-&gt;read8i();	// 1 &amp; 2
++	parser-&gt;read16i();	// 3 &amp; 4
++	parser-&gt;read8i(); // 5
++	sectionNumber = parser-&gt;read8i();	// 6
++	lastSectionNumber = parser-&gt;read8i(); // 7	
++
++	aprintf(&quot;[TS] parsePat: sectionLength: %d, section %d/%d @ %&quot;LLU&quot;\n&quot;, sectionLength, sectionNumber, lastSectionNumber, startPos);
++
++	entries = (int)(sectionLength - 9) / 4;	// entries per section
++	*nbPmt = 0;
++
++	for (int i = 0; i &lt; entries; i++)
++	{
++		bool foundProg = false;
++
++		progId = (parser-&gt;read8i() &lt;&lt; 8) | parser-&gt;read8i();
++
++		for (int j = 0; j &lt; *nbPmt; j++)
++		{
++			if (pmts[j].programNumber == progId)
++			{
++				foundProg = true;
++				break;
++			}
++		}
++
++		if (!foundProg &amp;&amp; *nbPmt &lt; maxPmt)
++		{
++			pmts[*nbPmt].programNumber = progId;
++			pmts[*nbPmt].tid = ((parser-&gt;read8i() &amp; 0x1F) &lt;&lt; 8) | parser-&gt;read8i();
++
++			aprintf(&quot;[TS] parsePat: programNumber: %d (%d/%d), PMT: %d\n&quot;, pmts[*nbPmt].programNumber, i + 1, entries, pmts[*nbPmt].tid);
++
++			(*nbPmt)++;
++		}
++	}
++
++	parser-&gt;setpos(startPos);
++
++	return 1;
+ }
++
+ /**
+       \fn     dmx_probePat(dmx_demuxerTS *demuxer, uint32_t *nbPmt,MPEG_PMT *pmts,uint32_t maxPMT)
+       \brief  Search for PAT and returns PMT info if found
+@@ -484,36 +458,103 @@
+       @param maxPMT : Maximum # of PMT we accept in pmts (in)
+ 
+ */
+-uint8_t dmx_probePat(dmx_demuxerTS *demuxer, uint32_t *nbPmt,MPEG_PMT *pmts,uint32_t maxPmt)
++int dmx_parsePmt(dmx_demuxerTS *demuxer, int pid, MPEG_TRACK *pmts, int *cur, int max)
+ {
+-  
+-  fileParser *parser;
+-  uint32_t curSection,maxSection;
+-  uint32_t left,toScan;
+-  
+-      parser=demuxer-&gt;getParser();
+-      *nbPmt=0;
+-      if(dmx_searchAndSkipHeader(0,demuxer,&amp;curSection, &amp;maxSection,&amp;left,&amp;toScan))
+-      {
+-        
+-              while(toScan &gt;=4 &amp;&amp; left&gt;=8)
+-              {
+-                  printf(&quot;**\n&quot;);
+-                  pmts[*nbPmt].programNumber=parser-&gt;read16i()&amp;0xFFFF;
+-                  pmts[*nbPmt].tid=parser-&gt;read16i()&amp;0x1FFF;
+-                  aprintf(&quot; [PAT]Program Number :%03x\n&quot;,pmts[*nbPmt].programNumber);
+-                  aprintf(&quot; [PAT]PID for this   :%03x\n&quot;,pmts[*nbPmt].tid);
+-                  aprintf(&quot; toScan :%u left :%u\n&quot;,toScan,left);
+-                  if((*nbPmt)&lt;maxPmt)
+-                      (*nbPmt)++;
+-                  left-=4;
+-                  toScan-=4;
+-              }
+-              return 1;
+-        
+-      }
+-      return 0;
++	uint8_t tableId, sectionNumber, lastSectionNumber;
++	uint16_t sectionLength, progId, progDescLength;
++	int32_t sectionBytes;
++	uint64_t startPos;
++	fileParser *parser = demuxer-&gt;getParser();
++	int entries;
++
++	parser-&gt;getpos(&amp;startPos);
++
++	// Decode PSI header
++	parser-&gt;read8i();	// Pointer field, can be ignored (?)
++
++	tableId = parser-&gt;read8i();	// 0
++
++	if (tableId != 2)
++	{
++		parser-&gt;setpos(startPos);
++		return 0;
++	}
++
++	sectionLength = ((parser-&gt;read8i() &amp; 0xf) &lt;&lt; 8 ) | parser-&gt;read8i();	// 1 &amp; 2
++	parser-&gt;read16i();	// 3 &amp; 4
++	parser-&gt;read8i(); // 5
++	sectionNumber = parser-&gt;read8i();	// 6
++	lastSectionNumber = parser-&gt;read8i(); // 7
++	parser-&gt;read16i(); // 8 &amp; 9
++	progDescLength = ((parser-&gt;read8i() &amp; 0xf) &lt;&lt; 8 ) | parser-&gt;read8i();	// 10 &amp; 11
++
++	if (progDescLength &gt; sectionLength - 9)
++	{
++		printf(&quot;[TS] parsePmt: Invalid progDesc length (%d/%d)\n&quot;, progDescLength, sectionLength - 9);
++		parser-&gt;setpos(startPos);
++
++		return 0;
++	}
++
++	parser-&gt;forward(progDescLength);
++
++	sectionBytes = sectionLength - 13 - progDescLength;	
++
++	while (sectionBytes &gt;= 5)
++	{
++		int esType, esPid, esDescLength;
++		const char *idString;
++		ADM_STREAM_TYPE streamType;
++		bool streamFound = false;
++
++		esType = parser-&gt;read8i();
++		esPid = ((parser-&gt;read8i() &amp; 0x1f) &lt;&lt; 8) | parser-&gt;read8i();
++		esDescLength = ((parser-&gt;read8i() &amp; 0xf) &lt;&lt; 8) | parser-&gt;read8i();
++		idString = dmx_streamType(esType, &amp;streamType);
++
++		if (esDescLength &gt; sectionBytes - 5)
++		{
++			printf(&quot;[TS] parsePmt: esDescLength too large %d &gt; %d\n&quot;, esDescLength, sectionBytes - 5);
++			return 0;
++		}
++
++		for (int i = 0; i &lt; *cur; i++)
++		{
++			if (pmts[i].pid == esPid)
++			{
++				streamFound = true;
++				break;
++			}
++		}
++
++		if (!streamFound &amp;&amp; *cur &lt; max)
++		{
++			pmts[*cur].pid = esPid;
++			pmts[*cur].streamType = streamType;
++
++			if (streamType == ADM_STREAM_MPEG_AUDIO)
++				pmts[*cur].pes = 0xC0;
++			else if(streamType == ADM_STREAM_MPEG_VIDEO)
++				pmts[*cur].pes = 0xE0;
++			else
++				pmts[*cur].pes = 0;
++
++			(*cur)++;
++		}
++
++		if (esDescLength)
++			parser-&gt;forward(esDescLength);
++
++		sectionBytes -= 5 + esDescLength;
++
++		aprintf(&quot;[TS] parsePmt: esPid: %d, esType: 0x%x (%s), esDescLength: %d, bytes left: %d\n&quot;, esPid, esType, idString, esDescLength, sectionBytes);
++	}
++
++	parser-&gt;setpos(startPos);
++
++	return 1;
+ }
++
+ const char *dmx_streamType(uint32_t type,ADM_STREAM_TYPE *streamType)
+ {
+  switch(type)
+@@ -528,76 +569,7 @@
+  *streamType=ADM_STREAM_UNKNOWN;
+   return &quot;???&quot;;
+ }
+-/**
+-      \fn     dmx_probePat(dmx_demuxerTS *demuxer, uint32_t *nbPmt,MPEG_PMT *pmts,uint32_t maxPMT)
+-      \brief  Search for PAT and returns PMT info if found
+-      @return 1 on success, 0 on failure
+-      @param demuxer: mpegTS demuxer (input)
+-      @param *nbPmt : number of PMTS found (output)
+-      @param *pmts : contains info about the PMT found (out but must be allocated by caller)
+-      @param maxPMT : Maximum # of PMT we accept in pmts (in)
+ 
+-*/
+-uint8_t dmx_probePMT(dmx_demuxerTS *demuxer, uint32_t pmtId,MPEG_TRACK *pmts,uint32_t *cur, uint32_t max)
+-{
+-  
+-  fileParser *parser;
+-  uint32_t curSection,maxSection;
+-  uint32_t left=0,toScan,programInfo=0;
+-  
+-      printf(&quot;Searching for PMT, pid=0x%x\n&quot;,pmtId);
+-      demuxer-&gt;changePid(pmtId,pmtId); // change pid as setPos will seek for them
+-      demuxer-&gt;setPos(0,0);
+-      parser=demuxer-&gt;getParser();
+-      if(dmx_searchAndSkipHeader(pmtId,demuxer,&amp;curSection, &amp;maxSection,&amp;left,&amp;toScan))
+-      {
+-          uint16_t alpha;
+-               alpha=parser-&gt;read16i();
+-               aprintf(&quot;[PMT]PCR for it    :x%x\n&quot;,alpha&amp;0x1FFF);
+-               programInfo=parser-&gt;read16i() &amp; 0x0FFF;
+-               aprintf(&quot;[PMT]Program Info  :%d\n&quot;,programInfo);
+-               if( (programInfo+2 &gt; left) || (programInfo+2&gt;toScan))
+-               {
+-                 printf(&quot;Program Info too big :%u\n&quot;,programInfo);
+-                 return 0;
+-               }
+-               parser-&gt;forward(programInfo);
+-               toScan-=(2+programInfo);
+-               left-=(2+programInfo);
+-               while(toScan &gt;=5 )
+-              {
+-                  uint8_t stream;
+-                  uint32_t pid,esDescLen;
+-                  const char *idString;
+-                  ADM_STREAM_TYPE streamType;
+-                  aprintf(&quot;**\n&quot;);
+-                  stream    =parser-&gt;read8i();
+-                  pid       =parser-&gt;read16i()&amp;0x1FFF;
+-                  esDescLen =parser-&gt;read16i()&amp;0x0FFF;
+-                  idString=dmx_streamType(stream,&amp;streamType);
+-                  aprintf(&quot;[PMT]Stream Type :0x%x (%s)\n&quot;,stream,idString);
+-                  aprintf(&quot;[PMT]Pid         :0x%x\n&quot;,pid);
+-                  aprintf(&quot;[PMT]ES Len      :%d\n&quot;,esDescLen);
+-                  
+-                  parser-&gt;forward(esDescLen);
+-                  left-=(5+esDescLen);
+-                  toScan-=(5+esDescLen);
+-                  if(*cur&lt;max)
+-                  {
+-                    pmts[*cur].pid=pid;
+-                    pmts[*cur].streamType=streamType;
+-                    pmts[*cur].pes=0x0;
+-                    if(streamType==ADM_STREAM_MPEG_AUDIO) pmts[*cur].pes=0xC0;
+-                    if(streamType==ADM_STREAM_MPEG_VIDEO) pmts[*cur].pes=0xE0;
+-                    
+-                    (*cur)++;
+-                  }
+-                  aprintf(&quot;[PMT]left %u toscan %u\n&quot;,left,toScan);
+-              }
+-              
+-      }
+-      return 0;
+-}
+ /**
+       \fn dmx_streamTypeAsSTring
+       \brief returns stream type as a printable string
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001533.html">[Avidemux-svn-commit] r4292 -	branches/avidemux_2.4_branch/avidemux/ADM_infoExtractor
+</A></li>
+	<LI>Next message: <A HREF="001535.html">[Avidemux-svn-commit] r4294 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1534">[ date ]</a>
+              <a href="thread.html#1534">[ thread ]</a>
+              <a href="subject.html#1534">[ subject ]</a>
+              <a href="author.html#1534">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

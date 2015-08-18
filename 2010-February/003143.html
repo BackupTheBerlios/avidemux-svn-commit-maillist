@@ -1,0 +1,216 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5938 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5938%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder%3A%0A%09include%20src&In-Reply-To=%3C201002180618.o1I6ItE1016241%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003142.html">
+   <LINK REL="Next"  HREF="003144.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5938 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder:	include src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5938%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder%3A%0A%09include%20src&In-Reply-To=%3C201002180618.o1I6ItE1016241%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5938 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Feb 18 07:18:55 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003142.html">[Avidemux-svn-commit] r5937 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavformat
+</A></li>
+        <LI>Next message: <A HREF="003144.html">[Avidemux-svn-commit] r5939 - in	branches/avidemux_2.6_branch_mean/avidemux: common	common/ADM_editor common/ADM_script	common/ADM_script2/include common/ADM_script2/src	qt4/ADM_userInterfaces/ADM_shell
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3143">[ date ]</a>
+              <a href="thread.html#3143">[ thread ]</a>
+              <a href="subject.html#3143">[ subject ]</a>
+              <a href="author.html#3143">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-02-18 07:18:53 +0100 (Thu, 18 Feb 2010)
+New Revision: 5938
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoderFFmpeg.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp
+Log:
+[encoder(lav)] Simpler &amp; much better PTS/DTS computation, workaroung delay when dealing with field based source
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoderFFmpeg.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoderFFmpeg.h	2010-02-18 06:18:37 UTC (rev 5937)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/include/ADM_coreVideoEncoderFFmpeg.h	2010-02-18 06:18:53 UTC (rev 5938)
+@@ -50,11 +50,11 @@
+                FILE             *statFile;
+                int              pass;   // Pass number = 1 or 2, valid only if we use 2 pass mode
+                bool             _isMT; // True if multithreaded
+-               uint64_t         nextDts;
+                bool             _globalHeader;
+                float            timeScaler;
+                vector &lt;ADM_timeMapping&gt;mapper;
+-               uint64_t         getRealPtsFromLav(uint64_t val);
++               bool             getRealPtsFromLav(uint64_t val,uint64_t *dts,uint64_t *pts);
++               vector &lt;uint64_t&gt;queueOfDts;
+ protected:
+     virtual               bool             prolog(void); 
+     virtual               bool             preEncode(void); 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp	2010-02-18 06:18:37 UTC (rev 5937)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp	2010-02-18 06:18:53 UTC (rev 5938)
+@@ -99,13 +99,21 @@
+     statFile=NULL;
+     _globalHeader=globalHeader;
+     _isMT=false;
+-    encoderDelay=source-&gt;getInfo()-&gt;frameIncrement*LAVS(max_b_frames);
++
++    uint64_t inc=source-&gt;getInfo()-&gt;frameIncrement;
++    if(inc&lt;30000) // Less than 30 ms , fps &gt; 30 fps it is probably field
++     {
++            inc*=2;
++            ADM_warning(&quot;It is probably field encoded, doubling increment\n&quot;);
++     }
++    encoderDelay=inc*LAVS(max_b_frames);
+     ADM_info(&quot;[Lavcodec] Using a video encoder delay of %d ms\n&quot;,(int)(encoderDelay/1000));
+     if(_globalHeader)
+     {
+                 ADM_info(&quot;Codec configured to use global header\n&quot;);
+                 _context-&gt;flags|=CODEC_FLAG_GLOBAL_HEADER;
+     }
++    
+ }
+ /**
+     \fn ADM_coreVideoEncoderFFmpeg
+@@ -182,6 +190,7 @@
+ #else
+ 
+     int n,d;
++    
+     usSecondsToFrac(f,&amp;n,&amp;d);
+  //   printf(&quot;[ff] Converted a time increment of %d ms to %d /%d seconds\n&quot;,f/1000,n,d);
+     _context-&gt;time_base.num=n;
+@@ -223,7 +232,8 @@
+     prolog();
+ 
+     uint64_t p=image-&gt;Pts;
+-    nextDts=image-&gt;Pts;
++    queueOfDts.push_back(p);
++    aprintf(&quot;Incoming frame PTS=%&quot;LLU&quot;, delay=%&quot;LLU&quot;\n&quot;,p,getEncoderDelay());
+     p+=getEncoderDelay();
+     _frame.pts= timingToLav(p);    //
+     if(!_frame.pts) _frame.pts=AV_NOPTS_VALUE;
+@@ -365,21 +375,26 @@
+     \fn getRealPtsFromLav
+     \brief Lookup in the stored value to get the exact pts from the truncated one from lav
+ */
+-uint64_t ADM_coreVideoEncoderFFmpeg::getRealPtsFromLav(uint64_t val)
++bool ADM_coreVideoEncoderFFmpeg::getRealPtsFromLav(uint64_t val,uint64_t *dts,uint64_t *pts)
+ {
+     int n=mapper.size();
+     for(int i=0;i&lt;n;i++)
+     {
+         if(mapper[i].lavTS==val)
+         {
+-            uint64_t r=mapper[i].realTS;
++            *pts=mapper[i].realTS;
+             mapper.erase(mapper.begin()+i);
+-            return r;
++            // Now get DTS, it is min (lastDTS+inc, PTS-delay)
++            ADM_assert(queueOfDts.size());
++            *dts=queueOfDts[0];
++            queueOfDts.erase(queueOfDts.begin());
++            return true;
+         }
+     }
+     ADM_warning(&quot;Cannot find PTS : %&quot;LLU&quot;\n&quot;,val);  
+     for(int i=0;i&lt;n;i++) ADM_warning(&quot;%d : %&quot;LLU&quot;\n&quot;,i,mapper[i].lavTS);
+     ADM_assert(0);
++    return false;
+ 
+ }
+ /**
+@@ -394,6 +409,11 @@
+     {
+         pict_type=_context-&gt;coded_frame-&gt;pict_type;
+         keyframe=_context-&gt;coded_frame-&gt;key_frame;
++    }else
++    {
++        out-&gt;len=0;
++        ADM_warning(&quot;No picture...\n&quot;);
++        return false;
+     }
+     aprintf(&quot;[ffMpeg4] Out Quant :%d, pic type %d keyf %d\n&quot;,out-&gt;out_quantizer,pict_type,keyframe);
+     out-&gt;len=size;
+@@ -401,24 +421,12 @@
+     if(keyframe) 
+         out-&gt;flags=AVI_KEY_FRAME;
+     else if(pict_type==FF_B_TYPE)
+-            out-&gt;flags=AVI_B_FRAME;
++        out-&gt;flags=AVI_B_FRAME;
+     
+     // Update PTS/Dts
+-
+-    out-&gt;pts= getRealPtsFromLav(_context-&gt;coded_frame-&gt;pts);
+-// Since we will buffer frame, we have to minus that from dts
+-// which is in fact the pts of the currently encoded frame
+-    uint64_t preDts;
+-    if(nextDts&gt;=getEncoderDelay())
+-    {
+-        preDts=nextDts-getEncoderDelay(); 
+-     }
+-    else                                    
+-    {
+-        preDts=0;
+-    }
+-#warning simplify
+-    out-&gt;dts=preDts;
++    getRealPtsFromLav(_context-&gt;coded_frame-&gt;pts,&amp;(out-&gt;dts),&amp;(out-&gt;pts));
++    
++    
+     aprintf(&quot;Codec&gt;Out pts=%&quot;LLU&quot; us, out Dts=%&quot;LLU&quot;\n&quot;,out-&gt;pts,out-&gt;dts);    
+ 
+     // Update quant
+@@ -427,6 +435,8 @@
+     else
+       out-&gt;out_quantizer =(int) floor (_context-&gt;coded_frame-&gt;quality / (float) FF_QP2LAMBDA);
+ 
++    
++
+     // Update stats
+     if(Settings.params.mode==COMPRESS_2PASS   || Settings.params.mode==COMPRESS_2PASS_BITRATE)
+     {
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003142.html">[Avidemux-svn-commit] r5937 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavformat
+</A></li>
+	<LI>Next message: <A HREF="003144.html">[Avidemux-svn-commit] r5939 - in	branches/avidemux_2.6_branch_mean/avidemux: common	common/ADM_editor common/ADM_script	common/ADM_script2/include common/ADM_script2/src	qt4/ADM_userInterfaces/ADM_shell
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3143">[ date ]</a>
+              <a href="thread.html#3143">[ thread ]</a>
+              <a href="subject.html#3143">[ subject ]</a>
+              <a href="author.html#3143">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

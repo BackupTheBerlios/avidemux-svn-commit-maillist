@@ -1,0 +1,269 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6976 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6976%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser%3A%0A%09include%20src&In-Reply-To=%3C20110205164315.2189348135F%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004148.html">
+   <LINK REL="Next"  HREF="004150.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6976 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6976%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser%3A%0A%09include%20src&In-Reply-To=%3C20110205164315.2189348135F%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6976 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Feb  5 17:43:14 CET 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004148.html">[Avidemux-svn-commit] r6975 - in branches/avidemux_2.6_branch_mean:	. avidemux avidemux_plugins cmake myOwnPlugins/videoFilter
+</A></li>
+        <LI>Next message: <A HREF="004150.html">[Avidemux-svn-commit] r6977 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4149">[ date ]</a>
+              <a href="thread.html#4149">[ thread ]</a>
+              <a href="subject.html#4149">[ subject ]</a>
+              <a href="author.html#4149">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-02-05 17:43:14 +0100 (Sat, 05 Feb 2011)
+New Revision: 6976
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacinfo.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacinfo.cpp
+Log:
+[AAC] Add simple AAC/ADTS parser
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacinfo.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacinfo.h	2011-02-03 18:56:36 UTC (rev 6975)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacinfo.h	2011-02-05 16:43:14 UTC (rev 6976)
+@@ -6,7 +6,7 @@
+ #ifndef ADM__AAC__INFO
+ #define ADM__AAC__INFO
+ 
+-typedef struct AacAudioInfo
++typedef struct 
+ {
+ 	
+ 	uint32_t layer;		// 0 mpeg4, 1 mpeg2 
+@@ -20,8 +20,6 @@
+ 
+ }AacAudioInfo;
+ 
+-uint8_t	getAACFrameInfo(uint8_t *stream,uint32_t maxSearch, AacAudioInfo *mpegInfo,AacAudioInfo *templ,
+-			uint32_t *offset);
+ 
+-
+-#endif
++bool getAdtsAacInfo(int size, uint8_t *data, AacAudioInfo *info);
++#endif
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacinfo.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacinfo.cpp	2011-02-03 18:56:36 UTC (rev 6975)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacinfo.cpp	2011-02-05 16:43:14 UTC (rev 6976)
+@@ -28,6 +28,17 @@
+ //#include &quot;aviaudio.hxx&quot;
+ #include &quot;ADM_aacinfo.h&quot;
+ 
++static const int aacChannels[8]=
++{
++0, //0: Defined in AOT Specifc Config
++1, //1: 1 channel: front-center
++2, //2: 2 channels: front-left, front-right
++3, //3: 3 channels: front-center, front-left, front-right
++4, //4: 4 channels: front-center, front-left, front-right, back-center
++5, // 5: 5 channels: front-center, front-left, front-right, back-left, back-right
++6, // 6: 6 channels: front-center, front-left, front-right, back-left, back-right, LFE-channel
++8 // 7: 8 channels: front-center, front-left, front-right, side-left, side-right, back-left, back-right, LFE-channel
++};
+ 
+ static 	uint32_t aacBitrate[16]=
+ {
+@@ -78,61 +89,96 @@
+ 	16		crc
+ 	
+ */
++#define x_log ADM_info
++/**
++    \fn getAdtsAacInfo
++*/
+ 
+-uint8_t	getAACFrameInfo(uint8_t *stream,uint32_t maxSearch, AacAudioInfo *mpegInfo,AacAudioInfo *templ,uint32_t *offset)
++bool getAdtsAacInfo(int size, uint8_t *ptr, AacAudioInfo *info)
+ {
+-uint32_t start=0,found=0,part;
+-uint8_t  a[8];
+-uint32_t nfq,fqindex,brindex,index,nbframe=0;
+-			memset(mpegInfo,0,sizeof(*mpegInfo));
+-			memcpy(a+1,stream,7);
+-			do
+-			{
+-				
+-				memmove(a,a+1,7);
+-				a[7]=stream[start+7];
+-				if(start&gt;=maxSearch-7) break;
+-				start++;
+-				if(a[0]==0xff &amp;&amp; ((a[1]&amp;0xF6)==0xF0))
+-				{
+-					// Layer
+-                                        part=a[1]&amp;0xf;
+-					mpegInfo-&gt;layer=(part&gt;&gt;3);	
+-					if(part &amp; 0x6) continue;
+-					
+-					mpegInfo-&gt;profile=a[2]&gt;&gt;6;
+-					mpegInfo-&gt;samplerate=aacBitrate[(a[2]&gt;&gt;2) &amp; 0xF];
+-					mpegInfo-&gt;channels=((a[2]&amp;1)&lt;&lt;2)+(a[3]&gt;&gt;6);
+-					nbframe=(a[6]&gt;&gt;6)&amp;3;
+-					nbframe++;
+-					mpegInfo-&gt;size=((a[3]&amp;3)&lt;&lt;11)
+-							+((a[4])&lt;&lt;3)
+-							+((a[5]&gt;&gt;5));
+-						
+-					if(!mpegInfo-&gt;samplerate) continue;
+-					
+-					found=1;
+-				}
+-				
+-			}while(!found &amp;&amp; start&lt;maxSearch-4);
+-			if(!found)
+-				{	
+-					return 0;
+-				}
+-			*offset=start-1;
+-			printf(&quot;AAC Frame found at offset :%u layer:%u profile:%u samperate:%u channels:%u size:%u nbBlock:%u\n&quot;,
+-					*offset,
+-					mpegInfo-&gt;layer,
+-					mpegInfo-&gt;profile, 
+-					mpegInfo-&gt;samplerate,
+-					mpegInfo-&gt;channels,
+-					mpegInfo-&gt;size,
+-					nbframe);
+-			return 1;
+-			
++    uint8_t *org=ptr;
++    uint8_t *limit=ptr+size;
++    if(size&lt;8) return false;
++    if(ptr[0]!=0xff || (ptr[1]&gt;&gt;4)!=0xf)
++    {
++            x_log(&quot;Wrong adts header %02x %02x\n&quot;,ptr[0],ptr[1]);
++            return false;
++    }
++    // [1] Mpeg2=0,Mpeg4=1
++    // [2] Layer =0
++    // [1] 1: no CRC, 0:CRC present
++    ptr++;
++    bool crc=!(ptr[0]&amp;1);
++    if(crc)
++        x_log(&quot;CRC\n&quot;);
++    else
++        x_log(&quot;No CRC\n&quot;);
++    ptr++;
++    //----
++    // [2] Profile, objectType -1
++    // [4] Sample rate
++    // [1] 0
++    // [1] Channel mapping
++    //
++    //....
++    int samplerate=(ptr[0]&gt;&gt;2)&amp;0xf;
++    int fq=aacBitrate[samplerate];
++    ADM_info(&quot;Frequency : %d\n&quot;,fq);
++    if(!fq)
++    {
++        ADM_warning(&quot;Invalid samplerate\n&quot;);
++        return false;
++    }
++    info-&gt;samplerate=fq;
++    int channelMapping=((ptr[0]&amp;1)&lt;&lt;2)+(ptr[1]&gt;&gt;6);
++    if(channelMapping&gt;=8)
++    {
++        ADM_warning(&quot;Bad channel\n&quot;);
++        return false;
++    }
++    ADM_info(&quot;Channels %d\n&quot;,aacChannels[channelMapping]);
++    info-&gt;channels=aacChannels[channelMapping];
++    ptr++;
++    //-------
++    
++   
++    // [2] Channel mapping continued
++    // [1] original =0
++    // [1] home =0
++    // [1] Copyright=0
++    // [1] Copyright start=0
++    // [2] Size (including header)
++    //
++    //....
++    
++    uint32_t frameSize=(ptr[0]&gt;&gt;6)&amp;1;
++    frameSize=(frameSize&lt;&lt;8)+ptr[1];
++    frameSize=(frameSize&lt;&lt;3)+(ptr[2]&gt;&gt;5);
++    if(frameSize!=size)
++    {
++        x_log(&quot;Frame size mismatch : computed %d, got %d\n&quot;,frameSize,size);
++        return false;
++    }
++    ptr++;
++    // [8] Size (continued)
++    //
++    //....
++    
++    ptr++;
++    // [3] Size (continued)
++    // [5] ??
++    //
++    //....
+ 
+-	
++    ptr++;
++    // [6] ??
++    // [2] Frame count
++    //
++    //....
++    ptr++;
++    // Data
++    return true;
++}
+ 
+-}
+ //____________
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004148.html">[Avidemux-svn-commit] r6975 - in branches/avidemux_2.6_branch_mean:	. avidemux avidemux_plugins cmake myOwnPlugins/videoFilter
+</A></li>
+	<LI>Next message: <A HREF="004150.html">[Avidemux-svn-commit] r6977 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4149">[ date ]</a>
+              <a href="thread.html#4149">[ thread ]</a>
+              <a href="subject.html#4149">[ subject ]</a>
+              <a href="author.html#4149">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

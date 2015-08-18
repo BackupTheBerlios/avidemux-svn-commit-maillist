@@ -1,0 +1,158 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5973 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5973%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif&In-Reply-To=%3C201003050618.o256IbTl014261%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003171.html">
+   <LINK REL="Next"  HREF="003179.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5973 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5973%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif&In-Reply-To=%3C201003050618.o256IbTl014261%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5973 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Mar  5 07:18:37 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003171.html">[Avidemux-svn-commit] r5972 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif
+</A></li>
+        <LI>Next message: <A HREF="003179.html">[Avidemux-svn-commit] r5974 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoFilter2/include	avidemux/common/ADM_videoFilter2/src	avidemux_core/ADM_coreImage/include avidemux_core/ADM_coreImage/src	avidemux_core/ADM_coreVideoFilter/include	avidemux_core/ADM_coreVideoFilter/src	avidemux_plugins/ADM_videoEncoder/null	avidemux_plugins/ADM_videoEncoder/png	avidemux_plugins/ADM_videoEncoder/yv12	avidemux_plugins/ADM_videoFilters6/dummy	avidemux_plugins/ADM_videoFilters6/verticalFlip
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3178">[ date ]</a>
+              <a href="thread.html#3178">[ thread ]</a>
+              <a href="subject.html#3178">[ subject ]</a>
+              <a href="author.html#3178">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-03-05 07:18:35 +0100 (Fri, 05 Mar 2010)
+New Revision: 5973
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif/ADM_vidYadif.cpp
+Log:
+[yadif] update to new filter scheme
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif/ADM_vidYadif.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif/ADM_vidYadif.cpp	2010-03-04 06:39:10 UTC (rev 5972)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif/ADM_vidYadif.cpp	2010-03-05 06:18:35 UTC (rev 5973)
+@@ -62,10 +62,10 @@
+                     yadifFilter(ADM_coreVideoFilter *previous,CONFcouple *conf);
+                     ~yadifFilter();
+ 
+-       virtual const char   *getConfiguration(void);                 /// Return  current configuration as a human readable string
+-       virtual bool         getNextFrame(ADMImage *image);           /// Return the next image
+-	   virtual bool         getCoupledConf(CONFcouple **couples) ;   /// Return the current filter configuration
+-       virtual bool         configure(void) ;                        /// Start graphical user interface
++        virtual const char   *getConfiguration(void);                 /// Return  current configuration as a human readable string
++        virtual bool         getNextFrame(uint32_t *fn,ADMImage *image);           /// Return the next image
++        virtual bool         getCoupledConf(CONFcouple **couples) ;   /// Return the current filter configuration
++        virtual bool         configure(void) ;                        /// Start graphical user interface
+ };
+ 
+ // Add the hook to make it valid plugin
+@@ -175,9 +175,9 @@
+     \fn getConfiguration
+     \brief Return current setting as a string
+ */
+-bool yadifFilter::getNextFrame(ADMImage *image)
++bool yadifFilter::getNextFrame(uint32_t *fn,ADMImage *image)
+ {
+-#if 0
++
+         int mode;
+         int parity;
+         int tff;
+@@ -190,9 +190,9 @@
+         mode = configuration.mode;
+ 
+         if (mode &amp; 1) 
+-                n = (frame&gt;&gt;1); // bob
++                n = (nextFrame&gt;&gt;1); // bob
+         else
+-                n = frame;
++                n = nextFrame;
+ 
+         src = vidCache-&gt;getImage(n);
+   // Request frame 'n' from the child (source) clip.
+@@ -200,18 +200,16 @@
+         if (n&gt;0)
+                 prev =  vidCache-&gt;getImage( n-1); // get previous frame
+         else
+-                prev= vidCache-&gt;getImage(0); // get very first frame
++                prev= src; // get very first frame
+ 
+-        if (n&lt; _in-&gt;getInfo()-&gt;nb_frames-1)
+-                next = vidCache-&gt;getImage( n+1); // get next frame
+-        else
+-                next = vidCache-&gt;getImage( _in-&gt;getInfo()-&gt;nb_frames-1); // get last frame
++        next=vidCache-&gt;getImage(n+1);
++        if(!next) next=src;
+ 
+-        dst = data;
++        dst = image;
+         
+         if(!prev || !src || !next)
+         {
+-            printf(&quot;Failed to read frame for frame %u\n&quot;,frame);
++            printf(&quot;Failed to read frame for frame %u\n&quot;,nextFrame);
+             vidCache-&gt;unlockAll();
+             return 0;
+         }
+@@ -226,7 +224,7 @@
+ #endif
+                 tff = configuration.order;	
+         
+-        parity = (mode &amp; 1) ? (frame &amp; 1) ^ (1^tff) : (tff ^ 1);  // 0 or 1
++        parity = (mode &amp; 1) ? (nextFrame &amp; 1) ^ (1^tff) : (tff ^ 1);  // 0 or 1
+ 
+       //MEANX  cpu = avs_get_cpu_flags(p-&gt;env);
+ 
+@@ -289,8 +287,8 @@
+                 if (next_pitch != src_pitch)
+                         ADM_dealloc(nextp);
+         }
+-       vidCache-&gt;unlockAll();
+-#endif
++      vidCache-&gt;unlockAll();
++      nextFrame++;
+       return 1;
+ }
+ //****************
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003171.html">[Avidemux-svn-commit] r5972 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/yadif
+</A></li>
+	<LI>Next message: <A HREF="003179.html">[Avidemux-svn-commit] r5974 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoFilter2/include	avidemux/common/ADM_videoFilter2/src	avidemux_core/ADM_coreImage/include avidemux_core/ADM_coreImage/src	avidemux_core/ADM_coreVideoFilter/include	avidemux_core/ADM_coreVideoFilter/src	avidemux_plugins/ADM_videoEncoder/null	avidemux_plugins/ADM_videoEncoder/png	avidemux_plugins/ADM_videoEncoder/yv12	avidemux_plugins/ADM_videoFilters6/dummy	avidemux_plugins/ADM_videoFilters6/verticalFlip
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3178">[ date ]</a>
+              <a href="thread.html#3178">[ thread ]</a>
+              <a href="subject.html#3178">[ subject ]</a>
+              <a href="author.html#3178">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

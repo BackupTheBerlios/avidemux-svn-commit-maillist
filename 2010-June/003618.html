@@ -1,0 +1,162 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6429 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6429%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C201006271519.o5RFJ2kp028697%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003617.html">
+   <LINK REL="Next"  HREF="003619.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6429 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6429%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src&In-Reply-To=%3C201006271519.o5RFJ2kp028697%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6429 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jun 27 17:19:02 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003617.html">[Avidemux-svn-commit] r6428 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudioParser/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="003619.html">[Avidemux-svn-commit] r6430 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3618">[ date ]</a>
+              <a href="thread.html#3618">[ thread ]</a>
+              <a href="subject.html#3618">[ subject ]</a>
+              <a href="author.html#3618">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-06-27 17:19:01 +0200 (Sun, 27 Jun 2010)
+New Revision: 6429
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_getbits.cpp
+Log:
+[All] Wrap get_bits inside a class to avoid including fffmpeg headers directly. Slower but safer
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_getbits.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_getbits.cpp	2010-06-27 15:18:59 UTC (rev 6428)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/ADM_getbits.cpp	2010-06-27 15:19:01 UTC (rev 6429)
+@@ -0,0 +1,85 @@
++/**
++        \file ADM_getbits.cpp
++        \brief Wrapper around ffmpeg getbits function
++        \author mean <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.Fr</A> (c) 2010
++
++*/
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;ADM_includeFfmpeg.h&quot;
++
++#include &quot;ADM_default.h&quot;
++
++#ifndef ADM_getbits_H
++#define ADM_getbits_H
++extern &quot;C&quot;
++{
++#define ADM_NO_CONFIG_H
++#include &quot;ADM_ffmpeg/libavutil/common.h&quot;
++#include &quot;ADM_ffmpeg/libavutil/bswap.h&quot;
++#ifndef INT_MAX
++#define INT_MAX (0x7FFFFFFF)
++#endif
++#include &quot;ADM_ffmpeg/ffmpeg_config/config.h&quot;
++#include &quot;ADM_ffmpeg/libavutil/internal.h&quot;
++#include &quot;ADM_ffmpeg/libavcodec/get_bits.h&quot;
++#include &quot;ADM_ffmpeg/libavcodec/golomb.h&quot;
++}
++#undef printf
++#undef sprintf
++#endif
++
++
++#include &quot;ADM_getbits.h&quot;
++/**
++    \fn ctor
++*/
++getBits::getBits(int bufferSize, uint8_t *buffer)
++{
++    GetBitContext *c=new  GetBitContext;
++    init_get_bits(c,buffer,bufferSize*8);
++    ctx=(void *)c;
++
++}
++/**
++    \fn dtor
++*/
++getBits::~getBits()
++{
++    GetBitContext *c= (GetBitContext *)ctx;
++    delete c;
++    ctx=NULL;
++}
++int getBits::get(int nb)
++{
++    if(nb&gt;15) return get_bits_long((GetBitContext *)ctx,nb);
++    return get_bits( (GetBitContext *)ctx,nb);
++}
++int getBits::skip(int nb)
++{
++     skip_bits( (GetBitContext *)ctx,nb);
++     return 0; 
++}
++int getBits::getUEG(void)
++{
++    return get_ue_golomb( (GetBitContext *)ctx);
++}
++int getBits::getSEG(void)
++{
++    return get_se_golomb( (GetBitContext *)ctx);
++}
++int getBits::getUEG31(void)
++{
++    return get_ue_golomb_31( (GetBitContext *)ctx);
++}
++int getBits::getConsumedBits(void)
++{
++    return get_bits_count((GetBitContext *)ctx);
++}
++// EOF
+\ No newline at end of file
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003617.html">[Avidemux-svn-commit] r6428 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudioParser/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="003619.html">[Avidemux-svn-commit] r6430 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3618">[ date ]</a>
+              <a href="thread.html#3618">[ thread ]</a>
+              <a href="subject.html#3618">[ subject ]</a>
+              <a href="author.html#3618">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

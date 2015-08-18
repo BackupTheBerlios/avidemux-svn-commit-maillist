@@ -1,0 +1,157 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3141 -	branches/avidemux_2.4_branch/avidemux/ADM_video
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3141%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_video&In-Reply-To=%3C200705251319.l4PDJDvp016980%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000435.html">
+   <LINK REL="Next"  HREF="000437.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3141 -	branches/avidemux_2.4_branch/avidemux/ADM_video</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3141%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_video&In-Reply-To=%3C200705251319.l4PDJDvp016980%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3141 -	branches/avidemux_2.4_branch/avidemux/ADM_video">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri May 25 15:19:13 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000435.html">[Avidemux-svn-commit] r3140 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2
+</A></li>
+        <LI>Next message: <A HREF="000437.html">[Avidemux-svn-commit] r3142 -	branches/avidemux_2.4_branch/avidemux/ADM_ocr
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#436">[ date ]</a>
+              <a href="thread.html#436">[ thread ]</a>
+              <a href="subject.html#436">[ subject ]</a>
+              <a href="author.html#436">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-05-25 15:19:12 +0200 (Fri, 25 May 2007)
+New Revision: 3141
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_vidVobSubRender.cpp
+Log:
+make vobsub ocr more resistent to problems
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_vidVobSubRender.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_vidVobSubRender.cpp	2007-05-24 19:09:15 UTC (rev 3140)
++++ branches/avidemux_2.4_branch/avidemux/ADM_video/ADM_vidVobSubRender.cpp	2007-05-25 13:19:12 UTC (rev 3141)
+@@ -247,6 +247,7 @@
+ {        
+         odd=even=0;
+         aprintf(&quot;**Cur: A:%llx R:%llx next:%llx\n&quot;,posA,posR,_vobSubInfo-&gt;lines[idx+1].fileOffset);
++        
+         _subSize=_parser-&gt;read16i();
+         if(!_subSize)
+         {
+@@ -270,6 +271,11 @@
+         // We got the full packet
+         // now scan it
+         _curOffset=2;
++        if(_subSize&lt;4)
++        {
++          printf(&quot;[handleSub] Packet too short!\n&quot;);
++          return 1; 
++        }
+         _dataSize=readword();
+         aprintf(&quot;data block=%lu\n&quot;,_dataSize);
+         if(_dataSize&lt;=4)
+@@ -290,8 +296,11 @@
+                 
+                 while(_curOffset&lt;next)
+                 {
++                      
++                      
+                         command=readbyte();
+                         aprintf(&quot;vobsub:Command : %d date:%d next:%d cur:%lu\n&quot;,command,date,next,_curOffset);
++                        int left=next-_curOffset;
+                         switch(command)
+                         {
+                                 case 00: _displaying=1;
+@@ -318,6 +327,11 @@
+ #endif                                        
+                                         break;
+                                 case 03: // Pallette 4 nibble= 16 bits
++                                         if(left&lt;2)
++                                         {
++                                            printf(&quot;Command 3: Palette: Not enough bytes left\n&quot;);
++                                            return 1; 
++                                         }
+                                          dum=readword();
+                                         _colors[0]=dum&gt;&gt;12;
+                                         _colors[1]=0xf &amp; (dum&gt;&gt;8);
+@@ -328,6 +342,12 @@
+                                         break;
+                                 case 04: // alpha channel
+                                          //4 nibble= 16 bits
++                                        if(left&lt;2)
++                                         {
++                                            printf(&quot;Command 4: Alpha: Not enough bytes left\n&quot;);
++                                            return 1; 
++                                         }
++
+                                         dum=readword();
+                                         _alpha[0]=dum&gt;&gt;12;
+                                         _alpha[1]=0xf &amp; (dum&gt;&gt;8);
+@@ -340,6 +360,11 @@
+                                         {
+                                                 uint16_t a,b,c;
+                                                 uint32_t nx1,nx2,ny1,ny2;
++                                                if(left&lt;6)
++                                                {
++                                                    printf(&quot;Command 5: Coord: Not enough bytes left\n&quot;);
++                                                    return 1; 
++                                                }
+                                                 if(doneA) return 1;
+                                                 doneA++;
+                                                 a=readword();
+@@ -377,7 +402,11 @@
+                                         {
+                                                 if(doneB) return 1;
+                                                 doneB++;
+-
++                                                if(left&lt;4)
++                                                {
++                                                    printf(&quot;Command 6: RLE: Not enough bytes left\n&quot;);
++                                                    return 1; 
++                                                }
+                                         odd=readword();                                        
+                                         even=readword();
+  
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000435.html">[Avidemux-svn-commit] r3140 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2
+</A></li>
+	<LI>Next message: <A HREF="000437.html">[Avidemux-svn-commit] r3142 -	branches/avidemux_2.4_branch/avidemux/ADM_ocr
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#436">[ date ]</a>
+              <a href="thread.html#436">[ thread ]</a>
+              <a href="subject.html#436">[ subject ]</a>
+              <a href="author.html#436">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

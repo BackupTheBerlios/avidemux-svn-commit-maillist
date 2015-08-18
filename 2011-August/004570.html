@@ -1,0 +1,272 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7419 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7419%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src&In-Reply-To=%3C20110815140624.E78B0481298%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004569.html">
+   <LINK REL="Next"  HREF="004571.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7419 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7419%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src&In-Reply-To=%3C20110815140624.E78B0481298%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7419 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Aug 15 16:06:24 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004569.html">[Avidemux-svn-commit] r7418 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl
+</A></li>
+        <LI>Next message: <A HREF="004571.html">[Avidemux-svn-commit] r7420 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4570">[ date ]</a>
+              <a href="thread.html#4570">[ thread ]</a>
+              <a href="subject.html#4570">[ subject ]</a>
+              <a href="author.html#4570">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-08-15 16:06:24 +0200 (Mon, 15 Aug 2011)
+New Revision: 7419
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageUtils.cpp
+Log:
+[CoreUtil] MMX YUV444 to yv12, part 1
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageUtils.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageUtils.cpp	2011-08-15 14:06:23 UTC (rev 7418)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src/ADM_imageUtils.cpp	2011-08-15 14:06:24 UTC (rev 7419)
+@@ -582,45 +582,174 @@
+ /**
+     \fn convertFromYUV444
+ */
++static inline void yuv444_C(uint8_t *src,uint8_t *dst,int w,int h,int s)
++{
++    src+=2;
++    for(int y=0;y&lt;h;y++)
++    {
++        for(int x=0;x&lt;w;x++)
++                dst[x]=src[4*x];
++        dst+=s;
++        src+=4*w;
++    }
++}
++#ifdef ADM_CPU_X86
++static inline void yuv444_MMX(uint8_t *src,uint8_t *dst,int w,int h,int s)
++{
++static uint64_t FUNNY_MANGLE(mask);
++    mask=0x00ff000000ff0000LL;
++  //mask=0x0000ff000000ff00LL;
++    __asm__(&quot; movq &quot;Mangle(mask)&quot;, %%mm7\n&quot; ::);
++    __asm__(&quot; pxor %%mm6,%%mm6\n&quot; ::);
++    
++    int step=w/8;
++    int left=w-8*step;
++    uint8_t *xsrc=src;
++    uint8_t *xdst=dst;
++
++    for(int y=0;y&lt;h;y++)
++    {
++        xsrc=src;
++        xdst=dst;
++        for(int x=0;x&lt;step;x++)
++        {
++                        __asm__(
++                        &quot;movq           (%0),%%mm0 \n&quot;
++                        &quot;pand           %%mm7,%%mm0\n&quot;
++                        &quot;movq           8(%0),%%mm1 \n&quot;
++                        &quot;pand           %%mm7,%%mm1\n&quot;
++
++                        &quot;movq           16(%0),%%mm2 \n&quot;
++                        &quot;pand           %%mm7,%%mm2\n&quot;
++                        &quot;movq           24(%0),%%mm3 \n&quot;
++                        &quot;pand           %%mm7,%%mm3\n&quot;
++
++                        &quot;packuswb       %%mm1,%%mm0\n&quot;
++                        &quot;packuswb       %%mm3,%%mm2\n&quot;
++                        &quot;psrlw          $8,%%mm0\n&quot;
++                        &quot;psrlw          $8,%%mm2\n&quot;
++                        &quot;packuswb       %%mm2,%%mm0\n&quot;
++
++                        &quot;movq           %%mm0,(%1) \n&quot;                       
++                        
++                        
++                        :: &quot;r&quot;(xsrc),&quot;r&quot;(xdst)
++                        );
++                        xsrc+=32;
++                        xdst+=8;
++            }
++        for(int i=0;i&lt;left;i++)
++             xdst[i]=xsrc[4*i];
++        dst+=s;
++        src+=4*w;
++    }
++     __asm__( &quot;emms\n&quot;::  );
++
++}
++#endif
++#ifdef ADM_CPU_X86
++static inline void YUV444_chroma_MMX(uint8_t *src,uint8_t *dst,int w,int h,int s)
++{
++static uint64_t FUNNY_MANGLE(mask2);
++    mask2=0x000000FF000000FFLL;
++    __asm__(&quot; movq &quot;Mangle(mask2)&quot;, %%mm7\n&quot; ::);
++    __asm__(&quot; pxor %%mm6,%%mm6\n&quot; ::);
++    int step=w/8;
++    int left=w-8*step;
++    uint8_t *xsrc=src;
++    uint8_t *xdst=dst;
++
++    for(int y=0;y&lt;h;y++)
++    {
++        xsrc=src;
++        xdst=dst;
++        for(int x=0;x&lt;step;x++)
++        {
++                        __asm__(
++                        &quot;movq           (%0),%%mm0 \n&quot;
++                        &quot;movq           8(%0),%%mm1 \n&quot;
++                        &quot;movq           16(%0),%%mm2 \n&quot;
++                        &quot;movq           24(%0),%%mm3 \n&quot;
++
++                        &quot;pand           %%mm7,%%mm0\n&quot;
++                        &quot;pand           %%mm7,%%mm1\n&quot;
++                        &quot;pand           %%mm7,%%mm2\n&quot;
++                        &quot;pand           %%mm7,%%mm3\n&quot;
++
++                        &quot;packuswb       %%mm0,%%mm1\n&quot;
++                        &quot;packuswb       %%mm2,%%mm3\n&quot;
++                        &quot;packuswb       %%mm1,%%mm3\n&quot;
++                        
++                        &quot;movq           %%mm3,(%1) \n&quot;                       
++                        :: &quot;r&quot;(xsrc),&quot;r&quot;(xdst)
++                        );
++                        xsrc+=64;
++                        xdst+=8;
++            }
++        for(int i=0;i&lt;left;i++)
++             xdst[i]=xsrc[4*i];
++        dst+=s;
++        src+=4*w*4;
++    }
++     __asm__( &quot;emms\n&quot;::  );
++
++}
++#endif
++/**
++    \fn YUV444_chroma_C
++*/
++static inline void YUV444_chroma_C(uint8_t *src,uint8_t *dst,int w,int h,int s)
++{
++    for(int y=0;y&lt;h;y++)
++    {
++        for(int x=0;x&lt;w;x++)
++                dst[x]=src[8*x];
++        dst+=s;
++        src+=4*w*2*2;
++    }
++}
++
++
+ bool ADMImage::convertFromYUV444(uint8_t *from)
+ {
+     int stride=this-&gt;GetPitch(PLANAR_Y);
+     int width=this-&gt;GetWidth(PLANAR_Y);
+     int height=this-&gt;GetHeight(PLANAR_Y);
+     uint8_t *dst=this-&gt;GetWritePtr(PLANAR_Y);
+-    uint8_t *src=from+2;
+-    for(int y=0;y&lt;height;y++)
+-    {
+-        for(int x=0;x&lt;width;x++)
+-                dst[x]=src[4*x];
+-        dst+=stride;
+-        src+=4*width;
+-    }
++    uint8_t *src=from;
++
++    #ifdef ADM_CPU_X86
++        if(CpuCaps::hasMMX())
++            yuv444_MMX(src,dst,width,height,stride);            
++        else
++    #endif
++            yuv444_C(src,dst,width,height,stride);
++    
++
+     //
+     stride=this-&gt;GetPitch(PLANAR_U);
+     width=this-&gt;GetWidth(PLANAR_U);
+     height=this-&gt;GetHeight(PLANAR_U);
+     dst=this-&gt;GetWritePtr(PLANAR_U);
+     src=from+0;
+-    for(int y=0;y&lt;height;y++)
+-    {
+-        for(int x=0;x&lt;width;x++)
+-                dst[x]=src[8*x];
+-        dst+=stride;
+-        src+=4*width*2*2;
+-    }
++    #ifdef ADM_CPU_X86
++        if( 0 &amp;&amp; CpuCaps::hasMMX())
++            YUV444_chroma_MMX(src,dst,width,height,stride);            
++        else
++    #endif
++            YUV444_chroma_C(src,dst,width,height,stride);
++
+     stride=this-&gt;GetPitch(PLANAR_V);
+     width=this-&gt;GetWidth(PLANAR_V);
+     height=this-&gt;GetHeight(PLANAR_V);
+     dst=this-&gt;GetWritePtr(PLANAR_V);
+     src=from+1;
+-    for(int y=0;y&lt;height;y++)
+-    {
+-        for(int x=0;x&lt;width;x++)
+-                dst[x]=src[8*x];
+-        dst+=stride;
+-        src+=16*width;
+-    }
++    #ifdef ADM_CPU_X86
++        if( 0 &amp;&amp;CpuCaps::hasMMX())
++            YUV444_chroma_MMX(src,dst,width,height,stride);            
++        else
++    #endif
++            YUV444_chroma_C(src,dst,width,height,stride);
+     return true;
+ }
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004569.html">[Avidemux-svn-commit] r7418 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6_openGl
+</A></li>
+	<LI>Next message: <A HREF="004571.html">[Avidemux-svn-commit] r7420 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4570">[ date ]</a>
+              <a href="thread.html#4570">[ thread ]</a>
+              <a href="subject.html#4570">[ subject ]</a>
+              <a href="author.html#4570">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

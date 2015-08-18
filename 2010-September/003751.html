@@ -1,0 +1,557 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6565 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	. kernelDeint
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6565%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6%3A%0A%09.%20kernelDeint&In-Reply-To=%3C20100901134636.EBC65480FC4%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003750.html">
+   <LINK REL="Next"  HREF="003752.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6565 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	. kernelDeint</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6565%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6%3A%0A%09.%20kernelDeint&In-Reply-To=%3C20100901134636.EBC65480FC4%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6565 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	. kernelDeint">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Sep  1 15:46:36 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003750.html">[Avidemux-svn-commit] r6564 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	. blackenBorder
+</A></li>
+        <LI>Next message: <A HREF="003752.html">[Avidemux-svn-commit] r6566 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3751">[ date ]</a>
+              <a href="thread.html#3751">[ thread ]</a>
+              <a href="subject.html#3751">[ subject ]</a>
+              <a href="author.html#3751">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-09-01 15:46:36 +0200 (Wed, 01 Sep 2010)
+New Revision: 6565
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/ADM_vidKernelDeint.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/ADM_vidKernelDeint.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/kdeint.conf
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/kdeint.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/kdeint_desc.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/CMakeLists.txt
+Log:
+[filter] Add kernel deint
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/CMakeLists.txt	2010-09-01 13:46:35 UTC (rev 6564)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/CMakeLists.txt	2010-09-01 13:46:36 UTC (rev 6565)
+@@ -12,3 +12,4 @@
+ ADD_SUBDIRECTORY(stackField)
+ ADD_SUBDIRECTORY(logo)
+ ADD_SUBDIRECTORY(blackenBorder)
++ADD_SUBDIRECTORY(kernelDeint)
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/ADM_vidKernelDeint.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/ADM_vidKernelDeint.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/ADM_vidKernelDeint.cpp	2010-09-01 13:46:36 UTC (rev 6565)
+@@ -0,0 +1,372 @@
++/***************************************************************************
++                          ADM_vidKernelDeint  -  description
++                             -------------------
++ 			Port of another D Graft deinterlacer
++			<A HREF="http://neuron2.net/kerneldeint/kerneldeint.html">http://neuron2.net/kerneldeint/kerneldeint.html</A>
++     ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++
++/*
++	KernelDeint() plugin for Avisynth.
++
++	Copyright (C) 2003 Donald A. Graft
++
++	This program is free software; you can redistribute it and/or modify
++	it under the terms of the GNU General Public License as published by
++	the Free Software Foundation.
++
++	This program is distributed in the hope that it will be useful,
++	but WITHOUT ANY WARRANTY; without even the implied warranty of
++	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++	GNU General Public License for more details.
++
++	You should have received a copy of the GNU General Public License
++	along with this program; if not, write to the Free Software
++	Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++*/
++
++#include &quot;ADM_default.h&quot;
++#include &quot;ADM_coreVideoFilterInternal.h&quot;
++#include &quot;DIA_coreToolkit.h&quot;
++#include &quot;ADM_vidKernelDeint.h&quot;
++#include &quot;kdeint_desc.cpp&quot;
++
++#include &quot;DIA_factory.h&quot;
++// Add the hook to make it valid plugin
++DECLARE_VIDEO_FILTER(   kernelDeint,   // Class
++                        1,0,0,              // Version
++                        ADM_UI_ALL,         // UI
++                        VF_INTERLACING,            // Category
++                        &quot;kerndelDeint&quot;,            // internal name (must be uniq!)
++                        &quot;Kernel Deint.&quot;,            // Display name
++                        &quot;Port of Donald Graft Kernel Deinterlacer.&quot; // Description
++                    );
++
++extern int PutHintingData(uint8_t *video, unsigned int hint);
++extern int GetHintingData(uint8_t *video, unsigned int *hint);
++
++#define PROGRESSIVE  0x00000001
++
++/**
++    \fn goToTime
++    \brief called when seeking. Need to cleanup our stuff.
++*/
++bool         kernelDeint::goToTime(uint64_t usSeek)
++{
++    vidCache-&gt;flush();
++    return ADM_coreVideoFilter::goToTime(usSeek);
++}
++
++
++/**
++    \fn configure
++*/
++bool kernelDeint::configure( void)
++{
++  #define PX(x) &amp;(param.x)
++
++   diaMenuEntry menuField[2]={{1,QT_TR_NOOP(&quot;Top&quot;),NULL},
++                             {0,QT_TR_NOOP(&quot;Bottom&quot;),NULL}
++                          };
++  
++    
++    diaElemMenu     menu1(PX(order),QT_TR_NOOP(&quot;_Field order:&quot;), 2,menuField);
++    diaElemUInteger threshold(PX(threshold),QT_TR_NOOP(&quot;_Threshold:&quot;),0,100,QT_TR_NOOP(&quot;Smaller means more deinterlacing&quot;));
++    diaElemToggle   sharp(PX(sharp),QT_TR_NOOP(&quot;_Sharp&quot;),QT_TR_NOOP(&quot;_Sharper engine:&quot;));
++    diaElemToggle   twoway(PX(twoway),QT_TR_NOOP(&quot;T_woway&quot;),QT_TR_NOOP(&quot;Extrapolate better (better not to use it)&quot;));
++    diaElemToggle   map(PX(map),QT_TR_NOOP(&quot;_Map&quot;),QT_TR_NOOP(&quot;Show interlaced areas (for test!)&quot;));
++    
++    diaElem *elems[5]={&amp;menu1,&amp;threshold,&amp;sharp,&amp;twoway,&amp;map};
++  
++   return  diaFactoryRun(QT_TR_NOOP(&quot;KernelDeint&quot;),5,elems);
++}
++/**
++    \fn getCoupledConf
++*/
++bool         kernelDeint::getCoupledConf(CONFcouple **couples)
++{
++    return ADM_paramSave(couples, kdeint_param,&amp;param);
++}
++/**
++    
++*/
++const char *kernelDeint::getConfiguration(void)
++{
++ 	static char conf[100];
++    conf[0]=0;
++    snprintf(conf,100,&quot;kdeint Borders : order:%&quot;LU&quot; threshold:%&quot;LU&quot; sharp:%&quot;LU&quot; twoway:%&quot;LU&quot; map:%&quot;LU&quot;\n&quot;,
++                param.order,param.threshold,param.sharp,param.twoway,param.map);
++    return conf;
++}
++/**
++    \fn dtor
++*/
++kernelDeint::~kernelDeint()
++{
++    if(vidCache) delete vidCache;
++    vidCache=NULL;
++ 	
++}
++
++/**
++    \fn ctor
++*/
++ kernelDeint::kernelDeint(ADM_coreVideoFilter *previous,CONFcouple *setup)
++            :  ADM_coreVideoFilter(previous,setup)
++{
++    if(!setup || !ADM_paramLoad(setup,kdeint_param,&amp;param))
++    {
++        // Default value
++        param.order=1;// Bff=0 / 1=tff
++        param.threshold=10;
++        param.sharp=0;
++        param.twoway=0;
++        param.map=0;
++    }  	  			
++    debug=false;   
++	vidCache=new VideoCache(4,previous);
++}
++/**
++    \fn getNextFrame
++*/
++bool kernelDeint::getNextFrame(uint32_t *fn,ADMImage *image)
++{
++
++    uint32_t page=info.width*info.height;
++    ADMImage *src=NULL, *prv=NULL;
++
++    uint32_t		order, threshold;
++	uint8_t			sharp, twoway, map;
++	
++	order=param.order;
++	threshold=param.threshold;
++	sharp=param.sharp;
++	twoway=param.twoway;
++	map=param.map;				
++    uint32_t frame_prev=nextFrame;
++    if(frame_prev) frame_prev--;
++    
++        src=vidCache-&gt;getImage(nextFrame);
++        if(!src) 
++        {
++            ADM_warning(&quot;kerneldeint:Cannot get frame\n&quot;);
++            vidCache-&gt;unlockAll();
++            nextFrame++;
++            return false;
++        }
++        prv=vidCache-&gt;getImage(frame_prev);
++        if(!prv)
++        {
++            vidCache-&gt;unlockAll();
++            image-&gt;duplicate(src);
++            image-&gt;copyInfo(src);
++            nextFrame++;
++            return true;
++        }
++/** From here it is mostly untouched .. */
++    const unsigned char *srcp, *prvp, *prvpp, *prvpn, *prvppp, *prvpnn, *prvp4p, *prvp4n;
++	const unsigned char *srcp_saved;
++	const unsigned char *srcpp, *srcppp, *srcpn, *srcpnn, *srcp3p, *srcp3n, *srcp4p, *srcp4n;
++    unsigned char *dstp;
++	unsigned char *dstp_saved;
++ 
++	ADM_PLANE plane;
++	int src_pitch;
++    int dst_pitch;
++    int w;
++    int h;
++	int x, y, z;
++	int val, hi, lo;
++	double valf;
++	unsigned int hint;
++	
++
++	for ( z = 0; z &lt;  3; z++)
++	{
++		if (z == 0) plane = PLANAR_Y;
++		else if (z == 1) plane = PLANAR_U;
++		else plane = PLANAR_V;
++
++		srcp = srcp_saved = src-&gt;GetReadPtr(plane);
++		if (plane == PLANAR_Y &amp;&amp; (GetHintingData((unsigned char *) srcp, &amp;hint) == false) &amp;&amp; (hint &amp; PROGRESSIVE))
++		{
++			if (debug ==true)
++			{
++				ADM_info( &quot;KernelDeint: frame %d: progressive\n&quot;, nextFrame); 
++				
++			}
++            image-&gt;duplicate(src);
++			image-&gt;copyInfo(src);
++			vidCache-&gt;unlockAll();
++            nextFrame++;
++			return true;
++		}
++		else
++		{
++			if (debug == true)
++			{
++				ADM_info( &quot;KernelDeint: frame %d: interlaced\n&quot;, nextFrame); 
++			}
++		}
++		src_pitch = src-&gt;GetPitch(plane);
++		dstp = dstp_saved = image-&gt;GetWritePtr(plane);
++		dst_pitch = image-&gt;GetPitch(plane);
++		w = image-&gt;GetRowSize(plane);
++		h = image-&gt;GetHeight(plane);
++		srcp = srcp_saved  + (1-order) * src_pitch;
++		dstp = dstp_saved  + (1-order) * dst_pitch;
++		for (y = 0; y &lt; h; y+=2)
++		{
++			memcpy(dstp, srcp, w);
++			srcp += 2*src_pitch;
++			dstp += 2*dst_pitch;
++		}
++
++		// Copy through the lines that will be missed below.
++		memcpy(dstp_saved + order*dst_pitch, srcp_saved + (1-order)*src_pitch, w);
++		memcpy(dstp_saved + (2+order)*dst_pitch, srcp_saved + (3-order)*src_pitch, w);
++		memcpy(dstp_saved + (h-2+order)*dst_pitch, srcp_saved + (h-1-order)*src_pitch, w);
++		memcpy(dstp_saved + (h-4+order)*dst_pitch, srcp_saved + (h-3-order)*src_pitch, w);
++		/* For the other field choose adaptively between using the previous field
++		   or the interpolant from the current field. */
++		prvp = prv-&gt;GetReadPtr(plane) + 5*src_pitch - (1-order)*src_pitch;
++		prvpp = prvp - src_pitch;
++		prvppp = prvp - 2*src_pitch;
++		prvp4p = prvp - 4*src_pitch;
++		prvpn = prvp + src_pitch;
++		prvpnn = prvp + 2*src_pitch;
++		prvp4n = prvp + 4*src_pitch;
++		srcp = srcp_saved + 5*src_pitch - (1-order)*src_pitch;
++		srcpp = srcp - src_pitch;
++		srcppp = srcp - 2*src_pitch;
++		srcp3p = srcp - 3*src_pitch;
++		srcp4p = srcp - 4*src_pitch;
++		srcpn = srcp + src_pitch;
++		srcpnn = srcp + 2*src_pitch;
++		srcp3n = srcp + 3*src_pitch;
++		srcp4n = srcp + 4*src_pitch;
++		dstp =  dstp_saved  + 5*dst_pitch - (1-order)*dst_pitch;
++		for (y = 5 - (1-order); y &lt;= h - 5 - (1-order); y+=2)
++		{
++			for (x = 0; x &lt; w; x++)
++			{
++				if ((threshold == 0) || (!nextFrame) ||
++					(abs((int)prvp[x] - (int)srcp[x]) &gt; threshold) ||
++					(abs((int)prvpp[x] - (int)srcpp[x]) &gt; threshold) ||
++					(abs((int)prvpn[x] - (int)srcpn[x]) &gt; threshold))
++				{
++					if (map == true)
++					{
++						int g = x &amp; ~3;
++						if (0) // RGB
++						{
++							dstp[g++] = 255;
++							dstp[g++] = 255;
++							dstp[g++] = 255;
++							dstp[g] = 255;
++							x = g;
++						}
++						else if (0) // YUY2
++						{
++							dstp[g++] = 235;
++							dstp[g++] = 128;
++							dstp[g++] = 235;
++							dstp[g] = 128;
++							x = g;
++						}
++						else
++						{
++							if (plane == PLANAR_Y) dstp[x] = 235;
++							else dstp[x] = 128;
++						}
++					}
++					else
++					{
++						if (0)
++						{
++							hi = 255;
++							lo = 0;
++						}
++						else if (1)
++						{
++							hi = (plane == PLANAR_Y) ? 235 : 240;
++							lo = 16;
++						}
++						else if (0)
++						{
++							hi = (x &amp; 1) ? 240 : 235;
++							lo = 16;
++						}
++						//else env-&gt;ThrowError(&quot;KernelDeint: Unknown color space&quot;);
++						if (sharp == true)
++						{
++							if (twoway == true)
++								valf = + 0.526*((int)srcpp[x] + (int)srcpn[x])
++								   + 0.170*((int)srcp[x] + (int)prvp[x])
++								   - 0.116*((int)srcppp[x] + (int)srcpnn[x] + (int)prvppp[x] + (int)prvpnn[x])
++					 			   - 0.026*((int)srcp3p[x] + (int)srcp3n[x])
++								   + 0.031*((int)srcp4p[x] + (int)srcp4n[x] + (int)prvp4p[x] + (int)prvp4n[x]);
++							else
++								valf = + 0.526*((int)srcpp[x] + (int)srcpn[x])
++								   + 0.170*((int)prvp[x])
++								   - 0.116*((int)prvppp[x] + (int)prvpnn[x])
++					 			   - 0.026*((int)srcp3p[x] + (int)srcp3n[x])
++								   + 0.031*((int)prvp4p[x] + (int)prvp4n[x]);
++							if (valf &gt; hi) valf = hi;
++							else if (valf &lt; lo) valf = lo;
++							dstp[x] = (int) valf;
++						}
++						else
++						{
++							if (twoway == true)
++								val = (8*((int)srcpp[x] + (int)srcpn[x]) + 2*((int)srcp[x] + (int)prvp[x]) -
++									(int)(srcppp[x]) - (int)(srcpnn[x]) -
++									(int)(prvppp[x]) - (int)(prvpnn[x])) &gt;&gt; 4;
++							else
++								val = (8*((int)srcpp[x] + (int)srcpn[x]) + 2*((int)prvp[x]) -
++									(int)(prvppp[x]) - (int)(prvpnn[x])) &gt;&gt; 4;
++							if (val &gt; hi) val = hi;
++							else if (val &lt; lo) val = lo;
++							dstp[x] = (int) val;
++						}
++					}
++				}
++				else
++				{
++					dstp[x] = srcp[x];
++				}
++			}
++			prvp  += 2*src_pitch;
++			prvpp  += 2*src_pitch;
++			prvppp  += 2*src_pitch;
++			prvpn  += 2*src_pitch;
++			prvpnn  += 2*src_pitch;
++			prvp4p  += 2*src_pitch;
++			prvp4n  += 2*src_pitch;
++			srcp  += 2*src_pitch;
++			srcpp += 2*src_pitch;
++			srcppp += 2*src_pitch;
++			srcp3p += 2*src_pitch;
++			srcp4p += 2*src_pitch;
++			srcpn += 2*src_pitch;
++			srcpnn += 2*src_pitch;
++			srcp3n += 2*src_pitch;
++			srcp4n += 2*src_pitch;
++			dstp  += 2*dst_pitch;
++		}
++	}
++    vidCache-&gt;unlockAll();
++    image-&gt;copyInfo(src);
++    nextFrame++;
++    return true;
++}
++// EOF
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/ADM_vidKernelDeint.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/ADM_vidKernelDeint.h	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/ADM_vidKernelDeint.h	2010-09-01 13:46:36 UTC (rev 6565)
+@@ -0,0 +1,26 @@
++
++#ifndef ADM_KERNELDEINT
++#define ADM_KERNELDEINT
++#include &quot;kdeint.h&quot;
++/**
++    \class kernelDeint
++*/
++class kernelDeint : public  ADM_coreVideoFilter
++{
++protected:
++        kdeint       param;
++        bool         debug;
++        bool         goToTime(uint64_t usSeek);
++public:
++                    kernelDeint(ADM_coreVideoFilter *previous,CONFcouple *conf);
++                    ~kernelDeint();
++
++        virtual const char   *getConfiguration(void);                   /// Return  current configuration as a human readable string
++        virtual bool         getNextFrame(uint32_t *fn,ADMImage *image);    /// Return the next image
++	 //  virtual FilterInfo  *getInfo(void);                             /// Return picture parameters after this filter
++        virtual bool         getCoupledConf(CONFcouple **couples) ;   /// Return the current filter configuration
++        virtual bool         configure(void) ;           /// Start graphical user interface
++};
++
++
++#endif
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/CMakeLists.txt	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/CMakeLists.txt	2010-09-01 13:46:36 UTC (rev 6565)
+@@ -0,0 +1,9 @@
++INCLUDE(vf_plugin)
++
++
++SET(ADM_vf_kernelDeint_SRCS ADM_vidKernelDeint.cpp)
++
++ADD_VIDEO_FILTER(ADM_vf_kernelDeint ${ADM_vf_kernelDeint_SRCS})
++
++INIT_VIDEO_FILTER(ADM_vf_kernelDeint)
++INSTALL_VIDEO_FILTER(ADM_vf_kernelDeint)
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/kdeint.conf
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/kdeint.conf	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/kdeint.conf	2010-09-01 13:46:36 UTC (rev 6565)
+@@ -0,0 +1,5 @@
++uint32_t:order
++uint32_t:threshold
++uint32_t:sharp
++uint32_t:twoway
++uint32_t:map
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/kdeint.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/kdeint.h	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/kdeint.h	2010-09-01 13:46:36 UTC (rev 6565)
+@@ -0,0 +1,12 @@
++// Automatically generated, do not edit!
++#ifndef ADM_kdeint_CONF_H
++#define ADM_kdeint_CONF_H
++typedef struct {
++   uint32_t order;
++   uint32_t threshold;
++   uint32_t sharp;
++   uint32_t twoway;
++   uint32_t map;
++}kdeint;
++#endif //kdeint
++//EOF
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/kdeint_desc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/kdeint_desc.cpp	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/kernelDeint/kdeint_desc.cpp	2010-09-01 13:46:36 UTC (rev 6565)
+@@ -0,0 +1,9 @@
++// Automatically generated, do not edit!
++const ADM_paramList kdeint_param[]={
++ {&quot;order&quot;,offsetof( kdeint,order),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;threshold&quot;,offsetof( kdeint,threshold),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;sharp&quot;,offsetof( kdeint,sharp),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;twoway&quot;,offsetof( kdeint,twoway),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;map&quot;,offsetof( kdeint,map),&quot;uint32_t&quot;,ADM_param_uint32_t},
++{NULL,0,NULL}
++};
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003750.html">[Avidemux-svn-commit] r6564 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6:	. blackenBorder
+</A></li>
+	<LI>Next message: <A HREF="003752.html">[Avidemux-svn-commit] r6566 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoFilter:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3751">[ date ]</a>
+              <a href="thread.html#3751">[ thread ]</a>
+              <a href="subject.html#3751">[ subject ]</a>
+              <a href="author.html#3751">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

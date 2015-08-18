@@ -1,0 +1,299 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7191 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7191%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser%3A%0A%09include%20src&In-Reply-To=%3C20110507162602.A61B348133A%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004345.html">
+   <LINK REL="Next"  HREF="004347.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7191 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7191%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser%3A%0A%09include%20src&In-Reply-To=%3C20110507162602.A61B348133A%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7191 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser:	include src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat May  7 18:26:02 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004345.html">[Avidemux-svn-commit] r7190 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudioParser/include	avidemux_core/ADM_coreAudioParser/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="004347.html">[Avidemux-svn-commit] r7192 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudioParser/src	avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4346">[ date ]</a>
+              <a href="thread.html#4346">[ thread ]</a>
+              <a href="subject.html#4346">[ subject ]</a>
+              <a href="author.html#4346">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-05-07 18:26:02 +0200 (Sat, 07 May 2011)
+New Revision: 7191
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacLatm.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacLatm.cpp
+Log:
+[LATM] Not working but close LOAS/LATM decoder for AAC in TS audio
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacLatm.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacLatm.h	2011-05-07 16:26:00 UTC (rev 7190)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/include/ADM_aacLatm.h	2011-05-07 16:26:02 UTC (rev 7191)
+@@ -22,12 +22,15 @@
+ #ifndef ADM_AAC_LATM
+ #define ADM_AAC_LATM
+ #include &quot;ADM_getbits.h&quot;
++#include &lt;list&gt;
+ /**
+     \class ADM_latm2aac
+ */
+-#define AAC_LATM_MAX_EXTRA 10
+-#define LATM_MAX_LAYER     64
+-#define LATM_MAX_BUFFER    8192
++#define AAC_LATM_MAX_EXTRA      10
++#define LATM_MAX_LAYER          64
++#define LATM_MAX_BUFFER_SIZE    8192
++#define LATM_NB_BUFFERS         16
++
+ typedef struct
+ {
+     int      nbLayers;
+@@ -40,21 +43,29 @@
+ }latmConf_t;
+ 
+ 
++typedef struct
++{
++        uint8_t  buffer[LATM_MAX_BUFFER_SIZE];
++        uint32_t bufferLen;
++        uint64_t dts;
++}latmBuffer;
++
+ class ADM_latm2aac
+ {
+ private:
+-
++                latmBuffer buffers[LATM_NB_BUFFERS];
++                std::list &lt;latmBuffer *&gt; listOfFreeBuffers;
++                std::list &lt;latmBuffer *&gt; listOfUsedBuffers;
+                 uint32_t extraLen;
+                 uint8_t  extraData[AAC_LATM_MAX_EXTRA];
+                 uint32_t fq,channels;
+-                bool     readAudioMux( getBits &amp;bits );
++                bool     readAudioMux(uint64_t dts, getBits &amp;bits );
+                 bool     demuxLatm(uint64_t date,uint8_t *start,uint32_t size);
+                 bool     AudioSpecificConfig(getBits &amp;bits,int &amp;bitsConsumed);
+                 bool     readStreamMuxConfig(getBits &amp;bits);
+                 int      readPayloadInfoLength(getBits &amp;bits);
+-                bool     readPayload(getBits &amp;bits, int size, uint8_t *to, int max);
+-                uint8_t  buffer[LATM_MAX_BUFFER];
+-                uint32_t bufferLen;
++                bool     readPayload(getBits &amp;bits, uint64_t dts,int size);
++
+                 latmConf_t conf;
+ public:
+                 bool getExtraData(uint32_t *len,uint8_t **data);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacLatm.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacLatm.cpp	2011-05-07 16:26:00 UTC (rev 7190)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreAudioParser/src/ADM_aacLatm.cpp	2011-05-07 16:26:02 UTC (rev 7191)
+@@ -178,7 +178,7 @@
+ {
+     if(conf.allStreamsSameTimeFraming)
+     {
+-        // handle layer...
++        // handle layer..., only one accepted ATM
+         if(conf.frameLengthType[0]==0)
+         {
+             int l=0;
+@@ -198,28 +198,37 @@
+     }
+ }
+ /**
+-
++    \fn readPayload
+ */
+-bool ADM_latm2aac::readPayload(getBits &amp;bits, int size, uint8_t *to, int max)
++bool ADM_latm2aac::readPayload(getBits &amp;bits, uint64_t dts,int size)
+ {
+     if(conf.allStreamsSameTimeFraming)
+     {
+             ADM_info(&quot;Payload %d \n&quot;,size);
+-            if(size&gt;max)
++            if(size&gt;LATM_MAX_BUFFER_SIZE)
+             {
+-                    ADM_warning(&quot;Packet too big %d vs %d\n&quot;,size,max);
++                    ADM_warning(&quot;Packet too big %d vs %d\n&quot;,size,LATM_MAX_BUFFER_SIZE);
+                     return false;
+             }
+         
+-            for(int i=0;i&lt;size;i++)
++            // try to get a buffer...
++            if(!listOfFreeBuffers.size())
+             {
+-                if(conf.gotConfig)
+-                    buffer[i++]=bits.get(8);
+-                else
+-                    bits.skip(8);
++                    ADM_error(&quot;No free buffer!\n&quot;);
++                    return false;
+             }
+-            if(conf.gotConfig)
+-                bufferLen=size;
++            latmBuffer *b=listOfFreeBuffers.back();
++            listOfFreeBuffers.pop_back();
++            b-&gt;dts=dts;
++            for(int i=0;i&lt;size;i++)
++            {                
++                    b-&gt;buffer[i]=bits.get(8);
++            }
++            b-&gt;bufferLen=size;
++            if(!conf.gotConfig)
++                listOfFreeBuffers.push_back(b);
++            else
++                listOfUsedBuffers.push_back(b);
+             return true;
+     }else
+     {
+@@ -342,7 +351,7 @@
+     \fn readStreamMux
+     \brief from vlc
+ */
+-bool  ADM_latm2aac::readAudioMux( getBits &amp;bits )
++bool  ADM_latm2aac::readAudioMux( uint64_t dts,getBits &amp;bits )
+ {
+ 
+     if( !bits.get(1) ) // use SameStreamMux
+@@ -357,8 +366,7 @@
+             int len=readPayloadInfoLength(bits);
+             if(!len) return false;
+             
+-            bool r=readPayload(bits,len,buffer,LATM_MAX_BUFFER);
+-            bufferLen=len;
++            bool r=readPayload(bits,dts,len);
+             bits.align();
+             return r;
+         }
+@@ -376,14 +384,14 @@
+ bool ADM_latm2aac::demuxLatm(uint64_t date,uint8_t *start,uint32_t size)
+ {
+     getBits  bits(size,start);
+-    return readAudioMux(bits);
++    return readAudioMux(date,bits);
+ }
+ /**
+     \fn pushData
+     \brief Check for LOAS sync word, extract LATM frames
+ */
+ 
+-bool ADM_latm2aac::pushData(int incomingLen,uint8_t *inData,uint64_t time)
++bool ADM_latm2aac::pushData(int incomingLen,uint8_t *inData,uint64_t dts)
+ {
+     // Lookup sync
+     uint8_t *end=inData+incomingLen;
+@@ -405,7 +413,8 @@
+             return true;
+         }
+         ADM_info(&quot;Found LATM : size %d\n&quot;,len);
+-        demuxLatm(time,start,len);
++        demuxLatm(dts,start,len);
++        dts=ADM_NO_PTS;
+         // LATM demux
+         start+=len;
+     }
+@@ -423,7 +432,8 @@
+                 extraLen=0;
+                 memset(&amp;conf,0,sizeof(conf));
+                 conf.gotConfig=false;
+-                bufferLen=0;
++                for(int i=0;i&lt;LATM_NB_BUFFERS;i++)
++                    listOfFreeBuffers.push_back(&amp;(buffers[i]));
+ }
+ /**
+     \fn dtor
+@@ -439,7 +449,7 @@
+ */
+ bool ADM_latm2aac::empty()
+ {
+-    if(bufferLen==0) return true;
++    if(listOfUsedBuffers.size()==0) return true;
+     return false;
+ }
+ /**
+@@ -448,7 +458,10 @@
+ */
+ bool ADM_latm2aac::flush()
+ {
+-   bufferLen=0;
++   listOfFreeBuffers.clear();
++   listOfUsedBuffers.clear();
++   for(int i=0;i&lt;LATM_NB_BUFFERS;i++)
++                    listOfFreeBuffers.push_back(&amp;(buffers[i]));
+    return true;
+ }
+ /**
+@@ -457,17 +470,22 @@
+ */
+ bool ADM_latm2aac::getData(uint64_t *time,uint32_t *len, uint8_t *data, uint32_t maxSize)
+ {
+-    if(bufferLen==0) return false;
+-    if(bufferLen&gt;maxSize)
++    if(empty()) return false;
++    printf(&quot;%d slogs in latm buffers\n&quot;,listOfUsedBuffers.size());
++    latmBuffer *b=listOfUsedBuffers.front();
++    listOfUsedBuffers.pop_front();
++    listOfFreeBuffers.push_back(b);
++    if(b-&gt;bufferLen&gt;maxSize)
+     {
+         ADM_warning(&quot;Buffer too small\n&quot;);
+-        bufferLen=0;
+         return false;
+ 
+     }
+-    memcpy(data,buffer,bufferLen);
+-    *len=bufferLen;
+-    bufferLen=0;
++    memcpy(data,b-&gt;buffer,b-&gt;bufferLen);
++    *len=b-&gt;bufferLen;
++    b-&gt;bufferLen=0;
++    *time=b-&gt;dts;
++    printf(&quot;   read %d bytes\n&quot;,*len);
+     return true;
+ }
+ //EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004345.html">[Avidemux-svn-commit] r7190 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudioParser/include	avidemux_core/ADM_coreAudioParser/src	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="004347.html">[Avidemux-svn-commit] r7192 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreAudioParser/src	avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4346">[ date ]</a>
+              <a href="thread.html#4346">[ thread ]</a>
+              <a href="subject.html#4346">[ subject ]</a>
+              <a href="author.html#4346">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

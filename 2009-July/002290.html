@@ -1,0 +1,186 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5075 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5075%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src&In-Reply-To=%3C200907122020.n6CKKqO0020827%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002289.html">
+   <LINK REL="Next"  HREF="002291.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5075 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5075%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src&In-Reply-To=%3C200907122020.n6CKKqO0020827%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5075 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jul 12 22:20:52 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002289.html">[Avidemux-svn-commit] r5074 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="002291.html">[Avidemux-svn-commit] r5076 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/gtk
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2290">[ date ]</a>
+              <a href="thread.html#2290">[ thread ]</a>
+              <a href="subject.html#2290">[ subject ]</a>
+              <a href="author.html#2290">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-07-12 22:20:51 +0200 (Sun, 12 Jul 2009)
+New Revision: 5075
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp
+Log:
+[coreFFvideoEncoder] Concert time increment in us to rationnal, probably buggy. Else it overflows mpeg4 header
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp	2009-07-12 20:20:50 UTC (rev 5074)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreVideoEncoder/src/ADM_coreVideoEncoderFFmpeg.cpp	2009-07-12 20:20:51 UTC (rev 5075)
+@@ -20,9 +20,66 @@
+ #include &quot;ADM_coreVideoEncoderFFmpeg.h&quot;
+ #include &quot;prefs.h&quot;
+ #define ADM_NO_PTS 0xFFFFFFFFFFFFFFFFLL // FIXME
+-#define TIME_TENTH_MILLISEC
++//#define TIME_TENTH_MILLISEC
+ #define aprintf(...) {}
++
++typedef struct
++{
++    uint64_t mn,mx;
++    int n,d;
++
++}TimeIncrementType;
++
++TimeIncrementType fpsTable[]=
++{
++    {  40000,40000,1 ,25},
++    {  20000,20000,1 ,50},
++    {  33360,33369,30,1001},
++    {  41700,41710,24,1001},
++}; 
++
+ /**
++    \fn usSecondsToFrac
++    \brief Convert a duration in useconds into Rationnal
++*/
++bool usSecondsToFrac(uint64_t useconds, int *n,int *d)
++{
++    // First search for known value...
++    int nb=sizeof(fpsTable)/sizeof(TimeIncrementType);
++    for(int i=0;i&lt;nb;i++)
++    {
++        TimeIncrementType *t=fpsTable+i;
++        if( useconds&gt;=t-&gt;mn &amp;&amp; useconds&lt;=t-&gt;mx)
++        {
++            *n=t-&gt;n;
++            *d=t-&gt;d;
++            return true;
++        }
++    }
++    // Else try to squish it to low value..
++    int base=1000000; // value is in us
++    while(!( useconds % 9)&amp;&amp; useconds)
++    {
++        base/=10;
++        useconds/=10;
++    }
++    // Then try 2 and 5
++    while(!( useconds &amp;1)&amp;&amp; useconds)
++    {
++        base/=2;
++        useconds/=2;
++    }
++    while(!( useconds %5)&amp;&amp; useconds)
++    {
++        base/=5;
++        useconds/=5;
++    }
++    *n=useconds;
++    *d=base;
++    return true;
++}
++
++/**
+     \fn ADM_coreVideoEncoderFFmpeg
+     \brief Constructor
+ 
+@@ -120,16 +177,19 @@
+     // Eval fps
+     uint64_t f=source-&gt;getInfo()-&gt;frameIncrement;
+     // Let's put 100 us as time  base
+-    _context-&gt;time_base.den=10000LL;
++    
+ #ifdef TIME_TENTH_MILLISEC
+     _context-&gt;time_base.num=1;
++    _context-&gt;time_base.den=10000LL;
+ #else
+-    if(f&gt;=100)
+-        _context-&gt;time_base.num=f/100;
+-    else
+-        _context-&gt;time_base.num=1;
++
++    int n,d;
++    usSecondsToFrac(f,&amp;n,&amp;d);
++ //   printf(&quot;[ff] Converted a time increment of %d ms to %d /%d seconds\n&quot;,f/1000,n,d);
++    _context-&gt;time_base.num=n;
++    _context-&gt;time_base.den=d;
+ #endif
+-    //printf(&quot;[Time base] %d/%d\n&quot;, _context-&gt;time_base.num,_context-&gt;time_base.den);
++    
+     return true;
+ }
+ /**
+@@ -158,7 +218,7 @@
+ #ifdef TIME_TENTH_MILLISEC
+         f=f/100;
+ #else
+-        f=f/100;
++        f=f/1000;
+         f=f/n;
+ #endif
+         _frame.pts=f;
+@@ -220,6 +280,7 @@
+         return false;
+     }
+    prolog();
++   printf(&quot;[ff] Time base %d/%d\n&quot;, _context-&gt;time_base.num,_context-&gt;time_base.den);
+    if(Settings.MultiThreaded==true)
+         encoderMT();
+    res=avcodec_open(_context, codec); 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002289.html">[Avidemux-svn-commit] r5074 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="002291.html">[Avidemux-svn-commit] r5076 -	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_xvid/gtk
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2290">[ date ]</a>
+              <a href="thread.html#2290">[ thread ]</a>
+              <a href="subject.html#2290">[ subject ]</a>
+              <a href="author.html#2290">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

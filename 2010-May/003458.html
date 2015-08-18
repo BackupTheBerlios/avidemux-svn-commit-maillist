@@ -1,0 +1,392 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6263 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-May/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6263%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%20ADM_editor&In-Reply-To=%3C201005281712.o4SHC60F006768%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003457.html">
+   <LINK REL="Next"  HREF="003459.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6263 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6263%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20.%20ADM_editor&In-Reply-To=%3C201005281712.o4SHC60F006768%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6263 - in	branches/avidemux_2.6_branch_mean/avidemux/common: . ADM_editor">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri May 28 19:12:06 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003457.html">[Avidemux-svn-commit] r6262 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg:	libavutil patches
+</A></li>
+        <LI>Next message: <A HREF="003459.html">[Avidemux-svn-commit] r6264 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_editor avidemux/common/ADM_script2/py	avidemux/common/ADM_script2/src avidemux/common/ADM_toolkit	avidemux_core/ADM_coreTinyPy/include	avidemux_core/ADM_coreTinyPy/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3458">[ date ]</a>
+              <a href="thread.html#3458">[ thread ]</a>
+              <a href="subject.html#3458">[ subject ]</a>
+              <a href="author.html#3458">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-05-28 19:12:04 +0200 (Fri, 28 May 2010)
+New Revision: 6263
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPySave.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/avidemux/common/gui_save.cpp
+Log:
+[editor] PyProject
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPySave.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPySave.cpp	2010-05-28 17:11:59 UTC (rev 6262)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edPySave.cpp	2010-05-28 17:12:04 UTC (rev 6263)
+@@ -0,0 +1,246 @@
++/***************************************************************************
++                          ADM_edLoadSave.cpp  -  description
++                             -------------------
++
++	Save / load workbench
++
++    begin                : Thu Feb 28 2002
++    copyright            : (C) 2002 by mean
++    email                : <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A>
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;ADM_default.h&quot;
++#include &quot;fourcc.h&quot;
++#include &quot;ADM_quota.h&quot;
++#include &quot;ADM_editor/ADM_edit.hxx&quot;
++
++#include &quot;audioEncoderApi.h&quot;
++#include &quot;DIA_coreToolkit.h&quot;
++#include &quot;ADM_editor/ADM_edit.hxx&quot;
++#include &quot;ADM_videoEncoderApi.h&quot;
++#include &quot;ADM_paramList.h&quot;
++#include &quot;prefs.h&quot;
++#include &quot;avi_vars.h&quot;
++#include &quot;ADM_muxerProto.h&quot;
++#include &quot;ADM_audioFilterInterface.h&quot;
++#include &quot;GUI_ui.h&quot;
++#include &quot;ADM_videoFilters.h&quot;
++#include &quot;ADM_videoFilterApi.h&quot;
++#include &quot;errno.h&quot;
++/**
++    \fn dumpConf
++    \brief dump configuration as name=value pairs
++*/
++static void dumpConf(FILE *fd,CONFcouple *c)
++{
++ if(!c) return;
++        
++    uint32_t n=c-&gt;getSize();
++    for(int j=0;j&lt;n;j++)
++    {
++        char *name,*value;
++        c-&gt;getInternalName(j,&amp;name,&amp;value);
++        qfprintf(fd,&quot;,\&quot;%s=%s\&quot;&quot;,name,value);
++    }
++    delete c;
++    c=NULL;
++}
++/**
++    \fn        saveAsPyScript
++    \brief     Save the project as a python script
++*/
++bool ADM_Composer::saveAsPyScript (const char *name)
++{
++    const char *truefalse[]={&quot;false&quot;,&quot;true&quot;};
++    ADM_info(&quot; **Saving pyScript project %s**\n&quot;,name);
++    char *    tmp;
++
++    if (!_segments.getNbSegments())
++        return 1;
++
++    FILE *fd=NULL;
++
++    if( !(fd = qfopen (name, &quot;wt&quot;)) )
++    {
++        ADM_error(&quot;Cannot save python script file %s for writing (er:%d %s)\n&quot;,
++                   name, errno, strerror(errno));
++        return false;
++    }
++
++// Save source and segment
++//______________________________________________
++  qfprintf( fd, &quot;#PY  &lt;- Needed to identify&quot;);
++  qfprintf (fd, &quot;#\n&quot;);
++  qfprintf (fd, &quot;#--automatically built--\n&quot;);
++  qfprintf (fd, &quot;#--Project: %s\n\n&quot;,name);
++
++  qfprintf (fd,&quot;#** Video **\n&quot;);
++  qfprintf (fd,&quot;# %02ld videos source \n&quot;, _segments.getNbRefVideos());
++  qfprintf (fd,&quot;adm=Avidemux();\n&quot;);
++
++  char *nm;
++  
++
++  for (uint32_t i = 0; i &lt; _segments.getNbRefVideos(); i++)
++    {
++        nm=ADM_cleanupPath(_segments.getRefVideo(i)-&gt;_aviheader-&gt;getMyName() );
++        if(!i)
++        {
++                qfprintf (fd, &quot;adm.loadVideo(\&quot;%s\&quot;);\n&quot;, nm);
++        }
++        else
++        {
++                qfprintf (fd, &quot;adm.appendVideo(\&quot;%s\&quot;);\n&quot;, nm);
++        }
++        ADM_dealloc(nm);
++    }
++
++  qfprintf (fd,&quot;#%02ld segments\n&quot;, _segments.getNbSegments());
++  qfprintf (fd,&quot;adm.clearSegments();\n&quot;);
++  
++ 
++
++    for (uint32_t i = 0; i &lt; _segments.getNbSegments(); i++)
++    {
++        _SEGMENT *seg=_segments.getSegment(i);
++        qfprintf (fd, &quot;adm.addSegment(%&quot;LU&quot;,%&quot;LLU&quot;,%&quot;LLU&quot;);\n&quot;,seg-&gt;_reference,seg-&gt;_refStartTimeUs,seg-&gt;_durationUs);
++    }
++
++// Markers
++//
++
++        qfprintf(fd,&quot;adm.markerA=%&quot;LLU&quot;;\n&quot;,getMarkerAPts());
++        qfprintf(fd,&quot;adm.markerB=%&quot;LLU&quot;;\n&quot;,getMarkerBPts());
++
++// postproc
++//___________________________
++
++uint32_t pptype, ppstrength,ppswap;
++        video_body-&gt;getPostProc( &amp;pptype, &amp;ppstrength, &amp;ppswap);
++        qfprintf(fd,&quot;\n#** Postproc **\n&quot;);
++        qfprintf(fd,&quot;adm.setPostProc(%d,%d,%d);\n&quot;,pptype,ppstrength,ppswap);
++
++// Video codec
++//___________________________
++        
++		qfprintf(fd, &quot;\n#** Video Codec conf **\n&quot;);
++        CONFcouple *couples=NULL;
++    
++        qfprintf(fd, &quot;adm.videoCodec(\&quot;%s\&quot;&quot;, videoEncoder6_GetCurrentEncoderName());
++        videoEncoder6_GetConfiguration(&amp;couples);
++        dumpConf(fd,couples);
++        qfprintf(fd,&quot;);\n&quot;);
++
++// Video filters....
++//______________________________________________
++    qfprintf(fd,&quot;\n#** Filters **\n&quot;);
++    int nbFilter=ADM_vf_getSize();
++    for(int i=0;i&lt;nbFilter;i++)
++    {
++        // Grab its name...
++        uint32_t tag=ADM_vf_getTag(i);
++        qfprintf(fd, &quot;adm.addVideoFilter(\&quot;%s\&quot;&quot;, ADM_vf_getInternalNameFromTag(tag));
++        // Now get the filter settings (if any)
++        CONFcouple *c=NULL;
++        ADM_vf_getConfigurationFromIndex(i,&amp;c);
++        dumpConf(fd,c);
++        qfprintf(fd, &quot;);\n&quot;);
++    }
++
++
++// Audio Source
++//______________________________________________
++
++// Audio
++//______________________________________________
++
++   uint32_t delay,bitrate;
++   
++   qfprintf(fd,&quot;\n#** Audio **\n&quot;);
++   qfprintf(fd,&quot;adm.audioReset();\n&quot;);
++#if 0
++   // External audio ?
++        char *audioName;
++        AudioSource  source;
++
++        source=getCurrentAudioSource(&amp;audioName);
++        if(!audioName) audioName=&quot;&quot;;
++
++        if(source!=AudioAvi)
++        {
++                char *nm=ADM_cleanupPath(audioName);
++                qfprintf(fd,&quot;app.audio.load(\&quot;%s\&quot;,\&quot;%s\&quot;);\n&quot;, audioSourceFromEnum(source),nm); 
++                ADM_dealloc(nm);
++        }
++        else 
++        { // Maybe not the 1st track
++          int source;
++               source=video_body-&gt;getCurrentAudioStreamNumber(0);
++               if(source)
++                        qfprintf(fd,&quot;app.audio.setTrack(%d);\n&quot;, source); 
++                        
++        }
++#endif
++   couples=NULL;
++   getAudioExtraConf(&amp;bitrate,&amp;couples);
++    qfprintf(fd,&quot;adm.audioCodec(\&quot;%s\&quot;,%d&quot;,audioCodecGetName(),bitrate); 
++    dumpConf(fd,couples);
++    qfprintf(fd,&quot;);\n&quot;);
++
++
++    uint32_t x=audioFilterGetResample();
++    if(x) qfprintf(fd,&quot;adm.audioResample=%u;\n&quot;,audioFilterGetResample());
++
++    
++//   qfprintf(fd,&quot;app.audio.normalizeMode=%d;\n&quot;,audioGetNormalizeMode());
++//   qfprintf(fd,&quot;app.audio.normalizeValue=%d;\n&quot;,audioGetNormalizeValue());
++//   qfprintf(fd,&quot;app.audio.delay=%d;\n&quot;,audioGetDelay());
++// if (audioGetDrc()) qfprintf(fd,&quot;app.audio.drc=true;\n&quot;);
++   if(CHANNEL_INVALID!=audioFilterGetMixer())
++        qfprintf(fd,&quot;adm.audioMixer(\&quot;%s\&quot;);\n&quot;,AudioMixerIdToString(audioFilterGetMixer()));
++
++   
++
++   // Change fps ?
++        switch(audioFilterGetFrameRate())
++        {
++                case FILMCONV_NONE:      ;break;
++                case FILMCONV_PAL2FILM:  qfprintf(fd,&quot;adm.audioPal2film=1;\n&quot;);break;
++                case FILMCONV_FILM2PAL:  qfprintf(fd,&quot;adm.audioFilm2pal=1;\n&quot;);break;
++                default:ADM_assert(0);
++        }
++   
++       
++        
++  
++  // -------- Muxer -----------------------
++        qfprintf(fd,&quot;\n#** Muxer **\n&quot;);
++        CONFcouple *containerConf=NULL;
++        uint32_t index=UI_GetCurrentFormat();
++        const char *containerName=ADM_mx_getName(index);
++        ADM_mx_getExtraConf( index,&amp;containerConf);
++        
++        qfprintf(fd,&quot;adm.setContainer(\&quot;%s\&quot;&quot;,containerName); 
++        dumpConf(fd,containerConf);
++        qfprintf(fd,&quot;);\n&quot;);
++  // -------- /Muxer -----------------------
++        qfprintf(fd,&quot;setSuccess(%d);\n&quot;,1);
++        qfprintf(fd,&quot;#adm.Exit();\n&quot;);
++        qfprintf(fd,&quot;\n#End of script\n&quot;);
++        // All done
++        qfclose (fd);
++  
++  return 1;
++
++
++}
++
++//EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2010-05-28 17:11:59 UTC (rev 6262)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_edit.hxx	2010-05-28 17:12:04 UTC (rev 6263)
+@@ -135,6 +135,7 @@
+ virtual                         ~ADM_Composer();
+                     void        clean( void );
+                     uint8_t     saveAsScript (const char *name, const char *out);
++                    bool        saveAsPyScript(const char *name);
+                     uint8_t     resetSeg( void );
+                     bool     	addFile (const char *name);
+                     uint8_t 	cleanup( void);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/CMakeLists.txt	2010-05-28 17:11:59 UTC (rev 6262)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/CMakeLists.txt	2010-05-28 17:12:04 UTC (rev 6263)
+@@ -13,6 +13,7 @@
+ ADM_edPtsDts.cpp
+ ADM_edVideoCopy.cpp
+ ADM_segment.cpp
++ADM_edPySave.cpp
+ )
+ 
+ ADD_LIBRARY(ADM_editor6 STATIC ${ADM_editor_SRCS})
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/gui_save.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/gui_save.cpp	2010-05-28 17:11:59 UTC (rev 6262)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/gui_save.cpp	2010-05-28 17:12:04 UTC (rev 6263)
+@@ -38,6 +38,7 @@
+ void A_saveImg (const char *name);
+ uint8_t ADM_saveRaw (const char *name);
+ void A_saveWorkbench (const char *name);
++void A_savePyProject (const char *name);
+ int  A_audioSave(char *name);
+ int  A_SaveWrapper(char *name);
+ void A_saveAudioProcessed (char *name);
+@@ -54,7 +55,8 @@
+     switch(action)
+     {
+     case ACT_SavePyWork:
+-            GUI_Error_HIG(&quot;Py&quot;,&quot;Not implemented yet\n&quot;);
++            GUI_FileSelWrite (QT_TR_NOOP(&quot;Select pyProject to Save&quot;), A_savePyProject);
++            UI_refreshCustomMenu();
+             break;
+     case ACT_SaveWork:
+       GUI_FileSelWrite (QT_TR_NOOP(&quot;Select Project to Save&quot;), A_saveWorkbench);
+@@ -446,7 +448,16 @@
+   video_body-&gt;saveAsScript(name,NULL);
+   video_body-&gt;setProjectName(name);
+ }
++
+ /**
++    \fn A_savePyProject
++    \brief Save workbench as pyscript
++*/
++void A_savePyProject (const char *name)
++{
++  video_body-&gt;saveAsPyScript(name);
++}
++/**
+     \fn A_SaveWrapper
+ 
+ */
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003457.html">[Avidemux-svn-commit] r6262 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg:	libavutil patches
+</A></li>
+	<LI>Next message: <A HREF="003459.html">[Avidemux-svn-commit] r6264 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_editor avidemux/common/ADM_script2/py	avidemux/common/ADM_script2/src avidemux/common/ADM_toolkit	avidemux_core/ADM_coreTinyPy/include	avidemux_core/ADM_coreTinyPy/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3458">[ date ]</a>
+              <a href="thread.html#3458">[ thread ]</a>
+              <a href="subject.html#3458">[ subject ]</a>
+              <a href="author.html#3458">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

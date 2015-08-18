@@ -1,0 +1,248 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6015 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src	avidemux/common/ADM_videoFilter2/include	avidemux_core/ADM_coreUtils/include
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6015%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_audioFilter/src%0A%09avidemux/common/ADM_videoFilter2/include%0A%09avidemux_core/ADM_coreUtils/include&In-Reply-To=%3C201003231454.o2NEsdZn008829%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003219.html">
+   <LINK REL="Next"  HREF="003221.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6015 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src	avidemux/common/ADM_videoFilter2/include	avidemux_core/ADM_coreUtils/include</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6015%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/common/ADM_audioFilter/src%0A%09avidemux/common/ADM_videoFilter2/include%0A%09avidemux_core/ADM_coreUtils/include&In-Reply-To=%3C201003231454.o2NEsdZn008829%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6015 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_audioFilter/src	avidemux/common/ADM_videoFilter2/include	avidemux_core/ADM_coreUtils/include">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Mar 23 15:54:39 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003219.html">[Avidemux-svn-commit] r6014 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoFilter2/src avidemux_core/ADM_coreUtils/src
+</A></li>
+        <LI>Next message: <A HREF="003221.html">[Avidemux-svn-commit] r6016 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3220">[ date ]</a>
+              <a href="thread.html#3220">[ thread ]</a>
+              <a href="subject.html#3220">[ subject ]</a>
+              <a href="author.html#3220">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-03-23 15:54:39 +0100 (Tue, 23 Mar 2010)
+New Revision: 6015
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_thread.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_filterThread.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_threadQueue.h
+Log:
+[audioThread] Use pre-allocated buffers to avoid memcpy+alloc
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_thread.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_thread.cpp	2010-03-19 06:33:11 UTC (rev 6014)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_audioFilter/src/audiofilter_thread.cpp	2010-03-23 14:54:39 UTC (rev 6015)
+@@ -19,7 +19,8 @@
+ #include &quot;audiofilter_thread.h&quot;
+ #include &lt;math.h&gt;
+ 
+-#define MAX_CHUNK_IN_QUEUE 50
++#define MAX_CHUNK_IN_QUEUE 10
++#define CHUNK_SIZE (20*1024) // should be more than enough
+ 
+ static void *boomerang(void *x)
+ {
+@@ -35,6 +36,12 @@
+ {
+     this-&gt;son=son;
+     ADM_info(&quot;Swallowing audio access into a thread\n&quot;);
++    for(int i=0;i&lt;MAX_CHUNK_IN_QUEUE;i++)
++    {
++            ADM_queuePacket pkt;
++            pkt.data=new uint8_t[CHUNK_SIZE];
++            freeList.push_back(pkt);
++    }
+     
+ }
+ /**
+@@ -55,6 +62,16 @@
+         pkt-&gt;data=NULL;
+     }
+     list.clear();
++
++    nb=freeList.size();
++    for(int i=0;i&lt;nb;i++)
++    {
++        ADM_queuePacket *pkt=&amp;(freeList[i]);
++        if(pkt-&gt;data) delete [] pkt-&gt;data;
++        pkt-&gt;data=NULL;
++    }
++    freeList.clear();
++
+     // Thread stopped, we can kill the son
+     delete son;
+ }
+@@ -104,17 +121,23 @@
+         {
+             //
+             // Dequeue one item
+-            ADM_queuePacket *pkt=&amp;(list[0]);
+-            ADM_assert(pkt-&gt;data);
+-            ADM_assert(pkt-&gt;dataLen&lt;maxSize);
+-            memcpy(buffer,pkt-&gt;data,pkt-&gt;dataLen);
+-            *dts=pkt-&gt;dts;
+-            //printf(&quot;popping Packet with DTS=%&quot;LLD&quot;, size=%d\n&quot;,*dts,(int)pkt-&gt;dataLen);
+-            *size=pkt-&gt;dataLen;
+-            delete [] pkt-&gt;data;
+-            pkt-&gt;data=NULL;
++            ADM_queuePacket pkt=list[0];
+             list.erase(list.begin());
+             mutex-&gt;unlock();
++            ADM_assert(pkt.data);
++            ADM_assert(pkt.dataLen&lt;maxSize);
++            ADM_assert(pkt.dataLen&lt;CHUNK_SIZE);
++            memcpy(buffer,pkt.data,pkt.dataLen);
++            *dts=pkt.dts;
++            //printf(&quot;popping Packet with DTS=%&quot;LLD&quot;, size=%d\n&quot;,*dts,(int)pkt-&gt;dataLen);
++            *size=pkt.dataLen;
++            mutex-&gt;lock();
++            freeList.push_back(pkt);
++            if(cond-&gt;iswaiting())
++            {
++                cond-&gt;wakeup();
++            }
++            mutex-&gt;unlock();
+             return true;
+         }
+         // If no item, thread still alive ?
+@@ -125,7 +148,7 @@
+             return false;
+         }
+         mutex-&gt;unlock();
+-        ADM_usleep(10*1000); // wait 10 ms
++        ADM_usleep(2*1000); // wait 10 ms
+     }
+     return false;
+ }
+@@ -135,43 +158,37 @@
+ */
+ bool ADM_audioAccess_thread::runAction(void)
+ {
+-    #define CHUNK_SIZE (48000*sizeof(float)*6)
+-    uint8_t *buffer=new uint8_t[CHUNK_SIZE];
+-    uint32_t size;
+-    uint64_t dts;
+     while(1)
+     {
+-        if(false==son-&gt;getPacket(buffer,&amp;size,CHUNK_SIZE,&amp;dts))
++        if(threadState==RunStateStopOrder)  
+         {
+-            ADM_info(&quot;Audio Thread, no more data\n&quot;);
++            ADM_info(&quot;Audio Thread, received stop order\n&quot;);
+             goto theEnd;
+         }
+-        ADM_queuePacket p;
+-        p.data=new uint8_t[size];
+-        memcpy(p.data,buffer,size);
+-        p.dataLen=size;
+-        p.dts=dts;
+         mutex-&gt;lock();
+-        list.push_back(p);
+-        //printf(&quot;Pushing Packet with DTS=%&quot;LLD&quot;,size=%d\n&quot;,dts,(int)size);
++        if(!freeList.size())
++        {
++            cond-&gt;wait();
++            continue;
++        }
++        ADM_queuePacket pkt=(freeList[0]);
++        ADM_assert(pkt.data);
++        freeList.erase(freeList.begin());
+         mutex-&gt;unlock();
+-        if(threadState==RunStateStopOrder)  
++
++        if(false==son-&gt;getPacket(pkt.data,&amp;(pkt.dataLen),CHUNK_SIZE,&amp;(pkt.dts)))
+         {
+-            ADM_info(&quot;Audio Thread, received stop order\n&quot;);
++            ADM_info(&quot;Audio Thread, no more data\n&quot;);
+             goto theEnd;
+         }
+-        while(1)
+-        {
+-            int n=list.size();
+-            if(n&lt;MAX_CHUNK_IN_QUEUE) break;
+-            ADM_usleep(20*1000); // Fixme: replace by thread signals
+-            if(threadState==RunStateStopOrder) goto theEnd;
+-        }
+-            
++      
++        mutex-&gt;lock();
++        list.push_back(pkt);
++        //printf(&quot;Pushing Packet with DTS=%&quot;LLD&quot;,size=%d\n&quot;,dts,(int)size);
++        mutex-&gt;unlock();
+     }
+ 
+ theEnd:
+-    delete [] buffer;
+     return true;
+ }
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_filterThread.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_filterThread.h	2010-03-19 06:33:11 UTC (rev 6014)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2/include/ADM_filterThread.h	2010-03-23 14:54:39 UTC (rev 6015)
+@@ -24,7 +24,7 @@
+ class ADM_videoFilterQueue : public ADM_coreVideoFilter,public ADM_threadQueue
+ {
+ protected:
+-             ListOfQueuePacket freeList;
++           
+ public:
+                             ADM_videoFilterQueue(ADM_coreVideoFilter *son,CONFcouple *conf=NULL);
+        virtual              ~ADM_videoFilterQueue();
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_threadQueue.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_threadQueue.h	2010-03-19 06:33:11 UTC (rev 6014)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/include/ADM_threadQueue.h	2010-03-23 14:54:39 UTC (rev 6015)
+@@ -51,6 +51,7 @@
+ {
+   protected:
+                 ListOfQueuePacket list;
++                ListOfQueuePacket freeList;
+                 admMutex          *mutex;
+                 admCond           *cond;
+                 bool              started;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003219.html">[Avidemux-svn-commit] r6014 - in branches/avidemux_2.6_branch_mean:	avidemux/common/ADM_videoFilter2/src avidemux_core/ADM_coreUtils/src
+</A></li>
+	<LI>Next message: <A HREF="003221.html">[Avidemux-svn-commit] r6016 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3220">[ date ]</a>
+              <a href="thread.html#3220">[ thread ]</a>
+              <a href="subject.html#3220">[ subject ]</a>
+              <a href="author.html#3220">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

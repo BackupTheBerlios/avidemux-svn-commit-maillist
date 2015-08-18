@@ -1,0 +1,686 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4507 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4507%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200812302134.mBULY10C022746%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001742.html">
+   
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4507 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4507%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec&In-Reply-To=%3C200812302134.mBULY10C022746%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4507 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Dec 30 22:34:01 CET 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001742.html">[Avidemux-svn-commit] r4506 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs
+</A></li>
+        
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1743">[ date ]</a>
+              <a href="thread.html#1743">[ thread ]</a>
+              <a href="subject.html#1743">[ subject ]</a>
+              <a href="author.html#1743">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2008-12-30 22:33:51 +0100 (Tue, 30 Dec 2008)
+New Revision: 4507
+
+Added:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/msrledec.c
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/msrledec.h
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/CMakeLists.txt
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/Makefile.am
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/bmp.c
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/bmp.h
+Log:
+[dib] update libavcodec BMP decoder (backport r15924)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/CMakeLists.txt	2008-12-30 21:11:06 UTC (rev 4506)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/CMakeLists.txt	2008-12-30 21:33:51 UTC (rev 4507)
+@@ -32,7 +32,7 @@
+                 dvbsubdec.c
+                 dvbsub.c xiph.c
+                 sp5xdec.c nellymoserdec.c
+-                rawdec.c rawenc.c bmp.c
++                rawdec.c rawenc.c bmp.c msrledec.c
+ )
+ # ADD x86 ones
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/Makefile.am
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/Makefile.am	2008-12-30 21:11:06 UTC (rev 4506)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/Makefile.am	2008-12-30 21:33:51 UTC (rev 4507)
+@@ -70,7 +70,7 @@
+                 wma.c \
+                 dvbsub_parser.c \
+                 dvbsubdec.c \
+-                dvbsub.c xiph.c sp5xdec.c nellymoserdec.c bmp.c
++                dvbsub.c xiph.c sp5xdec.c nellymoserdec.c bmp.c msrledec.c
+ 
+ 	
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/bmp.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/bmp.c	2008-12-30 21:11:06 UTC (rev 4506)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/bmp.c	2008-12-30 21:33:51 UTC (rev 4507)
+@@ -22,6 +22,7 @@
+ #include &quot;avcodec.h&quot;
+ #include &quot;bytestream.h&quot;
+ #include &quot;bmp.h&quot;
++#include &quot;msrledec.h&quot;
+ 
+ static int bmp_decode_init(AVCodecContext *avctx){
+     BMPContext *s = avctx-&gt;priv_data;
+@@ -34,7 +35,7 @@
+ 
+ static int bmp_decode_frame(AVCodecContext *avctx,
+                             void *data, int *data_size,
+-                            uint8_t *buf, int buf_size)
++                            const uint8_t *buf, int buf_size)
+ {
+     BMPContext *s = avctx-&gt;priv_data;
+     AVFrame *picture = data;
+@@ -48,7 +49,7 @@
+     uint32_t rgb[3];
+     uint8_t *ptr;
+     int dsize;
+-    uint8_t *buf0 = buf;
++    const uint8_t *buf0 = buf;
+ 
+     if(buf_size &lt; 14){
+         av_log(avctx, AV_LOG_ERROR, &quot;buf size too small (%d)\n&quot;, buf_size);
+@@ -72,21 +73,39 @@
+     buf += 2; /* reserved2 */
+ 
+     hsize = bytestream_get_le32(&amp;buf); /* header size */
++    ihsize = bytestream_get_le32(&amp;buf);       /* more header size */
++    if(ihsize + 14 &gt; hsize){
++        av_log(avctx, AV_LOG_ERROR, &quot;invalid header size %d\n&quot;, hsize);
++        return -1;
++    }
++
++    /* sometimes file size is set to some headers size, set a real size in that case */
++    if(fsize == 14 || fsize == ihsize + 14)
++        fsize = buf_size - 2;
++
+     if(fsize &lt;= hsize){
+-        av_log(avctx, AV_LOG_ERROR, &quot;not enough data (%d &lt; %d)\n&quot;,
++        av_log(avctx, AV_LOG_ERROR, &quot;declared file size is less than header size (%d &lt; %d)\n&quot;,
+                fsize, hsize);
+         return -1;
+     }
+ 
+-    ihsize = bytestream_get_le32(&amp;buf);       /* more header size */
+-    if(ihsize + 14 &gt; hsize){
+-        av_log(avctx, AV_LOG_ERROR, &quot;invalid header size %d\n&quot;, hsize);
++    switch(ihsize){
++    case  40: // windib v3
++    case  64: // OS/2 v2
++    case 108: // windib v4
++    case 124: // windib v5
++        width = bytestream_get_le32(&amp;buf);
++        height = bytestream_get_le32(&amp;buf);
++        break;
++    case  12: // OS/2 v1
++        width  = bytestream_get_le16(&amp;buf);
++        height = bytestream_get_le16(&amp;buf);
++        break;
++    default:
++        av_log(avctx, AV_LOG_ERROR, &quot;unsupported BMP file, patch welcome\n&quot;);
+         return -1;
+     }
+ 
+-    width = bytestream_get_le32(&amp;buf);
+-    height = bytestream_get_le32(&amp;buf);
+-
+     if(bytestream_get_le16(&amp;buf) != 1){ /* planes */
+         av_log(avctx, AV_LOG_ERROR, &quot;invalid BMP header\n&quot;);
+         return -1;
+@@ -94,12 +113,12 @@
+ 
+     depth = bytestream_get_le16(&amp;buf);
+ 
+-    if(ihsize &gt; 16)
++    if(ihsize == 40)
+         comp = bytestream_get_le32(&amp;buf);
+     else
+         comp = BMP_RGB;
+ 
+-    if(comp != BMP_RGB &amp;&amp; comp != BMP_BITFIELDS){
++    if(comp != BMP_RGB &amp;&amp; comp != BMP_BITFIELDS &amp;&amp; comp != BMP_RLE4 &amp;&amp; comp != BMP_RLE8){
+         av_log(avctx, AV_LOG_ERROR, &quot;BMP coding %d not supported\n&quot;, comp);
+         return -1;
+     }
+@@ -141,7 +160,26 @@
+     case 16:
+         if(comp == BMP_RGB)
+             avctx-&gt;pix_fmt = PIX_FMT_RGB555;
++        if(comp == BMP_BITFIELDS)
++            avctx-&gt;pix_fmt = rgb[1] == 0x07E0 ? PIX_FMT_RGB565 : PIX_FMT_RGB555;
+         break;
++    case 8:
++        if(hsize - ihsize - 14 &gt; 0)
++            avctx-&gt;pix_fmt = PIX_FMT_PAL8;
++        else
++            avctx-&gt;pix_fmt = PIX_FMT_GRAY8;
++        break;
++    case 4:
++        if(hsize - ihsize - 14 &gt; 0){
++            avctx-&gt;pix_fmt = PIX_FMT_PAL8;
++        }else{
++            av_log(avctx, AV_LOG_ERROR, &quot;Unknown palette for 16-colour BMP\n&quot;);
++            return -1;
++        }
++        break;
++    case 1:
++        avctx-&gt;pix_fmt = PIX_FMT_MONOBLACK;
++        break;
+     default:
+         av_log(avctx, AV_LOG_ERROR, &quot;depth %d not supported\n&quot;, depth);
+         return -1;
+@@ -167,14 +205,21 @@
+     dsize = buf_size - hsize;
+ 
+     /* Line size in file multiple of 4 */
+-    n = (avctx-&gt;width * (depth / 8) + 3) &amp; ~3;
++    n = ((avctx-&gt;width * depth) / 8 + 3) &amp; ~3;
+ 
+-    if(n * avctx-&gt;height &gt; dsize){
++    if(n * avctx-&gt;height &gt; dsize &amp;&amp; comp != BMP_RLE4 &amp;&amp; comp != BMP_RLE8){
+         av_log(avctx, AV_LOG_ERROR, &quot;not enough data (%d &lt; %d)\n&quot;,
+                dsize, n * avctx-&gt;height);
+         return -1;
+     }
+ 
++    // RLE may skip decoding some picture areas, so blank picture before decoding
++    if(comp == BMP_RLE4 || comp == BMP_RLE8)
++        memset(p-&gt;data[0], 0, avctx-&gt;height * p-&gt;linesize[0]);
++
++    if(depth == 4 || depth == 8)
++        memset(p-&gt;data[1], 0, 1024);
++
+     if(height &gt; 0){
+         ptr = p-&gt;data[0] + (avctx-&gt;height - 1) * p-&gt;linesize[0];
+         linesize = -p-&gt;linesize[0];
+@@ -183,46 +228,86 @@
+         linesize = p-&gt;linesize[0];
+     }
+ 
+-    switch(depth){
+-    case 24:
+-        for(i = 0; i &lt; avctx-&gt;height; i++){
+-            memcpy(ptr, buf, avctx-&gt;width*(depth&gt;&gt;3));
+-            buf += n;
+-            ptr += linesize;
++    if(avctx-&gt;pix_fmt == PIX_FMT_PAL8){
++        buf = buf0 + 14 + ihsize; //palette location
++        if((hsize-ihsize-14)&gt;&gt;depth &lt; 4){ // OS/2 bitmap, 3 bytes per palette entry
++            for(i = 0; i &lt; (1 &lt;&lt; depth); i++)
++                ((uint32_t*)p-&gt;data[1])[i] = bytestream_get_le24(&amp;buf);
++        }else{
++            for(i = 0; i &lt; (1 &lt;&lt; depth); i++)
++                ((uint32_t*)p-&gt;data[1])[i] = bytestream_get_le32(&amp;buf);
+         }
+-        break;
+-    case 16:
+-        for(i = 0; i &lt; avctx-&gt;height; i++){
+-            uint16_t *src = (uint16_t *) buf;
+-            uint16_t *dst = (uint16_t *) ptr;
++        buf = buf0 + hsize;
++    }
++    if(comp == BMP_RLE4 || comp == BMP_RLE8){
++        ff_msrle_decode(avctx, p, depth, buf, dsize);
++    }else{
++        switch(depth){
++        case 1:
++            for(i = 0; i &lt; avctx-&gt;height; i++){
++                memcpy(ptr, buf, n);
++                buf += n;
++                ptr += linesize;
++            }
++            break;
++        case 4:
++            for(i = 0; i &lt; avctx-&gt;height; i++){
++                int j;
++                for(j = 0; j &lt; n; j++){
++                    ptr[j*2+0] = (buf[j] &gt;&gt; 4) &amp; 0xF;
++                    ptr[j*2+1] = buf[j] &amp; 0xF;
++                }
++                buf += n;
++                ptr += linesize;
++            }
++            break;
++        case 8:
++            for(i = 0; i &lt; avctx-&gt;height; i++){
++                memcpy(ptr, buf, avctx-&gt;width);
++                buf += n;
++                ptr += linesize;
++            }
++            break;
++        case 24:
++            for(i = 0; i &lt; avctx-&gt;height; i++){
++                memcpy(ptr, buf, avctx-&gt;width*(depth&gt;&gt;3));
++                buf += n;
++                ptr += linesize;
++            }
++            break;
++        case 16:
++            for(i = 0; i &lt; avctx-&gt;height; i++){
++                const uint16_t *src = (const uint16_t *) buf;
++                uint16_t *dst = (uint16_t *) ptr;
+ 
+-            for(j = 0; j &lt; avctx-&gt;width; j++)
+-                *dst++ = le2me_16(*src++);
++                for(j = 0; j &lt; avctx-&gt;width; j++)
++                    *dst++ = le2me_16(*src++);
+ 
+-            buf += n;
+-            ptr += linesize;
+-        }
+-        break;
+-    case 32:
+-        for(i = 0; i &lt; avctx-&gt;height; i++){
+-            uint8_t *src = buf;
+-            uint8_t *dst = ptr;
++                buf += n;
++                ptr += linesize;
++            }
++            break;
++        case 32:
++            for(i = 0; i &lt; avctx-&gt;height; i++){
++                const uint8_t *src = buf;
++                uint8_t *dst = ptr;
+ 
+-            for(j = 0; j &lt; avctx-&gt;width; j++){
+-                dst[0] = src[rgb[2]];
+-                dst[1] = src[rgb[1]];
+-                dst[2] = src[rgb[0]];
+-                dst += 3;
+-                src += 4;
++                for(j = 0; j &lt; avctx-&gt;width; j++){
++                    dst[0] = src[rgb[2]];
++                    dst[1] = src[rgb[1]];
++                    dst[2] = src[rgb[0]];
++                    dst += 3;
++                    src += 4;
++                }
++
++                buf += n;
++                ptr += linesize;
+             }
+-
+-            buf += n;
+-            ptr += linesize;
++            break;
++        default:
++            av_log(avctx, AV_LOG_ERROR, &quot;BMP decoder is broken\n&quot;);
++            return -1;
+         }
+-        break;
+-    default:
+-        av_log(avctx, AV_LOG_ERROR, &quot;BMP decoder is broken\n&quot;);
+-        return -1;
+     }
+ 
+     *picture = s-&gt;picture;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/bmp.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/bmp.h	2008-12-30 21:11:06 UTC (rev 4506)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/bmp.h	2008-12-30 21:33:51 UTC (rev 4507)
+@@ -35,4 +35,4 @@
+     BMP_BITFIELDS   =3,
+ } BiCompression;
+ 
+-#endif // AVCODEC_BMP_H
++#endif /* AVCODEC_BMP_H */
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/msrledec.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/msrledec.c	2008-12-30 21:11:06 UTC (rev 4506)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/msrledec.c	2008-12-30 21:33:51 UTC (rev 4507)
+@@ -0,0 +1,256 @@
++/*
++ * Micrsoft RLE Decoder
++ * Copyright (C) 2008 Konstantin Shishkov
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++/**
++ * @file msrledec.c
++ * MS RLE Decoder based on decoder by Mike Melanson and my own for TSCC
++ * For more information about the MS RLE format, visit:
++ *   <A HREF="http://www.multimedia.cx/msrle.txt">http://www.multimedia.cx/msrle.txt</A>
++ */
++
++#include &quot;avcodec.h&quot;
++
++#define FETCH_NEXT_STREAM_BYTE() \
++    if (stream_ptr &gt;= data_size) \
++    { \
++      av_log(avctx, AV_LOG_ERROR, &quot; MS RLE: stream ptr just went out of bounds (1)\n&quot;); \
++      return -1; \
++    } \
++    stream_byte = data[stream_ptr++];
++
++static int msrle_decode_pal4(AVCodecContext *avctx, AVPicture *pic,
++                              const uint8_t *data, int data_size)
++{
++    int stream_ptr = 0;
++    unsigned char rle_code;
++    unsigned char extra_byte, odd_pixel;
++    unsigned char stream_byte;
++    int pixel_ptr = 0;
++    int row_dec = pic-&gt;linesize[0];
++    int row_ptr = (avctx-&gt;height - 1) * row_dec;
++    int frame_size = row_dec * avctx-&gt;height;
++    int i;
++
++    while (row_ptr &gt;= 0) {
++        FETCH_NEXT_STREAM_BYTE();
++        rle_code = stream_byte;
++        if (rle_code == 0) {
++            /* fetch the next byte to see how to handle escape code */
++            FETCH_NEXT_STREAM_BYTE();
++            if (stream_byte == 0) {
++                /* line is done, goto the next one */
++                row_ptr -= row_dec;
++                pixel_ptr = 0;
++            } else if (stream_byte == 1) {
++                /* decode is done */
++                return 0;
++            } else if (stream_byte == 2) {
++                /* reposition frame decode coordinates */
++                FETCH_NEXT_STREAM_BYTE();
++                pixel_ptr += stream_byte;
++                FETCH_NEXT_STREAM_BYTE();
++                row_ptr -= stream_byte * row_dec;
++        } else {
++            // copy pixels from encoded stream
++            odd_pixel =  stream_byte &amp; 1;
++            rle_code = (stream_byte + 1) / 2;
++            extra_byte = rle_code &amp; 0x01;
++            if ((row_ptr + pixel_ptr + stream_byte &gt; frame_size) ||
++                (row_ptr &lt; 0)) {
++                av_log(avctx, AV_LOG_ERROR, &quot; MS RLE: frame ptr just went out of bounds (1)\n&quot;);
++                return -1;
++            }
++
++            for (i = 0; i &lt; rle_code; i++) {
++                if (pixel_ptr &gt;= avctx-&gt;width)
++                    break;
++                FETCH_NEXT_STREAM_BYTE();
++                pic-&gt;data[0][row_ptr + pixel_ptr] = stream_byte &gt;&gt; 4;
++                pixel_ptr++;
++                if (i + 1 == rle_code &amp;&amp; odd_pixel)
++                    break;
++                if (pixel_ptr &gt;= avctx-&gt;width)
++                    break;
++                pic-&gt;data[0][row_ptr + pixel_ptr] = stream_byte &amp; 0x0F;
++                pixel_ptr++;
++            }
++
++            // if the RLE code is odd, skip a byte in the stream
++            if (extra_byte)
++              stream_ptr++;
++            }
++        } else {
++            // decode a run of data
++            if ((row_ptr + pixel_ptr + stream_byte &gt; frame_size) ||
++                (row_ptr &lt; 0)) {
++                av_log(avctx, AV_LOG_ERROR, &quot; MS RLE: frame ptr just went out of bounds (1)\n&quot;);
++                return -1;
++            }
++            FETCH_NEXT_STREAM_BYTE();
++            for (i = 0; i &lt; rle_code; i++) {
++                if (pixel_ptr &gt;= avctx-&gt;width)
++                    break;
++                if ((i &amp; 1) == 0)
++                    pic-&gt;data[0][row_ptr + pixel_ptr] = stream_byte &gt;&gt; 4;
++                else
++                    pic-&gt;data[0][row_ptr + pixel_ptr] = stream_byte &amp; 0x0F;
++                pixel_ptr++;
++            }
++        }
++    }
++
++    /* one last sanity check on the way out */
++    if (stream_ptr &lt; data_size) {
++        av_log(avctx, AV_LOG_ERROR, &quot; MS RLE: ended frame decode with bytes left over (%d &lt; %d)\n&quot;,
++            stream_ptr, data_size);
++        return -1;
++    }
++
++    return 0;
++}
++
++
++static int msrle_decode_8_16_24_32(AVCodecContext *avctx, AVPicture *pic, int depth,
++                                    const uint8_t *data, int srcsize)
++{
++    uint8_t *output, *output_end;
++    const uint8_t* src = data;
++    int p1, p2, line=avctx-&gt;height, pos=0, i;
++    uint16_t pix16;
++    uint32_t pix32;
++
++    output = pic-&gt;data[0] + (avctx-&gt;height - 1) * pic-&gt;linesize[0];
++    output_end = pic-&gt;data[0] + (avctx-&gt;height) * pic-&gt;linesize[0];
++    while(src &lt; data + srcsize) {
++        p1 = *src++;
++        if(p1 == 0) { //Escape code
++            p2 = *src++;
++            if(p2 == 0) { //End-of-line
++                output = pic-&gt;data[0] + (--line) * pic-&gt;linesize[0];
++                if (line &lt; 0){
++                    av_log(avctx, AV_LOG_ERROR, &quot;Next line is beyond picture bounds\n&quot;);
++                    return -1;
++                }
++                pos = 0;
++                continue;
++            } else if(p2 == 1) { //End-of-picture
++                return 0;
++            } else if(p2 == 2) { //Skip
++                p1 = *src++;
++                p2 = *src++;
++                line -= p2;
++                if (line &lt; 0){
++                    av_log(avctx, AV_LOG_ERROR, &quot;Skip beyond picture bounds\n&quot;);
++                    return -1;
++                }
++                pos += p1;
++                output = pic-&gt;data[0] + line * pic-&gt;linesize[0] + pos * (depth &gt;&gt; 3);
++                continue;
++            }
++            // Copy data
++            if (output + p2 * (depth &gt;&gt; 3) &gt; output_end) {
++                src += p2 * (depth &gt;&gt; 3);
++                continue;
++            }
++            if ((depth == 8) || (depth == 24)) {
++                for(i = 0; i &lt; p2 * (depth &gt;&gt; 3); i++) {
++                    *output++ = *src++;
++                }
++                // RLE8 copy is actually padded - and runs are not!
++                if(depth == 8 &amp;&amp; (p2 &amp; 1)) {
++                    src++;
++                }
++            } else if (depth == 16) {
++                for(i = 0; i &lt; p2; i++) {
++                    pix16 = AV_RL16(src);
++                    src += 2;
++                    *(uint16_t*)output = pix16;
++                    output += 2;
++                }
++            } else if (depth == 32) {
++                for(i = 0; i &lt; p2; i++) {
++                    pix32 = AV_RL32(src);
++                    src += 4;
++                    *(uint32_t*)output = pix32;
++                    output += 4;
++                }
++            }
++            pos += p2;
++        } else { //Run of pixels
++            uint8_t pix[3]; //original pixel
++            switch(depth){
++            case  8: pix[0] = *src++;
++                     break;
++            case 16: pix16 = AV_RL16(src);
++                     src += 2;
++                     break;
++            case 24: pix[0] = *src++;
++                     pix[1] = *src++;
++                     pix[2] = *src++;
++                     break;
++            case 32: pix32 = AV_RL32(src);
++                     src += 4;
++                     break;
++            }
++            if (output + p1 * (depth &gt;&gt; 3) &gt; output_end)
++                continue;
++            for(i = 0; i &lt; p1; i++) {
++                switch(depth){
++                case  8: *output++ = pix[0];
++                         break;
++                case 16: *(uint16_t*)output = pix16;
++                         output += 2;
++                         break;
++                case 24: *output++ = pix[0];
++                         *output++ = pix[1];
++                         *output++ = pix[2];
++                         break;
++                case 32: *(uint32_t*)output = pix32;
++                         output += 4;
++                         break;
++                }
++            }
++            pos += p1;
++        }
++    }
++
++    av_log(avctx, AV_LOG_WARNING, &quot;MS RLE warning: no End-of-picture code\n&quot;);
++    return 0;
++}
++
++
++int ff_msrle_decode(AVCodecContext *avctx, AVPicture *pic, int depth,
++                    const uint8_t* data, int data_size)
++{
++    switch(depth){
++    case  4:
++        return msrle_decode_pal4(avctx, pic, data, data_size);
++    case  8:
++    case 16:
++    case 24:
++    case 32:
++        return msrle_decode_8_16_24_32(avctx, pic, depth, data, data_size);
++    default:
++        av_log(avctx, AV_LOG_ERROR, &quot;Unknown depth %d\n&quot;, depth);
++        return -1;
++    }
++}
++
+
+Added: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/msrledec.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/msrledec.h	2008-12-30 21:11:06 UTC (rev 4506)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec/msrledec.h	2008-12-30 21:33:51 UTC (rev 4507)
+@@ -0,0 +1,40 @@
++/*
++ * Micrsoft RLE Decoder
++ * Copyright (C) 2008 Konstantin Shishkov
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++#ifndef AVCODEC_MSRLEDEC_H
++#define AVCODEC_MSRLEDEC_H
++
++#include &quot;avcodec.h&quot;
++
++/**
++ * decode stream in MS RLE format into frame
++ *
++ * @param avctx     codec context
++ * @param pic       destination frame
++ * @param depth     bit depth
++ * @param data      input stream
++ * @param data_size input size
++ */
++int ff_msrle_decode(AVCodecContext *avctx, AVPicture *pic, int depth,
++                    const uint8_t* data, int data_size);
++
++#endif /* AVCODEC_MSRLEDEC_H */
++
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001742.html">[Avidemux-svn-commit] r4506 -	branches/avidemux_2.4_branch/avidemux/ADM_codecs
+</A></li>
+	
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1743">[ date ]</a>
+              <a href="thread.html#1743">[ thread ]</a>
+              <a href="subject.html#1743">[ subject ]</a>
+              <a href="author.html#1743">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

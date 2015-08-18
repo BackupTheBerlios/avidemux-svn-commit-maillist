@@ -1,0 +1,338 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2875 - in	branches/avidemux_2.4_branch/avidemux: ADM_editor	ADM_inputs/ADM_mpegdemuxer
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2875%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_editor%0A%09ADM_inputs/ADM_mpegdemuxer&In-Reply-To=%3C200703101005.l2AA5JCd015161%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000194.html">
+   <LINK REL="Next"  HREF="000196.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2875 - in	branches/avidemux_2.4_branch/avidemux: ADM_editor	ADM_inputs/ADM_mpegdemuxer</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2875%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_editor%0A%09ADM_inputs/ADM_mpegdemuxer&In-Reply-To=%3C200703101005.l2AA5JCd015161%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2875 - in	branches/avidemux_2.4_branch/avidemux: ADM_editor	ADM_inputs/ADM_mpegdemuxer">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Mar 10 11:05:19 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000194.html">[Avidemux-svn-commit] r2874 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer
+</A></li>
+        <LI>Next message: <A HREF="000196.html">[Avidemux-svn-commit] r2876 - in	branches/avidemux_2.4_branch/autononreg: . videofunc
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#195">[ date ]</a>
+              <a href="thread.html#195">[ thread ]</a>
+              <a href="subject.html#195">[ subject ]</a>
+              <a href="author.html#195">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-03-10 11:05:18 +0100 (Sat, 10 Mar 2007)
+New Revision: 2875
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edIdentify.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_identify.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_identify.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer_h264.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probe.cpp
+Log:
+try to detect h264 es
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edIdentify.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edIdentify.cpp	2007-03-09 18:25:17 UTC (rev 2874)
++++ branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edIdentify.cpp	2007-03-10 10:05:18 UTC (rev 2875)
+@@ -35,8 +35,11 @@
+ #include &quot;ADM_editor/ADM_edit.hxx&quot;
+ #include &quot;ADM_video/ADM_genvideo.hxx&quot;
+ #include &quot;ADM_filter/video_filters.h&quot;
++#include &quot;ADM_mpegdemuxer/dmx_identify.h&quot;
+ #include &quot;ADM_assert.h&quot;
+ 
++DMX_TYPE dmxIdentify(const char *name);
++
+ /**
+ 	Read the magic of a file i.e. its 16 first bytes
+ */
+@@ -240,6 +243,18 @@
+       return 1;
+ 
+     }    
++    /* Try harder to identify stuff */
++    switch(dmxIdentify(name))
++    {
++      case  DMX_MPG_ES :
++      case  DMX_MPG_H264_ES:
++      case  DMX_MPG_PS :
++      case  DMX_MPG_TS : 
++                          printf(&quot;Probe says it is mpeg\n&quot;);
++                          *type = Mpeg_FileType;   return 1;
++      case  DMX_MPG_MSDVR  :*type = ASF_FileType; return 1;
++      
++    }
+   printf (&quot;\n unrecognized file detected...\n&quot;);
+   fourCC::print(magic[0]); printf(&quot;\n&quot;);
+   fourCC::print(magic[1]);
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_identify.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_identify.cpp	2007-03-09 18:25:17 UTC (rev 2874)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_identify.cpp	2007-03-10 10:05:18 UTC (rev 2875)
+@@ -33,8 +33,10 @@
+ 
+ #define MAX_PROBE (5*1024*1024)
+ #define MIN_DETECT 40
++#define H264MIN_DETECT 50
+ 
+ static uint8_t probeTs(fileParser *parser);
++uint8_t probeH264(fileParser *parser);
+ 
+ DMX_TYPE dmxIdentify(const char *name)
+ {
+@@ -104,6 +106,11 @@
+                 {
+                         // Try TS here
+                         printf(&quot;Cannot identify %s as mpeg (%lu/%lu)\n&quot;,name,typeES,typePS);
++                        // Try to see if it is H264 ES
++                        if(probeH264(parser))
++                        {                         
++                            ret=DMX_MPG_H264_ES;
++                        }
+ 
+                 }
+      
+@@ -151,4 +158,47 @@
+ 
+         return 1;
+ }
++/**
++      \fn probeH264
++      \brief Try to identidy H264 streams
++*/
++uint8_t probeH264(fileParser *parser)
++{
++  uint32_t nal=0;
++  uint8_t ret=0;
++  uint64_t size,pos,left;
++  uint8_t stream;
++        parser-&gt;setpos(0);
++        while(1)
++        {
++                parser-&gt;getpos(&amp;pos);
++                if(pos&gt;MAX_PROBE) goto _nalyze2;
++                if(!parser-&gt;syncH264(&amp;stream)) goto _nalyze2;
++
++#define INSIDE(x,y) (stream&gt;=x &amp;&amp; stream&lt;y)
++                if(stream==01 || stream==7 || stream==9) 
++                {                        
++                        nal++;
++                        continue;
++                }
++
++
++        }
++_nalyze2:
++                if(nal&gt;H264MIN_DETECT)
++                {
++                        
++                        printf(&quot;Identified as H264 ES \n&quot;);
++                        ret=1;
++                }
++                else
++                {
++                        // Try TS here
++                        printf(&quot;Cannot identify as H264 ES (%lu/%lu)\n&quot;,nal,H264MIN_DETECT);
++
++                }
++     
++               return ret;
++}            
++
+ // EOF
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_identify.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_identify.h	2007-03-09 18:25:17 UTC (rev 2874)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_identify.h	2007-03-10 10:05:18 UTC (rev 2875)
+@@ -9,6 +9,7 @@
+ {
+         DMX_MPG_UNKNOWN=0,
+         DMX_MPG_ES,
++        DMX_MPG_H264_ES,
+         DMX_MPG_PS,
+         DMX_MPG_TS,
+         DMX_MPG_MSDVR
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer.cpp	2007-03-09 18:25:17 UTC (rev 2874)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer.cpp	2007-03-10 10:05:18 UTC (rev 2875)
+@@ -85,16 +85,15 @@
+ 
+ 
+         mpegType=dmxIdentify(realname);
+-#ifndef ADM_DEBUG
++
+         if(mpegType==DMX_MPG_UNKNOWN)
+         {
+                 delete [] realname;
+                 return 0;
+         }
+-#else
+-      mpegType=DMX_MPG_ES;
+-      payloadType=DMX_PAYLOAD_H264;
+-#endif
++
++     
++
+         switch(mpegType)
+         {
+                case DMX_MPG_MSDVR:
+@@ -125,6 +124,11 @@
+                                 demuxer=new dmx_demuxerES;
+                                 mpegTypeChar='E';
+                                 break;
++                case DMX_MPG_H264_ES:
++                                payloadType=DMX_PAYLOAD_H264;
++                                demuxer=new dmx_demuxerES;
++                                mpegTypeChar='E';
++                                break;
+                 case DMX_MPG_PS:
+                 		{
+                 		dmx_demuxerPS *dmx;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer_h264.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer_h264.cpp	2007-03-09 18:25:17 UTC (rev 2874)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_indexer_h264.cpp	2007-03-10 10:05:18 UTC (rev 2875)
+@@ -101,6 +101,21 @@
+ uint64_t pts,dts;
+ uint8_t pic_started=0;
+       
++      
++#if 0
++    FILE *f=fopen(&quot;/tmp/foo.h264&quot;,&quot;wt&quot;);
++    uint8_t buffer[80];
++    ADM_assert(f);
++    for(int i=0;i&lt;1024*1024*2;i++)
++    {
++       _run-&gt;demuxer-&gt;read(buffer,60);
++        fwrite(buffer,60,1,f);
++    }
++    fclose(f);
++    exit(0);  
++
++#endif
++      
+       printf(&quot;Starting H264 indexer\n&quot;);
+       while(1)
+       {
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.cpp	2007-03-09 18:25:17 UTC (rev 2874)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.cpp	2007-03-10 10:05:18 UTC (rev 2875)
+@@ -331,7 +331,39 @@
+         *stream=read8i();
+         return 1;
+ }
++//
++//      Search packet signature and return packet type
++//_______________________________________
++uint8_t fileParser::syncH264(uint8_t *stream)
++{
++uint32_t val,hnt;
+ 
++        val=0;
++        hnt=0;                  
++        // preload
++        if((5+_off)&gt;=_size) 
++        {
++                printf(&quot;Dmx IO: End of file met (%&quot;LLU&quot; / %&quot;LLU&quot; seg%lu)\n&quot;,_off,_size,_nbFd);
++                return 0;
++        }
++        hnt=(read8i()&lt;&lt;24)+(read8i()&lt;&lt;16) + (read8i()&lt;&lt;8) +read8i();
++        
++
++        while((hnt!=0x1))
++        {                                
++                hnt&lt;&lt;=8;
++                val=read8i();                                   
++                hnt+=val;
++                if(_curFd==_nbFd-1)
++                {       
++                                if((5+_off)&gt;=_size) return 0;
++                }
++        }
++                                
++        *stream=read8i();
++        return 1;
++}
++
+ uint8_t fileParser::getpos(uint64_t *o)
+ {
+          *o=_off;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.h	2007-03-09 18:25:17 UTC (rev 2874)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_io.h	2007-03-10 10:05:18 UTC (rev 2875)
+@@ -52,6 +52,7 @@
+                         uint8_t  open(const char *name,FP_TYPE *multi);
+                         uint8_t  forward(uint64_t u);
+                         uint8_t  sync(uint8_t *t );
++                        uint8_t  syncH264(uint8_t *t );
+                         uint8_t  getpos(uint64_t *o);
+                         uint8_t  setpos(uint64_t o);                
+                         uint64_t getSize( void ) ;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probe.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probe.cpp	2007-03-09 18:25:17 UTC (rev 2874)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probe.cpp	2007-03-10 10:05:18 UTC (rev 2875)
+@@ -81,6 +81,7 @@
+                   return 1;
+                 }
+         case DMX_MPG_ES:
++        case DMX_MPG_H264_ES:
+                 {
+                 *nbTracks=1;
+                 *tracks=new MPEG_TRACK;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000194.html">[Avidemux-svn-commit] r2874 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer
+</A></li>
+	<LI>Next message: <A HREF="000196.html">[Avidemux-svn-commit] r2876 - in	branches/avidemux_2.4_branch/autononreg: . videofunc
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#195">[ date ]</a>
+              <a href="thread.html#195">[ thread ]</a>
+              <a href="subject.html#195">[ subject ]</a>
+              <a href="author.html#195">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

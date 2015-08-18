@@ -1,0 +1,194 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3663 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-October/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3663%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2&In-Reply-To=%3C200710201715.l9KHFIvi016454%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000932.html">
+   <LINK REL="Next"  HREF="000934.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3663 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3663%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2&In-Reply-To=%3C200710201715.l9KHFIvi016454%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3663 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Oct 20 19:15:18 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000932.html">[Avidemux-svn-commit] r3662 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+        <LI>Next message: <A HREF="000934.html">[Avidemux-svn-commit] r3664 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_NONE/ADM_dialogFactory	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory	ADM_userInterfaces/ADM_commonUI ADM_video ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#933">[ date ]</a>
+              <a href="thread.html#933">[ thread ]</a>
+              <a href="subject.html#933">[ subject ]</a>
+              <a href="author.html#933">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-10-20 19:15:18 +0200 (Sat, 20 Oct 2007)
+New Revision: 3663
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2/GUI_bindings.cpp
+Log:
+[GTK] Fix drag &amp; drop, works with nautilus and konqueror
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2/GUI_bindings.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2/GUI_bindings.cpp	2007-10-20 17:14:23 UTC (rev 3662)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_gui2/GUI_bindings.cpp	2007-10-20 17:15:18 UTC (rev 3663)
+@@ -1016,53 +1016,84 @@
+ 	 gtk_combo_box_set_active(GTK_COMBO_BOX(lookup_widget(guiRootWindow,FORMAT_WIDGET)),fmt);
+ 	return 1;
+ }
++/**
++    \fn DNDmerge
++    \brief Extract the actual filename from the DNDstring <A HREF="file://abcd">file://abcd</A> and store it into where
++*/
++static void DNDmerge(char **where, char *start,char *end)
++{
++  int len=end-start;
++  ADM_assert(len&gt;7); // <A HREF="file://">file://</A> = 7 bytes
++  len-=7;
++  *where=(char *)ADM_alloc(end-start+1);  // 7 more but who cares ?
++  memcpy(*where,start+7,len);
++  
++  // chomp it
++  char *tail=(*where)+len;
++  do
++  { 
++      *tail=0;
++      tail--;
++  }while(*tail==0xA || *tail==0xd);
++}
+ // DND CYB
++#define MAX_DND_FILES 20
++/**
++    \fn DNDDataReceived
++    \brief DnDrop file handling, code by CYB, modified by mean
++        The datas are incoming like this <A HREF="file://abcd\rfile://xyz\r...">file://abcd\rfile://xyz\r...</A>
++*/
+ void DNDDataReceived( GtkWidget *widget, GdkDragContext *dc,
+                                   gint x, gint y, GtkSelectionData *selection_data, guint info, guint t)
+ {
+-   void *filename;
+-   char *start,*end;
+-   int cont;
+-
+-    if (info == TARGET_URI_LIST)
++   char *start,*cur,*old;
++   char *names[MAX_DND_FILES];
++   
++    memset(names,0,sizeof(char *)*MAX_DND_FILES);
++    if (info != TARGET_URI_LIST)
+     {
+-     start = strstr((char*)selection_data-&gt;data,&quot;<A HREF="file://">file://</A>&quot;);
+-     cont = 0;
+-     do
++      gtk_drag_finish(dc,TRUE,FALSE,t);
++      return;
++    }
++    
++    int current=0;
++    start=(char*)selection_data-&gt;data;
++    old=start;
++    while(current&lt;MAX_DND_FILES)
++    {
++     cur = strstr(start,&quot;<A HREF="file://">file://</A>&quot;);
++     if(!cur) // Not found
+      {
+-       if (start)
+-       {
+-        end = strstr((char*)start+1,&quot;<A HREF="file://">file://</A>&quot;);
+-        if (!end)
+-        {
+-                      end = start + strlen(start);
+-                      cont = 1;
+-                      continue;
+-        }
+-        filename = ADM_alloc(end-start); 
+-        if (filename)
+-        {
+-              memset(filename,0,end-start);
+-              memcpy(filename,start+7,end-start-7-2);
+-              if (avifileinfo) 
++        if(!current) 
++          break; 
++        DNDmerge(&amp;(names[current-1]),old,start+strlen(start));
++        current++;
++        break;
++     }
++     // Add
++     if(current)
++     {
++        DNDmerge(&amp;(names[current-1]),old,cur);
++     }
++     current++;
++     old=cur;
++     start=cur+1;
++    }
++    
++    // Cleanup
++    for(int i=0;i&lt;current-1;i++)
++    {
++      printf(&quot;DND : %d %s\n&quot;,i,names[i]);
++      char *filename=names[i];
++      if (avifileinfo) 
+               {
+-                    // Append video when there's already something
+                     fileReadWrite(A_appendAvi, 0, (char*)filename);
+                }
+                else
+                {
+                     fileReadWrite(A_openAvi, 0, (char*)filename);
+                }
+-         } 
+-         ADM_dealloc(filename);
+-         start = end;
+-       }
+-       else
+-       {
+-           cont=1;
+-       } 
+-     } //do
+-     while (!cont);  
++      ADM_dealloc(names[i]); 
+     }
+     gtk_drag_finish(dc,TRUE,FALSE,t);
+ }
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000932.html">[Avidemux-svn-commit] r3662 -	branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavcodec
+</A></li>
+	<LI>Next message: <A HREF="000934.html">[Avidemux-svn-commit] r3664 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_NONE/ADM_dialogFactory	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory	ADM_userInterfaces/ADM_commonUI ADM_video ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#933">[ date ]</a>
+              <a href="thread.html#933">[ thread ]</a>
+              <a href="subject.html#933">[ subject ]</a>
+              <a href="author.html#933">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

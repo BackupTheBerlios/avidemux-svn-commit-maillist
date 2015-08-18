@@ -1,0 +1,161 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7262 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7262%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render&In-Reply-To=%3C20110609180417.B26B84812F0%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004415.html">
+   <LINK REL="Next"  HREF="004417.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7262 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7262%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render&In-Reply-To=%3C20110609180417.B26B84812F0%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7262 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render">mean at mail.berlios.de
+       </A><BR>
+    <I>Thu Jun  9 20:04:17 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004415.html">[Avidemux-svn-commit] r7261 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage:	include src
+</A></li>
+        <LI>Next message: <A HREF="004417.html">[Avidemux-svn-commit] r7263 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4416">[ date ]</a>
+              <a href="thread.html#4416">[ thread ]</a>
+              <a href="subject.html#4416">[ subject ]</a>
+              <a href="author.html#4416">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-06-09 20:04:17 +0200 (Thu, 09 Jun 2011)
+New Revision: 7262
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_accelRender.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.h
+Log:
+[render] Add support for hwRefImage
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_accelRender.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_accelRender.h	2011-06-09 18:04:16 UTC (rev 7261)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_accelRender.h	2011-06-09 18:04:17 UTC (rev 7262)
+@@ -36,5 +36,6 @@
+               virtual   bool    refresh(void) {return true;}
+               virtual   bool    changeZoom(renderZoom newzoom)=0;
+               virtual   bool    usingUIRedraw(void)=0;
++              virtual   ADM_HW_IMAGE getPreferedImage(void ) {return ADM_HW_NONE;}
+ };
+ #endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.cpp	2011-06-09 18:04:16 UTC (rev 7261)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.cpp	2011-06-09 18:04:17 UTC (rev 7262)
+@@ -197,6 +197,8 @@
+ uint8_t renderUpdateImage(ADMImage *image)
+ {
+     ADM_assert(!_lock);
++    if(renderer-&gt;getPreferedImage()!=image-&gt;refType)
++            image-&gt;hwDownloadFromRef();
+     renderer-&gt;displayImage(image);
+     return 1;
+ }
+@@ -357,6 +359,16 @@
+     return false;
+ 
+ }
++/**
++    \fn renderGetPreferedImageFormat
++    \brief get the prefered hw accelerated image format (NONE,VDPAU,...)
++*/  
++ADM_HW_IMAGE renderGetPreferedImageFormat(void)
++{
++    if(!renderer) return ADM_HW_NONE;
++    return renderer-&gt;getPreferedImage();
++}
++
+ //***************************************
+ /**
+     \fn bool calcDisplayFromZoom(renderZoom zoom);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.h	2011-06-09 18:04:16 UTC (rev 7261)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_render.h	2011-06-09 18:04:17 UTC (rev 7262)
+@@ -44,7 +44,7 @@
+ uint8_t renderStartPlaying( void );
+ uint8_t renderStopPlaying( void );
+ bool    renderExposeEventFromUI(void); // This is called by UI, return true if UI should redraw, false else
+-
++ADM_HW_IMAGE renderGetPreferedImageFormat(void);
+ uint8_t renderLock(void);
+ uint8_t renderUnlock(void);
+ bool renderHookRefreshRequest(refreshSB cb);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp	2011-06-09 18:04:16 UTC (rev 7261)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.cpp	2011-06-09 18:04:17 UTC (rev 7262)
+@@ -147,9 +147,10 @@
+         // cookie is a render...
+         struct vdpau_render_state *rndr = (struct vdpau_render_state *)pic-&gt;refDescriptor.refCookie;
+         myInput=rndr-&gt;surface;
+-        printf(&quot;Skipping blit surface=%d\n&quot;,(int)myInput);
++        //printf(&quot;Skipping blit surface=%d\n&quot;,(int)myInput);
+     }else
+     {
++        //printf(&quot;Blitting surface\n&quot;);
+         if(VDP_STATUS_OK!=admVdpau::surfacePutBits( 
+                 input,
+                 planes,pitches))
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.h	2011-06-09 18:04:16 UTC (rev 7261)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_render/GUI_vdpauRender.h	2011-06-09 18:04:17 UTC (rev 7262)
+@@ -35,6 +35,7 @@
+               virtual   bool changeZoom(renderZoom newzoom);
+               virtual   bool refresh(void);
+               virtual   bool usingUIRedraw(void) {return false;}; // we can redraw by ourself
++              virtual   ADM_HW_IMAGE getPreferedImage(void ) {return ADM_HW_VDPAU;}
+ };
+ #endif
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004415.html">[Avidemux-svn-commit] r7261 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage:	include src
+</A></li>
+	<LI>Next message: <A HREF="004417.html">[Avidemux-svn-commit] r7263 - in	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_videoFilter2:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4416">[ date ]</a>
+              <a href="thread.html#4416">[ thread ]</a>
+              <a href="subject.html#4416">[ subject ]</a>
+              <a href="author.html#4416">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

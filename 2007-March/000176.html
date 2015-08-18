@@ -1,0 +1,456 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2856 - in	branches/avidemux_2.4_branch/avidemux: ADM_inputs/ADM_3gp	ADM_inputs/ADM_openDML ADM_outputs/oplug_avi
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2856%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_inputs/ADM_3gp%0A%09ADM_inputs/ADM_openDML%20ADM_outputs/oplug_avi&In-Reply-To=%3C200703021924.l22JO1Uq009839%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000175.html">
+   <LINK REL="Next"  HREF="000177.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2856 - in	branches/avidemux_2.4_branch/avidemux: ADM_inputs/ADM_3gp	ADM_inputs/ADM_openDML ADM_outputs/oplug_avi</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2856%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_inputs/ADM_3gp%0A%09ADM_inputs/ADM_openDML%20ADM_outputs/oplug_avi&In-Reply-To=%3C200703021924.l22JO1Uq009839%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2856 - in	branches/avidemux_2.4_branch/avidemux: ADM_inputs/ADM_3gp	ADM_inputs/ADM_openDML ADM_outputs/oplug_avi">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Mar  2 20:24:01 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000175.html">[Avidemux-svn-commit] r2855 -	branches/avidemux_2.4_branch/avidemux/ADM_script
+</A></li>
+        <LI>Next message: <A HREF="000177.html">[Avidemux-svn-commit] r2857 - in	branches/avidemux_2.4_branch/avidemux: ADM_inputs/ADM_3gp	ADM_outputs/oplug_avi
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#176">[ date ]</a>
+              <a href="thread.html#176">[ thread ]</a>
+              <a href="subject.html#176">[ subject ]</a>
+              <a href="author.html#176">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-03-02 20:24:00 +0100 (Fri, 02 Mar 2007)
+New Revision: 2856
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.h
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_infoextractor.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_openDML/ADM_openDMLDepack.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy_pack.cpp
+Log:
+revamp packed bitstream unpacker, should be 100 % exact this time 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.h	2007-03-02 07:14:49 UTC (rev 2855)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_3gp.h	2007-03-02 19:24:00 UTC (rev 2856)
+@@ -154,6 +154,7 @@
+ 
+ uint8_t extractMpeg4Info(uint8_t *data,uint32_t dataSize,uint32_t *w,uint32_t *h,uint32_t *time_inc);
+ uint8_t extractH263Info(uint8_t *data,uint32_t dataSize,uint32_t *w,uint32_t *h);
++uint8_t extractVopInfo(uint8_t *data, uint32_t len,uint32_t timeincbits,uint32_t *vopType,uint32_t *modulo, uint32_t *time_inc);
+ #endif
+ 
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_infoextractor.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_infoextractor.cpp	2007-03-02 07:14:49 UTC (rev 2855)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_3gp/ADM_infoextractor.cpp	2007-03-02 19:24:00 UTC (rev 2856)
+@@ -52,7 +52,7 @@
+     uint32_t mw,mh;
+     uint32_t timeVal;
+     
+-    mixDump(data,dataSize);
++    //mixDump(data,dataSize);
+     printf(&quot;\n&quot;);
+     while(1)
+     {
+@@ -72,7 +72,14 @@
+                 dataSize--;
+                 idx++;
+                 printf(&quot;VOL Header:\n&quot;);
+-                mixDump(data+idx,dataSize);printf(&quot;\n&quot;);
++                if(dataSize&lt;16)
++                {
++                  mixDump(data+idx,dataSize);printf(&quot;\n&quot;);
++                }
++                else
++                {
++                  mixDump(data+idx,16);printf(&quot;\n&quot;);
++                }
+                 // Here we go !
+                 GetBitContext s;
+                 init_get_bits( &amp;s,data+idx, dataSize*8);
+@@ -111,15 +118,7 @@
+                  skip_bits(&amp;s,1); //  Marker
+                  if(get_bits(&amp;s,1)) // Fixed vop rate, compute how much bits needed
+                  {
+-                    uint32_t in=*time_inc;
+-                    uint32_t i=1;
+-                    in--;
+-                    while(in)
+-                    {
+-                        in&gt;&gt;=1;
+-                        if(in) i++;
+-                    }
+-                    skip_bits(&amp;s,i);
++                     get_bits(&amp;s, *time_inc);
+                  }
+                   skip_bits(&amp;s,1); //  Marker
+                   mw=get_bits(&amp;s,13);
+@@ -146,6 +145,54 @@
+     
+     return 0;
+ }
++/**
++    \fn extractVopInfo
++    \brief extract info from vop : Vop type, module time base, time inc
++    
++    Warning this function expects data to start AFTER startcode, contrarily to other functions here!
++*/
++
++uint8_t extractVopInfo(uint8_t *data, uint32_t len,uint32_t timeincbits,uint32_t *vopType,uint32_t *modulo, uint32_t *time_inc,uint32_t *vopcoded)
++{
++   GetBitContext s;
++   int vop;
++   uint32_t vp,tinc;
++           init_get_bits( &amp;s,data, len*8);
++           vop=get_bits(&amp;s,2);
++           switch(vop)
++           {
++             case 0: vp=AVI_KEY_FRAME;break;
++             case 1: vp=0;break;
++             case 2: vp=AVI_B_FRAME;break;
++             default:
++                printf(&quot;Unknown vop type :%d\n&quot;,vop);
++                return 0;
++           }
++           /* Read modulo */
++           int imodulo=0;
++           while (get_bits1(&amp;s) != 0)
++                  imodulo++;
++           if(!get_bits1(&amp;s))
++           {
++              printf(&quot;Wrong marker1\n&quot;);
++              return 0; 
++           }
++           *modulo=imodulo;
++           /* Read time */
++           tinc=get_bits(&amp;s,timeincbits);
++           /* Marker */
++            if(!get_bits1(&amp;s))
++           {
++              printf(&quot;Wrong marker2\n&quot;);
++              return 0; 
++           }
++           /* Vop coded */
++           *vopcoded=get_bits1(&amp;s);
++           *vopType=vp;
++           *time_inc=tinc;
++           return 1;
++}
++
+ /*
+         Extract H263 width &amp; height from header
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_openDML/ADM_openDMLDepack.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_openDML/ADM_openDMLDepack.cpp	2007-03-02 07:14:49 UTC (rev 2855)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_openDML/ADM_openDMLDepack.cpp	2007-03-02 19:24:00 UTC (rev 2856)
+@@ -33,16 +33,25 @@
+ #ifdef ADM_DEBUG
+ 	//#define OPENDML_VERBOSE
+ #endif
++#define DEPACK_VERBOSE
+ 
+ typedef struct vopS
+ {
+ 	uint32_t offset;
+ 	uint32_t type;
++        uint32_t vopCoded;
++        uint32_t modulo;
++        uint32_t timeInc;
+ }vopS;
+ #define MAX_VOP 10
+-static uint32_t searchVop(uint8_t *begin, uint8_t *end,uint32_t *nb, vopS *vop);
++
+ uint8_t ADM_findMpegStartCode(uint8_t *start, uint8_t *end,uint8_t *outstartcode,uint32_t *offset);
++uint8_t extractVopInfo(uint8_t *data, uint32_t len,uint32_t timeincbits,uint32_t *vopType,uint32_t *modulo, uint32_t *time_inc,uint32_t *vopcoded);
++uint8_t extractMpeg4Info(uint8_t *data,uint32_t dataSize,uint32_t *w,uint32_t *h,uint32_t *time_inc);
+ 
++
++static uint32_t searchVop(uint8_t *begin, uint8_t *end,uint32_t *nb, vopS *vop,uint32_t *timeincbits);
++
+ static const char *s_voptype[4]={&quot;I frame&quot;,&quot;P frame&quot;,&quot;B frame&quot;,&quot;D frame&quot;};
+ uint8_t OpenDMLHeader::unpackPacked( void )
+ {
+@@ -51,6 +60,7 @@
+ 	uint32_t firstType, secondType,thirdType;
+ 	uint32_t targetIndex=0,nbVop;
+ 	uint32_t nbDuped=0;
++        uint32_t timcincbits=16;  /* Nb bits used to code time_inc 16 is a safe default */
+ 	
+ 	vopS	myVops[MAX_VOP]; // should be enough
+ 	// here we got the vidHeader to get the file easily
+@@ -61,7 +71,7 @@
+ 	// First get a unpack buffe
+ 	uint8_t *buffer=new uint8_t [2*getWidth()*getHeight()];
+ 
+-	// For each frame we lookup 2 times the VOP header
++	// For each frame we lookup x times the VOP header
+ 	// the first one become frame n, the second one becomes frame N+1
+ 	// Image contaning only VOP header are royally ignored
+ 	// We should get about the same number of in/out frame
+@@ -77,73 +87,51 @@
+ 	ADMCompressedImage image;
+         image.data=buffer;
+ 	uint32_t img=0;
++        uint32_t modulo,time_inc,vopcoded,vopType;
++        uint32_t timeincbits=16;
++        uint32_t oldtimecode=0xffffffff;
+ 	while(img&lt;nbFrame)
+ 	{
++                ADM_assert(nbDuped&lt;2);
+ 		working-&gt;update(img,nbFrame);
+ 		if(!getFrameNoAlloc(img,&amp;image))
+ 			{
+ 				printf(&quot;Error could not get frame %lu\n&quot;,img);
+ 				goto _abortUnpack;
+ 			}
+-		aprintf(&quot;--Frame:%lu/%lu, len %lu\n&quot;,img,nbFrame,image.dataLength);
++		aprintf(&quot;--Frame:%lu/%lu, len %lu, nbDuped%u\n&quot;,img,nbFrame,image.dataLength,nbDuped);
+ 		
+ 		
+-		if(image.dataLength&lt;9) // ??
++		if(image.dataLength&lt;6) // Too short to contain a valid vop header, just copy
+ 		{
+-			if(nbDuped)
+-			{
+-                                aprintf(&quot; skipped\n&quot;);
+-				nbDuped--;
+-                                aprintf(&quot;At %u, %d duped!\n&quot;,img,nbDuped);
+-			}
+-			else
+-			{
+-				memcpy(&amp;newIndex[targetIndex],&amp;_idx[img],sizeof(_idx[0]));
++                                memcpy(&amp;newIndex[targetIndex],&amp;_idx[img],sizeof(_idx[0]));
+ 				aprintf(&quot;TOO SMALL\n&quot;);
+ 				targetIndex++;
+-			}
+-			img++;
+-			continue;
+-		}
+-		if(nbDuped)
++                                img++;
++                                continue;
++                }
++                /* Cannot find vop, corrupted or WTF ...*/
++                if(!searchVop(buffer,buffer+image.dataLength,&amp;nbVop,myVops,&amp;timcincbits))
+                 {
+-                        aprintf(&quot;At %u, %d duped!\n&quot;,img,nbDuped);
++                    printf(&quot;img :%u failed to find vop!\n&quot;,img); 
++                    memcpy(&amp;newIndex[targetIndex],&amp;_idx[img],sizeof(_idx[0]));
++                    targetIndex++;
++                    img++;
++                    continue;
++                  
+                 }
+-		// now search vop header in this
+-		// Search first vop
+-		
+-		uint8_t *lastPos=buffer;
+-		uint8_t *endPos=buffer+image.dataLength;
+-		aprintf(&quot;Frame :%lu&quot;,img);
+-		searchVop(buffer,endPos,&amp;nbVop,myVops);
+-		
+-		
+-		if(!nbVop) goto _abortUnpack;
+-		
+-		if(nbVop==1) // only one vop
+-		{
+-                        if(myVops[0].type==AVI_KEY_FRAME)
++                /* We have one or more vop inside it...*/
++                if(nbVop==1) // only one vop, could it be an evil duplicate ?
++                {
++                        if(myVops[0].timeInc==oldtimecode &amp;&amp; !myVops[0].vopCoded)
+                         {
+-                                if(nbDuped)
+-                                {
+-                                        ADM_assert(targetIndex);
+-                                        if(newIndex[targetIndex-1].intra==AVI_B_FRAME)
+-                                        {
+-                                                printf(&quot;Trying to fix wrong vop packed\n&quot;);
+-                                                targetIndex--;
+-                                                nbDuped--;
+-                                        }
+-                                }
++                          aprintf(&quot;Frame has same timecode and is not vop coded; skipping\n&quot;);
++                          img++;
++                          nbDuped--;
++                          continue;
+                         }
+-			memcpy(&amp;newIndex[targetIndex],&amp;_idx[img],sizeof(_idx[0]));
+-			newIndex[targetIndex].intra=myVops[0].type;
+-			aprintf(&quot;Only one frame found\n&quot;);
+-			targetIndex++;
+-			img++;
+-			continue;
++                }
+ 		
+-		}
+-		nbDuped++;
+ 		// more than one vop, do up to the n-1th
+ 		// the 1st image starts at 0
+ 		myVops[0].offset=0;
+@@ -151,24 +139,29 @@
+ 				
+ 		
+ 		uint32_t place;
+-                if(nbVop&gt;2)
++                //if(nbVop&gt;2)
+                 {
+                         aprintf(&quot;At %u, %d vop!\n&quot;,img,nbVop);
+                 }
+-		for(uint32_t j=0;j&lt;nbVop;j++)
+-		{
++                /* The 1st one becomes our new timecode reference, a dupe will have the same timebase */
++                if(myVops[0].type!=AVI_B_FRAME)
++                    oldtimecode=myVops[0].timeInc;
+ 
+-			place=targetIndex+j;
+-			 if(!j)
+-				newIndex[place].intra=myVops[j].type;
+-			else
+-				newIndex[place].intra=AVI_B_FRAME;
+-			newIndex[place].size=myVops[j+1].offset-myVops[j].offset;
+-			newIndex[place].offset=_idx[img].offset+myVops[j].offset;
+-				
+-		}				
+-		targetIndex+=nbVop;	
+-		img++;
++                for(uint32_t j=0;j&lt;nbVop;j++)
++                {
++  
++                        place=targetIndex+j;
++                          if(!j)
++                                newIndex[place].intra=myVops[j].type;
++                        else
++                                newIndex[place].intra=AVI_B_FRAME;
++                        newIndex[place].size=myVops[j+1].offset-myVops[j].offset;
++                        newIndex[place].offset=_idx[img].offset+myVops[j].offset;
++                                
++                }				
++                targetIndex+=nbVop;	
++                img++;
++                nbDuped+=nbVop-1;;
+ 		
+ 	}
+ 	newIndex[0].intra=AVI_KEY_FRAME; // Force
+@@ -202,13 +195,15 @@
+ // Search a start vop in it
+ // and return also the vop type
+ // needed to update the index
+-uint32_t searchVop(uint8_t *begin, uint8_t *end,uint32_t *nb, vopS *vop)
++uint32_t searchVop(uint8_t *begin, uint8_t *end,uint32_t *nb, vopS *vop,uint32_t *timeincbits)
+ {
+ 	
+ 	uint32_t off=0;
+ 	uint32_t globalOff=0;
+ 	uint32_t voptype;
+ 	uint8_t code;
++        uint32_t w,h,t;
++        uint32_t modulo,time_inc,vopcoded,vopType;
+ 	*nb=0;
+ 	while(begin&lt;end-3)
+ 	{
+@@ -228,14 +223,34 @@
+ 					case 3: printf(&quot;Glouglou\n&quot;);voptype=0;break;
+ 				
+ 				}
+-        	    vop[*nb].offset=globalOff+off-4;
++        	                vop[*nb].offset=globalOff+off-4;
+ 				vop[*nb].type=voptype;
+-				*nb=(*nb)+1;
+-				begin+=off+1;
++
++				
++                                
++                                /* Get more info */
++                                if( extractVopInfo(begin+off, end-begin-off, *timeincbits,&amp;vopType,&amp;modulo, &amp;time_inc,&amp;vopcoded))
++                                {
++                                    aprintf(&quot; frame found: vopType:%x modulo:%d time_inc:%d vopcoded:%d\n&quot;,vopType,modulo,time_inc,vopcoded);
++                                    vop[*nb].modulo=modulo;
++                                    vop[*nb].timeInc=time_inc;
++                                    vop[*nb].vopCoded=vopcoded;
++                                }
++                                *nb=(*nb)+1;
++                                begin+=off+1;
+ 				globalOff+=off+1;
+ 				continue;
+ 			
+-			}	
++			}
++                else if(code==0x20 &amp;&amp; off&gt;=4	) // Vol start
++                {
++                  
++                   if(extractMpeg4Info(begin+off-4,end+4-off-begin,&amp;w,&amp;h,timeincbits))
++                   {
++                      aprintf(&quot;Found Vol header : w:%d h:%d timeincbits:%d\n&quot;,w,h,*timeincbits);
++                   }
++                  
++                }
+         	begin+=off;
+         	globalOff+=off;
+         	continue;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy_pack.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy_pack.cpp	2007-03-02 07:14:49 UTC (rev 2855)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisavecopy_pack.cpp	2007-03-02 19:24:00 UTC (rev 2856)
+@@ -338,10 +338,10 @@
+   init_put_bits(&amp;pbs, data-&gt;data+4, data-&gt;len-4);
+     
+   put_bits(&amp;pbs, 2,2); // Bvop
+-  put_bits(&amp;pbs, 2,2); // Padding
++  put_bits(&amp;pbs, 1,0); // Time base
+   put_bits(&amp;pbs, 1,0); // Marker
+   if(time_inc!=0xFFFF)
+-    put_bits(&amp;pbs, time_inc,0); // time_inc
++    put_bits(&amp;pbs, time_inc,0); // time_inc, it is somehow wrong
+   put_bits(&amp;pbs, 1,0); // Marker
+   put_bits(&amp;pbs, 1,0); // vop not coded
+   
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000175.html">[Avidemux-svn-commit] r2855 -	branches/avidemux_2.4_branch/avidemux/ADM_script
+</A></li>
+	<LI>Next message: <A HREF="000177.html">[Avidemux-svn-commit] r2857 - in	branches/avidemux_2.4_branch/avidemux: ADM_inputs/ADM_3gp	ADM_outputs/oplug_avi
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#176">[ date ]</a>
+              <a href="thread.html#176">[ thread ]</a>
+              <a href="subject.html#176">[ subject ]</a>
+              <a href="author.html#176">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

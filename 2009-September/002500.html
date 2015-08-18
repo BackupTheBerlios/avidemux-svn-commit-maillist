@@ -1,0 +1,395 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5287 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5287%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska&In-Reply-To=%3C200909010853.n818r5XS012731%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002499.html">
+   <LINK REL="Next"  HREF="002501.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5287 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5287%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska&In-Reply-To=%3C200909010853.n818r5XS012731%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5287 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Sep  1 10:53:05 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002499.html">[Avidemux-svn-commit] r5286 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv
+</A></li>
+        <LI>Next message: <A HREF="002501.html">[Avidemux-svn-commit] r5288 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_demuxers/OpenDml
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2500">[ date ]</a>
+              <a href="thread.html#2500">[ thread ]</a>
+              <a href="subject.html#2500">[ subject ]</a>
+              <a href="author.html#2500">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-09-01 10:53:05 +0200 (Tue, 01 Sep 2009)
+New Revision: 5287
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkvIndexer.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv_audio.cpp
+Log:
+[Mkv Demux] switch to vector for indeces, might be slower but much more elegant
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp	2009-09-01 08:53:04 UTC (rev 5286)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.cpp	2009-09-01 08:53:05 UTC (rev 5287)
+@@ -81,7 +81,7 @@
+       return 0;
+     }
+   // update some infos
+-  _videostream.dwLength= _mainaviheader.dwTotalFrames=_tracks[0]._nbIndex;
++  _videostream.dwLength= _mainaviheader.dwTotalFrames=_tracks[0].index.size();;
+ 
+   _parser=new ADM_ebml_file();
+   ADM_assert(_parser-&gt;open(name));
+@@ -259,21 +259,7 @@
+   {
+     FREEIF(1+i);
+   }
+-  // Delete index
+-  if(_isvideopresent &amp;&amp; _tracks[0]._index)
+-  {
+-    delete []  _tracks[0]._index;
+-    _tracks[0]._index=NULL;
+-  }
+-  for(int i=0;i&lt;_nbAudioTrack;i++)
+-  {
+-    mkvIndex **dx=&amp;(_tracks[1+i]._index);
+-    if(*dx)
+-    {
+-        delete []  *dx;
+-        *dx=NULL;
+-    }
+-  }
++
+     if(_audioStreams)
+     {
+         for(int i=0;i&lt;_nbAudioTrack;i++) if(_audioStreams[i]) delete _audioStreams[i];
+@@ -324,8 +310,8 @@
+ 
+   uint8_t  mkvHeader::setFlag(uint32_t frame,uint32_t flags)
+ {
+-  if(frame&gt;=_tracks[0]._nbIndex) return 0;
+-  _tracks[0]._index[frame].flags=flags;
++  if(frame&gt;=_tracks[0].index.size()) return 0;
++  _tracks[0].index[frame].flags=flags;
+   return 1;
+ }
+ 
+@@ -335,8 +321,8 @@
+ */
+ uint32_t mkvHeader::getFlags(uint32_t frame,uint32_t *flags)
+ {
+-  if(frame&gt;=_tracks[0]._nbIndex) return 0;
+-  *flags=_tracks[0]._index[frame].flags;
++  if(frame&gt;=_tracks[0].index.size()) return 0;
++  *flags=_tracks[0].index[frame].flags;
+   if(!frame) *flags=AVI_KEY_FRAME;
+   return 1;
+ }
+@@ -345,8 +331,8 @@
+ */
+ uint64_t mkvHeader::getTime(uint32_t frame)
+ {
+- if(frame&gt;=_tracks[0]._nbIndex) return ADM_COMPRESSED_NO_PTS;
+-  return _tracks[0]._index[frame].Pts;
++ if(frame&gt;=_tracks[0].index.size()) return ADM_COMPRESSED_NO_PTS;
++  return _tracks[0].index[frame].Pts;
+ }
+ /**
+     \fn getVideoDuration
+@@ -354,7 +340,9 @@
+ */
+ uint64_t mkvHeader::getVideoDuration(void)
+ {
+-    return _tracks[0]._index[_tracks[0]._nbIndex-1].Pts;
++    uint32_t limit=_tracks[0].index.size();
++    if(!limit) return 0;
++    return _tracks[0].index[limit-1].Pts;
+ }
+ 
+ /**
+@@ -362,8 +350,8 @@
+ */
+ uint8_t                 mkvHeader::getFrameSize(uint32_t frame,uint32_t *size)
+ {
+-    if(frame&gt;=_tracks[0]._nbIndex) return 0;
+-    *size=_tracks[0]._index[frame].size;
++    if(frame&gt;=_tracks[0].index.size()) return 0;
++    *size=_tracks[0].index[frame].size;
+     return 1;
+ }
+ 
+@@ -375,9 +363,9 @@
+ uint8_t  mkvHeader::getFrame(uint32_t framenum,ADMCompressedImage *img)
+ {
+   ADM_assert(_parser);
+-  if(framenum&gt;=_tracks[0]._nbIndex) return 0;
++  if(framenum&gt;=_tracks[0].index.size()) return 0;
+ 
+-  mkvIndex *dx=&amp;(_tracks[0]._index[framenum]);
++  mkvIndex *dx=&amp;(_tracks[0].index[framenum]);
+ 
+   _parser-&gt;seek(dx-&gt;pos);
+   _parser-&gt;readSignedInt(2); // Timecode
+@@ -501,12 +489,12 @@
+ bool    mkvHeader::getPtsDts(uint32_t frame,uint64_t *pts,uint64_t *dts)
+ {
+      ADM_assert(_parser);
+-     if(frame&gt;=_tracks[0]._nbIndex) 
++     if(frame&gt;=_tracks[0].index.size()) 
+      {
+-            printf(&quot;[MKV] Frame %&quot;LU&quot; exceeds # of frames %&quot;LU&quot;\n&quot;,frame,_tracks[0]._nbIndex);
++            printf(&quot;[MKV] Frame %&quot;LU&quot; exceeds # of frames %&quot;LU&quot;\n&quot;,frame,_tracks[0].index.size());
+             return false;
+      }
+-    mkvIndex *dx=&amp;(_tracks[0]._index[frame]);
++    mkvIndex *dx=&amp;(_tracks[0].index[frame]);
+     
+     *dts=dx-&gt;Dts; // FIXME
+     *pts=dx-&gt;Pts;
+@@ -518,12 +506,12 @@
+ bool    mkvHeader::setPtsDts(uint32_t frame,uint64_t pts,uint64_t dts)
+ {
+       ADM_assert(_parser);
+-     if(frame&gt;=_tracks[0]._nbIndex) 
++     if(frame&gt;=_tracks[0].index.size()) 
+      {
+-            printf(&quot;[MKV] Frame %&quot;LU&quot; exceeds # of frames %&quot;LU&quot;\n&quot;,frame,_tracks[0]._nbIndex);
++            printf(&quot;[MKV] Frame %&quot;LU&quot; exceeds # of frames %&quot;LU&quot;\n&quot;,frame,_tracks[0].index.size());
+             return false;
+      }
+-    mkvIndex *dx=&amp;(_tracks[0]._index[frame]);
++    mkvIndex *dx=&amp;(_tracks[0].index[frame]);
+     
+     dx-&gt;Dts=dts; // FIXME
+     dx-&gt;Pts=pts;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h	2009-09-01 08:53:04 UTC (rev 5286)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv.h	2009-09-01 08:53:05 UTC (rev 5287)
+@@ -25,7 +25,7 @@
+ #include &quot;ADM_Video.h&quot;
+ #include &quot;ADM_audioStream.h&quot;
+ #include &quot;ADM_ebml.h&quot;
+-
++#include &lt;vector&gt;
+ /**
+     \struct mkvIndex
+     \brief defines a frame, audio or video
+@@ -39,7 +39,7 @@
+     uint64_t Pts;   // Pts in us
+ }mkvIndex;
+ 
+-
++typedef std::vector &lt;mkvIndex &gt; mkvListOfIndex;
+ /**
+     \struct mkvTrak
+     \brief Hold information about a give track, the track #0  is always video.
+@@ -53,14 +53,14 @@
+   WAVHeader wavHeader;
+   uint32_t  nbPackets; // number of blocks (used for audio)
+   uint32_t  nbFrames;  // number of distinct frames
+-  uint32_t  length;    // Number of bytes seen
++  uint32_t  length;    // Number o;f bytes seen
+   
+   /* Used for both */
+   uint8_t    *extraData;
+   uint32_t   extraDataLen;
+-  mkvIndex  *_index;
+-  uint32_t  _nbIndex;  // current size of the index
+-  uint32_t  _indexMax; // Max size of the index
++  
++  mkvListOfIndex  index;
++
+   uint32_t  _sizeInBytes; // Approximate size in bytes of that stream
+   uint32_t  _defaultFrameDuration; // Duration of ONE frame in us!
+ }mkvTrak;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkvIndexer.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkvIndexer.cpp	2009-09-01 08:53:04 UTC (rev 5286)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkvIndexer.cpp	2009-09-01 08:53:05 UTC (rev 5287)
+@@ -37,12 +37,7 @@
+ 
+    parser-&gt;seek(0);
+    DIA_workingBase *work=createWorking(&quot;Matroska Images&quot;);
+-   // Start with a small index, it will grow automatically afterward
+-   for(int i=0;i&lt;_nbAudioTrack+1;i++)
+-   {
+-    _tracks[i]._indexMax=1000;
+-    _tracks[i]._index=new mkvIndex[_tracks[i]._indexMax];
+-   }
++ 
+     //************
+    work-&gt;update(0);
+    for(int clusters=0;clusters&lt;_nbClusters;clusters++)
+@@ -107,7 +102,7 @@
+      }
+    // printf(&quot;[MKV] ending cluster at 0x%llx\n&quot;,segment.tell());
+   }
+-     printf(&quot;Found %&quot;LU&quot; images in this cluster\n&quot;,VIDEO._nbIndex);
++     printf(&quot;Found %&quot;LU&quot; images in this cluster\n&quot;,(uint32_t)VIDEO.index.size());
+      delete work;
+      return 1;
+ }
+@@ -152,25 +147,16 @@
+ {
+   //
+   mkvTrak *Track=&amp;(_tracks[track]);
+-  // Need to grow index ?
+-  if(Track-&gt;_nbIndex==Track-&gt;_indexMax-1)
+-  {
+-    // Realloc
+-    mkvIndex *dx=new mkvIndex[Track-&gt;_indexMax*2];
+-    memcpy(dx, Track-&gt;_index,sizeof(mkvIndex)*Track-&gt;_nbIndex);
+-    Track-&gt;_indexMax*=2;
+-    delete [] Track-&gt;_index;
+-    Track-&gt;_index=dx;
+-  }
++  mkvIndex ix;
+ 
+-  mkvIndex *index=Track-&gt;_index;
+-  int x=Track-&gt;_nbIndex;
+-  index[x].pos=where;
+-  index[x].size=size;
+-  index[x].flags=AVI_KEY_FRAME;
+-  index[x].Dts=timecodeMS*1000;
+-  index[x].Pts=timecodeMS*1000;
+-  Track-&gt;_nbIndex++;
++  ix.pos=where;
++  ix.size=size;
++  ix.flags=AVI_KEY_FRAME;
++  ix.Dts=timecodeMS*1000;
++  ix.Pts=timecodeMS*1000;
++
++  Track-&gt;index.push_back(ix);
++
+   return 1;
+ }
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv_audio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv_audio.cpp	2009-09-01 08:53:04 UTC (rev 5286)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Matroska/ADM_mkv_audio.cpp	2009-09-01 08:53:05 UTC (rev 5287)
+@@ -87,9 +87,10 @@
+ */
+ uint64_t  mkvAccess::getDurationInUs(void)
+ {
+-    uint32_t limit=_track-&gt;_nbIndex;
+-    mkvIndex *dex=_track-&gt;_index;
+-    return dex[limit-1].Dts;
++    
++    uint32_t limit=_track-&gt;index.size();
++    if(!limit) return 0;
++    return _track-&gt;index[limit-1].Dts;
+ }
+ /**
+     \fn mkvAccess
+@@ -106,14 +107,14 @@
+ */
+ uint8_t mkvAccess::goToBlock(uint32_t x)
+ {
+-
+-  if(x&gt;=_track-&gt;_nbIndex)
++  uint32_t limit=_track-&gt;index.size();
++  if(x&gt;=limit)
+   {
+-    printf(&quot;Exceeding max cluster : asked: %u max :%u\n&quot;,x,_track-&gt;_nbIndex);
++    printf(&quot;Exceeding max cluster : asked: %u max :%u\n&quot;,x,limit);
+     return 0;  // FIXME
+   }
+ 
+-  _parser-&gt;seek(_track-&gt;_index[x].pos);
++  _parser-&gt;seek(_track-&gt;index[x].pos);
+   _currentLace=_maxLace=0;
+   _currentBlock=x;
+   return 1;
+@@ -125,13 +126,13 @@
+ {
+ uint64_t targetUs=timeUs;
+ 
+-    uint32_t limit=_track-&gt;_nbIndex;
+-    mkvIndex *dex=_track-&gt;_index;
++    uint32_t limit=_track-&gt;index.size();
++    mkvListOfIndex *dex=&amp;(_track-&gt;index);
+       // First identify the cluster...
+       int clus=-1;
+             for(int i=0;i&lt;limit-1;i++)
+             {
+-              if(targetUs&gt;=dex[i].Dts &amp;&amp; targetUs&lt;dex[i+1].Dts)
++              if(targetUs&gt;=(*dex)[i].Dts &amp;&amp; targetUs&lt;(*dex)[i+1].Dts)
+               {
+                 clus=i;
+                 break;
+@@ -139,7 +140,7 @@
+             }
+             if(clus==-1) clus=limit-1; // Hopefully in the last one
+ 
+-            targetUs-=dex[clus].Dts; // now the time is relative
++            targetUs-=(*dex)[clus].Dts; // now the time is relative
+             goToBlock(clus);
+ 
+             printf(&quot;[MKVAUDIO] Asked for %&quot;LLU&quot; us, go to block %d, which starts at %&quot;LLU&quot; ms\n&quot;,timeUs,clus,targetUs);
+@@ -193,12 +194,12 @@
+       _currentLace++;
+       return true;
+     }
+-    if(_currentBlock&gt;=_track-&gt;_nbIndex) return false;
++    if(_currentBlock&gt;=_track-&gt;index.size()) return false;
+     // Else we start a new lace (or no lacing at all)
+     goToBlock(_currentBlock);
+-    mkvIndex *dex=_track-&gt;_index;
+-    uint64_t size=dex[_currentBlock].size-3;
+-    uint64_t time=dex[_currentBlock].Dts;
++    mkvIndex *dex=&amp;(_track-&gt;index[_currentBlock]);
++    uint64_t size=dex-&gt;size-3;
++    uint64_t time=dex-&gt;Dts;
+     if(!time &amp;&amp; _currentBlock) time=ADM_AUDIO_NO_DTS;
+     vprintf(&quot;[MKV] Time :%lu block:%u\n&quot;,time,_currentBlock);
+     // Read headers &amp; flags
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002499.html">[Avidemux-svn-commit] r5286 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Flv
+</A></li>
+	<LI>Next message: <A HREF="002501.html">[Avidemux-svn-commit] r5288 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreUtils/include avidemux_core/ADM_coreUtils/src	avidemux_plugins/ADM_demuxers/OpenDml
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2500">[ date ]</a>
+              <a href="thread.html#2500">[ thread ]</a>
+              <a href="subject.html#2500">[ subject ]</a>
+              <a href="author.html#2500">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

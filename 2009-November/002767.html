@@ -1,0 +1,324 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5558 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264:	. qt4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-November/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5558%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264%3A%0A%09.%20qt4&In-Reply-To=%3C200911242048.nAOKmE3a026417%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002766.html">
+   <LINK REL="Next"  HREF="002768.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5558 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264:	. qt4</H1>
+    <B>gruntster at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5558%20-%20in%0A%09branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264%3A%0A%09.%20qt4&In-Reply-To=%3C200911242048.nAOKmE3a026417%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5558 - in	branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264:	. qt4">gruntster at mail.berlios.de
+       </A><BR>
+    <I>Tue Nov 24 21:48:14 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002766.html">[Avidemux-svn-commit] r5557 - in	branches/avidemux_2.5_branch_gruntster/cmake: . patches
+</A></li>
+        <LI>Next message: <A HREF="002768.html">[Avidemux-svn-commit] r5559 - branches/avidemux_2.5_branch_gruntster
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2767">[ date ]</a>
+              <a href="thread.html#2767">[ thread ]</a>
+              <a href="subject.html#2767">[ subject ]</a>
+              <a href="author.html#2767">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: gruntster
+Date: 2009-11-24 21:48:08 +0100 (Tue, 24 Nov 2009)
+New Revision: 5558
+
+Modified:
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.ui
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Options.cpp
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Options.h
+   branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Param.xsd
+Log:
+[x264] add macroblock-tree optimisation option
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.cpp	2009-11-24 19:28:15 UTC (rev 5557)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.cpp	2009-11-24 20:48:08 UTC (rev 5558)
+@@ -70,6 +70,12 @@
+ 	connect(ui.quantiserSpinBox, SIGNAL(valueChanged(int)), this, SLOT(quantiserSpinBox_valueChanged(int)));
+ 	connect(ui.targetRateControlSpinBox, SIGNAL(valueChanged(int)), this, SLOT(targetRateControlSpinBox_valueChanged(int)));
+ 
++#if X264_BUILD &gt;= 69
++	connect(ui.mbTreeCheckBox, SIGNAL(toggled(bool)), this, SLOT(mbTreeCheckBox_toggled(bool)));
++#else
++	ui.mbTreeCheckBox-&gt;setVisible(false);
++#endif
++
+ 	ui.sarAsInputLabel-&gt;setText(QString(&quot;%1:%2&quot;).arg(properties-&gt;parWidth).arg(properties-&gt;parHeight));
+ 
+ 	// Motion Estimation tab
+@@ -80,7 +86,7 @@
+ 
+ #if X264_BUILD &gt;= 57
+ 	ui.meMethodComboBox-&gt;addItem(QT_TR_NOOP(&quot;Hadamard Exhaustive Search&quot;));
+-#endif	// X264_BUILD &gt;= 57
++#endif
+ 
+ #if X264_BUILD &gt;= 65
+ 	ui.rdoCheckBox-&gt;setVisible(false);
+@@ -125,6 +131,9 @@
+ #if X264_BUILD &lt; 59
+ 	ui.aqGroupBox-&gt;setEnabled(false);
+ #endif
++#if X264_BUILD &gt;= 69
++	connect(ui.aqVarianceCheckBox, SIGNAL(toggled(bool)), this, SLOT(aqVarianceCheckBox_toggled(bool)));
++#endif
+ 
+ 	// Advanced tab
+ 	ui.zoneTableView-&gt;sortByColumn(0, Qt::AscendingOrder);
+@@ -427,6 +436,17 @@
+ 		lastBitrate = value;
+ }
+ 
++#if X264_BUILD &gt;= 69
++void x264ConfigDialog::mbTreeCheckBox_toggled(bool checked)
++{
++	if (!disableGenericSlots &amp;&amp; checked &amp;&amp; !ui.aqVarianceCheckBox-&gt;isChecked())
++		if (GUI_Question(QT_TR_NOOP(&quot;Macroblock-Tree optimisation requires Variance Adaptive Quantisation to be enabled.  Variance Adaptive Quantisation will automatically be enabled.\n\nDo you wish to continue?&quot;)))
++			ui.aqVarianceCheckBox-&gt;setChecked(true);
++		else
++			ui.mbTreeCheckBox-&gt;setChecked(false);
++}
++#endif
++
+ // Motion Estimation tab
+ void x264ConfigDialog::meSlider_valueChanged(int value)
+ {
+@@ -482,7 +502,7 @@
+ // Analysis tab
+ void x264ConfigDialog::trellisCheckBox_toggled(bool checked)
+ {
+-	if (disableGenericSlots &amp;&amp; checked &amp;&amp; !ui.cabacCheckBox-&gt;isChecked())
++	if (!disableGenericSlots &amp;&amp; checked &amp;&amp; !ui.cabacCheckBox-&gt;isChecked())
+ 		if (GUI_Question(QT_TR_NOOP(&quot;Trellis optimisation requires CABAC coding to be enabled.  CABAC coding will automatically be enabled.\n\nDo you wish to continue?&quot;)))
+ 			ui.cabacCheckBox-&gt;setChecked(true);
+ 		else
+@@ -500,6 +520,19 @@
+ 	}
+ }
+ 
++// Quantiser tab
++#if X264_BUILD &gt;= 69
++void x264ConfigDialog::aqVarianceCheckBox_toggled(bool checked)
++{
++	if (!disableGenericSlots &amp;&amp; !checked &amp;&amp; ui.mbTreeCheckBox-&gt;isChecked())
++		if (GUI_Question(QT_TR_NOOP(&quot;Macroblock-Tree optimisation requires Variance Adaptive Quantisation to be enabled.  Macroblock-Tree optimisation will automatically be disabled.\n\nDo you wish to continue?&quot;)))
++			ui.mbTreeCheckBox-&gt;setChecked(false);
++		else
++			ui.aqVarianceCheckBox-&gt;setChecked(true);
++}
++#endif
++
++// Advanced tab
+ void x264ConfigDialog::zoneAddButton_pressed()
+ {
+ 	zoneTableModel.insertRows(0, 1, QModelIndex());
+@@ -608,6 +641,10 @@
+ 			break;
+ 	}
+ 
++#if X264_BUILD &gt;= 69
++	ui.mbTreeCheckBox-&gt;setChecked(options-&gt;getMbTree());
++#endif
++
+ 	if (options-&gt;getSarAsInput())
+ 		ui.sarAsInputRadioButton-&gt;setChecked(true);
+ 	else
+@@ -843,6 +880,11 @@
+ 	PluginConfigType configurationType = (PluginConfigType)ui.configurationComboBox-&gt;itemData(ui.configurationComboBox-&gt;currentIndex()).toInt();
+ 
+ 	options-&gt;setPresetConfiguration(ui.configurationComboBox-&gt;currentText().toUtf8().constData(), configurationType);
++
++#if X264_BUILD &gt;= 69
++	options-&gt;setMbTree(ui.mbTreeCheckBox-&gt;isChecked());
++#endif
++
+ 	options-&gt;setSarAsInput(ui.sarAsInputRadioButton-&gt;isChecked());
+ 
+ 	if (ui.sarCustomRadioButton-&gt;isChecked())
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.h	2009-11-24 19:28:15 UTC (rev 5557)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.h	2009-11-24 20:48:08 UTC (rev 5558)
+@@ -1,8 +1,8 @@
+ #ifndef x264ConfigDialog_h
+ #define x264ConfigDialog_h
+ #include &quot;ui_x264ConfigDialog.h&quot;
+-#define ADM_LEGACY_PROGGY
+-#include &quot;ADM_default.h&quot;
++#define ADM_LEGACY_PROGGY
++#include &quot;ADM_default.h&quot;
+ #include &quot;../x264Options.h&quot;
+ #include &quot;x264ZoneTableModel.h&quot;
+ #include &quot;x264ZoneTableDelegate.h&quot;
+@@ -72,6 +72,9 @@
+ 	void quantiserSlider_valueChanged(int value);
+ 	void quantiserSpinBox_valueChanged(int value);
+ 	void targetRateControlSpinBox_valueChanged(int value);
++#if X264_BUILD &gt;= 69
++	void mbTreeCheckBox_toggled(bool checked);
++#endif
+ 
+ 	// Motion Estimation tab
+ 	void meSlider_valueChanged(int value);
+@@ -87,6 +90,11 @@
+ 	void trellisCheckBox_toggled(bool checked);
+ 	void matrixCustomEditButton_pressed();
+ 
++	// Quantiser tab
++#if X264_BUILD &gt;= 69
++	void aqVarianceCheckBox_toggled(bool checked);
++#endif
++
+ 	// Advanced Rate Control tab
+ 	void zoneAddButton_pressed();
+ 	void zoneEditButton_pressed();
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.ui
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.ui	2009-11-24 19:28:15 UTC (rev 5557)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/qt4/x264ConfigDialog.ui	2009-11-24 20:48:08 UTC (rev 5558)
+@@ -477,6 +477,13 @@
+             &lt;/item&gt;
+            &lt;/layout&gt;
+           &lt;/item&gt;
++          &lt;item&gt;
++           &lt;widget class=&quot;QCheckBox&quot; name=&quot;mbTreeCheckBox&quot; &gt;
++            &lt;property name=&quot;text&quot; &gt;
++             &lt;string&gt;Macroblock-Tree Rate Control&lt;/string&gt;
++            &lt;/property&gt;
++           &lt;/widget&gt;
++          &lt;/item&gt;
+          &lt;/layout&gt;
+         &lt;/widget&gt;
+        &lt;/item&gt;
+@@ -4182,6 +4189,7 @@
+   &lt;tabstop&gt;targetRateControlSpinBox&lt;/tabstop&gt;
+   &lt;tabstop&gt;quantiserSlider&lt;/tabstop&gt;
+   &lt;tabstop&gt;quantiserSpinBox&lt;/tabstop&gt;
++  &lt;tabstop&gt;mbTreeCheckBox&lt;/tabstop&gt;
+   &lt;tabstop&gt;sarCustomRadioButton&lt;/tabstop&gt;
+   &lt;tabstop&gt;sarCustomSpinBox1&lt;/tabstop&gt;
+   &lt;tabstop&gt;sarCustomSpinBox2&lt;/tabstop&gt;
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Options.cpp
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Options.cpp	2009-11-24 19:28:15 UTC (rev 5557)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Options.cpp	2009-11-24 20:48:08 UTC (rev 5558)
+@@ -887,6 +887,18 @@
+ }
+ #endif
+ 
++#if X264_BUILD &gt;= 69
++bool x264Options::getMbTree(void)
++{
++	return _param.rc.b_mb_tree;
++}
++
++void x264Options::setMbTree(bool mbTree)
++{
++	_param.rc.b_mb_tree = mbTree;
++}
++#endif
++
+ float x264Options::getQuantiserCurveCompression(void)
+ {
+ 	return _param.rc.f_qcompress;
+@@ -1323,6 +1335,11 @@
+ 	xmlNewChild(xmlNodeChild, NULL, (xmlChar*)&quot;adaptiveQuantiserMode&quot;, xmlBuffer);
+ 	xmlNewChild(xmlNodeChild, NULL, (xmlChar*)&quot;adaptiveQuantiserStrength&quot;, number2String(xmlBuffer, bufferSize, getAdaptiveQuantiserStrength()));
+ #endif
++
++#if X264_BUILD &gt;= 69
++	xmlNewChild(xmlNodeChild, NULL, (xmlChar*)&quot;mbTree&quot;, boolean2String(xmlBuffer, bufferSize, getMbTree()));
++#endif
++
+ 	xmlNewChild(xmlNodeChild, NULL, (xmlChar*)&quot;quantiserCurveCompression&quot;, number2String(xmlBuffer, bufferSize, getQuantiserCurveCompression()));
+ 	xmlNewChild(xmlNodeChild, NULL, (xmlChar*)&quot;reduceFluxBeforeCurveCompression&quot;, number2String(xmlBuffer, bufferSize, getReduceFluxBeforeCurveCompression()));
+ 	xmlNewChild(xmlNodeChild, NULL, (xmlChar*)&quot;reduceFluxAfterCurveCompression&quot;, number2String(xmlBuffer, bufferSize, getReduceFluxAfterCurveCompression()));
+@@ -1786,6 +1803,10 @@
+ 			else if (strcmp((char*)xmlChild-&gt;name, &quot;adaptiveQuantiserStrength&quot;) == 0)
+ 				setAdaptiveQuantiserStrength(string2Float(content));
+ #endif
++#if X264_BUILD &gt;= 69
++			else if (strcmp((char*)xmlChild-&gt;name, &quot;mbTree&quot;) == 0)
++				setMbTree(string2Boolean(content));
++#endif
+ 			else if (strcmp((char*)xmlChild-&gt;name, &quot;quantiserCurveCompression&quot;) == 0)
+ 				setQuantiserCurveCompression(string2Float(content));
+ 			else if (strcmp((char*)xmlChild-&gt;name, &quot;reduceFluxBeforeCurveCompression&quot;) == 0)
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Options.h
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Options.h	2009-11-24 19:28:15 UTC (rev 5557)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Options.h	2009-11-24 20:48:08 UTC (rev 5558)
+@@ -289,6 +289,11 @@
+ 	void setAdaptiveQuantiserStrength(float adaptiveQuantiserStrength);
+ #endif
+ 
++#if X264_BUILD &gt;= 69
++	bool getMbTree(void);
++	void setMbTree(bool mbTree);
++#endif
++
+ 	float getQuantiserCurveCompression(void);
+ 	void setQuantiserCurveCompression(float quantiserCurveCompression);
+ 
+
+Modified: branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Param.xsd
+===================================================================
+--- branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Param.xsd	2009-11-24 19:28:15 UTC (rev 5557)
++++ branches/avidemux_2.5_branch_gruntster/plugins/ADM_videoEncoder/ADM_vidEnc_x264/x264Param.xsd	2009-11-24 20:48:08 UTC (rev 5558)
+@@ -480,6 +480,7 @@
+                       &lt;/xs:simpleType&gt;
+                     &lt;/xs:element&gt;
+                     &lt;xs:element name=&quot;adaptiveQuantiserStrength&quot; type=&quot;xs:float&quot; minOccurs=&quot;0&quot;/&gt;
++                    &lt;xs:element name=&quot;mbTree&quot; type=&quot;xs:boolean&quot; minOccurs=&quot;0&quot;/&gt;
+                     &lt;xs:element name=&quot;quantiserCurveCompression&quot; minOccurs=&quot;0&quot;&gt;
+                       &lt;xs:simpleType&gt;
+                         &lt;xs:restriction base=&quot;xs:float&quot;&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002766.html">[Avidemux-svn-commit] r5557 - in	branches/avidemux_2.5_branch_gruntster/cmake: . patches
+</A></li>
+	<LI>Next message: <A HREF="002768.html">[Avidemux-svn-commit] r5559 - branches/avidemux_2.5_branch_gruntster
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2767">[ date ]</a>
+              <a href="thread.html#2767">[ thread ]</a>
+              <a href="subject.html#2767">[ subject ]</a>
+              <a href="author.html#2767">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

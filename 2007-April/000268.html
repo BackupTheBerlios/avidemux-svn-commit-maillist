@@ -1,0 +1,200 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2950 - in	branches/avidemux_2.4_branch/avidemux: ADM_editor	ADM_inputs/ADM_mpegdemuxer
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2950%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_editor%0A%09ADM_inputs/ADM_mpegdemuxer&In-Reply-To=%3C200704181827.l3IIRgmr016888%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000267.html">
+   <LINK REL="Next"  HREF="000269.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2950 - in	branches/avidemux_2.4_branch/avidemux: ADM_editor	ADM_inputs/ADM_mpegdemuxer</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2950%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_editor%0A%09ADM_inputs/ADM_mpegdemuxer&In-Reply-To=%3C200704181827.l3IIRgmr016888%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2950 - in	branches/avidemux_2.4_branch/avidemux: ADM_editor	ADM_inputs/ADM_mpegdemuxer">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Apr 18 20:27:42 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000267.html">[Avidemux-svn-commit] r2949 - in	branches/avidemux_2.4_branch/avidemux: ADM_editor	ADM_inputs/ADM_mpegdemuxer
+</A></li>
+        <LI>Next message: <A HREF="000269.html">[Avidemux-svn-commit] r2951 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#268">[ date ]</a>
+              <a href="thread.html#268">[ thread ]</a>
+              <a href="subject.html#268">[ subject ]</a>
+              <a href="author.html#268">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-04-18 20:27:41 +0200 (Wed, 18 Apr 2007)
+New Revision: 2950
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edit.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_video.cpp
+Log:
+support for m2ts
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edit.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edit.cpp	2007-04-18 07:03:50 UTC (rev 2949)
++++ branches/avidemux_2.4_branch/avidemux/ADM_editor/ADM_edit.cpp	2007-04-18 18:27:41 UTC (rev 2950)
+@@ -1494,7 +1494,7 @@
+                 }
+ 
+           
+-                if(type==DMX_MPG_PS || type==DMX_MPG_TS)
++                if(type==DMX_MPG_PS || type==DMX_MPG_TS || type==DMX_MPG_TS2)
+                 {
+                        if(nbTrack&gt;2)
+ 		       if(autoidx)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.cpp	2007-04-18 07:03:50 UTC (rev 2949)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_demuxerTS.cpp	2007-04-18 18:27:41 UTC (rev 2950)
+@@ -339,8 +339,17 @@
+                         _oldPesStart=_pesBufferStart;
+                         _oldPesLen=_pesBufferLen;
+                         _pesBufferStart=abs;
++                        
++                        parser-&gt;read32(left,_pesBuffer);
++                        // FIXME HACK
++                        if(TS_PacketSize==192 &amp;&amp; left &gt;4)
++                          {
++                            left-=4; // Remove timestamp of m2ts packet
++                          }
++                       // FIXME HACK
+                         _pesBufferLen=left;
+-                        parser-&gt;read32(left,_pesBuffer);
++                        
++                           
+                         _pesPTS=ADM_NO_PTS;
+                         _pesDTS=ADM_NO_PTS;
+                         // If we are in pack mode, cut padding bits
+@@ -376,12 +385,19 @@
+                         goto _againBranch;
+                 left-=consumed;
+                 _pesBufferStart=abs;
+-                _pesBufferLen=left;
+ 
++
+                 _pesPTS=ADM_NO_PTS;
+                 _pesDTS=ADM_NO_PTS;
+ 
+                 parser-&gt;read32(left,_pesBuffer);
++                 // FIXME HACK
++                if(TS_PacketSize==192 &amp;&amp; left &gt;4)
++                  {
++                    left-=4; // Remove timestamp of m2ts packet
++                  }
++                _pesBufferLen=left;
++                 // FIXME HACK
+                 return 1;
+         }
+ 
+@@ -421,12 +437,18 @@
+                 _oldPesLen=_pesBufferLen;
+ 
+                 _pesBufferStart=abs;
+-                _pesBufferLen=left;
++                
+ 
+                 _pesPTS=pts;
+                 _pesDTS=dts;
+ 
+                 parser-&gt;read32(left,_pesBuffer);
++                  // FIXME HACK
++                if(TS_PacketSize==192 &amp;&amp; left &gt;4)
++                  {
++                    left-=4; // Remove timestamp of m2ts packet
++                  }
++                _pesBufferLen=left;
+                 if(packMode)
+                 {
+                         if(packLen&lt;left) _pesBufferLen=packLen;
+@@ -542,7 +564,6 @@
+                 left-=val;
+         }
+         // Ok now we got the raw data packet
+-        
+         *oleft=left;
+         *opid=pid;
+         *occ=cc;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp	2007-04-18 07:03:50 UTC (rev 2949)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_probeTS.cpp	2007-04-18 18:27:41 UTC (rev 2950)
+@@ -80,8 +80,10 @@
+ 
+ uint8_t dmx_probeTS(const char *file,  uint32_t *nbTracks,MPEG_TRACK **tracks,DMX_TYPE type)
+ {
++  
+     // Try through PMT/PAT first
+-      if(! dmx_probeTSPat(file,nbTracks,tracks,type))
++      if(type==DMX_MPG_TS2 || !dmx_probeTSPat(file,nbTracks,tracks,type))
++      //if( !dmx_probeTSPat(file,nbTracks,tracks,type))
+       {
+         
+         printf(&quot;PAT/PMT Failed, using brute force\n&quot;);
+@@ -210,7 +212,7 @@
+ 
+         if(!id) continue;
+ 
+-        if((code&gt;=0xC0 &amp;&amp; code &lt;= 0xC9) || code==0xbd)
++        if((code&gt;=0xC0 &amp;&amp; code &lt;= 0xC9) || ((code==0xbd)&amp;&amp; (type==DMX_MPG_TS)) || ((code==0xfd)&amp;&amp; (type==DMX_MPG_TS2)))
+         {
+             demuxer.changePid(id,code);
+             demuxer.setPos(0,0);
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_video.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_video.cpp	2007-04-18 07:03:50 UTC (rev 2949)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer/dmx_video.cpp	2007-04-18 18:27:41 UTC (rev 2950)
+@@ -548,7 +548,7 @@
+                                 return 0;
+                         }
+                         //Dump();
+-                        if(type=='P' || type=='T' || type=='M')
++                        if(type!='E')
+                         {
+                                 // We have potentially some audio
+                                 // Try to get it
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000267.html">[Avidemux-svn-commit] r2949 - in	branches/avidemux_2.4_branch/avidemux: ADM_editor	ADM_inputs/ADM_mpegdemuxer
+</A></li>
+	<LI>Next message: <A HREF="000269.html">[Avidemux-svn-commit] r2951 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#268">[ date ]</a>
+              <a href="thread.html#268">[ thread ]</a>
+              <a href="subject.html#268">[ subject ]</a>
+              <a href="author.html#268">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

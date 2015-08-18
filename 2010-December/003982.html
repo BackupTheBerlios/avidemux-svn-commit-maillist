@@ -1,0 +1,219 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6803 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg:	libavcodec patches/avcodec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6803%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg%3A%0A%09libavcodec%20patches/avcodec&In-Reply-To=%3C20101204105454.F1B1348071A%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003981.html">
+   <LINK REL="Next"  HREF="003983.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6803 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg:	libavcodec patches/avcodec</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6803%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg%3A%0A%09libavcodec%20patches/avcodec&In-Reply-To=%3C20101204105454.F1B1348071A%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6803 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg:	libavcodec patches/avcodec">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Dec  4 11:54:54 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003981.html">[Avidemux-svn-commit] r6802 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="003983.html">[Avidemux-svn-commit] r6804 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3982">[ date ]</a>
+              <a href="thread.html#3982">[ thread ]</a>
+              <a href="subject.html#3982">[ subject ]</a>
+              <a href="author.html#3982">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-12-04 11:54:54 +0100 (Sat, 04 Dec 2010)
+New Revision: 6803
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavcodec/ff_spsinfo.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/patches/avcodec/h264_parser.c.patch
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavcodec/h264_parser.c
+Log:
+[avcodec] Export parser/h264 stuff to decode SPS
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavcodec/ff_spsinfo.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavcodec/ff_spsinfo.h	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavcodec/ff_spsinfo.h	2010-12-04 10:54:54 UTC (rev 6803)
+@@ -0,0 +1,17 @@
++#ifndef FF_SPS_INFO_H
++#define FF_SPS_INFO_H
++
++typedef struct
++{
++	int width;
++	int height;
++	int fps1000;
++	int darNum;
++	int darDen;
++	int hasStructInfo;
++	int CpbDpbToSkip;
++}ffSpsInfo;
++
++
++#endif
++
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavcodec/h264_parser.c
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavcodec/h264_parser.c	2010-12-04 10:54:51 UTC (rev 6802)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/libavcodec/h264_parser.c	2010-12-04 10:54:54 UTC (rev 6803)
+@@ -29,10 +29,51 @@
+ #include &quot;h264_parser.h&quot;
+ #include &quot;h264data.h&quot;
+ #include &quot;golomb.h&quot;
+-
++#include &quot;ff_spsinfo.h&quot; // MEANX
+ #include &lt;assert.h&gt;
++ // MEANX
++/**
++    \fn AVCodecParserContext
++*/
++int ff_h264_info(AVCodecParserContext *parser,ffSpsInfo *info)
++{
++    H264Context *ctx = parser-&gt;priv_data;
++    memset(info,0,sizeof(*info));
++    if(!ctx-&gt;sps.mb_width || !ctx-&gt;sps.mb_height)
++    {
++        return 0;
++    }
++    info-&gt;width=ctx-&gt;sps.mb_width  * 16;
++    info-&gt;height=(2-ctx-&gt;sps.frame_mbs_only_flag)*ctx-&gt;sps.mb_height * 16;
++    if(ctx-&gt;sps.timing_info_present_flag)
++    {
++            float scale=ctx-&gt;sps.time_scale ;
++            float ticks=ctx-&gt;sps.num_units_in_tick;
++            info-&gt;fps1000 =  (uint32_t) ((scale/ticks) *    1000.);
++#undef printf
++            printf(&quot;Scale : %d, tick=%d, fps=%d\n&quot;,(int)scale,(int)ticks,(int)info-&gt;fps1000);
++    }else
++    {
++            ADM_warning(&quot;[H264] No timing information\n&quot;);
++            info-&gt;fps1000=25000;
++    }
++    // D.2.2 SEI Timing present if CpbDbpDelayPresentFlag=1 or pictStructPresent=1
++    // CpbDbpDelayPresentFlag =1 if nal_hdr or vcl_hrd or ???
++    int f=ctx-&gt;sps.nal_hrd_parameters_present_flag | ctx-&gt;sps.vcl_hrd_parameters_present_flag;
++    info-&gt;hasStructInfo=f | ctx-&gt;sps.pic_struct_present_flag;;
++    // While decoding SEI, if CpbDpbDelaysPresentFlags is there we skip cpb_removal_delay + dpb_output_delay
+ 
+-
++    info-&gt;CpbDpbToSkip=0;
++    if(f)
++    {
++        info-&gt;CpbDpbToSkip=ctx-&gt;sps.cpb_removal_delay_length+ctx-&gt;sps.dpb_output_delay_length;
++    }
++#warning fixme sar vs dar
++    info-&gt;darNum=ctx-&gt;sps.sar.num;
++    info-&gt;darDen=ctx-&gt;sps.sar.den;
++    return 1;
++}
++// /MEANX
+ int ff_h264_find_frame_end(H264Context *h, const uint8_t *buf, int buf_size)
+ {
+     int i;
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/patches/avcodec/h264_parser.c.patch
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/patches/avcodec/h264_parser.c.patch	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_ffmpeg/patches/avcodec/h264_parser.c.patch	2010-12-04 10:54:54 UTC (rev 6803)
+@@ -0,0 +1,58 @@
++diff --git a/avidemux_core/ADM_ffmpeg/libavcodec/h264_parser.c b/avidemux_core/ADM_ffmpeg/libavcodec/h264_parser.c
++index 70d08f4..437f9d0 100644
++--- a/avidemux_core/ADM_ffmpeg/libavcodec/h264_parser.c
+++++ b/avidemux_core/ADM_ffmpeg/libavcodec/h264_parser.c
++@@ -29,10 +29,51 @@
++ #include &quot;h264_parser.h&quot;
++ #include &quot;h264data.h&quot;
++ #include &quot;golomb.h&quot;
++-
+++#include &quot;ff_spsinfo.h&quot; // MEANX
++ #include &lt;assert.h&gt;
+++ // MEANX
+++/**
+++    \fn AVCodecParserContext
+++*/
+++int ff_h264_info(AVCodecParserContext *parser,ffSpsInfo *info)
+++{
+++    H264Context *ctx = parser-&gt;priv_data;
+++    memset(info,0,sizeof(*info));
+++    if(!ctx-&gt;sps.mb_width || !ctx-&gt;sps.mb_height)
+++    {
+++        return 0;
+++    }
+++    info-&gt;width=ctx-&gt;sps.mb_width  * 16;
+++    info-&gt;height=(2-ctx-&gt;sps.frame_mbs_only_flag)*ctx-&gt;sps.mb_height * 16;
+++    if(ctx-&gt;sps.timing_info_present_flag)
+++    {
+++            float scale=ctx-&gt;sps.time_scale ;
+++            float ticks=ctx-&gt;sps.num_units_in_tick;
+++            info-&gt;fps1000 =  (uint32_t) ((scale/ticks) *    1000.);
+++#undef printf
+++            printf(&quot;Scale : %d, tick=%d, fps=%d\n&quot;,(int)scale,(int)ticks,(int)info-&gt;fps1000);
+++    }else
+++    {
+++            ADM_warning(&quot;[H264] No timing information\n&quot;);
+++            info-&gt;fps1000=25000;
+++    }
+++    // D.2.2 SEI Timing present if CpbDbpDelayPresentFlag=1 or pictStructPresent=1
+++    // CpbDbpDelayPresentFlag =1 if nal_hdr or vcl_hrd or ???
+++    int f=ctx-&gt;sps.nal_hrd_parameters_present_flag | ctx-&gt;sps.vcl_hrd_parameters_present_flag;
+++    info-&gt;hasStructInfo=f | ctx-&gt;sps.pic_struct_present_flag;;
+++    // While decoding SEI, if CpbDpbDelaysPresentFlags is there we skip cpb_removal_delay + dpb_output_delay
++ 
++-
+++    info-&gt;CpbDpbToSkip=0;
+++    if(f)
+++    {
+++        info-&gt;CpbDpbToSkip=ctx-&gt;sps.cpb_removal_delay_length+ctx-&gt;sps.dpb_output_delay_length;
+++    }
+++#warning fixme sar vs dar
+++    info-&gt;darNum=ctx-&gt;sps.sar.num;
+++    info-&gt;darDen=ctx-&gt;sps.sar.den;
+++    return 1;
+++}
+++// /MEANX
++ int ff_h264_find_frame_end(H264Context *h, const uint8_t *buf, int buf_size)
++ {
++     int i;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003981.html">[Avidemux-svn-commit] r6802 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="003983.html">[Avidemux-svn-commit] r6804 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3982">[ date ]</a>
+              <a href="thread.html#3982">[ thread ]</a>
+              <a href="subject.html#3982">[ subject ]</a>
+              <a href="author.html#3982">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

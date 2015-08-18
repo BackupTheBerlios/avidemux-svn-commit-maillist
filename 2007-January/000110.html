@@ -1,0 +1,291 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2785 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-January/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2785%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_encoder&In-Reply-To=%3C200701300718.l0U7IdUl031550%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000109.html">
+   <LINK REL="Next"  HREF="000111.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2785 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2785%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20ADM_codecs%20ADM_encoder&In-Reply-To=%3C200701300718.l0U7IdUl031550%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2785 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Jan 30 08:18:39 CET 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000109.html">[Avidemux-svn-commit] r2784 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer
+</A></li>
+        <LI>Next message: <A HREF="000111.html">[Avidemux-svn-commit] r2786 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder	ADM_inputs/ADM_3gp ADM_libraries/ADM_lavformat
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#110">[ date ]</a>
+              <a href="thread.html#110">[ thread ]</a>
+              <a href="subject.html#110">[ subject ]</a>
+              <a href="author.html#110">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-01-30 08:18:38 +0100 (Tue, 30 Jan 2007)
+New Revision: 2785
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.h
+   branches/avidemux_2.4_branch/avidemux/ADM_encoder/ADM_encCodecDesc.h
+   branches/avidemux_2.4_branch/avidemux/ADM_encoder/ADM_vidEncode.hxx
+   branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encConfig.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.h
+Log:
+DV codec output, first part
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2007-01-28 16:29:29 UTC (rev 2784)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.cpp	2007-01-30 07:18:38 UTC (rev 2785)
+@@ -346,6 +346,11 @@
+     case FF_SNOW:
+       WRAP_Open (CODEC_ID_SNOW);
+       break;
++      
++    case FF_DV:
++      WRAP_Open (CODEC_ID_DVVIDEO);
++      break;
++
+     default:
+       ADM_assert (0);
+     }
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.h	2007-01-28 16:29:29 UTC (rev 2784)
++++ branches/avidemux_2.4_branch/avidemux/ADM_codecs/ADM_ffmpeg.h	2007-01-30 07:18:38 UTC (rev 2785)
+@@ -34,6 +34,7 @@
+   FF_MPEG2 = 9,
+   FF_SNOW = 10,
+   FF_FFHUFF = 11,
++  FF_DV=12,
+ } FF_CODEC_ID;
+ 
+ /*
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_encoder/ADM_encCodecDesc.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_encoder/ADM_encCodecDesc.h	2007-01-28 16:29:29 UTC (rev 2784)
++++ branches/avidemux_2.4_branch/avidemux/ADM_encoder/ADM_encCodecDesc.h	2007-01-30 07:18:38 UTC (rev 2785)
+@@ -114,6 +114,23 @@
+   sizeof (ffmpeg4Extra),
+   getFFCompressParams
+ };
++COMPRES_PARAMS ffmpegDV = {
++  CodecDV,
++  &quot;DV&quot;,
++  &quot;DV&quot;,
++  &quot;DV&quot;,
++  COMPRESS_CQ,
++  4,
++  1500,
++  700,
++  1000, // AVG
++  ADM_ENC_CAP_CBR + ADM_ENC_CAP_CQ + ADM_ENC_CAP_2PASS,
++  ADM_EXTRA_PARAM,
++  &amp;ffmpeg4Extra,
++  sizeof (ffmpeg4Extra),
++  NULL
++};
++
+ COMPRES_PARAMS ffmpegSnow = {
+   CodecSnow,
+   &quot;Snow (lavc)&quot;,
+@@ -707,6 +724,7 @@
+   &amp;VCDCodec,
+   &amp;SVCDCodec,
+   &amp;DVDCodec,
++  &amp;ffmpegDV,
+   &amp;RequantCodec,
+ #ifdef USE_XVID_4
+   &amp;Xvid4Codec,
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_encoder/ADM_vidEncode.hxx
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_encoder/ADM_vidEncode.hxx	2007-01-28 16:29:29 UTC (rev 2784)
++++ branches/avidemux_2.4_branch/avidemux/ADM_encoder/ADM_vidEncode.hxx	2007-01-30 07:18:38 UTC (rev 2785)
+@@ -43,6 +43,7 @@
+ #endif
+   CodecYV12,
+   CodecRequant,
++  CodecDV,
+   CodecDummy
+ };
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encConfig.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encConfig.cpp	2007-01-28 16:29:29 UTC (rev 2784)
++++ branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encConfig.cpp	2007-01-30 07:18:38 UTC (rev 2785)
+@@ -700,6 +700,9 @@
+     case CodecFFV1:
+       e = new EncoderFFMPEGFFV1 (&amp;ffmpegFFV1);
+       break;
++    case CodecDV:
++        e = new EncoderFFMPEGDV (&amp;ffmpegDV);
++      break;
+     case CodecSnow:
+       e = new EncodeFFMPEGSNow (&amp;ffmpegSnow);
+       break;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp	2007-01-28 16:29:29 UTC (rev 2784)
++++ branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.cpp	2007-01-30 07:18:38 UTC (rev 2785)
+@@ -222,7 +222,48 @@
+ 
+ }
+ 
++//*********************DV **********************************************
++EncoderFFMPEGDV::EncoderFFMPEGDV (COMPRES_PARAMS * config):
++EncoderFFMPEG (FF_DV, config)
++{
++  _id = FF_DV;
++  _frametogo = 0;
+ 
++
++}
++uint8_t
++EncoderFFMPEGDV::hasExtraHeaderData (uint32_t * l, uint8_t ** data)
++{
++  *l = 0;
++  *data = NULL;
++  return 0;
++
++}
++uint8_t
++EncoderFFMPEGDV::configure (AVDMGenericVideoStream * instream)
++{
++  ADM_assert (instream);
++  ADV_Info *info;
++
++
++
++  info = instream-&gt;getInfo ();
++  _fps = info-&gt;fps1000;
++  _w = info-&gt;width;
++  _h = info-&gt;height;
++  _vbuffer = new ADMImage (_w, _h);
++  ADM_assert (_vbuffer);
++  _in = instream;
++
++  _codec = new ffmpegEncoderCQ (_w, _h, _id);
++  _codec-&gt;init (_param.qz, _fps, 0);
++  _state=enc_CQ;
++  return 1;
++
++
++
++}
++
+ //************************* SNOW **************************
+ // return codec name as seen in avi header
+ //
+@@ -231,6 +272,9 @@
+ {
+   switch (_id)
+     {
++    case FF_DV:
++        return &quot;dvsd&quot;;
++        break;
+     case FF_FFHUFF:
+       return &quot;FFVH&quot;;
+       break;
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.h	2007-01-28 16:29:29 UTC (rev 2784)
++++ branches/avidemux_2.4_branch/avidemux/ADM_encoder/adm_encffmpeg.h	2007-01-30 07:18:38 UTC (rev 2785)
+@@ -252,4 +252,50 @@
+   virtual uint8_t hasExtraHeaderData (uint32_t * l, uint8_t ** data);
+ 
+ };
++
++
++    
++class EncoderFFMPEGDV:public EncoderFFMPEG
++{
++
++protected:
++
++
++public:
++  EncoderFFMPEGDV (COMPRES_PARAMS * config);
++  ~EncoderFFMPEGDV ()
++  {
++    stop ();
++  };				// can be called twice if needed ..
++  virtual uint8_t isDualPass (void)
++  {
++    return 0;
++  };
++  virtual uint8_t configure (AVDMGenericVideoStream * instream);
++  virtual uint8_t setLogFile (const char *p, uint32_t fr)
++  {
++    UNUSED_ARG (p);
++    UNUSED_ARG (fr);
++    return 1;
++  };
++  virtual uint8_t startPass2 (void)
++  {
++    return 1;
++  };
++  virtual uint8_t startPass1 (void)
++  {
++    return 1;
++  };
++  virtual const char *getDisplayName (void)
++  {
++    return &quot;FFMPEG DV&quot;;
++  }
++  virtual const char *getFCCHandler (void)
++  {
++    return &quot;DVDS&quot;;
++  }
++  virtual uint8_t hasExtraHeaderData (uint32_t * l, uint8_t ** data);
++
++};
++
+ #endif
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000109.html">[Avidemux-svn-commit] r2784 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_mpegdemuxer
+</A></li>
+	<LI>Next message: <A HREF="000111.html">[Avidemux-svn-commit] r2786 - in	branches/avidemux_2.4_branch/avidemux: ADM_codecs ADM_encoder	ADM_inputs/ADM_3gp ADM_libraries/ADM_lavformat
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#110">[ date ]</a>
+              <a href="thread.html#110">[ thread ]</a>
+              <a href="subject.html#110">[ subject ]</a>
+              <a href="author.html#110">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

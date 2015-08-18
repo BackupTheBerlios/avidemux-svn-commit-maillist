@@ -1,0 +1,839 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6021 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-March/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6021%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264&In-Reply-To=%3C201003231454.o2NEst0U008949%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003224.html">
+   <LINK REL="Next"  HREF="003226.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6021 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6021%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264&In-Reply-To=%3C201003231454.o2NEst0U008949%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6021 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Mar 23 15:54:55 CET 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003224.html">[Avidemux-svn-commit] r6019 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreMuxer/src avidemux_plugins/ADM_muxers/muxerAvi
+</A></li>
+        <LI>Next message: <A HREF="003226.html">[Avidemux-svn-commit] r6022 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3225">[ date ]</a>
+              <a href="thread.html#3225">[ thread ]</a>
+              <a href="subject.html#3225">[ subject ]</a>
+              <a href="author.html#3225">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-03-23 15:54:55 +0100 (Tue, 23 Mar 2010)
+New Revision: 6021
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Dialog.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.conf
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp
+Log:
+[x264] Very very basic encoder support
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp	2010-03-23 14:54:51 UTC (rev 6020)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.cpp	2010-03-23 14:54:55 UTC (rev 6021)
+@@ -27,44 +27,56 @@
+ #define aprintf printf
+ #endif
+ 
+-
++extern &quot;C&quot; 
++{
++static void        logger( void *cooki, int i_level, const char *psz, va_list list)
++{
++    static char buffer[2048];
++    vsnprintf(buffer,2048,psz,list);
++    printf(&quot;&gt;&gt;%s\n&quot;,buffer);
++}
++}
+ #define MMSET(x) memset(&amp;(x),0,sizeof(x))
+ 
+-x264_encoder x264Settings;
+-#if 0
+-=
++x264_encoder x264Settings=
+ {
+     {
+     COMPRESS_CQ, //COMPRESSION_MODE  mode;
+-    2,              // uint32_t          qz;           /// Quantizer
++    15,              // uint32_t          qz;           /// Quantizer
+     1500,           //uint32_t          bitrate;      /// In kb/s 
+     700,            //uint32_t          finalsize;    /// In ?
+     1500,           //uint32_t          avg_bitrate;  /// avg_bitrate is in kb/s!!
+-    ADM_ENC_CAP_CBR+ADM_ENC_CAP_CQ+ADM_ENC_CAP_2PASS+ADM_ENC_CAP_2PASS_BR+ADM_ENC_CAP_GLOBAL+ADM_ENC_CAP_SAME
++    ADM_ENC_CAP_CBR+ADM_ENC_CAP_CQ+0*COMPRESS_AQ+ADM_ENC_CAP_2PASS+ADM_ENC_CAP_2PASS_BR+ADM_ENC_CAP_GLOBAL+ADM_ENC_CAP_SAME
+     },
+-            XVID_PROFILE_AS_L4, // Profile
+-            3, // rdMode
+-            3, // MotionEstimation
+-            0, // cqmMode
+-            0, // arMode
+-            2, // MaxBframe
+-            200, // MaxKeyInterval
+-            
+-            99, // nbThreads
+-            true, // rdOnBframe
+-            true, //bool:hqAcPred
+-            true, //bool:optimizeChrome
+-            true, // Trellis
++    2, // uint32_t MaxRefFrames;
++    20, //uint32_t MinIdr;
++    50, //uint32_t MaxIdr;
++    2,  // threads
++   true, //bool _8x8;
++   true, //bool _8x8P;
++   true, //bool _8x8B;
++   true, //bool _4x4;
++   true, //bool _8x8I;
++   true, //bool _4x4I;
++   2, //uint32_t MaxBFrame;
++   30, //uint32_t profile;
++   true, //bool CABAC;
++   true, //bool Trellis;     
+     
+ };
+-#endif
+ /**
+         \fn x264Encoder
+ */
+ x264Encoder::x264Encoder(ADM_coreVideoFilter *src,bool globalHeader) : ADM_coreVideoEncoder(src)
+ {
+-    printf(&quot;[x264] Creating.\n&quot;);
++    ADM_info(&quot;[x264] Creating.\n&quot;);
+     handle=NULL;
++    extraData=NULL;
++    extraDataLen=0;
++    seiUserDataLen=0;
++    seiUserData=NULL;
++    pic=NULL;
++    
+ }
+ /**
+     \fn setup
+@@ -72,13 +84,15 @@
+ bool x264Encoder::setup(void)
+ {
+   ADM_info(&quot;x264, setting up&quot;);
++  image=new ADMImage(getWidth(),getHeight());
+   MMSET(param);
+-
+-  param.i_threads = 2;
++  x264_param_default( &amp;param);
++  param.pf_log=logger;
++  param.i_threads = x264Settings.threads;
+   param.i_width = getWidth();
+   param.i_height = getHeight();
+   param.i_csp = X264_CSP_I420;
+-
++ 
+     //Framerate
+     int n,d;    
+     uint64_t f=source-&gt;getInfo()-&gt;frameIncrement;
+@@ -107,8 +121,7 @@
+   // BframeReduction ?
+   // PartitionDecision ?
+   MKPARAMF(rc.f_qcompress,BitrateVariability);
+-  
+-  param.i_frame_reference = 1;
++
+   // update for Sadarax dialog
+   MKPARAM(rc.i_vbv_max_bitrate,vbv_max_bitrate);
+   MKPARAM(rc.i_vbv_buffer_size,vbv_buffer_size);
+@@ -123,19 +136,24 @@
+   MKPARAM(rc.i_qp_min,MinQp);
+   MKPARAM(rc.i_qp_max,MaxQp);
+   MKPARAM(rc.i_qp_step,QpStep);
+-  MKPARAM(i_frame_reference,MaxRefFrames);
+   MKPARAM(i_scenecut_threshold,SceneCut);
+-  MKPARAM(i_keyint_min,MinIdr);
+-  MKPARAM(i_keyint_max,MaxIdr);
+-  MKPARAM(i_bframe,MaxBFrame);
+   MKPARAM(i_bframe_bias,Bias);
+   MKPARAM( b_bframe_pyramid,BasReference );
+   MKPARAM(analyse. b_bidir_me,BidirME );
+   MKPARAM( b_bframe_adaptive, Adaptative);
+   MKPARAM( analyse.b_weighted_bipred, Weighted);
++  MKPARAM(analyse.i_subpel_refine,PartitionDecision+1);
++#endif
++  MKPARAM(i_frame_reference,MaxRefFrames);
++  
++  MKPARAM(i_keyint_min,MinIdr);
++  MKPARAM(i_keyint_max,MaxIdr);
++  MKPARAM(i_bframe,MaxBFrame);
++
+   MKPARAM( b_cabac , CABAC);
+   MKPARAM( analyse.i_trellis, Trellis);
+-  MKPARAM(analyse.i_subpel_refine,PartitionDecision+1);
++
++#if 0  
+ #define MIN_RDO 6
+   if(zparam-&gt;PartitionDecision+1&gt;=MIN_RDO)
+   {
+@@ -153,21 +171,25 @@
+   
+   MKPARAM(analyse.i_me_method,Method);
+   MKPARAM(analyse.i_me_range,Range);
++  MKPARAM(i_bframe_bias,Bias);
++  MKPARAM( b_bframe_pyramid,BasReference );
++  MKPARAM(analyse. b_bidir_me,BidirME );
++  MKPARAM( b_bframe_adaptive, Adaptative);
++  MKPARAM( analyse.b_weighted_bipred, Weighted);
++#endif
+ //  MKPARAM(PartitionDecision,Method);
+   MKPARAM(analyse.b_transform_8x8,_8x8);
+-  MKPARAM(analyse.b_mixed_references,MixedRefs);
+-  MKPARAM(analyse.i_noise_reduction,NoiseReduction);
+   
+-#define MES(x,y) if(zparam-&gt;x) {param.analyse.inter |=X264_ANALYSE_##y;printf(&quot;[x264] &quot;#x&quot; is on\n&quot;);}
++#define MES(x,y) if(x264Settings.x) {param.analyse.inter |=X264_ANALYSE_##y;printf(&quot;[x264] &quot;#x&quot; is on\n&quot;);}
+   param.analyse.inter=0;
+   MES(  _8x8P,  PSUB16x16);
+   MES(  _8x8B,  BSUB16x16);
+   MES(  _4x4,   PSUB8x8);
+   MES(  _8x8I,  I8x8);
+   MES(  _4x4I,  I4x4);
+-#endif
+ 
+-  param.i_log_level=X264_LOG_INFO;
++
++  param.i_log_level=X264_LOG_DEBUG; //INFO;
+  
+   
+   if(globalHeader)
+@@ -182,14 +204,45 @@
+     return 0;
+   }
+ 
+-  pic =  new    x264_picture_t;
++  pic=new x264_picture_t;
++  x264_picture_alloc( pic, X264_CSP_I420, getWidth(),getHeight());
+   ADM_info(&quot;x264, setup ok\n&quot;);
+   if (globalHeader)
+     return createHeader ();
+   return true;
+ }
++/**
++    \fn encodeNals
++*/
++int x264Encoder::encodeNals(uint8_t *buf, int size, x264_nal_t *nals, int nalCount, bool skipSei)
++{
++    uint8_t *p = buf;
++    int i;
+ 
++    if (seiUserDataLen &gt; 0 &amp;&amp; nalCount &gt; 0)
++        {
++        memcpy(p, seiUserData, seiUserDataLen);
++        p += seiUserDataLen;
++        seiUserDataLen = 0;
++    }
+ 
++    for (i = 0; i &lt; nalCount; i++)
++        {
++        if (skipSei &amp;&amp; nals[i].i_type == NAL_SEI)
++                {
++            seiUserDataLen = nals[i].i_payload;
++            seiUserData = new uint8_t[seiUserDataLen];
++            memcpy(seiUserData, nals[i].p_payload, nals[i].i_payload);
++            continue;
++        }
++
++        memcpy(p, nals[i].p_payload, nals[i].i_payload);
++        p += nals[i].i_payload;
++    }
++
++    return p - buf;
++}
++
+ /**
+         \fn createHeader
+         \brief create esds header, needed for mp4/mov
+@@ -201,108 +254,14 @@
+ 
+ bool x264Encoder::createHeader (void)
+ {
+-#if 0
+-  x264_nal_t *
+-    nal;
+-  int
+-    nal_count;
+-  uint32_t
+-    offset = 0;;
+-  uint8_t    buffer[MAX_HEADER_X264];
+-  uint8_t    picParam[MAX_HEADER_X264];
+-  uint8_t    seqParam[MAX_HEADER_X264];
+-  uint8_t    sei[MAX_HEADER_X264];
+-  int	     picParamLen = 0, seqParamLen = 0,seiParamLen=0, len;
+-  int
+-    sz;
+ 
+-  // 1024 bytes should be enough
+-  extraData = new uint8_t[MAX_HEADER_X264];
+-  extraSize = 0;
++  x264_nal_t *nal;
++  int        nalCount;
+ 
+-  x264_t *x264=(x264_t *)_handle;
+-  //x264-&gt;i_frame=0; // force write_sei_params
+-  if (x264_encoder_headers (x264, &amp;nal, &amp;nal_count))
+-    {
+-      printf (&quot;[x264] Cannot create header\n&quot;);
+-      return 0;
+-    }
+-  printf (&quot;[x264] Nb nal: %d\n&quot;, nal_count);
++    extraDataLen = x264_encoder_headers(handle, &amp;nal, &amp;nalCount);
++    extraData = new uint8_t[extraDataLen];
++    extraDataLen = encodeNals(extraData, extraDataLen, nal, nalCount, true);
+ 
+-  // Now encode them
+-  for (int i = 0; i &lt; nal_count; i++)
+-    {
+-	  switch(nal[i].i_type)
+-	  {
+-	  case H264_NAL_TYPE_SEQ_PARAM:
+-		  	sz = x264_nal_encode (seqParam, &amp;seqParamLen, 0, &amp;nal[i]);
+-		  	break;
+-	  case H264_NAL_TYPE_PIC_PARAM:
+-		  	sz = x264_nal_encode (picParam, &amp;picParamLen, 0, &amp;nal[i]);
+-		  	break;
+-	  case H264_NAL_TYPE_SEI:
+-		  	sz = x264_nal_encode (sei, &amp;seiParamLen, 0, &amp;nal[i]);
+-		  	break;
+-	  default:
+-		  printf (&quot;[x264] ?? type %d in nal %d\n&quot;, nal[i].i_type, i);
+-		  sz = x264_nal_encode (buffer, &amp;len, 0, &amp;nal[i]);
+-	 }
+-    if (sz &lt;= 0)
+-	{
+-	  printf (&quot;[x264] Cannot encode nal header %d\n&quot;, i);
+-	  return 0;
+-	}
+-    }
+-  // Now that we got all the nals encoded, time to build the avcC atom
+-  // Check we have everything we want
+-  if (!picParamLen || !seqParamLen)
+-    {
+-      printf (&quot;[x264] Seqparam or PicParam not found\n&quot;);
+-      return 0;
+-    }
+-
+-
+-
+-  // Fill header
+-  extraData[0] = 1;		// Version
+-  extraData[1] = seqParam[1];	//0x42; // AVCProfileIndication
+-  extraData[2] = seqParam[2];	//0x00; // profile_compatibility
+-  extraData[3] = seqParam[3];	//0x0D; // AVCLevelIndication
+-
+-  extraData[4] = 0xFC + 3;	// lengthSizeMinusOne 
+-  extraData[5] = 0xE0 + 1;	// nonReferenceDegredationPriorityLow        
+-
+-  offset = 6;
+-
+-
+-
+-  extraData[offset] = seqParamLen &gt;&gt; 8;
+-  extraData[offset + 1] = seqParamLen &amp; 0xff;
+-  offset += 2;
+-  memcpy (extraData + offset, seqParam, seqParamLen);
+-  offset += seqParamLen;
+-
+-  
+-  extraData[offset] = 1;	// numOfPictureParameterSets
+-  offset++;
+-  extraData[offset] = (picParamLen) &gt;&gt; 8;
+-  extraData[offset + 1] = (picParamLen) &amp; 0xff;
+-  offset += 2;
+-  memcpy (extraData + offset, picParam, picParamLen);
+-  offset += picParamLen;
+-
+-  // Where x264 stores all its header, save it for later use
+-  if(seiParamLen) 
+-  {
+-	  	_seiUserDataLen=seiParamLen;
+-	  	_seiUserData=new uint8_t[_seiUserDataLen];
+-	  	memcpy(_seiUserData,sei,_seiUserDataLen);
+-  }
+-
+-  extraSize = offset;
+-
+-  ADM_assert (offset &lt; MAX_HEADER_X264);
+-#endif
+   return 1;
+ }
+ /** 
+@@ -319,17 +278,21 @@
+     if (pic)
+     {
+       // picture_clean ?
+-      delete	pic;
++      x264_picture_clean(pic);
++      delete pic;
+       pic = NULL;
+     }
+-#if 0
+-  if(_seiUserData)
++    if(extraData)
++    {
++        delete [] extraData;
++        extraData=NULL;
++    }
++
++  if(seiUserData)
+   {
+-	  delete [] _seiUserData;
+-	  _seiUserData=NULL;
++	  delete [] seiUserData;
++	  seiUserData=NULL;
+   }
+-#endif
+-   
+ }
+ 
+ /**
+@@ -407,14 +370,12 @@
+ {
+       pic-&gt;img.i_csp = X264_CSP_I420;
+       pic-&gt;img.i_plane = 3;
+-
+       pic-&gt;img.plane[0] = YPLANE(in);
+       pic-&gt;img.plane[2] = UPLANE(in);
+       pic-&gt;img.plane[1] = VPLANE(in);
+       pic-&gt;img.i_stride[0] = getWidth();
+       pic-&gt;img.i_stride[1] = getWidth()/2;
+       pic-&gt;img.i_stride[2] = getWidth()/2;
+-
+       pic-&gt;i_type = X264_TYPE_AUTO;
+       pic-&gt;i_pts = in-&gt;Pts;
+   return 1;
+@@ -425,78 +386,56 @@
+ */
+ bool x264Encoder::postAmble (ADMBitstream * out,uint32_t nbNals,x264_nal_t *nal,x264_picture_t *picout)
+ {
++        int size = encodeNals(out-&gt;data, out-&gt;bufferSize, nal, nbNals, false);
+ 
+-  uint32_t      size = 0, thisnal = 0;
+-  uint8_t *     dout = out-&gt;data;
+-  int           sizemax = 0;
++        if (size &lt; 0)
++        {
++                ADM_error(&quot;[x264] Error encoding NALs\n&quot;);
++                return false;
++        }
++        out-&gt;len=size;
++        out-&gt;pts =  picout-&gt;i_pts+getEncoderDelay();	
++        switch (picout-&gt;i_type)
++        {
++        case X264_TYPE_IDR:
++          out-&gt;flags = AVI_KEY_FRAME;
++          /* First frame ?*/
+ #if 0
+-  for (uint32_t i = 0; i &lt; nbNals; i++)
+-    {
+-      sizemax = 0xfffffff;;
+-      if (!param.b_repeat_headers)
+-    	  size += 4;
+-      thisnal =	x264_nal_encode (dout + size, &amp;sizemax, param.b_repeat_headers, &amp;nal[i]);
+-      if (!param.b_repeat_headers)
+-      {			// Need to put size (assuming nal_size=4)
+-    	  dout[size + 0 - 4] = (thisnal &gt;&gt; 24) &amp; 0xff;
+-    	  dout[size + 1 - 4] = (thisnal &gt;&gt; 16) &amp; 0xff;
+-    	  dout[size + 2 - 4] = (thisnal &gt;&gt; 8) &amp; 0xff;
+-    	  dout[size + 3 - 4] = (thisnal &gt;&gt; 0) &amp; 0xff;
+-      }
+-      size += thisnal;
+-    }
++          if(!param.b_repeat_headers &amp;&amp; _seiUserData &amp;&amp; !pic_out.i_pts)
++          {
++              // Put our SEI front...
++              // first a temp location...
++              uint8_t tmpBuffer[size];
++              memcpy(tmpBuffer,out-&gt;data,size);
++              // Put back out SEI and add Size
++              dout[0]=(_seiUserDataLen&gt;&gt;24)&amp;0xff;
++              dout[1]=(_seiUserDataLen&gt;&gt;16)&amp;0xff;
++              dout[2]=(_seiUserDataLen&gt;&gt;8)&amp;0xff;
++              dout[3]=(_seiUserDataLen&gt;&gt;0)&amp;0xff;
++              memcpy(dout+4,_seiUserData,_seiUserDataLen);
++              memcpy(dout+4+_seiUserDataLen,tmpBuffer,size);
++              size+=4+_seiUserDataLen;
++              out-&gt;len = size; // update total size
++          }
+ #endif
+-
+-  out-&gt;len = size;
+-  out-&gt;pts =  picout-&gt;i_pts+getEncoderDelay();	
+-//    if(admParam.BasReference)
+-//    {
+-//  printf(&quot;%u +=%u\n&quot;,out-&gt;ptsFrame,admParam.MaxBFrame);
+-//      out-&gt;ptsFrame+=admParam.MaxBFrame;
+-//    }
+-  //printf(&quot;Frame :%lld \n&quot;,pic_out.i_pts);
+-  switch (picout-&gt;i_type)
+-    {
+-    case X264_TYPE_IDR:
+-      out-&gt;flags = AVI_KEY_FRAME;
+-      /* First frame ?*/
+-#if 0
+-      if(!param.b_repeat_headers &amp;&amp; _seiUserData &amp;&amp; !pic_out.i_pts)
+-      {
+-    	  // Put our SEI front...
+-    	  // first a temp location...
+-    	  uint8_t tmpBuffer[size];
+-    	  memcpy(tmpBuffer,out-&gt;data,size);
+-    	  // Put back out SEI and add Size
+-    	  dout[0]=(_seiUserDataLen&gt;&gt;24)&amp;0xff;
+-    	  dout[1]=(_seiUserDataLen&gt;&gt;16)&amp;0xff;
+-    	  dout[2]=(_seiUserDataLen&gt;&gt;8)&amp;0xff;
+-    	  dout[3]=(_seiUserDataLen&gt;&gt;0)&amp;0xff;
+-    	  memcpy(dout+4,_seiUserData,_seiUserDataLen);
+-    	  memcpy(dout+4+_seiUserDataLen,tmpBuffer,size);
+-    	  size+=4+_seiUserDataLen;
+-    	  out-&gt;len = size; // update total size
+-      }
+-#endif
+-      break;
+-    case X264_TYPE_I:
+-      out-&gt;flags = AVI_P_FRAME;
+-      break;
+-    case X264_TYPE_P:
+-      out-&gt;flags = AVI_P_FRAME;
+-      break;
+-    case X264_TYPE_B:
+-    case X264_TYPE_BREF:
+-      out-&gt;flags = AVI_B_FRAME;
+-      break;
+-    default:
+-      printf (&quot;[x264] Unknown image type: %d\n&quot;, picout-&gt;i_type);
+-      //ADM_assert(0);
+-    }
+-    
+-    //
+-  out-&gt;out_quantizer = picout-&gt;i_qpplus1;
+-  return 1;
++          break;
++        case X264_TYPE_I:
++          out-&gt;flags = AVI_P_FRAME;
++          break;
++        case X264_TYPE_P:
++          out-&gt;flags = AVI_P_FRAME;
++          break;
++        case X264_TYPE_B:
++        case X264_TYPE_BREF:
++          out-&gt;flags = AVI_B_FRAME;
++          break;
++        default:
++          ADM_error (&quot;[x264] Unknown image type: %d\n&quot;, picout-&gt;i_type);
++          //ADM_assert(0);
++        }
++        out-&gt;out_quantizer = picout-&gt;i_qpplus1;
++        return true;
+ }
++
+ // EOF
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.h	2010-03-23 14:54:51 UTC (rev 6020)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264.h	2010-03-23 14:54:55 UTC (rev 6021)
+@@ -40,6 +40,11 @@
+                bool            preAmble (ADMImage * in);
+                bool            postAmble (ADMBitstream * out,uint32_t nbNals,x264_nal_t *nal,x264_picture_t *picout);
+                bool            createHeader(void);
++               int             encodeNals(uint8_t *buf, int size, x264_nal_t *nals, int nalCount, bool skipSei);
++               uint32_t        extraDataLen;
++               uint8_t         *extraData;
++               uint32_t        seiUserDataLen;
++               uint8_t         *seiUserData ;
+ 
+                
+ public:
+@@ -48,8 +53,8 @@
+ virtual                    ~x264Encoder();
+ virtual        bool        setup(void); 
+ virtual        bool        encode (ADMBitstream * out);
+-virtual const  char        *getFourcc(void) {return &quot;X264&quot;;}
+-
++virtual const  char        *getFourcc(void) {return &quot;H264&quot;;}
++virtual        bool         getExtraData(uint32_t *l,uint8_t **d) {*l=extraDataLen;*d=extraData;return true;}
+ virtual        bool         isDualPass(void) ;
+ 
+ };
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Dialog.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Dialog.cpp	2010-03-23 14:54:51 UTC (rev 6020)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/ADM_x264Dialog.cpp	2010-03-23 14:54:55 UTC (rev 6021)
+@@ -32,39 +32,8 @@
+ extern x264_encoder x264Settings;
+ bool         x264Configure(void)
+ {         
+-#if 0
+-diaMenuEntry meE[]={
+-  {0,QT_TR_NOOP(&quot;None&quot;)},
+-  {1,QT_TR_NOOP(&quot;Low&quot;)},
+-  {2,QT_TR_NOOP(&quot;Medium&quot;)},
+-  {3,QT_TR_NOOP(&quot;Full&quot;)}
+-};       
+ 
+-diaMenuEntry qzE[]={
+-  {0,QT_TR_NOOP(&quot;H.263&quot;)},
+-  {1,QT_TR_NOOP(&quot;MPEG&quot;)},
+-  {2,QT_TR_NOOP(&quot;Custom&quot;)}
+-};      
+-diaMenuEntry profileE[]={
+-{ XVID_PROFILE_S_L0  ,&quot;Simple Level0&quot;},
+-{ XVID_PROFILE_S_L1  ,&quot;Simple Level1&quot;},
+-{ XVID_PROFILE_S_L2  ,&quot;Simple Level2&quot;},
+-{ XVID_PROFILE_S_L3  ,&quot;Simple Level3&quot;},
+-{ XVID_PROFILE_AS_L0 ,&quot;Adv. Simple Level0&quot;},
+-{ XVID_PROFILE_AS_L1 ,&quot;Adv. Simple Level1&quot;},
+-{ XVID_PROFILE_AS_L2 ,&quot;Adv. Simple Level2&quot;},
+-{ XVID_PROFILE_AS_L3 ,&quot;Adv. Simple Level3&quot;},
+-{ XVID_PROFILE_AS_L4 ,&quot;Adv. Simple Level4&quot;},
+-}; 
+ 
+-diaMenuEntry rdE[]={
+-  {0,QT_TR_NOOP(&quot;None&quot;)},
+-  {1,QT_TR_NOOP(&quot;DCT&quot;)},
+-  {2,QT_TR_NOOP(&quot;Qpel16&quot;)},
+-  {3,QT_TR_NOOP(&quot;Qpel8&quot;)},
+-  {4,QT_TR_NOOP(&quot;Square&quot;)}
+-};    
+-
+ diaMenuEntry threads[]={
+   {1,QT_TR_NOOP(&quot;One thread&quot;)},
+   {2,QT_TR_NOOP(&quot;Two threads)&quot;)},
+@@ -73,37 +42,23 @@
+ };     
+ 
+ 
+-#define PX(x) &amp;(xvid4Settings.x)
++#define PX(x) &amp;(x264Settings.x)
+ 
+-         diaElemBitrate   bitrate(&amp;(xvid4Settings.params),NULL);
+-         diaElemMenu      meM(PX(motionEstimation),QT_TR_NOOP(&quot;MotionEstimation&quot;),4,meE);
++         diaElemBitrate   bitrate(&amp;(x264Settings.params),NULL);
++         diaElemMenu      threadM(PX(threads),QT_TR_NOOP(&quot;Threading&quot;),4,threads);
++         uint32_t trelBol=*PX(Trellis);
++         uint32_t cabacBol=*PX(CABAC);
+ 
+-         diaElemMenu      threadM(PX(nbThreads),QT_TR_NOOP(&quot;Threading&quot;),4,threads);
+-/*
+-         diaElemUInteger  qminM(PX(qmin),QT_TR_NOOP(&quot;Mi_n. quantizer:&quot;),1,31);
+-         diaElemUInteger  qmaxM(PX(qmax),QT_TR_NOOP(&quot;Ma_x. quantizer:&quot;),1,31);
+-         diaElemUInteger  qdiffM(PX(max_qdiff),QT_TR_NOOP(&quot;Max. quantizer _difference:&quot;),1,31);
+-*/
+-         uint32_t trelBol=*PX(trellis);
+          diaElemToggle    trellis(&amp;trelBol,QT_TR_NOOP(&quot;_Trellis quantization&quot;));         
+-         diaElemUInteger  max_b_frames(PX(maxBFrame),QT_TR_NOOP(&quot;_Number of B frames:&quot;),0,32);
++         diaElemToggle    cabac(&amp;cabacBol,QT_TR_NOOP(&quot;Cabac encoding&quot;));         
+ 
+-         diaElemMenu     qzM(PX(cqmMode),QT_TR_NOOP(&quot;_Quantization type:&quot;),2,qzE);
+-         
+-         diaElemMenu     rdM(PX(rdMode),QT_TR_NOOP(&quot;_Macroblock decision:&quot;),5,rdE);
+-
+-         diaElemMenu     profileM(PX(profile),QT_TR_NOOP(&quot;Profile:&quot;),9,profileE);
+-         /*
+-         diaElemUInteger filetol(PX(vratetol),QT_TR_NOOP(&quot;_Filesize tolerance (kb):&quot;),0,100000);
+-         
+-         diaElemFloat    qzComp(PX(qcompress),QT_TR_NOOP(&quot;_Quantizer compression:&quot;),0,1);
+-         diaElemFloat    qzBlur(PX(qblur),QT_TR_NOOP(&quot;Quantizer _blur:&quot;),0,1);
+-         */
+-        diaElemUInteger GopSize(PX(maxKeyFrameInterval),QT_TR_NOOP(&quot;_Gop Size:&quot;),1,500); 
++         diaElemUInteger GopSize(PX(MaxIdr),QT_TR_NOOP(&quot;_Gop Size:&quot;),1,500); 
++         diaElemUInteger max_b_frames(PX(MaxBFrame),QT_TR_NOOP(&quot;Max B Frames:&quot;),0,5); 
+           /* First Tab : encoding mode */
+        
+-        diaElemFrame frameMe(QT_TR_NOOP(&quot;Advanced Simple Profile&quot;));
+-        frameMe.swallow(&amp;profileM);
++        
++         diaElemFrame frameMe(QT_TR_NOOP(&quot;Main&quot;));
++        frameMe.swallow(&amp;cabac);
+         frameMe.swallow(&amp;max_b_frames);
+         frameMe.swallow(&amp;GopSize);
+         frameMe.swallow(&amp;bitrate);
+@@ -114,24 +69,20 @@
+ 
+         /* 2nd Tab : Qz */
+        
+-         diaElem *diaQze[]={&amp;qzM,&amp;rdM,&amp;meM,&amp;trellis};
+-        diaElemTabs tabQz(QT_TR_NOOP(&quot;Quantization&quot;),4,diaQze);
++         diaElem *diaQze[]={&amp;trellis};
++        diaElemTabs tabQz(QT_TR_NOOP(&quot;Quantization&quot;),1,diaQze);
+         
+         /* 3th Tab : thread */
+          diaElem *diaThread[]={&amp;threadM};
+          diaElemTabs tabThread(QT_TR_NOOP(&quot;Threads&quot;),1,diaThread);
+-        #if 0
+-         diaElem *diaRC[]={&amp;filetol,&amp;qzComp,&amp;qzBlur};
+-        diaElemTabs tabRC(QT_TR_NOOP(&quot;Rate Control&quot;),3,diaRC);
+-        #endif
+-         diaElemTabs *tabs[]={&amp;tabME,&amp;tabQz,&amp;tabThread};
+-        if( diaFactoryRunTabs(QT_TR_NOOP(&quot;Xvid4 MPEG-4 ASP configuration&quot;),3,tabs))
++      
++        diaElemTabs *tabs[]={&amp;tabME,&amp;tabQz,&amp;tabThread};
++        if( diaFactoryRunTabs(QT_TR_NOOP(&quot;X264 MPEG-4 AVC configuration&quot;),3,tabs))
+         {
+-            *PX(trellis)= trelBol;
++            *PX(Trellis)= trelBol;
++            *PX(CABAC)= cabacBol;
+             return true;
+         }
+ 
+          return false;
+-#endif
+-    return true;
+ }
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.conf
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.conf	2010-03-23 14:54:51 UTC (rev 6020)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.conf	2010-03-23 14:54:55 UTC (rev 6021)
+@@ -1,13 +1,15 @@
+ video_encode:params
++uint32_t:MaxRefFrames;
++uint32_t:MinIdr;
++uint32_t:MaxIdr;
++uint32_t:threads;
++bool:_8x8;
++bool:_8x8P;
++bool:_8x8B;
++bool:_4x4;
++bool:_8x8I;
++bool:_4x4I;
++uint32_t:MaxBFrame;
+ uint32_t:profile
+-uint32_t:rdMode
+-uint32_t:motionEstimation
+-uint32_t:cqmMode
+-uint32_t:arMode
+-uint32_t:maxBFrame
+-uint32_t:maxKeyFrameInterval
+-uint32_t:nbThreads
+-bool:rdOnBFrame
+-bool:hqAcPred
+-bool:optimizeChrome
+-bool:trellis
++bool:CABAC;
++bool:Trellis;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.h	2010-03-23 14:54:51 UTC (rev 6020)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder.h	2010-03-23 14:54:55 UTC (rev 6021)
+@@ -3,18 +3,20 @@
+ #define ADM_x264_encoder_CONF_H
+ typedef struct {
+    COMPRES_PARAMS params;
++   uint32_t MaxRefFrames;
++   uint32_t MinIdr;
++   uint32_t MaxIdr;
++   uint32_t threads;
++   bool _8x8;
++   bool _8x8P;
++   bool _8x8B;
++   bool _4x4;
++   bool _8x8I;
++   bool _4x4I;
++   uint32_t MaxBFrame;
+    uint32_t profile;
+-   uint32_t rdMode;
+-   uint32_t motionEstimation;
+-   uint32_t cqmMode;
+-   uint32_t arMode;
+-   uint32_t maxBFrame;
+-   uint32_t maxKeyFrameInterval;
+-   uint32_t nbThreads;
+-   bool rdOnBFrame;
+-   bool hqAcPred;
+-   bool optimizeChrome;
+-   bool trellis;
++   bool CABAC;
++   bool Trellis;
+ }x264_encoder;
+ #endif //x264_encoder
+ //EOF
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp	2010-03-23 14:54:51 UTC (rev 6020)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoEncoder/x264/x264_encoder_desc.cpp	2010-03-23 14:54:55 UTC (rev 6021)
+@@ -1,17 +1,19 @@
+ // Automatically generated, do not edit!
+ const ADM_paramList x264_encoder_param[]={
+  {&quot;params&quot;,offsetof( x264_encoder,params),&quot;COMPRES_PARAMS&quot;,ADM_param_video_encode},
++ {&quot;MaxRefFrames&quot;,offsetof( x264_encoder,MaxRefFrames),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;MinIdr&quot;,offsetof( x264_encoder,MinIdr),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;MaxIdr&quot;,offsetof( x264_encoder,MaxIdr),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;threads&quot;,offsetof( x264_encoder,threads),&quot;uint32_t&quot;,ADM_param_uint32_t},
++ {&quot;_8x8&quot;,offsetof( x264_encoder,_8x8),&quot;bool&quot;,ADM_param_bool},
++ {&quot;_8x8P&quot;,offsetof( x264_encoder,_8x8P),&quot;bool&quot;,ADM_param_bool},
++ {&quot;_8x8B&quot;,offsetof( x264_encoder,_8x8B),&quot;bool&quot;,ADM_param_bool},
++ {&quot;_4x4&quot;,offsetof( x264_encoder,_4x4),&quot;bool&quot;,ADM_param_bool},
++ {&quot;_8x8I&quot;,offsetof( x264_encoder,_8x8I),&quot;bool&quot;,ADM_param_bool},
++ {&quot;_4x4I&quot;,offsetof( x264_encoder,_4x4I),&quot;bool&quot;,ADM_param_bool},
++ {&quot;MaxBFrame&quot;,offsetof( x264_encoder,MaxBFrame),&quot;uint32_t&quot;,ADM_param_uint32_t},
+  {&quot;profile&quot;,offsetof( x264_encoder,profile),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;rdMode&quot;,offsetof( x264_encoder,rdMode),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;motionEstimation&quot;,offsetof( x264_encoder,motionEstimation),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;cqmMode&quot;,offsetof( x264_encoder,cqmMode),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;arMode&quot;,offsetof( x264_encoder,arMode),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;maxBFrame&quot;,offsetof( x264_encoder,maxBFrame),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;maxKeyFrameInterval&quot;,offsetof( x264_encoder,maxKeyFrameInterval),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;nbThreads&quot;,offsetof( x264_encoder,nbThreads),&quot;uint32_t&quot;,ADM_param_uint32_t},
+- {&quot;rdOnBFrame&quot;,offsetof( x264_encoder,rdOnBFrame),&quot;bool&quot;,ADM_param_bool},
+- {&quot;hqAcPred&quot;,offsetof( x264_encoder,hqAcPred),&quot;bool&quot;,ADM_param_bool},
+- {&quot;optimizeChrome&quot;,offsetof( x264_encoder,optimizeChrome),&quot;bool&quot;,ADM_param_bool},
+- {&quot;trellis&quot;,offsetof( x264_encoder,trellis),&quot;bool&quot;,ADM_param_bool},
++ {&quot;CABAC&quot;,offsetof( x264_encoder,CABAC),&quot;bool&quot;,ADM_param_bool},
++ {&quot;Trellis&quot;,offsetof( x264_encoder,Trellis),&quot;bool&quot;,ADM_param_bool},
+ {NULL,0,NULL}
+ };
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003224.html">[Avidemux-svn-commit] r6019 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreMuxer/src avidemux_plugins/ADM_muxers/muxerAvi
+</A></li>
+	<LI>Next message: <A HREF="003226.html">[Avidemux-svn-commit] r6022 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerAvi
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3225">[ date ]</a>
+              <a href="thread.html#3225">[ thread ]</a>
+              <a href="subject.html#3225">[ subject ]</a>
+              <a href="author.html#3225">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

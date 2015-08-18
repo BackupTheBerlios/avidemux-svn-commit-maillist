@@ -1,0 +1,242 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6626 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-September/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6626%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4&In-Reply-To=%3C20100919073539.5D16A481091%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003809.html">
+   <LINK REL="Next"  HREF="003811.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6626 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6626%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4&In-Reply-To=%3C20100919073539.5D16A481091%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6626 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Sep 19 09:35:39 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003809.html">[Avidemux-svn-commit] r6625 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="003811.html">[Avidemux-svn-commit] r6627 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/js
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3810">[ date ]</a>
+              <a href="thread.html#3810">[ thread ]</a>
+              <a href="subject.html#3810">[ subject ]</a>
+              <a href="author.html#3810">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-09-19 09:35:39 +0200 (Sun, 19 Sep 2010)
+New Revision: 6626
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4Analyzer.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4Indexer.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4Leaf.h
+Log:
+[MP4/Mov demuxer] Decode edts, just for information, we dont use it
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4.cpp	2010-09-19 07:35:38 UTC (rev 6625)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4.cpp	2010-09-19 07:35:39 UTC (rev 6626)
+@@ -63,7 +63,7 @@
+ #include &quot;fourcc.h&quot;
+ #include &quot;ADM_mp4.h&quot;
+ 
+-//#include &quot;ADM_codecs/ADM_codec.h&quot;
++#include &quot;ADM_vidMisc.h&quot;
+ 
+ #include &quot;ADM_videoInfoExtractor.h&quot;
+ 
+@@ -396,7 +396,13 @@
+             audioStream[audio]=ADM_audioCreateStream(&amp;(_tracks[1+audio]._rdWav), audioAccess[audio]);
+         }
+         fseeko(_fd,0,SEEK_SET);
+-        printf(&quot;3gp/mov file successfully read..\n&quot;);
++        ADM_info(&quot;3gp/mov file successfully read..\n&quot;);
++        int nb=(int)_tracks[0].nbIndex;
++        ADM_info(&quot;Nb images      : %d\n&quot;,nb);
++        ADM_info(&quot;Movie duration : %s\n&quot;,ADM_us2plain(_movieDuration*1000LL));
++        ADM_info(&quot;Last video PTS : %s\n&quot;,ADM_us2plain(_tracks[0].index[nb-1].pts));
++        ADM_info(&quot;Last video DTS : %s\n&quot;,ADM_us2plain(_tracks[0].index[nb-1].dts));
++
+         return 1;
+ }
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4.h	2010-09-19 07:35:38 UTC (rev 6625)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4.h	2010-09-19 07:35:39 UTC (rev 6626)
+@@ -126,6 +126,7 @@
+           uint8_t                       parseTrack(void *ztom);
+           uint8_t                       decodeVideoAtom(void *ztom);
+           uint8_t                       parseMdia(void *ztom,uint32_t *trackType,uint32_t w, uint32_t h);
++          uint8_t                       parseEdts(void *ztom);
+           uint8_t                       parseStbl(void *ztom,uint32_t trackType,uint32_t w,uint32_t h,uint32_t trackScale);
+           uint8_t                       decodeEsds(void *ztom,uint32_t trackType);
+           uint8_t                       updateCtts(MPsampleinfo *info );
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4Analyzer.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4Analyzer.cpp	2010-09-19 07:35:38 UTC (rev 6625)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4Analyzer.cpp	2010-09-19 07:35:39 UTC (rev 6626)
+@@ -188,8 +188,14 @@
+             parseMdia(&amp;son,&amp;trackType,w,h);
+             break;
+         }
++        case ADM_MP4_EDTS:
++        {
++            ADM_info(&quot;EDTS atom found\n&quot;);
++            parseEdts(&amp;son);
++            break;
++        }
+        default:
+-          adm_printf(ADM_PRINT_DEBUG,&quot;Unprocessed atom\n&quot;);
++          ADM_info(&quot;Unprocessed atom :%s\n&quot;,fourCC::tostringBE(son.getFCC()));
+      }
+      son.skipAtom();
+   }
+@@ -322,6 +328,54 @@
+ }
+ 
+ /**
++        \fn parseEdts
++        \brief parse sample table. this is the most important function.
++*/
++uint8_t       MP4Header::parseEdts(void *ztom)
++{
++  adm_atom *tom=(adm_atom *)ztom;
++  ADMAtoms id;
++  uint32_t container;
++
++  ADM_info(&quot;Parsing Edts&gt;&gt;\n&quot;);
++  while(!tom-&gt;isDone())
++  {
++     adm_atom son(tom);
++     if(!ADM_mp4SearchAtomName(son.getFCC(), &amp;id,&amp;container))
++     {
++       adm_printf(ADM_PRINT_DEBUG,&quot;[EDTS]Found atom %s unknown\n&quot;,fourCC::tostringBE(son.getFCC()));
++       son.skipAtom();
++       continue;
++     }
++    switch(id)
++    {
++       case ADM_MP4_ELST:
++       {
++              ADM_info(&quot;ELST atom found\n&quot;);
++              son.skipBytes(4);
++              uint32_t nb=son.read32();
++              ADM_info(&quot;Found %&quot;LU&quot; entries in list:\n&quot;,nb);
++              for(int i=0;i&lt;nb;i++)
++                {
++                    uint32_t editDuration=son.read32();
++                    uint32_t mediaTime=son.read32();
++                    uint32_t playbackSpeed=son.read32();
++                    ADM_info(&quot;Duration : %&quot;LU&quot;, mediaTime:%&quot;LU&quot; speed=%&quot;LU&quot;\n&quot;,editDuration,mediaTime,playbackSpeed);
++                }
++              son.skipAtom();
++              break;
++        
++       }
++       break;
++        default:
++            adm_printf(ADM_PRINT_DEBUG,&quot;** atom  NOT HANDLED [%s] \n&quot;,fourCC::tostringBE(son.getFCC()));
++     }
++   }
++   
++   tom-&gt;skipAtom();
++   return true;
++}
++/**
+         \fn parseStbl
+         \brief parse sample table. this is the most important function.
+ */
+@@ -576,7 +630,8 @@
+                                 //
+ #define commonPart(x)             _videostream.fccHandler=_video_bih.biCompression=fourCC::get((uint8_t *)#x);
+ 
+-
++                                 lw=(lw+7)&amp;(~7);
++                                 lh=(lh+7)&amp;(~7);
+                                  _video_bih.biWidth=_mainaviheader.dwWidth=lw ;
+                                   _video_bih.biHeight=_mainaviheader.dwHeight=lh;
+                                   _video_bih.biCompression=_videostream.fccHandler;
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4Indexer.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4Indexer.cpp	2010-09-19 07:35:38 UTC (rev 6625)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4Indexer.cpp	2010-09-19 07:35:39 UTC (rev 6626)
+@@ -47,7 +47,7 @@
+ 
+ uint32_t i,j,cur;
+ 
+-        printf(&quot;Build Track index\n&quot;);
++    ADM_info(&quot;Build Track index\n&quot;);
+ 	*outNbChunk=0;
+ 	aprintf(&quot;+_+_+_+_+_+\n&quot;);
+ 	aprintf(&quot;co : %lu sz: %lu sc: %lu co[0] %&quot;LLU&quot;\n&quot;,info-&gt;nbCo,info-&gt;nbSz,info-&gt;nbSc,info-&gt;Co[0]);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4Leaf.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4Leaf.h	2010-09-19 07:35:38 UTC (rev 6625)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/Mp4/ADM_mp4Leaf.h	2010-09-19 07:35:39 UTC (rev 6626)
+@@ -1,5 +1,5 @@
+ /*
+-<A HREF="http://developer.apple.com/documentation/QuickTime/QTFF/QTFFChap2/chapter_3_section_5.html#//apple_ref/doc/uid/DontLinkBookID_69-CH204-BBCJEIIA">http://developer.apple.com/documentation/QuickTime/QTFF/QTFFChap2/chapter_3_section_5.html#//apple_ref/doc/uid/DontLinkBookID_69-CH204-BBCJEIIA</A>
++<A HREF="http://developer.apple.com/library/mac/#documentation/QuickTime/QTFF/QTFFChap2/qtff2.html#//apple_ref/doc/uid/TP40000939-CH204-33299">http://developer.apple.com/library/mac/#documentation/QuickTime/QTFF/QTFFChap2/qtff2.html#//apple_ref/doc/uid/TP40000939-CH204-33299</A>
+ */
+ 
+ #if !defined(ADM_MPEGLEAF_H) || defined(ADMMP4_TAB_LEAF)
+@@ -39,10 +39,11 @@
+ MKMP4LEAF('co64',STCO64,0),
+ MKMP4LEAF('stsh',STSH,0),
+ MKMP4LEAF('stss',STSS,0),
++/* Edit list */
++MKMP4LEAF('elst',ELST,0), // <A HREF="http://wiki.multimedia.cx/index.php?title=QuickTime_container#elst">http://wiki.multimedia.cx/index.php?title=QuickTime_container#elst</A>
++MKMP4LEAF('edts',EDTS,1),
+ 
+ 
+-
+-
+ MKMP4LEAF('ctts',CTTS,0),
+ 
+ /* Data */
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003809.html">[Avidemux-svn-commit] r6625 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="003811.html">[Avidemux-svn-commit] r6627 -	branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script2/js
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3810">[ date ]</a>
+              <a href="thread.html#3810">[ thread ]</a>
+              <a href="subject.html#3810">[ subject ]</a>
+              <a href="author.html#3810">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,159 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r6501 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2010-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6501%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C20100803061519.5E93C480787%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="003687.html">
+   <LINK REL="Next"  HREF="003689.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r6501 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r6501%20-%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C20100803061519.5E93C480787%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r6501 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Aug  3 08:15:19 CEST 2010</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="003687.html">[Avidemux-svn-commit] r6500 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+        <LI>Next message: <A HREF="003689.html">[Avidemux-svn-commit] r6502 - in	branches/avidemux_2.5_branch_gruntster: avidemux cmake	platforms/windows/installer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3688">[ date ]</a>
+              <a href="thread.html#3688">[ thread ]</a>
+              <a href="subject.html#3688">[ subject ]</a>
+              <a href="author.html#3688">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2010-08-03 08:15:19 +0200 (Tue, 03 Aug 2010)
+New Revision: 6501
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psComputeTimeStamp.cpp
+Log:
+[PS/Demux] Remove first audio seek point if it has no DTS
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp	2010-08-02 20:23:15 UTC (rev 6500)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp	2010-08-03 06:15:19 UTC (rev 6501)
+@@ -101,6 +101,7 @@
+             return true;
+         }
+     }
++    ADM_warning(&quot;[psAudio] Cannot find seek point\n&quot;);
+     return false;
+ }
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psComputeTimeStamp.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psComputeTimeStamp.cpp	2010-08-02 20:23:15 UTC (rev 6500)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_demuxers/MpegPS/ADM_psComputeTimeStamp.cpp	2010-08-03 06:15:19 UTC (rev 6501)
+@@ -32,6 +32,69 @@
+         uint64_t lastDts=0,lastPts=0,dtsIncrement=0;
+ 
+ 
++        // Let's make sure the fist audio seek point is not ADM_NO_PTS
++        for(int i=0;i&lt;listOfAudioTracks.size();i++)
++        {
++
++            vector          &lt;ADM_mpgAudioSeekPoint &gt; *seekPoints=&amp;(listOfAudioTracks[i]-&gt;access-&gt;seekPoints);
++            uint64_t dts=(*seekPoints)[0].dts;
++            if(dts!=ADM_NO_PTS) continue;
++            ADM_warning(&quot;[PS] Audio track %d has no timestamp for first seek point, guessing...\n&quot;,i);
++            int offset=0;
++            int max=(*seekPoints).size();
++            while(offset&lt;max)
++            {
++                    if(   (*seekPoints)[offset].dts!=ADM_NO_PTS) break;
++                    offset++;
++            }
++            if(offset&gt;=max)
++            {
++                    ADM_error(&quot;No valid DTS in audio track\n&quot;);
++                    continue;
++            }
++#if 1
++            // Remove first seek point with no PTS...
++            if(offset) ADM_info(&quot;Deleting %d seekPoints with no timestamp\n&quot;,offset);
++            for(int rm=0;rm&lt;offset;rm++)
++                    (*seekPoints).erase( (*seekPoints).begin());
++#else
++
++            // Compute the missing DTS using byterate and assuming CBR
++            uint64_t future=(*seekPoints)[offset].dts;
++            uint64_t bytes=(*seekPoints)[offset].size;
++            double   byteRate= listOfAudioTracks[i]-&gt;header.byterate;
++            if(!byteRate)
++            {
++                ADM_error(&quot;No bytereate, cannot fix seekpoints\n&quot;);
++                continue;
++            }
++            for(int point=offset-1;point&gt;=0;point++)
++            {
++                double deltaBytes=(*seekPoints)[point].size;
++                double deltaTime=0;
++                printf(&quot;Computing DTS for seek point %d, bytes %&quot;LLU&quot;, with reference bytes %&quot;LLU&quot; time %&quot;LLU&quot; us\n&quot;,
++                                    point,(uint64_t)deltaBytes,bytes,future);
++                if(deltaBytes&gt;bytes)
++                {
++                        ADM_error(&quot;Size going back at seek point %d\n&quot;,i);
++                        goto next;
++                }
++                deltaBytes=(double)bytes-deltaBytes; // Bytes -&gt; us
++                deltaBytes=deltaBytes*1000*1000.; 
++                deltaTime=deltaBytes/byteRate;
++                if(deltaTime&gt;future)
++                {
++                        ADM_error(&quot;Computed time correction too big : %&quot;LLU&quot; max=%&quot;LLU&quot;\n&quot;,
++                                            (uint64_t)deltaTime, (uint64_t)future);
++                        (*seekPoints)[point].dts=0;
++                }else
++                (*seekPoints)[point].dts=(uint64_t)(future-deltaTime);
++            }
++#endif
++next:
++                ;
++        }
++
+         // For audio, The first packet in the seekpoints happens a bit after the action
+         // It means some audio may have been seen since we locked on video.
+         // So we compute the DTS of the first real packet
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="003687.html">[Avidemux-svn-commit] r6500 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_userInterfaces/ADM_QT4/ADM_dialog
+</A></li>
+	<LI>Next message: <A HREF="003689.html">[Avidemux-svn-commit] r6502 - in	branches/avidemux_2.5_branch_gruntster: avidemux cmake	platforms/windows/installer
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3688">[ date ]</a>
+              <a href="thread.html#3688">[ thread ]</a>
+              <a href="subject.html#3688">[ subject ]</a>
+              <a href="author.html#3688">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

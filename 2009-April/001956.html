@@ -1,0 +1,550 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4728 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_coreDemuxerMpeg/include	avidemux/ADM_coreDemuxerMpeg/src plugins/ADM_demuxers/MpegTS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4728%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/ADM_coreDemuxerMpeg/include%0A%09avidemux/ADM_coreDemuxerMpeg/src%20plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904070540.n375eFui009817%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001955.html">
+   <LINK REL="Next"  HREF="001957.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4728 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_coreDemuxerMpeg/include	avidemux/ADM_coreDemuxerMpeg/src plugins/ADM_demuxers/MpegTS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4728%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/ADM_coreDemuxerMpeg/include%0A%09avidemux/ADM_coreDemuxerMpeg/src%20plugins/ADM_demuxers/MpegTS&In-Reply-To=%3C200904070540.n375eFui009817%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4728 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_coreDemuxerMpeg/include	avidemux/ADM_coreDemuxerMpeg/src plugins/ADM_demuxers/MpegTS">mean at mail.berlios.de
+       </A><BR>
+    <I>Tue Apr  7 07:40:15 CEST 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001955.html">[Avidemux-svn-commit] r4727 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_coreDemuxerMpeg/include	avidemux/ADM_coreDemuxerMpeg/src plugins/ADM_demuxers/MpegTS
+</A></li>
+        <LI>Next message: <A HREF="001957.html">[Avidemux-svn-commit] r4729 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1956">[ date ]</a>
+              <a href="thread.html#1956">[ thread ]</a>
+              <a href="subject.html#1956">[ subject ]</a>
+              <a href="author.html#1956">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-04-07 07:40:14 +0200 (Tue, 07 Apr 2009)
+New Revision: 4728
+
+Added:
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsCrc.cpp
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/include/dmx_io.h
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/src/dmx_io.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.h
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/CMakeLists.txt
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+Log:
+[TsDemuxer] More skeleton
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/include/dmx_io.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/include/dmx_io.h	2009-04-07 05:40:06 UTC (rev 4727)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/include/dmx_io.h	2009-04-07 05:40:14 UTC (rev 4728)
+@@ -59,11 +59,13 @@
+                         uint32_t read32(uint32_t l, uint8_t *buffer);
+                         uint8_t  end(void) { return _off==_size-1;};
+ 						void hexDump(uint8_t *buf, int size);
++                        uint8_t  peek8i(void); // Only call it once!!
+ #ifdef NO_INLINE_FP
+                         uint32_t read32i(void );
+                         uint16_t read16i(void );
+                         uint8_t  read8i(void );
+                         
++                        
+ 
+ #else
+ uint32_t read32i(void )
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/src/dmx_io.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/src/dmx_io.cpp	2009-04-07 05:40:06 UTC (rev 4727)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_coreDemuxerMpeg/src/dmx_io.cpp	2009-04-07 05:40:14 UTC (rev 4728)
+@@ -486,6 +486,7 @@
+        v= (p[0]&lt;&lt;8)+p[1];
+        return v;
+ }
++
+ uint8_t fileParser::read8i(void )
+ {
+ uint8_t r;
+@@ -501,7 +502,25 @@
+         return r;
+ }
+ #endif
++/**
++    \fn peek8i
++    \brief Return the next bytes in the stream without advancing index
++    * BEWARE: Use with caution!
++*/
++uint8_t  fileParser::peek8i(void)
++{
++uint8_t r;
++    if(_off+1&lt;_tail)
++        r= _buffer[_off-_head];
++    else    
++    {
++        read32(1,&amp;r);
++        _off--;
++    }
++    return r;
+ 
++}
++
+ void fileParser::hexDump(uint8_t *buf, int size)
+ {
+ 	int len, i, j, c;
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.h	2009-04-07 05:40:06 UTC (rev 4727)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_ts.h	2009-04-07 05:40:14 UTC (rev 4728)
+@@ -26,6 +26,8 @@
+ #include &quot;ADM_indexFile.h&quot;
+ #include &quot;dmxTSPacket.h&quot;
+ #include &lt;vector&gt;
++
++
+ using std::vector;
+ /**
+     \struct dmxFrame
+
+Added: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsCrc.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsCrc.cpp	2009-04-07 05:40:06 UTC (rev 4727)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsCrc.cpp	2009-04-07 05:40:14 UTC (rev 4728)
+@@ -0,0 +1,57 @@
++
++static const uint32_t crc_table[256] = {
++	0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b,
++	0x1a864db2, 0x1e475005, 0x2608edb8, 0x22c9f00f, 0x2f8ad6d6, 0x2b4bcb61,
++	0x350c9b64, 0x31cd86d3, 0x3c8ea00a, 0x384fbdbd, 0x4c11db70, 0x48d0c6c7,
++	0x4593e01e, 0x4152fda9, 0x5f15adac, 0x5bd4b01b, 0x569796c2, 0x52568b75,
++	0x6a1936c8, 0x6ed82b7f, 0x639b0da6, 0x675a1011, 0x791d4014, 0x7ddc5da3,
++	0x709f7b7a, 0x745e66cd, 0x9823b6e0, 0x9ce2ab57, 0x91a18d8e, 0x95609039,
++	0x8b27c03c, 0x8fe6dd8b, 0x82a5fb52, 0x8664e6e5, 0xbe2b5b58, 0xbaea46ef,
++	0xb7a96036, 0xb3687d81, 0xad2f2d84, 0xa9ee3033, 0xa4ad16ea, 0xa06c0b5d,
++	0xd4326d90, 0xd0f37027, 0xddb056fe, 0xd9714b49, 0xc7361b4c, 0xc3f706fb,
++	0xceb42022, 0xca753d95, 0xf23a8028, 0xf6fb9d9f, 0xfbb8bb46, 0xff79a6f1,
++	0xe13ef6f4, 0xe5ffeb43, 0xe8bccd9a, 0xec7dd02d, 0x34867077, 0x30476dc0,
++	0x3d044b19, 0x39c556ae, 0x278206ab, 0x23431b1c, 0x2e003dc5, 0x2ac12072,
++	0x128e9dcf, 0x164f8078, 0x1b0ca6a1, 0x1fcdbb16, 0x018aeb13, 0x054bf6a4,
++	0x0808d07d, 0x0cc9cdca, 0x7897ab07, 0x7c56b6b0, 0x71159069, 0x75d48dde,
++	0x6b93dddb, 0x6f52c06c, 0x6211e6b5, 0x66d0fb02, 0x5e9f46bf, 0x5a5e5b08,
++	0x571d7dd1, 0x53dc6066, 0x4d9b3063, 0x495a2dd4, 0x44190b0d, 0x40d816ba,
++	0xaca5c697, 0xa864db20, 0xa527fdf9, 0xa1e6e04e, 0xbfa1b04b, 0xbb60adfc,
++	0xb6238b25, 0xb2e29692, 0x8aad2b2f, 0x8e6c3698, 0x832f1041, 0x87ee0df6,
++	0x99a95df3, 0x9d684044, 0x902b669d, 0x94ea7b2a, 0xe0b41de7, 0xe4750050,
++	0xe9362689, 0xedf73b3e, 0xf3b06b3b, 0xf771768c, 0xfa325055, 0xfef34de2,
++	0xc6bcf05f, 0xc27dede8, 0xcf3ecb31, 0xcbffd686, 0xd5b88683, 0xd1799b34,
++	0xdc3abded, 0xd8fba05a, 0x690ce0ee, 0x6dcdfd59, 0x608edb80, 0x644fc637,
++	0x7a089632, 0x7ec98b85, 0x738aad5c, 0x774bb0eb, 0x4f040d56, 0x4bc510e1,
++	0x46863638, 0x42472b8f, 0x5c007b8a, 0x58c1663d, 0x558240e4, 0x51435d53,
++	0x251d3b9e, 0x21dc2629, 0x2c9f00f0, 0x285e1d47, 0x36194d42, 0x32d850f5,
++	0x3f9b762c, 0x3b5a6b9b, 0x0315d626, 0x07d4cb91, 0x0a97ed48, 0x0e56f0ff,
++	0x1011a0fa, 0x14d0bd4d, 0x19939b94, 0x1d528623, 0xf12f560e, 0xf5ee4bb9,
++	0xf8ad6d60, 0xfc6c70d7, 0xe22b20d2, 0xe6ea3d65, 0xeba91bbc, 0xef68060b,
++	0xd727bbb6, 0xd3e6a601, 0xdea580d8, 0xda649d6f, 0xc423cd6a, 0xc0e2d0dd,
++	0xcda1f604, 0xc960ebb3, 0xbd3e8d7e, 0xb9ff90c9, 0xb4bcb610, 0xb07daba7,
++	0xae3afba2, 0xaafbe615, 0xa7b8c0cc, 0xa379dd7b, 0x9b3660c6, 0x9ff77d71,
++	0x92b45ba8, 0x9675461f, 0x8832161a, 0x8cf30bad, 0x81b02d74, 0x857130c3,
++	0x5d8a9099, 0x594b8d2e, 0x5408abf7, 0x50c9b640, 0x4e8ee645, 0x4a4ffbf2,
++	0x470cdd2b, 0x43cdc09c, 0x7b827d21, 0x7f436096, 0x7200464f, 0x76c15bf8,
++	0x68860bfd, 0x6c47164a, 0x61043093, 0x65c52d24, 0x119b4be9, 0x155a565e,
++	0x18197087, 0x1cd86d30, 0x029f3d35, 0x065e2082, 0x0b1d065b, 0x0fdc1bec,
++	0x3793a651, 0x3352bbe6, 0x3e119d3f, 0x3ad08088, 0x2497d08d, 0x2056cd3a,
++	0x2d15ebe3, 0x29d4f654, 0xc5a92679, 0xc1683bce, 0xcc2b1d17, 0xc8ea00a0,
++	0xd6ad50a5, 0xd26c4d12, 0xdf2f6bcb, 0xdbee767c, 0xe3a1cbc1, 0xe760d676,
++	0xea23f0af, 0xeee2ed18, 0xf0a5bd1d, 0xf464a0aa, 0xf9278673, 0xfde69bc4,
++	0x89b8fd09, 0x8d79e0be, 0x803ac667, 0x84fbdbd0, 0x9abc8bd5, 0x9e7d9662,
++	0x933eb0bb, 0x97ffad0c, 0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668,
++	0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
++};
++static uint32_t mpegTsCRC(uint8_t *data, uint32_t len)
++{
++
++    int i;
++    uint32_t crc = 0xffffffff;
++    
++    for (i=0; i&lt;len; i++)
++        crc = (crc &lt;&lt; 8) ^ crc_table[((crc &gt;&gt; 24) ^ *data++) &amp; 0xff];
++    
++    return crc;
++}
+\ No newline at end of file
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp	2009-04-07 05:40:06 UTC (rev 4727)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/ADM_tsPlugin.cpp	2009-04-07 05:40:14 UTC (rev 4728)
+@@ -22,10 +22,11 @@
+ ADM_DEMUXER_BEGIN( tsHeader,
+                     1,0,0,
+                     &quot;ts&quot;,
+-                    &quot;mpeg ps demuxer plugin (c) Mean 2007/2009&quot;
++                    &quot;mpeg ts demuxer plugin (c) Mean 2007/2009&quot;
+                 );
+ 
+ static bool detectTs(const char *file);
++static bool checkMarker(uint8_t *buffer, uint32_t bufferSize,uint32_t block);
+ uint8_t   tsIndexer(const char *file);
+ /**
+     \fn Probe
+@@ -35,17 +36,27 @@
+ {
+ char index[strlen(fileName)+4];
+ int count=0;
+-    if(!detectTs(fileName))
++    printf(&quot;[TS Demuxer] Probing...\n&quot;);
++    if(0 &amp;&amp; !detectTs(fileName))
+     {
+-        printf(&quot; [PS Demuxer] Not a ps file\n&quot;);
++        printf(&quot; [TS Demuxer] Not a ts file\n&quot;);
+         return false;
+     }
+ 
++    tsPacket *t=new tsPacket();
++    t-&gt;open(fileName,FP_PROBE);
++    uint8_t b[200];
++    uint32_t l,current,max;
++    t-&gt;getNextPSI(0,b,&amp;l,&amp;current,&amp;max);
++    delete t;
++    printf(&quot;[TS Demuxer] Probed...\n&quot;);
++    return 0;
++
+     sprintf(index,&quot;%s.idx&quot;,fileName);
+ again:    
+     if(ADM_fileExist(index)) 
+     {
+-        printf(&quot; [PS Demuxer] There is an index for that file \n&quot;);
++        printf(&quot; [TS Demuxer] There is an index for that file \n&quot;);
+         FILE *f=fopen(index,&quot;rt&quot;);
+         char signature[10];
+         fread(signature,4,1,f);
+@@ -64,7 +75,7 @@
+ }
+ #define PROBE_SIZE (1024*1024)
+ /**
+-    \fn detectPs
++    \fn detectTs
+     \brief returns true if the file seems to be mpeg PS
+ 
+ */
+@@ -78,21 +89,52 @@
+     if(!f) return false;
+     bufferSize=fread(buffer,1,PROBE_SIZE,f);
+     fclose(f);
+-    nbPacket=bufferSize/2300;
+-    uint8_t *head,*tail;
+-    head=buffer;
+-    tail=buffer+bufferSize;
+-    uint8_t code;
+-    uint32_t offset;
+-    while(ADM_findMpegStartCode(head,tail,&amp;code,&amp;offset))
++    // Do a simple check by checking we have 0x47....0x47 several time in a raw
++    if(true==checkMarker(buffer,bufferSize,188))
+     {
+-        head+=offset;
+-        if(code==0xE0) nbMatch++;
++        printf(&quot;[TS Demuxer] 188 bytes packet detected\n&quot;);
++        return true;
+     }
+-    printf(&quot; match :%d / %d (probeSize:%d)\n&quot;,nbMatch,nbPacket,bufferSize);
+-    if(nbMatch&gt;nbPacket/3)
++    // Do a simple check by checking we have 0x47....0x47 several time in a raw
++    if(true==checkMarker(buffer,bufferSize,192))
++    {
++        printf(&quot;[TS Demuxer] 192 bytes packet detected\n&quot;);
+         return true;
++    }
++    printf(&quot;[TS Demuxer] Not a TS file\n&quot;);
+     return false;
+-    
++}
+ 
+-}
+\ No newline at end of file
++/**
++        \fn checkMarker
++        \brief return true if the mpeg TS markers are there separated by block bytes
++*/
++bool checkMarker(uint8_t *buffer, uint32_t bufferSize,uint32_t block)
++{
++    uint8_t *end=buffer+bufferSize;
++    int syncOk=0;
++    int syncKo=0;
++    // Search Marker    
++    while(buffer&lt;end)
++    {
++        if(*buffer!=TS_MARKER)
++        {
++            while(*buffer!=TS_MARKER &amp;&amp; buffer&lt;end) 
++            {
++                buffer++;
++            }
++            syncKo++;
++        }
++        if(*buffer!=TS_MARKER) break;
++        while(buffer&lt;end &amp;&amp; buffer[block]==TS_MARKER)
++        {   
++                syncOk++,
++                buffer+=block;
++        }    
++        buffer++;
++    }
++    printf(&quot;[Ts Demuxer] Sync ok :%d Sync ko :%d\n&quot;,syncOk,syncKo);
++    if(!syncOk) return false;
++    if(syncOk&gt;5*syncKo) return true;
++}
++//EOF
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/CMakeLists.txt	2009-04-07 05:40:06 UTC (rev 4727)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/CMakeLists.txt	2009-04-07 05:40:14 UTC (rev 4728)
+@@ -13,6 +13,8 @@
+ 
+ ADD_LIBRARY(ADM_dm_ts SHARED ${ADM_ts_SRCS})
+ TARGET_LINK_LIBRARIES(ADM_dm_ts ADM_coreDemuxerMpeg ADM_audioParser)
++# For ffmpeg includes
++INCLUDE_DIRECTORIES(&quot;${AVIDEMUX_SOURCE_DIR}/avidemux/ADM_libraries/ADM_ffmpeg&quot;) 
+ INCLUDE_DIRECTORIES(&quot;${AVIDEMUX_SOURCE_DIR}/avidemux/ADM_coreDemuxerMpeg/include&quot;)
+ 
+ INIT_DEMUXER(ADM_dm_ts)
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-07 05:40:06 UTC (rev 4727)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.cpp	2009-04-07 05:40:14 UTC (rev 4728)
+@@ -19,13 +19,26 @@
+ #include &quot;dmxTSPacket.h&quot;
+ #include &quot;dmx_mpegstartcode.h&quot;
+ 
++#define TS_PACKET_LEN 188
++
++#define ADM_NO_CONFIG_H
++extern &quot;C&quot;
++{
++#include &quot;libavutil/common.h&quot;
++#include &quot;libavutil/bswap.h&quot;
++#include &quot;ADM_lavcodec/bitstream.h&quot;
++
++}
++#include &quot;ADM_tsCrc.cpp&quot;
++
++
+ /**
+     \fn tsPacket
+     \brief ctor
+ */
+ tsPacket::tsPacket(void) 
+ {
+-
++    extraCrap=0; // =4 for ts2
+ }
+ /**
+     \fn tsPacket
+@@ -84,8 +97,128 @@
+         return false;
+     }
+ }
++/**
++    \fn getSinglePacket
++    \brief 
++*/
++bool tsPacket::getSinglePacket(uint8_t *buffer)
++{
++    uint8_t scratch[16];
++again:
++    while(_file-&gt;read8i()!=TS_MARKER &amp;&amp; _file-&gt;end()!=true) ;
++    if(_file-&gt;end()==true) 
++    {
++        return false;
++    }
++    _file-&gt;read32(TS_PACKET_LEN-1,buffer); // 184-1
++    if(extraCrap)  _file-&gt;read32(extraCrap,scratch);
++    if(_file-&gt;peek8i()!=TS_MARKER)
++    {
++        printf(&quot;[tsPacket] Sync lost\n&quot;);
++        goto again;
++    }
++    return true;
++}
+ 
+ /**
++    \fn getNextPsiPacket
++    \brief Take a raw packet of type pid &amp; remove the header
++*/
++bool tsPacket::getNextPacket_NoHeader(uint32_t pid,uint8_t *buffer,uint32_t *olen)
++{
++    uint8_t scratch[188+4];
++nextPack:
++
++    if(false==getSinglePacket(scratch)) return false;
++    uint32_t id=scratch[1]+((scratch[0]&amp;0x1F)&lt;&lt;8);
++    if(id!=pid) goto nextPack;
++    
++
++    int payloadUnitStart=scratch[0]&amp;0x40;
++    int fieldControl=(scratch[2]&gt;&gt;4)&amp;3;
++    int continuity=(scratch[2]&amp;0xf);
++    int len=TS_PACKET_LEN-4; // usefull datas
++    // Adaptation field
++    // 11 Adapt+payload
++    // 10 Adapt only
++    // 01 Payload only
++    // 00 forbidden
++    if(!(fieldControl &amp; 1)) 
++    {
++        // No payload, continue
++        goto nextPack;
++    }
++    uint8_t *start,*end;
++    start=scratch+3;
++    end=scratch+187;
++
++    if(fieldControl &amp; 2) // Adaptation layer
++    {
++        int payloadSize=*start++;
++        start+=payloadSize;
++    }
++    int size=(int)(end-start);
++    if(size&lt;=0)  goto nextPack;
++    memcpy(buffer,start,size);
++    *olen=size;
++    return true;
++}
++
++/**
++    \fn getNextPsiPacket
++    \brief Take a raw packet of type pid &amp; remove the header
++*/
++#define DUMMY(x,n) {dummy=get_bits(&amp;s,n);printf(&quot;[TS]: &quot;#x&quot; =0x%x %d\n&quot;,dummy,dummy);}
++bool tsPacket::getNextPSI(uint32_t pid,uint8_t *buffer,uint32_t *olen,uint32_t *count, uint32_t *countMax)
++{
++    uint8_t scratch[188+4];
++    uint32_t len;
++nextPack2:
++
++    if(false==getNextPacket_NoHeader(pid,(uint8_t *)scratch,&amp;len)) return false;
++
++    // Verify CRC
++    uint32_t crc1=mpegTsCRC(scratch,len-4);
++
++    uint8_t *c=scratch+len-4;
++    uint32_t crc2=(c[0]&lt;&lt;24)+(c[1]&lt;&lt;16)+(c[2]&lt;&lt;8)+c[3];
++    if(crc1!=crc2)
++    {
++        printf(&quot;[MpegTs] getNextPSI bad checksum :%04x vs %04x\n&quot;,crc1,crc2);
++        goto nextPack2;
++    }
++
++    GetBitContext s;
++    uint32_t tableId;
++    uint32_t sectionLength=0;
++    uint32_t transportStreamId=0;
++    uint32_t dummy;
++    
++
++    init_get_bits( &amp;s,scratch, (len-4)*8);
++
++    DUMMY(tableId,8);
++    printf(&quot;[TS] Pid :%x TableId %02x\n&quot;,pid,tableId);
++    skip_bits(&amp;s,1);             // Section syntax indicator
++    if(get_bits(&amp;s,1))             // Marker
++    {
++          printf(&quot;[MpegTs] getNextPSI Missing 0 marker\n&quot;);
++          goto nextPack2;
++    }
++    sectionLength=get_bits(&amp;s,12);    // Section Length
++    transportStreamId=get_bits(&amp;s,16);// transportStreamId
++    skip_bits(&amp;s,2);                  // ignored
++    DUMMY(VersionNumber,5);         // Version number
++    DUMMY(CurrentNext,1);           // Current Next indicator
++    *count=get_bits(&amp;s,8);           // Section number
++    *countMax=get_bits(&amp;s,8);        // Section last number
++
++    int hdr=(8+16+16+8+8+8)/8;
++    *olen=len-4-hdr;
++    memcpy(buffer,scratch+hdr,*olen);
++    return true;
++}
++/**
+     \fn getPacket
+ */      
+ bool        tsPacket::getPacket(uint32_t maxSize, uint8_t *pid, uint32_t *packetSize,uint64_t *opts,uint64_t *odts,uint8_t *buffer,uint64_t *startAt)
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-07 05:40:06 UTC (rev 4727)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS/dmxTSPacket.h	2009-04-07 05:40:14 UTC (rev 4728)
+@@ -11,14 +11,15 @@
+ #include &quot;dmxPacket.h&quot;
+ #include &quot;ADM_Video.h&quot;
+ 
++#define TS_MARKER 0x47
+ 
+-
+ /**
+     \class tsPacket
+ */
+ class tsPacket : public ADMMpegPacket
+ {
+ protected:
++    uint32_t            extraCrap;
+     uint8_t             getPacketInfo(uint8_t stream,uint8_t *substream,uint32_t *olen,uint64_t *opts,uint64_t *odts);
+ public:
+                         tsPacket(void);
+@@ -28,6 +29,12 @@
+     virtual bool        getPacket(uint32_t maxSize, uint8_t *pid, uint32_t *packetSize,uint64_t *pts,uint64_t *dts,uint8_t *buffer,uint64_t *startAt);
+     virtual uint64_t    getPos(void);
+     virtual bool        setPos(uint64_t pos);
++protected:
++    bool                getNextPacket_NoHeader(uint32_t pid,uint8_t *buffer,uint32_t *len);
++    bool                getSinglePacket(uint8_t *buffer);
++public:
++    bool                getNextPSI(uint32_t pid,uint8_t *buffer,uint32_t *olen,uint32_t *count, uint32_t *countMax);
++
+ };
+ /**
+     \class tsPacketLinear
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001955.html">[Avidemux-svn-commit] r4727 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_coreDemuxerMpeg/include	avidemux/ADM_coreDemuxerMpeg/src plugins/ADM_demuxers/MpegTS
+</A></li>
+	<LI>Next message: <A HREF="001957.html">[Avidemux-svn-commit] r4729 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegTS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1956">[ date ]</a>
+              <a href="thread.html#1956">[ thread ]</a>
+              <a href="subject.html#1956">[ subject ]</a>
+              <a href="author.html#1956">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

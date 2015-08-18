@@ -1,0 +1,306 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r3459 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3459%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr&In-Reply-To=%3C200707301741.l6UHfC4T002360%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000733.html">
+   <LINK REL="Next"  HREF="000735.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r3459 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r3459%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr&In-Reply-To=%3C200707301741.l6UHfC4T002360%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r3459 -	branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Jul 30 19:41:12 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000733.html">[Avidemux-svn-commit] r3458 - in	branches/avidemux_2.4_branch/avidemux:	ADM_userInterfaces/ADM_QT4/ADM_dialog ADM_video
+</A></li>
+        <LI>Next message: <A HREF="000735.html">[Avidemux-svn-commit] r3460 - in	branches/avidemux_2.4_branch/avidemux: ADM_ocr	ADM_userInterfaces/ADM_GTK/ADM_ocr
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#734">[ date ]</a>
+              <a href="thread.html#734">[ thread ]</a>
+              <a href="subject.html#734">[ subject ]</a>
+              <a href="author.html#734">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-07-30 19:41:12 +0200 (Mon, 30 Jul 2007)
+New Revision: 3459
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr/adm_ocr.cpp
+Log:
+[OCR] Begin factorizing GTK code
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr/adm_ocr.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr/adm_ocr.cpp	2007-07-29 17:16:06 UTC (rev 3458)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_GTK/ADM_ocr/adm_ocr.cpp	2007-07-30 17:41:12 UTC (rev 3459)
+@@ -119,10 +119,103 @@
+     actionIgnore,
+     actionCalibrate
+ }ocrAction;
++
++/**************************
++ *  UI Dependant part
++ *************************/
++uint8_t ADM_ocrUpdateNbLines(void *ui,uint32_t cur,uint32_t total);
++uint8_t ADM_ocrUpdateNbGlyphs(void *ui,uint32_t nbGlyphs);
++uint8_t ADM_ocrUpdateTextAndTime(void *ui,char *decodedString,char *timeCode);
++uint8_t ADM_ocrDrawFull(void *d);
++uint8_t ADM_ocrUiEnd(void *d);
++void *ADM_ocrUiSetup(void);
+ /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+         Main
+    +++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
+-   
++uint8_t ADM_ocrUpdateNbLines(void *ui,uint32_t cur,uint32_t total)
++{
++char text[50];         
++         snprintf(text,50,&quot;%03d/%03d&quot;,cur,total);
++         gtk_label_set_text(GTK_LABEL(WID(labelNbLines)),text);
++         return 1;
++}
++uint8_t ADM_ocrUpdateNbGlyphs(void *ui,uint32_t nbGlyphs)
++{
++char text[50];         
++         snprintf(text,50,&quot;%03d&quot;,nbGlyphs);
++         gtk_label_set_text(GTK_LABEL(WID(labelNbGlyphs)),text);
++         return 1;
++}
++uint8_t ADM_ocrUpdateTextAndTime(void *ui,char *decodedString,char *timeCode)
++{
++             gtk_label_set_text(GTK_LABEL(WID(labelText)),decodedString);
++             gtk_label_set_text(GTK_LABEL(WID(labelTime)),timeCode);
++             return 1;
++}            
++uint8_t ADM_ocrDrawFull(void *d)
++{
++			UI_purge();
++             gui_draw();
++             UI_purge();
++             return 1;
++}
++
++uint8_t ADM_ocrUiEnd(void *d)
++{
++	GtkWidget *dialog=(GtkWidget *)d;
++	ADM_assert(dialog);
++		// Final round
++	    gtk_widget_set_sensitive(WID(frameBitmap),0);
++	   // gtk_widget_set_sensitive(WID(Current_Glyph),0);     
++	  
++	  
++	    gtk_unregister_dialog(dialog);
++	    gtk_widget_destroy(dialog);
++
++}
++void *ADM_ocrUiSetup(void)
++{
++	// Create UI &amp;&amp; prepare callback
++	 	dialog=NULL;
++	    mainDisplay=NULL;
++	    smallDisplay=NULL;
++	    workArea=NULL;
++	    bitmap=NULL;
++	    sdata=NULL;
++	    clipW=0;
++	    clipH=0;
++	    dialog=DIA_ocr();
++	    gtk_register_dialog(dialog);
++	#define ASSOCIATE(x,y)   gtk_dialog_add_action_widget (GTK_DIALOG (dialog), WID(x),y)
++	    
++	    ASSOCIATE(buttonOk,   actionAccept);
++	    ASSOCIATE(buttonSkip,     actionSkip);
++	    ASSOCIATE(buttonSkipAll,     actionSkipAll);
++	    ASSOCIATE(buttonIgnore,   actionIgnore);
++	    ASSOCIATE(buttonCalibrate,   actionCalibrate);
++	    
++	   
++	    gtk_widget_show(dialog);
++	    //
++	    
++	//  disable
++	    
++	    mainDisplay=WID(drawingareaBitmap);
++	    smallDisplay=WID(drawingareaSmall);
++	    
++	   
++	    
++	    CONNECT(drawingareaBitmap,expose_event,gui_draw);
++	    CONNECT(drawingareaSmall,expose_event,gui_draw_small);
++
++	    CONNECT(entry,activate,cb_accept);
++	    return (void *)dialog;
++	
++}
++/**
++ * 		\fn 		ADM_ocr_engine
++ * 		\brief 		Common part of the OCR engine
++ */
+ uint8_t ADM_ocr_engine(   ADM_OCR_SOURCE &amp; source,const char *labelSrt,admGlyph *head)
+ {
+ // 
+@@ -138,44 +231,11 @@
+     char     text[1024];
+     nbGlyphs=0;
+     ReplyType reply;
++    void *ui=NULL;
+     
+-    dialog=NULL;
+-    mainDisplay=NULL;
+-    smallDisplay=NULL;
+-    workArea=NULL;
+-    bitmap=NULL;
+-    sdata=NULL;
+-    clipW=0;
+-    clipH=0;
+-
++    ui=ADM_ocrUiSetup();
+     
+-// Create UI &amp;&amp; prepare callback
+-    
+-    dialog=DIA_ocr();
+-    gtk_register_dialog(dialog);
+-#define ASSOCIATE(x,y)   gtk_dialog_add_action_widget (GTK_DIALOG (dialog), WID(x),y)
+-    
+-    ASSOCIATE(buttonOk,   actionAccept);
+-    ASSOCIATE(buttonSkip,     actionSkip);
+-    ASSOCIATE(buttonSkipAll,     actionSkipAll);
+-    ASSOCIATE(buttonIgnore,   actionIgnore);
+-    ASSOCIATE(buttonCalibrate,   actionCalibrate);
+-    
+-   
+-    gtk_widget_show(dialog);
+-    //
+-    
+-//  disable
+-    
+-    mainDisplay=WID(drawingareaBitmap);
+-    smallDisplay=WID(drawingareaSmall);
+-    
+-   
+-    
+-    CONNECT(drawingareaBitmap,expose_event,gui_draw);
+-    CONNECT(drawingareaSmall,expose_event,gui_draw_small);
+ 
+-    CONNECT(entry,activate,cb_accept);
+ _again:    
+     
+     printf(&quot;Go go go\n&quot;);
+@@ -259,10 +319,8 @@
+            {                
+                 UI_purge();  // Force redaw
+            }
+-           // Merge
+-             UI_purge();
+-             gui_draw();
+-             UI_purge();
++           // Merge &amp; draw
++             ADM_ocrDrawFull(ui);
+              // OCR
+               reply=ocrBitmap(workArea,w,h,decodedString,head);
+               if(reply==ReplyClose) goto endIt;
+@@ -275,7 +333,8 @@
+                 }
+              
+              //
+-             gtk_label_set_text(GTK_LABEL(WID(labelText)),decodedString);
++             
++             
+              fprintf(out,&quot;%d\n&quot;,seqNum++);
+              uint16_t hh,mm,ss,ms;
+              ms2time(startTime, &amp;hh, &amp;mm, &amp;ss, &amp;ms);
+@@ -284,7 +343,7 @@
+              // Update Timecode
+              char timeCode[100];
+              snprintf(timeCode,100,&quot;%02d:%02d:%02d,%03d&quot;,hh,mm,ss,ms);
+-             gtk_label_set_text(GTK_LABEL(WID(labelTime)),timeCode);
++             ADM_ocrUpdateTextAndTime(ui,decodedString,timeCode);
+              
+              ms2time(endTime, &amp;hh, &amp;mm, &amp;ss, &amp;ms);
+              fprintf(out,&quot;%02d:%02d:%02d,%03d\n&quot;,hh,mm,ss,ms);
+@@ -293,25 +352,22 @@
+              oldw=w;
+              oldh=h;
+              // Update infos
+-             sprintf(text,&quot;%03d/%03d&quot;,i+1,nbSub);
+-             gtk_label_set_text(GTK_LABEL(WID(labelNbLines)),text);
+-             sprintf(text,&quot;%03d&quot;,nbGlyphs);
+-             gtk_label_set_text(GTK_LABEL(WID(labelNbGlyphs)),text);
++             ADM_ocrUpdateNbLines(ui,i+1,nbSub);
++             ADM_ocrUpdateNbGlyphs(ui,nbGlyphs);
+     }
+ 
+ endIt:
+-    // Final round
+-    gtk_widget_set_sensitive(WID(frameBitmap),0);
+-   // gtk_widget_set_sensitive(WID(Current_Glyph),0);     
+-    if(bitmapSource)
+-        delete bitmapSource;
+-    bitmapSource=NULL;
++	ADM_ocrUiEnd(ui);
++	ui=NULL;
++    
+     if(out) 
+-        fclose(out);
+-    out=NULL;
+-    gtk_unregister_dialog(dialog);
+-    gtk_widget_destroy(dialog);
+-
++          fclose(out);
++      out=NULL;
++      
++      if(bitmapSource)
++    	        delete bitmapSource;
++    	    bitmapSource=NULL;
++      
+     return 1;
+ 
+ }
+@@ -330,7 +386,7 @@
+         return 1;
+ 
+ }
+-
++/************************ UI Dependant part ********************/
+ /**
+         Search throught the existing glyphs , if not present create it
+         and append the text to decodedString
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000733.html">[Avidemux-svn-commit] r3458 - in	branches/avidemux_2.4_branch/avidemux:	ADM_userInterfaces/ADM_QT4/ADM_dialog ADM_video
+</A></li>
+	<LI>Next message: <A HREF="000735.html">[Avidemux-svn-commit] r3460 - in	branches/avidemux_2.4_branch/avidemux: ADM_ocr	ADM_userInterfaces/ADM_GTK/ADM_ocr
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#734">[ date ]</a>
+              <a href="thread.html#734">[ thread ]</a>
+              <a href="subject.html#734">[ subject ]</a>
+              <a href="author.html#734">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

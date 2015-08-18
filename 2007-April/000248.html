@@ -1,0 +1,265 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r2930 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_libraries/ADM_lavformat ADM_libraries/ADM_utilities	ADM_outputs/oplug_avi ADM_userInterfaces/ADM_commonUI
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2007-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2930%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%0A%09ADM_libraries/ADM_lavformat%20ADM_libraries/ADM_utilities%0A%09ADM_outputs/oplug_avi%20ADM_userInterfaces/ADM_commonUI&In-Reply-To=%3C200704130819.l3D8JiUO003189%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000247.html">
+   <LINK REL="Next"  HREF="000249.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r2930 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_libraries/ADM_lavformat ADM_libraries/ADM_utilities	ADM_outputs/oplug_avi ADM_userInterfaces/ADM_commonUI</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r2930%20-%20in%0A%09branches/avidemux_2.4_branch/avidemux%3A%20.%0A%09ADM_libraries/ADM_lavformat%20ADM_libraries/ADM_utilities%0A%09ADM_outputs/oplug_avi%20ADM_userInterfaces/ADM_commonUI&In-Reply-To=%3C200704130819.l3D8JiUO003189%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r2930 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_libraries/ADM_lavformat ADM_libraries/ADM_utilities	ADM_outputs/oplug_avi ADM_userInterfaces/ADM_commonUI">mean at mail.berlios.de
+       </A><BR>
+    <I>Fri Apr 13 10:19:44 CEST 2007</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000247.html">[Avidemux-svn-commit] r2929 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory	ADM_userInterfaces/ADM_commonUI
+</A></li>
+        <LI>Next message: <A HREF="000249.html">[Avidemux-svn-commit] r2931 - in	branches/avidemux_2.4_branch/avidemux: ADM_filter ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#248">[ date ]</a>
+              <a href="thread.html#248">[ thread ]</a>
+              <a href="subject.html#248">[ subject ]</a>
+              <a href="author.html#248">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2007-04-13 10:19:43 +0200 (Fri, 13 Apr 2007)
+New Revision: 2930
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/movenc.c
+   branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/prefs.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisave.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp
+   branches/avidemux_2.4_branch/avidemux/prefs.h
+   branches/avidemux_2.4_branch/avidemux/prefs.in
+Log:
+allow alternate tagging for ESDS atom (haali etc.. compatibility), used for mp3 in .mp4
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp	2007-04-12 18:41:56 UTC (rev 2929)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/ADM_lavformat.cpp	2007-04-13 08:19:43 UTC (rev 2930)
+@@ -47,7 +47,7 @@
+ #include &quot;ADM_lavformat.h&quot;
+ #include &quot;fourcc.h&quot;
+ 
+-
++#include &quot;prefs.h&quot;
+ #include &quot;ADM_osSupport/ADM_debugID.h&quot;
+ #define MODULE_NAME MODULE_LAVFORMAT
+ #include &quot;ADM_osSupport/ADM_debug.h&quot;
+@@ -617,7 +617,19 @@
+                 av_register_input_format(&amp;matroska_demuxer);
+                 register_protocol(&amp;file_protocol);
+ }
+-
++extern &quot;C&quot;
++{
++/** 
++    \fn ADM_useAlternateTagging
++    \brief returns 1 if using haali compatible tagging, 0 if normal. For mp3 in mp4ff.
++*/
++int ADM_useAlternateTagging(void)
++{
++  uint32_t v=1;
++  prefs-&gt;get(FEATURE_ALTERNATE_MP3_TAG,&amp;v);
++  return v;
++} 
++}
+ //___________________________________________________________________________
+ //EOF
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/movenc.c
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/movenc.c	2007-04-12 18:41:56 UTC (rev 2929)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_lavformat/movenc.c	2007-04-13 08:19:43 UTC (rev 2930)
+@@ -39,6 +39,10 @@
+ // ffmpeg -i testinput.avi  -f psp -r 14.985 -s 320x240 -b 768 -ar 24000 -ab 32 M4V00001.MP4
+ #define MODE_3G2 4
+ 
++// MEANX
++extern int ADM_useAlternateTagging(void);
++// MEANX
++
+ typedef struct MOVIentry {
+     unsigned int flags, size;
+     uint64_t     pos;
+@@ -245,6 +249,7 @@
+ 
+ static int mov_write_esds_tag(ByteIOContext *pb, MOVTrack* track) // Basic
+ {
++  int codec_id;
+     offset_t pos = url_ftell(pb);
+     int decoderSpecificInfoLen = track-&gt;vosLen ? descrLength(track-&gt;vosLen):0;
+ 
+@@ -262,8 +267,11 @@
+     putDescr(pb, 0x04, 13 + decoderSpecificInfoLen);
+ 
+     // Object type indication
+-    put_byte(pb, codec_get_tag(ff_mov_obj_type, track-&gt;enc-&gt;codec_id));
+-
++    // MEANX
++    codec_id=track-&gt;enc-&gt;codec_id;
++    if(ADM_useAlternateTagging() &amp;&amp; codec_id==CODEC_ID_MP3) codec_id=CODEC_ID_MP2;
++    put_byte(pb, codec_get_tag(ff_mov_obj_type, codec_id));
++    // /MEANX
+     // the following fields is made of 6 bits to identify the streamtype (4 for video, 5 for audio)
+     // plus 1 bit to indicate upstream and 1 bit set to 1 (reserved)
+     if(track-&gt;enc-&gt;codec_type == CODEC_TYPE_AUDIO)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/prefs.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/prefs.cpp	2007-04-12 18:41:56 UTC (rev 2929)
++++ branches/avidemux_2.4_branch/avidemux/ADM_libraries/ADM_utilities/prefs.cpp	2007-04-13 08:19:43 UTC (rev 2930)
+@@ -133,10 +133,11 @@
+ 	{&quot;feature.auto_unpack&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
+ 	{&quot;downmixing.prologic&quot;,		UINT,	&quot;2&quot;,	NULL,	&quot;0&quot;,	&quot;2&quot;	},
+ 	{&quot;filters.autoload.path&quot;,		STRING,&quot;/tmp/&quot;,NULL, NULL, NULL },
+-	{&quot;filters.autoload.active&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	}
++	{&quot;filters.autoload.active&quot;,		UINT,	&quot;0&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	},
++	{&quot;feature.alternate_mp3_tag&quot;,		UINT,	&quot;1&quot;,	NULL,	&quot;0&quot;,	&quot;1&quot;	}
+ };
+ 
+-int num_opts = 72;
++int num_opts = 73;
+ // &lt;/prefs_gen&gt;
+ 
+ #ifdef USE_LIBXML2
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisave.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisave.cpp	2007-04-12 18:41:56 UTC (rev 2929)
++++ branches/avidemux_2.4_branch/avidemux/ADM_outputs/oplug_avi/op_avisave.cpp	2007-04-13 08:19:43 UTC (rev 2930)
+@@ -87,7 +87,7 @@
+      mux.link(&amp;(muxingType[2]),1,&amp;n_block);
+     
+      diaElem *elems[4]={&amp;mux,&amp;n_frames,&amp;n_block,&amp;blockSize};
+-     if( diaFactoryRun(&quot;Mpeg2 Encoding&quot;,4,elems))
++     if( diaFactoryRun(_(&quot;Avi Muxer Option&quot;),4,elems))
+     {
+       muxMode=(PARAM_MUX)mux_mode;
+       switch(muxMode)
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp	2007-04-12 18:41:56 UTC (rev 2929)
++++ branches/avidemux_2.4_branch/avidemux/ADM_userInterfaces/ADM_commonUI/DIA_prefs.cpp	2007-04-13 08:19:43 UTC (rev 2930)
+@@ -71,7 +71,7 @@
+ uint32_t autovbr=0;
+ uint32_t autoindex=0;
+ uint32_t autounpack=0;
+-
++uint32_t alternate_mp3_tag=1;
+ 	olddevice=newdevice=AVDM_getCurrentDevice();
+ 
+         // Alsa
+@@ -83,7 +83,9 @@
+         prefs-&gt;get(FEATURE_AUTO_REBUILDINDEX,&amp;autoindex);
+          // autoindex
+         prefs-&gt;get(FEATURE_AUTO_UNPACK,&amp;autounpack);
+-
++        // Alternate mp3 tag (haali)
++        prefs-&gt;get(FEATURE_ALTERNATE_MP3_TAG,&amp;alternate_mp3_tag);
++        
+         // Video renderer
+         if(prefs-&gt;get(DEVICE_VIDEODEVICE,&amp;render)!=RC_OK)
+         {       
+@@ -149,6 +151,8 @@
+         diaElemUInteger multiThread(&amp;mthreads,_(&quot;Number of threads&quot;),0,10);
+         diaElemUInteger autoSplit(&amp;autosplit,_(&quot;Split mpegs every (MB)&quot;),10,4096);
+         
++        diaElemToggle   togTagMp3(&amp;alternate_mp3_tag,_(&quot;Use alternative tag for mp3 in .mp4&quot;));
++        
+         diaMenuEntry videoMode[]={
+                              {RENDER_GTK,      _(&quot;Gtk (Slow)&quot;),NULL}
+ #ifdef USE_XV
+@@ -241,8 +245,8 @@
+         diaElemTabs tabInput(&quot;Input&quot;,2,(diaElem **)diaInput);
+         
+         /* Third Tab : output */
+-        diaElem *diaOutput[]={&amp;autoSplit,&amp;openDml,&amp;allowAnyMpeg};
+-        diaElemTabs tabOutput(&quot;Output&quot;,3,(diaElem **)diaOutput);
++        diaElem *diaOutput[]={&amp;autoSplit,&amp;openDml,&amp;allowAnyMpeg,&amp;togTagMp3};
++        diaElemTabs tabOutput(&quot;Output&quot;,4,(diaElem **)diaOutput);
+         
+         /* Fourth Tab : audio */
+         diaElem *diaAudio[]={&amp;menuMixer,&amp;menuVolume,&amp;menuAudio,&amp;entryAlsaDevice};
+@@ -314,6 +318,8 @@
+                 // Filter directory
+                 if(filterPath)
+                   prefs-&gt;set(FILTERS_AUTOLOAD_PATH, filterPath);
++                // Alternate mp3 tag (haali)
++                prefs-&gt;set(FEATURE_ALTERNATE_MP3_TAG,alternate_mp3_tag);
+ 	}
+ 	return 1;
+ }
+
+Modified: branches/avidemux_2.4_branch/avidemux/prefs.h
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/prefs.h	2007-04-12 18:41:56 UTC (rev 2929)
++++ branches/avidemux_2.4_branch/avidemux/prefs.h	2007-04-13 08:19:43 UTC (rev 2930)
+@@ -79,7 +79,8 @@
+ 	FEATURE_AUTO_UNPACK,
+ 	DOWNMIXING_PROLOGIC,
+ 	FILTERS_AUTOLOAD_PATH,
+-	FILTERS_AUTOLOAD_ACTIVE
++	FILTERS_AUTOLOAD_ACTIVE,
++	FEATURE_ALTERNATE_MP3_TAG
+ } options;
+ // &lt;/prefs_gen&gt;
+ 
+
+Modified: branches/avidemux_2.4_branch/avidemux/prefs.in
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/prefs.in	2007-04-12 18:41:56 UTC (rev 2929)
++++ branches/avidemux_2.4_branch/avidemux/prefs.in	2007-04-13 08:19:43 UTC (rev 2930)
+@@ -89,4 +89,5 @@
+ # prologic 1/2
+ downmixing.prologic,			UINT,	2,	0,	2
+ filters.autoload.path,                  STRING, &quot;/tmp/&quot;
+-filters.autoload.active,                UINT,   0,      0,      1
+\ No newline at end of file
++filters.autoload.active,                UINT,   0,      0,      1
++feature.alternate_mp3_tag,              UINT,   1,      0,      1
+\ No newline at end of file
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000247.html">[Avidemux-svn-commit] r2929 - in	branches/avidemux_2.4_branch/avidemux: .	ADM_userInterfaces/ADM_GTK/ADM_dialog	ADM_userInterfaces/ADM_GTK/ADM_dialogFactory	ADM_userInterfaces/ADM_QT4/ADM_dialogFactory	ADM_userInterfaces/ADM_commonUI
+</A></li>
+	<LI>Next message: <A HREF="000249.html">[Avidemux-svn-commit] r2931 - in	branches/avidemux_2.4_branch/avidemux: ADM_filter ADM_videoFilter
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#248">[ date ]</a>
+              <a href="thread.html#248">[ thread ]</a>
+              <a href="subject.html#248">[ subject ]</a>
+              <a href="author.html#248">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

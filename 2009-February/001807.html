@@ -1,0 +1,187 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4577 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_editor plugins/ADM_demuxers/MpegPS
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-February/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4577%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/ADM_editor%20plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C200902071434.n17EYT6h031006%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001806.html">
+   <LINK REL="Next"  HREF="001808.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4577 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_editor plugins/ADM_demuxers/MpegPS</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4577%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux/ADM_editor%20plugins/ADM_demuxers/MpegPS&In-Reply-To=%3C200902071434.n17EYT6h031006%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4577 - in branches/avidemux_2.6_branch_mean:	avidemux/ADM_editor plugins/ADM_demuxers/MpegPS">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Feb  7 15:34:29 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001806.html">[Avidemux-svn-commit] r4576 - tags/avidemux_2.4.4
+</A></li>
+        <LI>Next message: <A HREF="001808.html">[Avidemux-svn-commit] r4578 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1807">[ date ]</a>
+              <a href="thread.html#1807">[ thread ]</a>
+              <a href="subject.html#1807">[ subject ]</a>
+              <a href="author.html#1807">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-02-07 15:34:28 +0100 (Sat, 07 Feb 2009)
+New Revision: 4577
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADMedAVIAUD.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_ps.h
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp
+   branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/dmxPSPacket.cpp
+Log:
+[PsAudio] Better seek
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADMedAVIAUD.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADMedAVIAUD.cpp	2009-02-06 19:07:37 UTC (rev 4576)
++++ branches/avidemux_2.6_branch_mean/avidemux/ADM_editor/ADMedAVIAUD.cpp	2009-02-07 14:34:28 UTC (rev 4577)
+@@ -165,7 +165,11 @@
+     }
+     
+     // This packet has been dropped (too early packt), try the next one
+-    if(drop==true) goto again;
++    if(drop==true)
++    {
++        // TODO Check if the packet somehow overlaps, i.e. starts too early but finish ok
++        goto again;
++    }
+     // Update infos
+     *samples=(decodedSample);
+     *odts=lastDts;
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_ps.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_ps.h	2009-02-06 19:07:37 UTC (rev 4576)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_ps.h	2009-02-07 14:34:28 UTC (rev 4577)
+@@ -41,6 +41,7 @@
+ }dmxFrame;
+ /**
+     \struct ADM_psAudioSeekPoint
++    \brief The dts are stored in rescaled us. Warning the low level getpacket is getting absolute 90 khzTick
+ */
+ typedef struct
+ {            
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp	2009-02-06 19:07:37 UTC (rev 4576)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/ADM_psAudio.cpp	2009-02-07 14:34:28 UTC (rev 4577)
+@@ -21,6 +21,9 @@
+ #include &lt;math.h&gt;
+ 
+ #include &quot;ADM_ps.h&quot;
++
++#define aprintf printf
++
+ /**
+     \fn ADM_psAccess
+ */
+@@ -70,27 +73,27 @@
+ }
+ /**
+     \fn goToTime
++    \brief Rememember seekPoint.dts time is already scaled and in us
+ */                              
+ bool      ADM_psAccess::goToTime(uint64_t timeUs)
+ {
+     // Convert time in us to scaled 90 kHz tick
+-    double f=timeUs;
+-    f*=90;
+-    f/=1000;
+-    f+=dtsOffset;
+-    uint64_t n=(uint64_t)f;
+-
+-    if(n&lt;=seekPoints[seekPoints.size()-1].dts)
++    
++    if(timeUs&lt;seekPoints[0].dts)
+     {
++            aprintf(&quot;[PsAudio] Requested %&quot;LU&quot; tick before 1st seek point at :%&quot;LU&quot;\n&quot;,(uint32_t)timeUs/1000,(uint32_t)seekPoints[0].dts/1000);
+             demuxer.setPos(seekPoints[0].position);
+             return true;
+     }
+ 
+-    for(int i=0;i&lt;seekPoints.size()-1;i++)
++    for(int i=1;i&lt;seekPoints.size();i++)
+     {
+-        if(seekPoints[i].dts &gt;=n &amp;&amp; seekPoints[i+1].dts&gt;n)
++        if(seekPoints[i].dts &gt;=timeUs )
+         {
+-            demuxer.setPos(seekPoints[i].position);
++            aprintf(&quot;[PsAudio] Requested %&quot;LU&quot; tick seeking to  at :%&quot;LU&quot; us (next is %&quot;LU&quot;ms \n&quot;,(uint32_t)timeUs/1000,
++                    (uint32_t)seekPoints[i-1].dts/1000,
++                    (uint32_t)seekPoints[i].dts/1000);
++            demuxer.setPos(seekPoints[i-1].position);
+             return true;
+         }
+     }
+@@ -119,6 +122,11 @@
+     if(d==ADM_NO_PTS) *dts=p;
+             else *dts=d;
+     *dts=timeConvert(*dts);
++    if(*dts!=ADM_NO_PTS) 
++    {
++        aprintf(&quot;[psAudio] getPacket dts = %&quot;LU&quot; ms\n&quot;,(uint32_t)*dts/1000);
++    }
++
+     return true;
+ }
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/dmxPSPacket.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/dmxPSPacket.cpp	2009-02-06 19:07:37 UTC (rev 4576)
++++ branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS/dmxPSPacket.cpp	2009-02-07 14:34:28 UTC (rev 4577)
+@@ -81,7 +81,11 @@
+ 
+ bool    psPacket::setPos(uint64_t pos)
+ {
+-    return true;
++    if(!_file-&gt;setpos(pos))
++    {
++        printf(&quot;[psPacket] Cannot seek to %&quot;LLX&quot;\n&quot;, pos);
++        return false;
++    }
+ }
+ 
+ /**
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001806.html">[Avidemux-svn-commit] r4576 - tags/avidemux_2.4.4
+</A></li>
+	<LI>Next message: <A HREF="001808.html">[Avidemux-svn-commit] r4578 -	branches/avidemux_2.6_branch_mean/plugins/ADM_demuxers/MpegPS
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1807">[ date ]</a>
+              <a href="thread.html#1807">[ thread ]</a>
+              <a href="subject.html#1807">[ subject ]</a>
+              <a href="author.html#1807">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

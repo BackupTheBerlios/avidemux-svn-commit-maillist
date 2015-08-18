@@ -1,0 +1,340 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7313 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreImage/include	avidemux_plugins/ADM_videoFilters6/telecide
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-July/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7313%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreImage/include%0A%09avidemux_plugins/ADM_videoFilters6/telecide&In-Reply-To=%3C20110710143127.6DC284813BB%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004466.html">
+   <LINK REL="Next"  HREF="004468.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7313 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreImage/include	avidemux_plugins/ADM_videoFilters6/telecide</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7313%20-%20in%20branches/avidemux_2.6_branch_mean%3A%0A%09avidemux_core/ADM_coreImage/include%0A%09avidemux_plugins/ADM_videoFilters6/telecide&In-Reply-To=%3C20110710143127.6DC284813BB%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7313 - in branches/avidemux_2.6_branch_mean:	avidemux_core/ADM_coreImage/include	avidemux_plugins/ADM_videoFilters6/telecide">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Jul 10 16:31:27 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004466.html">[Avidemux-svn-commit] r7312 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide
+</A></li>
+        <LI>Next message: <A HREF="004468.html">[Avidemux-svn-commit] r7314 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4467">[ date ]</a>
+              <a href="thread.html#4467">[ thread ]</a>
+              <a href="subject.html#4467">[ subject ]</a>
+              <a href="author.html#4467">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-07-10 16:31:27 +0200 (Sun, 10 Jul 2011)
+New Revision: 7313
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/include/ADM_image.h
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide_getFrame.cpp
+Log:
+[telecide] Cleaning up code
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/include/ADM_image.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/include/ADM_image.h	2011-07-10 14:31:25 UTC (rev 7312)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreImage/include/ADM_image.h	2011-07-10 14:31:27 UTC (rev 7313)
+@@ -110,6 +110,7 @@
+         int             _qStride;
+         int             _qSize;
+         int             GetHeight(ADM_PLANE plane) {if(plane==PLANAR_Y) return _height; return _height/2;}
++        int             GetWidth(ADM_PLANE plane) {if(plane==PLANAR_Y) return _width; return _width/2;}
+         bool            GetPitches(uint32_t *pitches) {pitches[0]=GetPitch(PLANAR_Y);
+                                                        pitches[1]=GetPitch(PLANAR_U);
+                                                        pitches[2]=GetPitch(PLANAR_V);return true;}
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide_getFrame.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide_getFrame.cpp	2011-07-10 14:31:25 UTC (rev 7312)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide/Telecide_getFrame.cpp	2011-07-10 14:31:27 UTC (rev 7313)
+@@ -68,42 +68,58 @@
+ #define y0      _param-&gt;y0
+ #define y1      _param-&gt;y1
+ 
+-
+ /**
+-    \fn getNextFrame
++
+ */
+-bool Telecide::getNextFrame(uint32_t *frameNumber,ADMImage *output_image)
++static bool copyField(ADMImage *target, ADMImage *source, bool top)
+ {
+-ADMImage *fc;
+-uint8_t *fcrp;
+-uint8_t *fcrpU,*fcrpV;
++    for(int i=0;i&lt;3;i++)
++    {
++        ADM_PLANE plane=(ADM_PLANE )i;
++        uint8_t *dest=target-&gt;GetWritePtr(plane);
++        uint8_t *src=source-&gt;GetReadPtr(plane);
+ 
+-uint32_t pframe,nframe;
++        uint32_t sPitch=source-&gt;GetPitch(plane);
++        uint32_t dPitch=target-&gt;GetPitch(plane);
++        
++        if(false==top)
++        {
++            dest=dest+dPitch;
++            src=src+sPitch;
++        }
+ 
+-ADMImage *fp;
+-uint8_t *fprp;
+-uint8_t *fprpU,*fprpV;
+ 
+-ADMImage *fn;
+-uint8_t *fnrp;
+-uint8_t *fnrpU,*fnrpV;
++        uint32_t h=target-&gt;GetHeight(plane);
++        uint32_t w=target-&gt;GetWidth(plane);
+ 
+-ADMImage *lc;
+-uint8_t *crp;
+-uint8_t *crpU,*crpV;
++        // copy one line out of two
++        h&gt;&gt;=1;
++        dPitch*=2;
++        sPitch*=2;
+ 
+-ADMImage *lp;
+-uint8_t *prp;
+-uint8_t *prpU,*prpV;
++        BitBlit(dest,dPitch,src,sPitch,w,h);
+ 
+-ADMImage *dst;
++    }
++    return true;
++}
++
++/**
++    \fn getNextFrame
++*/
++bool Telecide::getNextFrame(uint32_t *frameNumber,ADMImage *output_image)
++{
++uint32_t pframe,nframe;
++
++ADMImage *fc=NULL;
++ADMImage *fp=NULL;
++ADMImage *fn=NULL;
++ADMImage *dst=NULL;
+ uint8_t *dstp;
+-uint8_t *dstpU,*dstpV;
+ 
+-ADMImage *final;
++ADMImage *final=NULL;
+ uint8_t *finalp;
+-uint8_t *finalpU,*finalpV;
+ 
++
+ teleCide *_param=&configuration;
+ 
+ 
+@@ -122,23 +138,11 @@
+             return false;
+         }
+         nextFrame++;
+-        output_image-&gt;copyInfo(fc);
+-        fcrp = (unsigned char *) fc-&gt;GetReadPtr(PLANAR_Y);
+-        //if (vi.IsYV12())
+-        {
+-                fcrpU = (unsigned char *) fc-&gt;GetReadPtr(PLANAR_U);
+-                fcrpV = (unsigned char *) fc-&gt;GetReadPtr(PLANAR_V);
+-        }
++        output_image-&gt;copyInfo(fc); // copy timing information...
+ 
+         // Get the previous frame.
+         pframe = frame == 0 ? 0 : frame - 1;
+         GETFRAME(pframe, fp);
+-        fprp = (unsigned char *) fp-&gt;GetReadPtr(PLANAR_Y);
+-        //if (vi.IsYV12())
+-        {
+-                fprpU = (unsigned char *) fp-&gt;GetReadPtr(PLANAR_U);
+-                fprpV = (unsigned char *) fp-&gt;GetReadPtr(PLANAR_V);
+-        }
+ 
+         // Get the next frame metrics if we might need them.
+         nframe = frame + 1;
+@@ -150,28 +154,14 @@
+             ADM_assert(fn);
+             lastFrame=true;
+         }
+-        fnrp = (unsigned char *) fn-&gt;GetReadPtr(PLANAR_Y);
+-        //if (vi.IsYV12())
+-        {
+-                fnrpU = (unsigned char *) fn-&gt;GetReadPtr(PLANAR_U);
+-                fnrpV = (unsigned char *) fn-&gt;GetReadPtr(PLANAR_V);
+-        }
+ 
+         int pitch = fc-&gt;GetPitch(PLANAR_Y);
+-        int pitchover2 = pitch &gt;&gt; 1;
+-        int pitchtimes4 = pitch &lt;&lt; 2;
++        
++        
+         int w = info.width;
+         int h = info.height; 
+         int hover2 = h &gt;&gt;1;
+         int wover2 = w &gt;&gt;1;
+-/*
+-        if (vi.IsYUY2() &amp;&amp; ((w/2) &amp; 1))
+-                env-&gt;ThrowError(&quot;Telecide: width must be a multiple of 2; use Crop&quot;);
+-        if (vi.IsYV12() &amp;&amp; (w &amp; 1))
+-                env-&gt;ThrowError(&quot;Telecide: width must be a multiple of 2; use Crop&quot;);
+-        if (h &amp; 1)
+-                env-&gt;ThrowError(&quot;Telecide: height must be a multiple of 2; use Crop&quot;);
+-*/
+ 
+         int hplus1over2 = (h+1)/2;
+         int hminus2= h - 2;
+@@ -190,20 +180,10 @@
+                         if (lastFrame==true ) break;
+                         if (CacheQuery(y, &amp;p, &amp;pblock, &amp;c, &amp;cblock) == false)
+                         {
++                                ADMImage *lc,*lp;
++
+                                 GETFRAME(y, lc);
+-                                crp = (unsigned char *) lc-&gt;GetReadPtr(PLANAR_Y);
+-                                //if (vi.IsYV12())
+-                                {
+-                                        crpU = (unsigned char *) lc-&gt;GetReadPtr(PLANAR_U);
+-                                        crpV = (unsigned char *) lc-&gt;GetReadPtr(PLANAR_V);
+-                                }
+                                 GETFRAME(y == 0 ? 1 : y - 1, lp);
+-                                prp = (unsigned char *) lp-&gt;GetReadPtr(PLANAR_Y);
+-                                //if (vi.IsYV12())
+-                                {
+-                                        prpU = (unsigned char *) lp-&gt;GetReadPtr(PLANAR_U);
+-                                        prpV = (unsigned char *) lp-&gt;GetReadPtr(PLANAR_V);
+-                                }
+                                 CalculateMetrics(y, lc,lp); //crp, crpU, crpV, prp, prpU, prpV);
+                         }
+                 }
+@@ -375,77 +355,39 @@
+ 
+         // Assemble and output the reconstructed frame according to the final match.
+         dstp = dst-&gt;GetWritePtr(PLANAR_Y);
+-//    if (vi.IsYV12())
+-        {
+-                dstpU = dst-&gt;GetWritePtr(PLANAR_U);
+-                dstpV = dst-&gt;GetWritePtr(PLANAR_V);
+-        }
+         if (chosen == N)
+         {
+                 // The best match was with the next frame.
+                 if (tff == true)
+                 {
+-                        BitBlt(dstp, 2 * dpitch, fnrp, 2 * pitch, w, hover2);
+-                        BitBlt(dstp + dpitch, 2 * dpitch, fcrp + pitch, 2 * pitch, w, hover2);
+-                        //if (vi.IsYV12())
+-                        {
+-                                BitBlt(dstpU, dpitch, fnrpU, pitch, w/2, h/4);
+-                                BitBlt(dstpV, dpitch, fnrpV, pitch, w/2, h/4);
+-                                BitBlt(dstpU + dpitch/2, dpitch, fcrpU + pitch/2, pitch, w/2, h/4);
+-                                BitBlt(dstpV + dpitch/2, dpitch, fcrpV + pitch/2, pitch, w/2, h/4);
+-                        }
++                        copyField(dst, fn,true);
++                        copyField(dst, fc,false);
+                 }
+                 else
+                 {
+-                        BitBlt(dstp, 2 * dpitch, fcrp, 2 * pitch, w, hplus1over2);
+-                        BitBlt(dstp + dpitch, 2 * dpitch, fnrp + pitch, 2 * pitch, w, hover2);
+-                        //if (vi.IsYV12())
+-                        {
+-                                BitBlt(dstpU, dpitch, fcrpU, pitch, w/2, h/4);
+-                                BitBlt(dstpV, dpitch, fcrpV, pitch, w/2, h/4);
+-                                BitBlt(dstpU + dpitch/2, dpitch, fnrpU + pitch/2, pitch, w/2, h/4);
+-                                BitBlt(dstpV + dpitch/2, dpitch, fnrpV + pitch/2, pitch, w/2, h/4);
+-                        }
++                        copyField(dst, fc,true);
++                        copyField(dst, fn,false);
+                 }
+         }
+         else if (chosen == C)
+         {
+                 // The best match was with the current frame.
+-                BitBlt(dstp, 2 * dpitch, fcrp, 2 * pitch, w, hplus1over2);
+-                BitBlt(dstp + dpitch, 2 * dpitch, fcrp + pitch, 2 * pitch, w, hover2);
+-                //if (vi.IsYV12())
+-                {
+-                        BitBlt(dstpU, dpitch, fcrpU, pitch, w/2, h/4);
+-                        BitBlt(dstpV, dpitch, fcrpV, pitch, w/2, h/4);
+-                        BitBlt(dstpU + dpitch/2, dpitch, fcrpU + pitch/2, pitch, w/2, h/4);
+-                        BitBlt(dstpV + dpitch/2, dpitch, fcrpV + pitch/2, pitch, w/2, h/4);
+-                }
++                copyField(dst, fc,true);
++                copyField(dst, fc,false);
++
+         }
+         else if (tff == false)
+         {
+                 // The best match was with the previous frame.
+-                BitBlt(dstp, 2 * dpitch, fprp, 2 * pitch, w, hplus1over2);
+-                BitBlt(dstp + dpitch, 2 * dpitch, fcrp + pitch, 2 * pitch, w, hover2);
+-               // if (vi.IsYV12())
+-                {
+-                        BitBlt(dstpU, dpitch, fprpU, pitch, w/2, h/4);
+-                        BitBlt(dstpV, dpitch, fprpV, pitch, w/2, h/4);
+-                        BitBlt(dstpU + dpitch/2, dpitch, fcrpU + pitch/2, pitch, w/2, h/4);
+-                        BitBlt(dstpV + dpitch/2, dpitch, fcrpV + pitch/2, pitch, w/2, h/4);
+-                }
++                copyField(dst, fp,true);
++                copyField(dst, fc,false);
+         }
+         else
+         {
+                 // The best match was with the previous frame.
+-                BitBlt(dstp, 2 * dpitch, fcrp, 2 * pitch, w, hplus1over2);
+-                BitBlt(dstp + dpitch, 2 * dpitch, fprp + pitch, 2 * pitch, w, hover2);
+-               // if (vi.IsYV12())
+-                {
+-                        BitBlt(dstpU, dpitch, fcrpU, pitch, w/2, h/4);
+-                        BitBlt(dstpV, dpitch, fcrpV, pitch, w/2, h/4);
+-                        BitBlt(dstpU + dpitch/2, dpitch, fprpU + pitch/2, pitch, w/2, h/4);
+-                        BitBlt(dstpV + dpitch/2, dpitch, fprpV + pitch/2, pitch, w/2, h/4);
+-                }
++                copyField(dst, fc,true);
++                copyField(dst, fp,false);
++
+         }
+         if (guide != GUIDE_NONE) PutChosen(frame, chosen);
+ 
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004466.html">[Avidemux-svn-commit] r7312 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide
+</A></li>
+	<LI>Next message: <A HREF="004468.html">[Avidemux-svn-commit] r7314 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_videoFilters6/telecide
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4467">[ date ]</a>
+              <a href="thread.html#4467">[ thread ]</a>
+              <a href="subject.html#4467">[ subject ]</a>
+              <a href="author.html#4467">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

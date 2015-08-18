@@ -1,0 +1,302 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7137 - in	branches/avidemux_2.6_branch_mean/avidemux_core:	ADM_core/include ADM_core/src ADM_coreUtils/src
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-April/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7137%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core%3A%0A%09ADM_core/include%20ADM_core/src%20ADM_coreUtils/src&In-Reply-To=%3C20110413053308.28B0E481342%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004295.html">
+   <LINK REL="Next"  HREF="004297.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7137 - in	branches/avidemux_2.6_branch_mean/avidemux_core:	ADM_core/include ADM_core/src ADM_coreUtils/src</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7137%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_core%3A%0A%09ADM_core/include%20ADM_core/src%20ADM_coreUtils/src&In-Reply-To=%3C20110413053308.28B0E481342%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7137 - in	branches/avidemux_2.6_branch_mean/avidemux_core:	ADM_core/include ADM_core/src ADM_coreUtils/src">mean at mail.berlios.de
+       </A><BR>
+    <I>Wed Apr 13 07:33:08 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004295.html">[Avidemux-svn-commit] r7136 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+        <LI>Next message: <A HREF="004297.html">[Avidemux-svn-commit] r7138 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4296">[ date ]</a>
+              <a href="thread.html#4296">[ thread ]</a>
+              <a href="subject.html#4296">[ subject ]</a>
+              <a href="author.html#4296">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-04-13 07:33:07 +0200 (Wed, 13 Apr 2011)
+New Revision: 7137
+
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_assert.h
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs.cpp
+Log:
+[core] use ADM_unlink, rewrite prefs load/save to be safe on win32
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_assert.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_assert.h	2011-04-13 05:33:06 UTC (rev 7136)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/include/ADM_assert.h	2011-04-13 05:33:07 UTC (rev 7137)
+@@ -54,6 +54,7 @@
+ int             ADM_fclose (FILE *file);
+ uint8_t         ADM_fileExist(const char *name);
+ uint8_t         ADM_mkdir(const char *name);
++bool            ADM_eraseFile(const char *name);
+ 
+ /* Replacements for memory allocation functions */
+ extern void     *ADM_alloc(size_t size);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp	2011-04-13 05:33:06 UTC (rev 7136)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core/src/ADM_fileio.cpp	2011-04-13 05:33:07 UTC (rev 7137)
+@@ -80,7 +80,19 @@
+ {
+ 	return fwrite(ptr,size,n,sstream);
+ }
+-
++/**
++    \fn ADM_eraseFile
++*/
++bool ADM_eraseFile(const char *file)
++{
++    if(!unlink(file))
++        return true;
++    return false;
++}
++/**
++    \fn ADM_fopen
++    \brief utf8 aware fopen, so that we can use utf8 string even on win32
++*/
+ FILE *ADM_fopen(const char *file, const char *mode)
+ {
+ #ifdef __MINGW32__
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs.cpp	2011-04-13 05:33:06 UTC (rev 7136)
++++ branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src/prefs.cpp	2011-04-13 05:33:07 UTC (rev 7137)
+@@ -168,6 +168,9 @@
+ int xmlSaveNoEmptyTags  = 1;      /* save empty tags as &lt;empty&gt;&lt;/empty&gt; */
+ int xmlIndentTreeOutput = 1;      /* try to indent the tree dumps */
+ #endif
++
++
++
+ void erase_blank_nodes(xmlNodePtr cur){
+   /* erase all blank-nodes recursive; they deny IndentTreeOutput !!! */
+   xmlNodePtr run = cur;
+@@ -242,27 +245,6 @@
+ 
+ #include &quot;prefs.h&quot;
+ 
+-preferences::preferences(){
+-	internal_lastfiles[0] = internal_lastfiles[1] = NULL;
+-	internal_lastfiles[2] = internal_lastfiles[3] = NULL;
+-	internal_lastfiles[4] = NULL;
+-	
+-	xdoc = NULL;
+-	
+-}
+-
+-preferences::~preferences(){
+-  unsigned int idx;
+-	for( idx=0; idx &lt; 4; idx++ ){
+-		if( internal_lastfiles[idx] )
+-			ADM_dealloc(internal_lastfiles[idx]);
+-	}
+-	
+-	if( xdoc )
+-		xmlFreeDoc(xdoc);
+-	
+-}
+-
+ #define FILE_SIZE_MAX (20*1024)
+ /**
+     \fn load
+@@ -375,7 +357,9 @@
+ 	return RC_OK;
+ }
+ 
+-
++/**
++    \fn save
++*/
+ int preferences::save(){
+    xmlNodePtr n;
+    char buf[1024];
+@@ -416,24 +400,26 @@
+ 	}
+ 	return save_xml_to_file();
+ }
++/**
++    \fn save_xml_to_file
+ 
+-int preferences::save_xml_to_file(){
++*/
++int preferences::save_xml_to_file()
++{
+    char *dir_adm;
+-   char *rcfile;
+-   char *rcfilenew;
++   std::string path,path_new;
+ 
+-        dir_adm=ADM_getBaseDir();
+-        if(!dir_adm) return RC_FAILED;
++    dir_adm=ADM_getBaseDir();
++    if(!dir_adm) return RC_FAILED;
+ 
+-        rcfile=new char[strlen(dir_adm)+4+strlen(CONFIG)];
+-        strcpy(rcfile,dir_adm);
+-        strcat(rcfile,&quot;/&quot;);
+-        strcat(rcfile,CONFIG);
++    path=std::string(dir_adm);
++    path=path+std::string(&quot;/&quot;);
++    path=path+std::string(CONFIG);
+ 
+ 
+-#if defined(__MINGW32__)
++#if 0 // Why ? defined(__MINGW32__)
+ 	xmlSetDocCompressMode(xdoc,9);
+-	if( xmlSaveFormatFile(rcfile,xdoc,1) == -1 ){
++	if( xmlSaveFormatFile(path.c_str(),xdoc,1) == -1 ){
+            fprintf(stderr,&quot;\ncan't save xml tree to file. Filesystem full?\n\n&quot;);
+            delete [] rcfile;
+ 	   return RC_FAILED;
+@@ -443,44 +429,47 @@
+ 
+ #else
+ 	
+-        
+-         rcfilenew=new char[strlen(rcfile)+5];
+-        strcpy(rcfilenew,rcfile);
+-        strcat(rcfilenew,&quot;.new&quot;);
+-        if( unlink(rcfilenew) == -1 &amp;&amp; errno != ENOENT ){
+-           fprintf(stderr,&quot;can't unlink(%s): %d (%s)\n&quot;,
+-                   rcfilenew, errno, strerror(errno));
+-           delete [] rcfilenew;
+-           return RC_FAILED;
+-        }
+-	xmlSetDocCompressMode(xdoc,9);
+-	if( qxmlSaveFormatFile(rcfilenew,xdoc,1) == -1 ){
+-           delete [] rcfilenew;
+-           delete [] rcfile;
++    path_new=path+std::string(&quot;.new&quot;);
++    ADM_eraseFile(path_new.c_str());
++    xmlSetDocCompressMode(xdoc,9);
++	if( qxmlSaveFormatFile(path_new.c_str(),xdoc,1) == -1 )
++    {
+ 	   return RC_FAILED;
+ 	}
+-
+-        if( unlink(rcfile) == -1 &amp;&amp; errno != ENOENT ){
+-           fprintf(stderr,&quot;can't unlink(%s): %d (%s)\n&quot;,
+-                   rcfile, errno, strerror(errno));
+-           delete [] rcfilenew;
+-           delete [] rcfile;
+-           return RC_FAILED;
+-        }
+-        if( link(rcfilenew,rcfile) == -1 ){
+-           fprintf(stderr,&quot;can't create \&quot;%s\&quot;: %d (%s)\n&quot;,
+-                   rcfile, errno, strerror(errno));
+-           delete [] rcfilenew;
+-           delete [] rcfile;
+-           return RC_FAILED;
+-        }
+-        unlink(rcfilenew); // rc/errno handling is done on next call ;-)
+-        delete [] rcfilenew;
+-        delete [] rcfile;
++    ADM_eraseFile(path.c_str());
++    if(false==ADM_copyFile(path_new.c_str(),path.c_str()))
++    {
++        ADM_error(&quot;Cannot copy %s to %s\n&quot;,path_new.c_str(),path.c_str());
++    }
++    ADM_eraseFile(path_new.c_str());
+ 	return RC_OK;
+ #endif
+ }
++/**
++    \fn ctor
++*/
++preferences::preferences(){
++	internal_lastfiles[0] = internal_lastfiles[1] = NULL;
++	internal_lastfiles[2] = internal_lastfiles[3] = NULL;
++	internal_lastfiles[4] = NULL;
++	
++	xdoc = NULL;
++	
++}
+ 
++preferences::~preferences(){
++  unsigned int idx;
++	for( idx=0; idx &lt; 4; idx++ ){
++		if( internal_lastfiles[idx] )
++			ADM_dealloc(internal_lastfiles[idx]);
++	}
++	
++	if( xdoc )
++		xmlFreeDoc(xdoc);
++	
++}
++
++
+ /*
+ int preferences::get(options option, uint8_t *val){
+    unsigned int x;
+@@ -978,12 +967,17 @@
+ #endif
+ 	return (const char**)internal_lastfiles;
+ }
++/**
++    \fn initPrefs
++*/
+ int initPrefs(  void )
+ {
+   prefs = new preferences();
+   return 1;
+ }
+-
++/**
++    \fn destroyPrefs
++*/
+ int destroyPrefs(void)
+ {
+ 	for (int i = 0; i &lt; num_opts; i++)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004295.html">[Avidemux-svn-commit] r7136 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUtils/src
+</A></li>
+	<LI>Next message: <A HREF="004297.html">[Avidemux-svn-commit] r7138 - in	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_core:	include src
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4296">[ date ]</a>
+              <a href="thread.html#4296">[ thread ]</a>
+              <a href="subject.html#4296">[ subject ]</a>
+              <a href="author.html#4296">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

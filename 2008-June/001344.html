@@ -1,0 +1,243 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r4088 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2008-June/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4088%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200806072032.m57KWMh8020427%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="001343.html">
+   <LINK REL="Next"  HREF="001345.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r4088 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r4088%20-%0A%09branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska&In-Reply-To=%3C200806072032.m57KWMh8020427%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r4088 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska">mean at mail.berlios.de
+       </A><BR>
+    <I>Sat Jun  7 22:32:22 CEST 2008</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="001343.html">[Avidemux-svn-commit] r4087 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+        <LI>Next message: <A HREF="001345.html">[Avidemux-svn-commit] r4089 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_codecs	avidemux/ADM_inputs/ADM_matroska	avidemux/ADM_libraries/ADM_utilities avidemux/ADM_outputs	avidemux/ADM_outputs/oplug_flv plugins/ADM_videoFilters/Ass
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1344">[ date ]</a>
+              <a href="thread.html#1344">[ thread ]</a>
+              <a href="subject.html#1344">[ subject ]</a>
+              <a href="author.html#1344">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2008-06-07 22:32:22 +0200 (Sat, 07 Jun 2008)
+New Revision: 4088
+
+Modified:
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+   branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp
+Log:
+[MKV] Mitigate error on the duration of audio track, final part
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2008-06-07 20:25:47 UTC (rev 4087)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkv.cpp	2008-06-07 20:32:22 UTC (rev 4088)
+@@ -124,6 +124,7 @@
+ */
+ uint8_t mkvHeader::rescaleTrack(mkvTrak *track,uint32_t durationMs)
+ {
++        if(track-&gt;_defaultFrameDuration) return 1; // No need to change
+         float samples=1000.;
+         samples*=durationMs;
+         samples/=track-&gt;nbPackets;  // 1000 * sample per packet
+
+Modified: branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp
+===================================================================
+--- branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp	2008-06-07 20:25:47 UTC (rev 4087)
++++ branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska/ADM_mkvEntries.cpp	2008-06-07 20:32:22 UTC (rev 4088)
+@@ -37,14 +37,14 @@
+           uint32_t     trackNo;
+           uint32_t     trackType;
+           uint32_t     extraDataLen;
+-          
++
+           uint32_t fcc;
+           uint32_t w,h,fps;
+           uint32_t fq,chan,bpp;
+           uint32_t defaultDuration;
+           float    trackScale;
+           uint8_t *extraData;
+-          
++
+           void dump(void);
+ };
+ /* Prototypes */
+@@ -86,7 +86,7 @@
+ /**
+       \fn analyzeOneTrack
+       \brief Grab info about the track (it is a recursive function !)
+-              
++
+ */
+ uint8_t mkvHeader::analyzeOneTrack(void *head,uint32_t headlen)
+ {
+@@ -96,12 +96,12 @@
+       /* Set some defaults value */
+ 
+       entry.chan=2;
+-      
++
+       entryWalk(  (ADM_ebml_file *)head,headlen,&amp;entry);
+       entry.dump();
+       if(entry.trackType==1 &amp;&amp;  !_isvideopresent)
+       {
+-        _isvideopresent=1; 
++        _isvideopresent=1;
+         if(entry.defaultDuration)
+         {
+             _tracks[0]._defaultFrameDuration=entry.defaultDuration;
+@@ -114,13 +114,13 @@
+             _videostream.dwRate=(uint32_t)inv;
+         }else
+         {
+-          printf(&quot;[MKV] No duration, assuming 25 fps\n&quot;); 
++          printf(&quot;[MKV] No duration, assuming 25 fps\n&quot;);
+           _videostream.dwScale=1000;
+           _videostream.dwRate=25000;
+ 
+         }
+-    
+-        _mainaviheader.dwMicroSecPerFrame=(uint32_t)floor(50);;     
++
++        _mainaviheader.dwMicroSecPerFrame=(uint32_t)floor(50);;
+         _videostream.fccType=fourCC::get((uint8_t *)&quot;vids&quot;);
+         _video_bih.biBitCount=24;
+         _videostream.dwInitialFrames= 0;
+@@ -128,7 +128,7 @@
+         _video_bih.biWidth=_mainaviheader.dwWidth=entry.w;
+         _video_bih.biHeight=_mainaviheader.dwHeight=entry.h;
+         _videostream.fccHandler=_video_bih.biCompression=entry.fcc;
+-        
++
+         // if it is vfw...
+         if(fourCC::check(entry.fcc,(uint8_t *)&quot;VFWX&quot;) &amp;&amp; entry.extraData &amp;&amp; entry.extraDataLen&gt;=sizeof(BITMAPINFOHEADER))
+         {
+@@ -136,24 +136,24 @@
+           delete [] _tracks[0].extraData;
+           entry.extraData=NULL;
+           entry.extraDataLen=0;
+-          
++
+           _videostream.fccHandler=_video_bih.biCompression;
+           _mainaviheader.dwWidth=  _video_bih.biWidth;
+-          _mainaviheader.dwHeight= _video_bih.biHeight;    
+-          
++          _mainaviheader.dwHeight= _video_bih.biHeight;
++
+         } // FIXME there can be real extradata after bitmapinfoheader
+-        
+-        _tracks[0].extraData=entry.extraData; 
+-        _tracks[0].extraDataLen=entry.extraDataLen;       
++
++        _tracks[0].extraData=entry.extraData;
++        _tracks[0].extraDataLen=entry.extraDataLen;
+         _tracks[0].streamIndex=entry.trackNo;
+-        
++
+         return 1;
+       }
+       if(entry.trackType==2 &amp;&amp; _nbAudioTrack&lt;ADM_MKV_MAX_TRACKS)
+       {
+          uint32_t  streamIndex;
+          mkvTrak *t=&amp;(_tracks[1+_nbAudioTrack]);
+-         
++
+          t-&gt;wavHeader.encoding=entry.fcc;
+          t-&gt;wavHeader.channels=entry.chan;
+          t-&gt;wavHeader.frequency=entry.fq;
+@@ -165,15 +165,15 @@
+          if(entry.defaultDuration)
+           t-&gt;_defaultFrameDuration=entry.defaultDuration;
+          else
+-           t-&gt;_defaultFrameDuration=24000;
++           t-&gt;_defaultFrameDuration=0;
+         _nbAudioTrack++;
+         return 1;
+       }
+       if(entry.extraData) delete [] entry.extraData;
+       return 1;
+-  
++
+ }
+-  
++
+ /**
+     \fn entryWalk
+     \brief walk a trackEntry atom and grabs all infos. Store them in entry
+@@ -184,7 +184,7 @@
+    uint64_t id,len;
+   ADM_MKV_TYPE type;
+   const char *ss;
+-  
++
+   while(!father.finished())
+   {
+       father.readElemId(&amp;id,&amp;len);
+@@ -196,7 +196,7 @@
+       }
+       switch(id)
+       {
+-        
++
+         case  MKV_TRACK_NUMBER: entry-&gt;trackNo=father.readUnsignedInt(len);break;
+         case  MKV_TRACK_TYPE: entry-&gt;trackType=father.readUnsignedInt(len);break;
+ 
+@@ -225,13 +225,13 @@
+                   father.readBin(codec,len);
+                   codec[len]=0;
+                   entry-&gt;fcc=ADM_mkvCodecToFourcc((char *)codec);
+-                  
++
+             }
+                   break;
+         default: printf(&quot;[MKV]not handled %s\n&quot;,ss);
+-                  father.skip(len);  
++                  father.skip(len);
+         }
+-        
++
+       }
+   return 1;
+ }//EOF
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="001343.html">[Avidemux-svn-commit] r4087 -	branches/avidemux_2.4_branch/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+	<LI>Next message: <A HREF="001345.html">[Avidemux-svn-commit] r4089 - in	branches/avidemux_2.5_branch_gruntster: avidemux/ADM_codecs	avidemux/ADM_inputs/ADM_matroska	avidemux/ADM_libraries/ADM_utilities avidemux/ADM_outputs	avidemux/ADM_outputs/oplug_flv plugins/ADM_videoFilters/Ass
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#1344">[ date ]</a>
+              <a href="thread.html#1344">[ thread ]</a>
+              <a href="subject.html#1344">[ subject ]</a>
+              <a href="author.html#1344">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

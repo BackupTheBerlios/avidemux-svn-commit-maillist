@@ -1,0 +1,630 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r5622 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2009-December/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5622%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20ADM_editor%0A%09ADM_script&In-Reply-To=%3C200912060927.nB69R4Ab008063%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="002829.html">
+   <LINK REL="Next"  HREF="002832.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r5622 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script</H1>
+    <B>mean at BerliOS</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r5622%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux/common%3A%20ADM_editor%0A%09ADM_script&In-Reply-To=%3C200912060927.nB69R4Ab008063%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r5622 - in	branches/avidemux_2.6_branch_mean/avidemux/common: ADM_editor	ADM_script">mean at mail.berlios.de
+       </A><BR>
+    <I>Sun Dec  6 10:27:04 CET 2009</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="002829.html">[Avidemux-svn-commit] r5621 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src
+</A></li>
+        <LI>Next message: <A HREF="002832.html">[Avidemux-svn-commit] r5623 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2831">[ date ]</a>
+              <a href="thread.html#2831">[ thread ]</a>
+              <a href="subject.html#2831">[ subject ]</a>
+              <a href="author.html#2831">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2009-12-06 10:27:03 +0100 (Sun, 06 Dec 2009)
+New Revision: 5622
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_jsUtils.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_jsUtils.h
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemux.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSDebug.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSFunctions.cpp
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.h
+   branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/CMakeLists.txt
+Log:
+[JS] Fix loading of large integer from jscript + dumpEditing debug function from js
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2009-12-05 18:25:18 UTC (rev 5621)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_editor/ADM_segment.cpp	2009-12-06 09:27:03 UTC (rev 5622)
+@@ -16,13 +16,14 @@
+  ***************************************************************************/
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_segment.h&quot;
+- #include &quot;../ADM_codecs/ADM_codec.h&quot;
+- #include &quot;ADM_image.h&quot;
+- #include &quot;../ADM_editor/ADM_edCache.h&quot;
+- #include &quot;ADM_pp.h&quot;
+- #include &quot;ADM_colorspace.h&quot;
++#include &quot;../ADM_codecs/ADM_codec.h&quot;
++#include &quot;ADM_image.h&quot;
++#include &quot;../ADM_editor/ADM_edCache.h&quot;
++#include &quot;ADM_pp.h&quot;
++#include &quot;ADM_colorspace.h&quot;
+ #include &quot;ADM_vidMisc.h&quot;
+ #include &quot;ADM_audiocodec/ADM_audiocodec.h&quot;
++#include &quot;ADM_script/ADM_JSif.h&quot;
+ 
+ ADM_EditorSegment::ADM_EditorSegment(void)
+ {
+@@ -459,12 +460,12 @@
+     {
+         _SEGMENT *s=getSegment(i);
+         
+-        printf(&quot;Segment :%d/%d\n&quot;,i,n);
+-        printf(&quot;\tReference    :%&quot;LU&quot;\n&quot;,s-&gt;_reference,ADM_us2plain(s-&gt;_reference));
+-        printf(&quot;\tstartLinear  :%08&quot;LLU&quot; %s\n&quot;,s-&gt;_startTimeUs,ADM_us2plain(s-&gt;_startTimeUs));
+-        printf(&quot;\tduration     :%08&quot;LLU&quot; %s\n&quot;,s-&gt;_durationUs,ADM_us2plain(s-&gt;_durationUs));
+-        printf(&quot;\trefStartPts  :%08&quot;LLU&quot; %s\n&quot;,s-&gt;_refStartTimeUs,ADM_us2plain(s-&gt;_refStartTimeUs));
+-        printf(&quot;\trefStartDts  :%08&quot;LLU&quot; %s\n&quot;,s-&gt;_refStartDts,ADM_us2plain(s-&gt;_refStartDts));
++        jsLog(JS_LOG_NORMAL,&quot;Segment :%d/%d&quot;,i,n);
++        jsLog(JS_LOG_NORMAL,&quot;\tReference    :%&quot;LU,s-&gt;_reference,ADM_us2plain(s-&gt;_reference));
++        jsLog(JS_LOG_NORMAL,&quot;\tstartLinear  :%08&quot;LLU&quot; %s&quot;,s-&gt;_startTimeUs,ADM_us2plain(s-&gt;_startTimeUs));
++        jsLog(JS_LOG_NORMAL,&quot;\tduration     :%08&quot;LLU&quot; %s&quot;,s-&gt;_durationUs,ADM_us2plain(s-&gt;_durationUs));
++        jsLog(JS_LOG_NORMAL,&quot;\trefStartPts  :%08&quot;LLU&quot; %s&quot;,s-&gt;_refStartTimeUs,ADM_us2plain(s-&gt;_refStartTimeUs));
++        jsLog(JS_LOG_NORMAL,&quot;\trefStartDts  :%08&quot;LLU&quot; %s&quot;,s-&gt;_refStartDts,ADM_us2plain(s-&gt;_refStartDts));
+     }
+ }
+ 
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemux.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemux.cpp	2009-12-05 18:25:18 UTC (rev 5621)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemux.cpp	2009-12-06 09:27:03 UTC (rev 5622)
+@@ -21,10 +21,12 @@
+ #include &quot;DIA_coreToolkit.h&quot;
+ #include &quot;ADM_commonUI/GUI_ui.h&quot;
+ #include &quot;ADM_muxerProto.h&quot;
+-
++#include &quot;ADM_confCouple.h&quot;
+ #include &quot;ADM_debugID.h&quot;
+ #define MODULE_NAME MODULE_SCRIPT
+ #include &quot;ADM_debug.h&quot;
++#include &quot;ADM_JSDebug.h&quot;
++#include &quot;ADM_jsUtils.h&quot;
+ 
+ extern int A_openAvi (const char *name);
+ extern int A_Save (const char *name);
+@@ -440,16 +442,18 @@
+                                        jsval *argv, jsval *rval)
+ {// begin AddSegment
+         ADM_JSAvidemux *p = (ADM_JSAvidemux *)JS_GetPrivate(cx, obj);
++        //
++        uint32_t ref=0;
++        uint64_t duration=0,start=0;
++        ADM_PARAM_LIST params[3]={{ADM_JS_UINT32_T,&amp;ref},{ADM_JS_UINT64_T,&amp;start},{ADM_JS_UINT64_T,&amp;duration}};
+         // default return value
+         *rval = BOOLEAN_TO_JSVAL(false);
+-        if(argc != 3)
+-                return JS_FALSE;
+-	if(JSVAL_IS_INT(argv[0]) == false || JSVAL_IS_INT(argv[1]) == false || JSVAL_IS_INT(argv[2]) == false)
+-		return JS_FALSE;
+-        uint64_t ref = JSVAL_TO_INT(argv[0]);
+-        uint64_t start= JSVAL_TO_INT(argv[1]);
+-        uint64_t duration= JSVAL_TO_INT(argv[2]);
+-        aprintf(&quot;adding segment :%d %d %d\n&quot;,a,b,c);
++        if(false==ADM_jsArg2Vars(cx, obj, argc, argv, 3, params))
++        {
++            jsLog(JS_LOG_ERROR,&quot;wrong arguments to AddSegment&quot;);
++            return JS_FALSE;
++        }
++        ADM_info(&quot;adding segment :%d %d %d\n&quot;,ref,start,duration);
+         enterLock();
+         *rval = BOOLEAN_TO_JSVAL( video_body-&gt;addSegment(ref,start,duration));
+         leaveLock();
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.cpp	2009-12-05 18:25:18 UTC (rev 5621)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.cpp	2009-12-06 09:27:03 UTC (rev 5622)
+@@ -30,10 +30,8 @@
+ 
+ //extern VF_FILTERS filterGetTagFromName(const char *inname);
+ extern uint8_t A_ListAllBlackFrames( char *file );
+-extern uint8_t loadVideoCodecConfString( const char *name);
+ extern uint8_t ADM_saveRaw (const char *name);
+ extern int A_saveJpg (char *name);
+-extern uint8_t loadVideoCodecConf( const char *name);
+ extern void filterCleanUp( void );
+ extern bool jsArgToConfCouple(int nb,CONFcouple **conf,  jsval *argv);
+ bool A_setVideoCodec(const char *nm);
+@@ -48,7 +46,6 @@
+ JSFunctionSpec ADM_JSAvidemuxVideo::avidemuxvideo_methods[] = 
+ {
+ 	{ &quot;clear&quot;, Clear, 0, 0, 0 },	// clear
+-	{ &quot;add&quot;, Add, 3, 0, 0 },	// add
+     { &quot;clearFilters&quot;, ClearFilters, 0, 0, 0 }, // Delete all filters
+ 	{ &quot;addFilter&quot;, AddFilter, 10, 0, 0 },	// Add filter to filter chain
+ 	{ &quot;codec&quot;, Codec, 1, 0, 0 },	// Set the video codec
+@@ -184,24 +181,7 @@
+         return JS_TRUE;
+ }// end Clear
+ 
+-JSBool ADM_JSAvidemuxVideo::Add(JSContext *cx, JSObject *obj, uintN argc, 
+-                                       jsval *argv, jsval *rval)
+-{// begin Add
+-        ADM_JSAvidemuxVideo *p = (ADM_JSAvidemuxVideo *)JS_GetPrivate(cx, obj);
+-        // default return value
+-        *rval = BOOLEAN_TO_JSVAL(false);
+-        if(argc != 3)
+-                return JS_FALSE;
+-        if(JSVAL_IS_INT(argv[0]) == false || JSVAL_IS_INT(argv[1]) == false  || JSVAL_IS_INT(argv[2]) == false)
+-                return JS_FALSE;
+-        printf(&quot;Adding Video... \n&quot;);
+-        enterLock();
+-//        *rval = BOOLEAN_TO_JSVAL(video_body-&gt;addSegment(JSVAL_TO_INT(argv[0]),JSVAL_TO_INT(argv[1]),JSVAL_TO_INT(argv[2])));
+-        leaveLock();
+-        return JS_TRUE;
+-}// end Add
+ 
+-
+ JSBool ADM_JSAvidemuxVideo::ClearFilters(JSContext *cx, JSObject *obj, uintN argc,
+                                        jsval *argv, jsval *rval)
+ {// begin Clear
+@@ -209,7 +189,9 @@
+         return JS_TRUE;
+ }// end Clear
+ 
+-
++/**
++    \fn AddFilter
++*/
+ JSBool ADM_JSAvidemuxVideo::AddFilter(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin AddFilter
+@@ -266,7 +248,9 @@
+         return JS_TRUE;
+ }// end Codec
+ 
+-
++/**
++    \fn Save
++*/
+ JSBool ADM_JSAvidemuxVideo::Save(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin Save
+@@ -285,7 +269,9 @@
+ #endif
+         return JS_TRUE;
+ }// end Save
+-
++/**
++    \fn saveJpeg
++*/
+ JSBool ADM_JSAvidemuxVideo::SaveJPEG(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin SaveJPG
+@@ -304,7 +290,9 @@
+ #endif
+         return JS_TRUE;
+ }// end SaveJPG
+-
++/**
++    \fn ListBlackFrames
++*/
+ JSBool ADM_JSAvidemuxVideo::ListBlackFrames(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin ListBlackFrames
+@@ -324,7 +312,9 @@
+ #endif
+         return JS_TRUE;
+ }// end ListBlackFrames
+-
++/**
++    \fn PostProcess
++*/
+ JSBool ADM_JSAvidemuxVideo::PostProcess(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin PostProcess
+@@ -342,7 +332,9 @@
+         *rval = BOOLEAN_TO_JSVAL(rtn);
+         return JS_TRUE;
+ }// end PostProcess
+-
++/**
++    \fn GetFps1000
++*/
+ JSBool ADM_JSAvidemuxVideo::GetFps1000(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin PostProcess
+@@ -357,6 +349,9 @@
+         *rval = INT_TO_JSVAL(info.fps1000);
+         return JS_TRUE;
+ }// end PostProcess
++/**
++    \fn GetNbFrames
++*/
+ JSBool ADM_JSAvidemuxVideo::GetNbFrames(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin PostProcess
+@@ -371,7 +366,9 @@
+         *rval = INT_TO_JSVAL(info.nb_frames);
+         return JS_TRUE;
+ }// end PostProcess
+-
++/**
++    \fn SetFps1000
++*/
+ JSBool ADM_JSAvidemuxVideo::SetFps1000(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin PostProcess
+@@ -405,7 +402,9 @@
+         return JS_TRUE;
+ }// end PostProcess
+ 
+-
++/**
++    \fn GetWidth
++*/
+ JSBool ADM_JSAvidemuxVideo::GetWidth(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin PostProcess
+@@ -421,6 +420,9 @@
+         *rval = INT_TO_JSVAL(info.width);
+         return JS_TRUE;
+ }// end PostProcess
++/**
++    \fn SetFps1000
++*/
+ JSBool ADM_JSAvidemuxVideo::GetHeight(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin PostProcess
+@@ -435,6 +437,10 @@
+         *rval = INT_TO_JSVAL(info.height);
+         return JS_TRUE;
+ }// end PostProcess
++/**
++    \fn GetFCC
++*/
++
+ JSBool ADM_JSAvidemuxVideo::GetFCC(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin PostProcess
+@@ -450,6 +456,9 @@
+         *rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, fourCC::tostring(info.fcc)));
+         return JS_TRUE;
+ }// end PostProcess
++/**
++    \fn SetFps1000
++*/
+ 
+ JSBool ADM_JSAvidemuxVideo::isVopPacked(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+@@ -467,6 +476,10 @@
+         if(info &amp; ADM_VOP_ON) *rval=JS_TRUE;
+         return JS_TRUE;
+ }// end PostProcess
++/**
++    \fn hasGmc
++*/
++
+ JSBool ADM_JSAvidemuxVideo::hasGmc(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin PostProcess
+@@ -483,6 +496,10 @@
+         if(info &amp; ADM_GMC_ON) *rval=JS_TRUE;
+         return JS_TRUE;
+ }// end PostProcess
++/**
++    \fn hasQpel
++*/
++
+ JSBool ADM_JSAvidemuxVideo::hasQpel(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin PostProcess
+@@ -499,6 +516,9 @@
+         return JS_TRUE;
+ }// end PostProcess
+ 
++/**
++    \fn getFrameSize
++*/
+ 
+ JSBool ADM_JSAvidemuxVideo::getFrameSize(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+@@ -518,6 +538,10 @@
+ #endif
+         return JS_TRUE;
+ }// end PostProcess
++/**
++    \fn getFrameType
++*/
++
+ JSBool ADM_JSAvidemuxVideo::getFrameType(JSContext *cx, JSObject *obj, uintN argc, 
+                                        jsval *argv, jsval *rval)
+ {// begin PostProcess
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.h	2009-12-05 18:25:18 UTC (rev 5621)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSAvidemuxVideo.h	2009-12-06 09:27:03 UTC (rev 5622)
+@@ -20,7 +20,6 @@
+ 	static void JSDestructor(JSContext *cx, JSObject *obj);
+ 	static JSObject *JSInit(JSContext *cx, JSObject *obj, JSObject *proto = NULL);
+ 	static JSBool Clear(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+-	static JSBool Add(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+ 	static JSBool ClearFilters(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+ 	static JSBool AddFilter(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+ 	static JSBool IndexMPEG(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSDebug.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSDebug.cpp	2009-12-05 18:25:18 UTC (rev 5621)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSDebug.cpp	2009-12-06 09:27:03 UTC (rev 5622)
+@@ -39,6 +39,7 @@
+ extern JSFunctionSpec *ADM_JsVideoGetFunctions(void);
+ extern JSFunctionSpec *ADM_JsClassGetFunctions(void);
+ extern JSFunctionSpec *ADM_JsDebugGetFunctions(void);
++extern JSFunctionSpec *ADM_JsFunctionGetFunctions(void);
+ 
+ /**/
+ static JSFunctionSpec adm_debug_functions[] = {
+@@ -163,7 +164,7 @@
+ {
+         if(!argc)
+         {
+-            jsLog(JS_LOG_NORMAL,&quot;help(\&quot;video\&quot;); or help(\&quot;audio\&quot;); or help(\&quot;debug\&quot;); or debug(\&quot;functions\&quot;&quot;);
++            jsLog(JS_LOG_NORMAL,&quot;help(\&quot;class\&quot;); or help(\&quot;video\&quot;); or help(\&quot;audio\&quot;); or help(\&quot;debug\&quot;); or debug(\&quot;functions\&quot;&quot;);
+             return JS_TRUE;
+         }
+         if(argc != 1)
+@@ -180,7 +181,8 @@
+             DUMPTABLE(audio,ADM_JsAudioGetFunctions);
+             DUMPTABLE(video,ADM_JsVideoGetFunctions);
+             DUMPTABLE(debug,ADM_JsDebugGetFunctions);
+-            DUMPTABLE(functions,ADM_JsClassGetFunctions);
++            DUMPTABLE(functions,ADM_JsFunctionGetFunctions);
++            DUMPTABLE(class,ADM_JsClassGetFunctions);
+         }
+         if(table) dumpFunc(table);
+         else jsLog(JS_LOG_ERROR,&quot;%s not found&quot;,f);
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSFunctions.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSFunctions.cpp	2009-12-05 18:25:18 UTC (rev 5621)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSFunctions.cpp	2009-12-06 09:27:03 UTC (rev 5622)
+@@ -115,6 +115,10 @@
+   {&quot;dialogFactoryThreadCount&quot;, facThreadCount,		  0},
+   {0}
+ };
++JSFunctionSpec *ADM_JsFunctionGetFunctions(void)
++{
++    return adm_functions;
++}
+ 
+ uint8_t JS_AvidemuxFunction(JSContext *cx,JSObject *global)
+ {
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.h	2009-12-05 18:25:18 UTC (rev 5621)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.h	2009-12-06 09:27:03 UTC (rev 5622)
+@@ -43,5 +43,9 @@
+     \brief interprete &amp; execute ecma script (interactive)
+ */
+ bool interactiveECMAScript(const char *name);
++/**
++    \fn jsLog
+ 
++*/
++bool jsLog(JS_LOG_TYPE type, const char *fmt,...);
+ #endif
+
+Added: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_jsUtils.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_jsUtils.cpp	2009-12-05 18:25:18 UTC (rev 5621)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_jsUtils.cpp	2009-12-06 09:27:03 UTC (rev 5622)
+@@ -0,0 +1,99 @@
++/**
++    \file ADM_jsUtils
++    \brief Simple param -&gt; type utilities
++    \author mean <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A> 2009
++*/
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#include &quot;ADM_default.h&quot;
++#include &lt;string.h&gt;
++#include &lt;pthread.h&gt;
++#include &quot;DIA_coreToolkit.h&quot;
++
++#include &quot;ADM_JSGlobal.h&quot;
++#include &quot;ADM_JSDebug.h&quot;
++#include &quot;ADM_JSif.h&quot;
++#include &quot;ADM_jsUtils.h&quot;
++/**
++    \fn ADM_jsArg2Vars  
++    \brief convert jsvals to native type with checking
++*/
++bool ADM_jsArg2Vars(JSContext *cx, JSObject *obj, int argc, jsval *argv, int paramNumber, ADM_PARAM_LIST *param)
++{
++    if(paramNumber!=argc)
++    {
++        ADM_warning(&quot;Wrong number of parameters : %d vs %d\n&quot;,argc,paramNumber);
++        return false;
++    }
++    for(int i=0;i&lt;argc;i++)
++    {
++        jsval j=argv[i];
++        ADM_PARAM_LIST *p=param+i;
++        switch(p-&gt;type)
++        {
++            case ADM_JS_UINT64_T:
++            case ADM_JS_UINT32_T:
++            case ADM_JS_INT64_T:
++            case ADM_JS_INT32_T:
++                {
++                        if(!JSVAL_IS_NUMBER(j))
++                        {
++                            ADM_warning(&quot;Expected number and got %d\n&quot;,j);
++                            return false;
++                        }
++                        // If it is an int...
++                        double v=0;
++                        if(JSVAL_IS_INT(j)) 
++                        {
++                            v=(int64_t)JSVAL_TO_INT(j);
++                            //ADM_warning(&quot;Value is int :%&quot;LLD&quot;\n&quot;,JSVAL_TO_INT(j));
++                        }
++                        if(JSVAL_IS_DOUBLE(j)) 
++                        {
++                            v=(int64_t)*(JSVAL_TO_DOUBLE(j));
++                            //ADM_warning(&quot;Value is float :%f\n&quot;,(float)*(JSVAL_TO_DOUBLE(j)));
++                        }
++                        // 
++                        //ADM_warning(&quot;%f\n&quot;,(float)v);
++                        // Affect
++                        switch(p-&gt;type)
++                        {
++                            case ADM_JS_UINT64_T: *(uint64_t *)p-&gt;value=(uint64_t)v;break;
++                            case ADM_JS_UINT32_T: *(uint32_t *)p-&gt;value=(uint32_t)v;break;
++                            case ADM_JS_INT64_T:  *(int64_t *)p-&gt;value=(int64_t)v;break;
++                            case ADM_JS_INT32_T:  *(int32_t *)p-&gt;value=(int32_t)v;break;
++                            default: ADM_assert(0);break;
++                        }
++                 }
++                        break;
++            case  ADM_JS_STRING:
++                        if(!JSVAL_IS_STRING(j))
++                        {
++                            ADM_warning(&quot;Expected string and got %d\n&quot;,j);
++                            return false;
++                        }
++                        p-&gt;value=(void *)(JSVAL_TO_STRING(j));
++                        break;
++            case  ADM_JS_BOOL:
++                        if(!JSVAL_IS_BOOLEAN(j))
++                        {
++                            ADM_warning(&quot;Expected boolean and got %d\n&quot;,j);
++                            return false;
++                        }
++                        *(bool *)p-&gt;value=JSVAL_TO_BOOLEAN(j);
++                        break;
++            default:
++                    ADM_assert(0);
++                    break;
++        }
++
++    }
++    return true;
++}
++// EOF
+
+Copied: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_jsUtils.h (from rev 5621, branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.h)
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_JSif.h	2009-12-05 18:25:18 UTC (rev 5621)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/ADM_jsUtils.h	2009-12-06 09:27:03 UTC (rev 5622)
+@@ -0,0 +1,39 @@
++/**
++    \file ADM_jsUtils
++    \brief Simple param -&gt; type utilities
++    \author mean <A HREF="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">fixounet at free.fr</A> 2009
++*/
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++#ifndef ADM_JS_UTILS_H
++#define ADM_JS_UTILS_H
++
++typedef enum
++{
++    ADM_JS_INVALID=0,
++    ADM_JS_UINT32_T=1,
++    ADM_JS_INT32_T,
++    ADM_JS_UINT64_T,
++    ADM_JS_INT64_T,
++    ADM_JS_STRING,
++    ADM_JS_BOOL,
++    ADM_JS_MAX
++}ADM_PARAM_TYPE;
++
++typedef struct
++{
++    ADM_PARAM_TYPE type;
++    void           *value;
++
++}ADM_PARAM_LIST;
++
++bool ADM_jsArg2Vars(JSContext *cx, JSObject *obj, int argc, jsval *argv, int paramNumber, ADM_PARAM_LIST *param);
++
++
++#endif
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/CMakeLists.txt
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/CMakeLists.txt	2009-12-05 18:25:18 UTC (rev 5621)
++++ branches/avidemux_2.6_branch_mean/avidemux/common/ADM_script/CMakeLists.txt	2009-12-06 09:27:03 UTC (rev 5622)
+@@ -3,6 +3,7 @@
+ 	ADM_Avidemux.cpp       ADM_JSAvidemuxAudio.cpp  ADM_JSAvidemuxVideo.cpp  ADM_JSFunctions.cpp        DirectorySearch.cpp
+         ADM_JSFunctionsNonRegFactory.cpp
+         ADM_JSif.cpp ADM_JSDebug.cpp
++        ADM_jsUtils.cpp
+ )
+ 
+ ADD_LIBRARY(ADM_script6 STATIC ${ADM_script_SRCS})
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="002829.html">[Avidemux-svn-commit] r5621 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreMuxer/src
+</A></li>
+	<LI>Next message: <A HREF="002832.html">[Avidemux-svn-commit] r5623 -	branches/avidemux_2.5_branch_gruntster/avidemux/ADM_inputs/ADM_matroska
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2831">[ date ]</a>
+              <a href="thread.html#2831">[ thread ]</a>
+              <a href="subject.html#2831">[ subject ]</a>
+              <a href="author.html#2831">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,307 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Avidemux-svn-commit] r7452 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2:	. libmp4v2/src patches
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/avidemux-svn-commit/2011-August/index.html" >
+   <LINK REL="made" HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7452%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2%3A%0A%09.%20libmp4v2/src%20patches&In-Reply-To=%3C20110829060237.C05B64811B0%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="004601.html">
+   <LINK REL="Next"  HREF="004603.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Avidemux-svn-commit] r7452 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2:	. libmp4v2/src patches</H1>
+    <B>mean at mail.berlios.de</B> 
+    <A HREF="mailto:avidemux-svn-commit%40lists.berlios.de?Subject=Re%3A%20%5BAvidemux-svn-commit%5D%20r7452%20-%20in%0A%09branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2%3A%0A%09.%20libmp4v2/src%20patches&In-Reply-To=%3C20110829060237.C05B64811B0%40sheep.berlios.de%3E"
+       TITLE="[Avidemux-svn-commit] r7452 - in	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2:	. libmp4v2/src patches">mean at mail.berlios.de
+       </A><BR>
+    <I>Mon Aug 29 08:02:37 CEST 2011</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="004601.html">[Avidemux-svn-commit] r7451 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io
+</A></li>
+        <LI>Next message: <A HREF="004603.html">[Avidemux-svn-commit] r7453 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUI/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4602">[ date ]</a>
+              <a href="thread.html#4602">[ thread ]</a>
+              <a href="subject.html#4602">[ subject ]</a>
+              <a href="author.html#4602">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: mean
+Date: 2011-08-29 08:02:37 +0200 (Mon, 29 Aug 2011)
+New Revision: 7452
+
+Added:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/patches/progress_callback_when_optimizing.patch
+Removed:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/patches/disable_get_max_bitrate_way_too_slow.diff
+Modified:
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/src/mp4file.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp
+   branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h
+Log:
+[mp4v2] Progress bar when optimizing
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/src/mp4file.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/src/mp4file.cpp	2011-08-27 17:15:10 UTC (rev 7451)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/src/mp4file.cpp	2011-08-29 06:02:37 UTC (rev 7452)
+@@ -30,6 +30,8 @@
+ 
+ #include &quot;src/impl.h&quot;
+ 
++extern void ADM_MP4_progressCallback(int p); // MEANX
++
+ namespace mp4v2 { namespace impl {
+ 
+ ///////////////////////////////////////////////////////////////////////////////
+@@ -330,6 +332,8 @@
+     MP4ChunkId* maxChunkIds = new MP4ChunkId[numTracks];
+     MP4Timestamp* nextChunkTimes = new MP4Timestamp[numTracks];
+ 
++    uint64_t sourceSize=src.size;
++
+     for( uint32_t i = 0; i &lt; numTracks; i++ ) {
+         chunkIds[i] = 1;
+         maxChunkIds[i] = m_pTracks[i]-&gt;GetNumberOfChunks();
+@@ -374,6 +378,17 @@
+ 
+         // point back at the new mp4 file for write chunk
+         m_file = &dst;
++
++        {
++            uint64_t destSize=dst.position; //MEANX
++            if(sourceSize&gt;10)
++            {
++                    double p=sourceSize;
++                    p=(destSize*100)/sourceSize;
++                    ADM_MP4_progressCallback((int)p);
++            }
++            
++        }
+         m_pTracks[nextTrackIndex]-&gt;RewriteChunk( chunkIds[nextTrackIndex], pChunk, chunkSize );
+ 
+         MP4Free( pChunk );
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp	2011-08-27 17:15:10 UTC (rev 7451)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.cpp	2011-08-29 06:02:37 UTC (rev 7452)
+@@ -17,7 +17,7 @@
+  *   (at your option) any later version.                                   *
+  *                                                                         *
+  ***************************************************************************/
+-
++#include &lt;stdarg.h&gt;
+ #include &quot;ADM_default.h&quot;
+ #include &quot;ADM_cpp.h&quot;
+ #include &quot;fourcc.h&quot;
+@@ -38,12 +38,43 @@
+ #define ADM_MP4_OPTIONS_OPEN  (MP4_CREATE_64BIT_DATA)
+ #define ADM_MP4_OPTIONS_CLOSE (MP4_CLOSE_DO_NOT_COMPUTE_BITRATE )
+ 
++// We should only have one valid at at time...
++muxerMp4v2 *currentMuxer=NULL;
++
+ mp4v2_muxer muxerConfig=
+ {
+    1, // uint32_t optimize;
+    0  //uint32_t add_itunes_metadata;
+ };
++extern &quot;C&quot;
++{
++static   void callback(MP4LogLevel level, const char *fmt, va_list ap)
++{
++        static char print_buffer[1024];
++		vsnprintf(print_buffer,1023,fmt,ap);
++		print_buffer[1023]=0; // ensure the string is terminated
++        ADM_info(&quot;&lt;mp4v2&gt;%s&quot;,print_buffer);
++}
++}
+ /**
++    \fn ADM_MP4_progressCallback
++    \brief callback from MP4V2 to get the optimizing progress
++*/
++void ADM_MP4_progressCallback(int p)
++{
++    if(currentMuxer)
++        currentMuxer-&gt;setPercent(p);
++           
++}
++/**
++    \fn setPercent
++*/
++void muxerMp4v2::setPercent(int percent)
++{
++    if(encoding)
++        encoding-&gt;setPercent(percent);
++}
++/**
+     \fn setMaxDurationPerChunk
+     \brief Max chunk duration is 1 sec par default; set it to ~ 4 frames
+ */
+@@ -93,6 +124,8 @@
+         nextWrite=0;
+         needToConvertFromAnnexB=false;
+         lastVideoDts=0;
++        MP4SetLogCallback(callback);
++        currentMuxer=this;
+ };
+ /**
+     \fn     muxerMp4v2
+@@ -105,6 +138,7 @@
+     close();
+     if(handle)
+         ADM_error(&quot;MP4V2: File still opened\n&quot;);
++    currentMuxer=NULL;
+ }
+ /**
+     \fn open
+@@ -254,10 +288,12 @@
+                         0 // Sync Sample
+                         );
+ theEnd:
+-    closeUI();
+     close();
++    
++    
+     if(muxerConfig.optimize &amp;&amp; result==true)
+     {
++        encoding-&gt;setPhasis(&quot;Optimizing&quot;);
+         string tmpTargetFileName=targetFileName+string(&quot;.tmp&quot;);
+         if(!ADM_renameFile(targetFileName.c_str(),tmpTargetFileName.c_str()))
+         {
+@@ -270,6 +306,7 @@
+         // delete
+         unlink(tmpTargetFileName.c_str());
+     }
++    closeUI();
+     return result;
+ }
+ /**
+
+Modified: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h	2011-08-27 17:15:10 UTC (rev 7451)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/muxerMp4v2.h	2011-08-29 06:02:37 UTC (rev 7452)
+@@ -69,6 +69,7 @@
+         uint8_t         *scratchBuffer;
+         string          targetFileName;
+         uint64_t        lastVideoDts;
++
+ protected: // video
+         bool            initMpeg4(void);
+         bool            initH264(void);
+@@ -91,6 +92,7 @@
+         virtual bool save(void) ;
+         virtual bool close(void) ;
+         virtual bool useGlobalHeader(void) {return true;}
++                void setPercent(int percent);
+ 
+ };
+ 
+
+Deleted: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/patches/disable_get_max_bitrate_way_too_slow.diff
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/patches/disable_get_max_bitrate_way_too_slow.diff	2011-08-27 17:15:10 UTC (rev 7451)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/patches/disable_get_max_bitrate_way_too_slow.diff	2011-08-29 06:02:37 UTC (rev 7452)
+@@ -1,20 +0,0 @@
+-diff --git a/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/src/mp4track.cpp b/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/src/mp4track.cpp
+-index cc4fdfc..c2a3de6 100644
+---- a/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/src/mp4track.cpp
+-+++ b/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/src/mp4track.cpp
+-@@ -534,13 +534,13 @@ void MP4Track::FinishWrite()
+-     }
+- 
+-     MP4Integer32Property* pBitrateProperty;
+--
+-+#if 0 // MEANX : Way too slow!
+-     if (m_trakAtom.FindProperty(
+-                 &quot;trak.mdia.minf.stbl.stsd.*.esds.decConfigDescr.maxBitrate&quot;,
+-                 (MP4Property**)&amp;pBitrateProperty)) {
+-         pBitrateProperty-&gt;SetValue(GetMaxBitrate());
+-     }
+--
+-+#endif
+-     if (m_trakAtom.FindProperty(
+-                 &quot;trak.mdia.minf.stbl.stsd.*.esds.decConfigDescr.avgBitrate&quot;,
+-                 (MP4Property**)&amp;pBitrateProperty)) {
+
+Added: branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/patches/progress_callback_when_optimizing.patch
+===================================================================
+--- branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/patches/progress_callback_when_optimizing.patch	                        (rev 0)
++++ branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/patches/progress_callback_when_optimizing.patch	2011-08-29 06:02:37 UTC (rev 7452)
+@@ -0,0 +1,40 @@
++diff --git a/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/src/mp4file.cpp b/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/src/mp4file.cpp
++index cdab917..d4e0162 100644
++--- a/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/src/mp4file.cpp
+++++ b/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/src/mp4file.cpp
++@@ -30,6 +30,8 @@
++ 
++ #include &quot;src/impl.h&quot;
++ 
+++extern void ADM_MP4_progressCallback(int p); // MEANX
+++
++ namespace mp4v2 { namespace impl {
++ 
++ ///////////////////////////////////////////////////////////////////////////////
++@@ -330,6 +332,8 @@ void MP4File::RewriteMdat( File&amp; src, File&amp; dst )
++     MP4ChunkId* maxChunkIds = new MP4ChunkId[numTracks];
++     MP4Timestamp* nextChunkTimes = new MP4Timestamp[numTracks];
++ 
+++    uint64_t sourceSize=src.size;
+++
++     for( uint32_t i = 0; i &lt; numTracks; i++ ) {
++         chunkIds[i] = 1;
++         maxChunkIds[i] = m_pTracks[i]-&gt;GetNumberOfChunks();
++@@ -374,6 +378,17 @@ void MP4File::RewriteMdat( File&amp; src, File&amp; dst )
++ 
++         // point back at the new mp4 file for write chunk
++         m_file = &dst;
+++
+++        {
+++            uint64_t destSize=dst.position; //MEANX
+++            if(sourceSize&gt;10)
+++            {
+++                    double p=sourceSize;
+++                    p=(destSize*100)/sourceSize;
+++                    ADM_MP4_progressCallback((int)p);
+++            }
+++            
+++        }
++         m_pTracks[nextTrackIndex]-&gt;RewriteChunk( chunkIds[nextTrackIndex], pChunk, chunkSize );
++ 
++         MP4Free( pChunk );
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="004601.html">[Avidemux-svn-commit] r7451 -	branches/avidemux_2.6_branch_mean/avidemux_plugins/ADM_muxers/muxerMp4v2/libmp4v2/libplatform/io
+</A></li>
+	<LI>Next message: <A HREF="004603.html">[Avidemux-svn-commit] r7453 -	branches/avidemux_2.6_branch_mean/avidemux_core/ADM_coreUI/include
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#4602">[ date ]</a>
+              <a href="thread.html#4602">[ thread ]</a>
+              <a href="subject.html#4602">[ subject ]</a>
+              <a href="author.html#4602">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/avidemux-svn-commit">More information about the Avidemux-svn-commit
+mailing list</a><br>
+</body></html>
